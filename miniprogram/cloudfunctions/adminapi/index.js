@@ -11,7 +11,7 @@ const _ = db.command;
 const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'ping'];
 
 exports.main = async (event) => {
   const action = (event && event.action) || 'login';
@@ -21,6 +21,10 @@ exports.main = async (event) => {
     await visitTimeoutTick();
     return { ok: true, cron: true };
   }
+
+  // 后台分发明文读取（2026-09-08 老板定：文员机 server 转发用；代码文件非敏感，免鉴权）
+  if (action === 'getAdminDistMeta') return await getAdminDistMeta();
+  if (action === 'getAdminDistPart') return await getAdminDistPart(event);
 
   if (!ACTIONS.includes(action)) return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
   // 除 login 外均需管理员校验
@@ -40,6 +44,7 @@ exports.main = async (event) => {
     if (action === 'listLatestLocations') return await listLatestLocations(event);
     if (action === 'getDayTrack') return await getDayTrack(event);
     if (action === 'getVisitTrack') return await getVisitTrack(event);
+    if (action === 'uploadAdminDist') return await uploadAdminDist(event);
     if (action === 'extendTask') return await extendTask(event);
     if (action === 'reassignTask') return await reassignTask(event);
     if (action === 'withdrawTask') return await withdrawTask(event);
@@ -153,13 +158,20 @@ async function listTasks(event) {
     Object.keys(setMap).forEach(tid => { countMap[tid] = setMap[tid].size; });
   }
   const tasks = rows.map(t => {
-    const total = (t.customerIds || []).length;
+    // 2026-09-08 修复：任务客户在 dayPlan[].customerIds（不在顶层 customerIds）；
+    // 补 salesmanId/customerIds/dayPlan 供位置监控客户点按业务员过滤（B 口径）
+    const dayPlan = t.dayPlan || [];
+    const cids = [];
+    dayPlan.forEach(d => (d.customerIds || []).forEach(id => cids.push(id)));
+    const total = cids.length;
     return {
       _id: t._id, name: t.name, taskNo: t.taskNo || '', salesmanName: t.salesmanName,
+      salesmanId: t.salesmanId || '',
       purpose: t.purpose, deadline: t.deadline, status: t.status,
       startDate: t.startDate || '', plannedDays: t.plannedDays || 1, createdAt: t.createdAt || null,
       finishReq: t.finishReq || null, finishedAt: t.finishedAt || null,
       archivedAt: t.archivedAt || null, endedAt: (t.archivedAt || t.finishedAt || t.createdAt) || null,
+      customerIds: cids, dayPlan,
       total, visited: countMap[t._id] || 0,
       percent: total ? Math.round((countMap[t._id] || 0) / total * 100) : 0
     };
@@ -389,6 +401,56 @@ async function cleanExpiredTracks() {
     await Promise.all(rows.slice(i, i + 50).map(r => db.collection('salesman_locations').doc(r._id).remove()));
   }
   return rows.length;
+}
+
+// ===================== 后台文件分发（2026-09-08 老板定：文员点刷新自动对齐版本号） =====================
+// 云端存 {version, adminHtml, ntMapJs}（settings 单文档）；云函数出入参 100KB 限制 → 90KB 分片。
+// 上传需鉴权（老板手动触发）；读取免鉴权（代码文件非敏感，文员 server 转发）。
+const DIST_CHUNK = 90000;
+const DIST_DOC = 'admin_dist';
+
+async function readDist() {
+  const r = await db.collection('settings').doc(DIST_DOC).get().catch(() => null);
+  return (r && r.data && r.data.value) || null;
+}
+
+async function uploadAdminDist(event) {
+  const { kind, part, total, content, version } = event;
+  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  const p = parseInt(part, 10), t = parseInt(total, 10);
+  if (!(p >= 0 && t >= 1 && p < t)) return { ok: false, code: 'BAD_ARG', msg: '分片参数不合法' };
+  if (typeof content !== 'string' || !content) return { ok: false, code: 'BAD_ARG', msg: '分片内容为空' };
+  const prev = (await readDist()) || { version: '', adminHtml: '', ntMapJs: '' };
+  if (p === 0) prev[kind] = '';
+  prev[kind] += content;
+  if (p === t - 1) {
+    prev.version = String(version || prev.version || '0.9.00');
+    prev.updatedAt = Date.now();
+  }
+  await db.collection('settings').doc(DIST_DOC).set({ data: { key: 'adminDist', value: prev } });
+  return { ok: true, part: p + 1, total: t };
+}
+
+async function getAdminDistMeta() {
+  const d = await readDist();
+  if (!d || !d.adminHtml || !d.ntMapJs) return { ok: false, code: 'NO_DIST', msg: '云端暂无分发文件' };
+  return {
+    ok: true,
+    version: d.version,
+    adminHtmlParts: Math.ceil(d.adminHtml.length / DIST_CHUNK),
+    ntMapJsParts: Math.ceil(d.ntMapJs.length / DIST_CHUNK)
+  };
+}
+
+async function getAdminDistPart(event) {
+  const { kind, part } = event;
+  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  const d = await readDist();
+  if (!d || !d[kind]) return { ok: false, code: 'NO_DIST', msg: '分片不存在' };
+  const p = parseInt(part, 10);
+  const chunk = d[kind].slice(p * DIST_CHUNK, (p + 1) * DIST_CHUNK);
+  if (!chunk) return { ok: false, code: 'NO_PART', msg: '分片不存在' };
+  return { ok: true, kind, part: p, content: chunk };
 }
 
 // 日期加 N 天（YYYY-MM-DD → YYYY-MM-DD，UTC 运算避免时区偏差）

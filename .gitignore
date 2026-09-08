@@ -19,6 +19,7 @@ packager/build/
 packager/output/
 packager/inputs/node-v24.16.0-win-x64.zip
 _scratch/
+_scratch_*
 *.log
 backup_icon_old.ico
 .DS_Store

@@ -2,7 +2,7 @@ const api = require('../../utils/api');
 const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
 
 Page({
-  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.02' },
+  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.04' },
   onShow() {
     const app = getApp();
     this.setData({ version: app.globalData.APP_VERSION || '0.9.00' }); // 版本号（2026-09-08 老板定）

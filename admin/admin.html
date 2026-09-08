@@ -15,6 +15,11 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--font);background:var(--bg);color:var(--ink)}
+/* 防 HTML5 拖拽光标（2026-09-08 老板报障）：拖动地图时鼠标变禁止⊘/加号＋并跟随移动
+   = 拖拽进入 drag 模式。全局禁拖禁选；输入类控件保留文本选择 */
+html,body{-webkit-user-select:none;user-select:none}
+body *{-webkit-user-drag:none;user-drag:none}
+input,textarea{-webkit-user-select:text;user-select:text}
 .btn{height:42px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 20px;font-size:14px;font-weight:400;cursor:pointer;border:none;font-family:var(--font)}
 .btn.primary{background:linear-gradient(135deg,#FF7A3D,var(--primary));color:#fff;box-shadow:0 8px 18px rgba(245,83,28,.3)}
 .btn.ghost{background:#fff;border:1.5px solid var(--line);color:var(--sub)}
@@ -409,7 +414,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
     <div class="ni dis" title="开发中">💾 数据备份</div>
     <div class="ni" data-p="settings" onclick="nav('settings')">⚙️ 系统设置</div>
     <div class="foot"><span>👤</span><span id="sideName">—</span></div>
-    <div class="side-ver" id="sideVer">v0.9.02</div>
+    <div class="side-ver" id="sideVer"></div>
   </aside>
   <main class="main">
     <div class="topbar">
@@ -426,26 +431,42 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
 
     <!-- 位置监控（2026-09-08 M2：全业务员实时位置 + 当天轨迹 + 客户点位图层） -->
     <div id="page-track" style="display:none">
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;border:2px solid #FFFFFF;position:relative">
+        <div id="trackMap" style="height:70vh;min-height:420px;position:relative"></div>
+        <div id="custSearchBox" style="position:absolute;left:12px;top:12px;z-index:99998;display:flex;flex-direction:column;width:260px">
+          <div style="display:flex;gap:6px;align-items:center;background:#FFFFFF;border:1px solid var(--line);border-radius:999px;padding:5px 10px;box-shadow:0 1px 4px rgba(0,0,0,.12)">
+            <span style="font-size:13px">🔍</span>
+            <input id="custSearchInput" placeholder="搜索店铺名称…" style="border:0;outline:0;flex:1;font-size:12.5px;background:transparent;color:#333A44" oninput="onCustSearch()">
+            <span id="custSearchClear" style="cursor:pointer;display:none;font-size:12px;color:var(--sub)" onclick="clearCustSearch()">✕</span>
+          </div>
+          <div id="custSearchDrop" style="display:none;margin-top:6px;background:#FFFFFF;border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.15);overflow:hidden"></div>
+        </div>
+        <div id="pickCapsule" style="position:absolute;left:0;right:0;top:12px;margin:0 auto;width:fit-content;z-index:99999;background:#FFFFFF;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;color:#333A44;box-shadow:0 1px 4px rgba(0,0,0,.12);white-space:nowrap;display:none;cursor:pointer;pointer-events:auto"></div>
+      </div>
       <div class="card" style="padding:12px 16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span style="font-weight:800;font-size:14px">业务员</span>
-          <div id="trackChips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
-          <button class="btn ghost" id="trackAllBtn" style="height:28px;font-size:12px;padding:0 12px" onclick="toggleTrackAll()">全部</button>
-          <button class="btn ghost" style="height:28px;font-size:12px;padding:0 12px" title="当前所有客户点装进一屏（不含业务员点）" onclick="fitCustBounds()">⤢ 全览</button>
-          <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">轨迹<input type="checkbox" id="trackLineSw" checked onchange="toggleTrackLine()"></label>
+          <span style="font-size:12px;color:var(--sub);font-weight:600" id="trackStat"></span>
+          <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto">轨迹<input type="checkbox" id="trackLineSw" checked onchange="toggleTrackLine()"></label>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">客户点<input type="checkbox" id="custLayerSw" checked onchange="toggleCustLayer()"></label>
-          <label style="font-size:12px;color:var(--sub);display:flex;align-items:center;gap:4px">点大小<input type="range" id="custSizeRange" min="8" max="18" value="12" style="width:70px" oninput="onCustSize()"></label>
+          <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">仓库<input type="checkbox" id="whSw" checked onchange="toggleWhStar()"></label>
+          <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">路况<input type="checkbox" id="trafficSw" onchange="rebuildTrackMap()"></label>
+          <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">拾取<input type="checkbox" id="pickSw" onchange="togglePick()"></label>
+          <label style="font-size:12px;color:var(--sub);display:flex;align-items:center;gap:4px">点大小<input type="range" id="custSizeRange" min="8" max="26" value="16" style="width:70px" oninput="onCustSize()"></label>
           <span style="display:flex;align-items:center;gap:8px;font-size:12px" id="custLegend">
             <span class="lg" id="lg_ongoing" style="color:#2F80ED" onclick="toggleCustKind('ongoing')">● 拜访中</span>
             <span class="lg" id="lg_pending" style="color:#F5531C" onclick="toggleCustKind('pending')">● 未拜访</span>
             <span class="lg" id="lg_visited" style="color:#34A853" onclick="toggleCustKind('visited')">● 已回访</span>
-            <span class="lg off" id="lg_gray" style="color:#9CA3AF" onclick="toggleCustKind('gray')">● 无任务</span>
+            <span class="lg" id="lg_gray" style="color:#9CA3AF" onclick="toggleCustKind('gray')">● 无任务</span>
           </span>
-          <span style="margin-left:auto;font-size:12px;color:var(--sub)" id="trackStat"></span>
+          <button class="btn ghost" style="height:28px;font-size:12px;padding:0 12px;margin-left:auto" title="当前所有客户点装进一屏（不含业务员点）" onclick="fitCustBounds()">⊡ 全览</button>
         </div>
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <div id="trackMap" style="height:64vh;min-height:420px"></div>
+      <div class="card" style="padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-weight:800;font-size:14px">业务员</span>
+          <div id="trackChips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          <button class="btn ghost" id="trackAllBtn" style="height:28px;font-size:12px;padding:0 12px;margin-left:auto" onclick="toggleTrackAll()">全部</button>
+        </div>
       </div>
     </div>
 
@@ -780,7 +801,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
     <!-- 系统设置 -->
     <div id="page-settings" style="display:none">
       <div class="title-bar"><span class="t">系统设置</span></div>
-      <div class="card" style="max-width:720px;padding:20px 24px">
+      <div class="card" style="max-width:1000px;padding:20px 24px">
 
         <!-- 分组一：定位与拜访 -->
         <div class="set-group">📍 定位与拜访</div>
@@ -814,21 +835,23 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
               <button class="btn primary btn-sm" onclick="saveLocSetting()">保存</button>
             </div>
             <div class="sb-d" style="margin-top:8px">业务员提交拜访时校验与客户的距离：勾选后按<b> 1~500 米</b>阈值校验，<b>填 0 或不勾选=关闭</b>；定位失败直接拦截提交。<br><b>正常页面刷新</b>=普通页面的定位刷新频率（默认 30 秒）；<b>重要页面刷新</b>=拜访记录等重要定位页面的频率（默认 15 秒）。定位失败静默保留旧数字。<br><b>拜访录音上限</b>=手机端现场录音单段最长时间（默认 5 分钟），到点自动停止。<br><b>拜访时长上限</b>=一次拜访最长计时（默认 1 小时）：到点前 5 分钟提醒；已选结果自动提交（跳过距离、无照片录音）、未选结果自动取消，均写入任务流程档案。</div>
-            <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
-              <label style="font-weight:800;font-size:13px;display:block;margin-bottom:8px">🛰 定位轨迹（时间分层）</label>
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <label style="font-weight:700;font-size:13px">工作时段<select class="inp" id="workStartHour" style="width:84px;margin-left:6px"></select> 点 ~ <select class="inp" id="workEndHour" style="width:84px"></select> 点</label>
-                <label style="font-weight:700;font-size:13px">非工作档位<select class="inp" id="offDutyTier" style="width:130px;margin-left:6px">
-                  <option value="5_30">5S/30S 不降频</option>
-                  <option value="10_60">10S/60S（默认）</option>
-                  <option value="20_120">20S/120S</option>
-                  <option value="30_180">30S/180S</option>
-                </select></label>
-                <label style="font-weight:700;font-size:13px">轨迹保留<input class="inp" id="trackKeepDays" type="number" min="1" max="365" style="width:80px;margin-left:6px"> 天</label>
-                <button class="btn primary btn-sm" onclick="saveTrackSetting()">保存</button>
-              </div>
-              <div class="sb-d" style="margin-top:8px"><b>工作时段</b>=采样全速（拜访中 5 秒/平时 30 秒）；<b>非工作档位</b>=拜访中/平时联动降频，上传发包跟随档位、绝不空转；最新位置非工作时段移动超 10 米才写。<b>轨迹保留</b>=云端轨迹片段保留天数（默认 30），到期自动清理。</div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-row-t">定位轨迹</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px">工作时段<select class="inp" id="workStartHour" style="width:84px;margin-left:6px"></select> 点 ~ <select class="inp" id="workEndHour" style="width:84px"></select> 点</label>
+              <label style="font-weight:700;font-size:13px">非工作档位<select class="inp" id="offDutyTier" style="width:130px;margin-left:6px">
+                <option value="5_30">5S/30S 不降频</option>
+                <option value="10_60">10S/60S（默认）</option>
+                <option value="20_120">20S/120S</option>
+                <option value="30_180">30S/180S</option>
+              </select></label>
+              <label style="font-weight:700;font-size:13px">轨迹保留<input class="inp" id="trackKeepDays" type="number" min="1" max="365" style="width:80px;margin-left:6px"> 天</label>
+              <button class="btn primary btn-sm" onclick="saveTrackSetting()">保存</button>
             </div>
+            <div class="sb-d" style="margin-top:8px"><b>工作时段</b>=采样全速（拜访中 5 秒/平时 30 秒）；<b>非工作档位</b>=拜访中/平时联动降频，上传发包跟随档位、绝不空转；最新位置非工作时段移动超 10 米才写。<b>轨迹保留</b>=云端轨迹片段保留天数（默认 30），到期自动清理。</div>
           </div>
         </div>
 
@@ -868,6 +891,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
             <div class="sb-d" style="margin-top:8px">已完成（审核通过）的任务自动进入「任务管理 → 历史任务」；已过期任务超过设定天数仍未延期/完成 → 自动归档为终态（业务员端不再显示，档案永久保留拜访记录/流程日志/审核情况）。</div>
           </div>
         </div>
+
+        <!-- 分组三：系统 -->
+        <div class="set-group">⚙️ 系统</div>
         <div class="set-row">
           <div class="set-row-t">数据刷新间隔</div>
           <div class="set-row-c">
@@ -884,9 +910,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
             <div class="sb-d" style="margin-top:8px">后台全局轮询（任务/审核/过期/坐标报错检测）的间隔，默认 15 秒；保存后立即生效。<br>标题栏铃铛左侧的 🔄 刷新图标可随时手动刷新当前页面（含响铃检测）。</div>
           </div>
         </div>
-
-        <!-- 分组三：系统 -->
-        <div class="set-group">⚙️ 系统</div>
         <div class="set-row">
           <div class="set-row-t">任务编号区域码</div>
           <div class="set-row-c">
@@ -894,6 +917,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
               <input class="inp" id="taskRegionCode" style="width:120px" placeholder="JH05">
               <button class="btn primary btn-sm" onclick="saveRegionCode()">保存</button>
             </div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-row-t">版本更新</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="font-size:12.5px;color:var(--sub)">当前版本 <b id="curVerText" style="color:#333A44"></b></span>
+              <button class="btn primary btn-sm" id="distBtn" onclick="checkDist()">🔍 检查更新</button>
+              <span style="font-size:12.5px;font-weight:600" id="distStatus"></span>
+            </div>
+            <div class="sb-d" style="margin-top:8px">老板上传新版本后，点「检查更新」：云端有新版本时按钮变为「⬇ 立即更新」，点击自动下载并重载生效。</div>
           </div>
         </div>
 
@@ -1244,9 +1278,8 @@ try {
         notifyShell(hide ? 'bell-hidden' : 'bell-visible');
       }
       if (m === 'manual-refresh') {
-        // 壳标题栏刷新符号（2026-09-08 改）：真重载页面 HTML——旧实现只刷数据，
-        // 导致 admin.html 的 CSS/结构改动在壳里永远不生效（壳禁 F5/右键）。
-        // 重载前先跑归档+响铃检测；登录态由 jh_session 会话恢复，不会掉线。
+        // 壳标题栏刷新符号（2026-09-08 定稿）：仅保留原功能（归档+响铃检测+真重载页面）；
+        // 版本更新不走这里——系统设置页「检查更新」按钮负责（2026-09-08 老板改）
         (async () => {
           try { await api('autoArchiveExpired'); } catch (e) { /* 静默 */ }
           try { await pollEvents(); } catch (e) { /* 静默 */ }
@@ -1558,6 +1591,8 @@ function renderDetail(res) {
 }
 
 // ===== 任务流程档案：日志时间线 + 提交审核情况（2026-09-08 老板定稿） =====
+const APP_VERSION = '0.9.04'; // 版本号（2026-09-08 老板定：与手机端对齐；改此值=双方统一口径改动，同步 bump 手机端）
+try { $('sideVer').textContent = 'v' + APP_VERSION; $('curVerText').textContent = 'v' + APP_VERSION; } catch (e) { /* 静默 */ }
 const ARCH_IC = { create: '📝', send: '📨', edit: '✏️', extend: '⏰', reassign: '👤', withdraw: '↩️', finishReq: '📤', reviewApprove: '✅', reviewReject: '⛔', autoDone: '🤖', archive: '🗄️', replan: '🗺', visit: '🏪', resched: '📅', visitAutoSubmit: '⏱', visitAutoCancel: '⏱' };
 const ARCH_COLOR = { create: '#2F80ED', send: '#2F80ED', edit: '#F5A623', extend: '#B97A0B', reassign: '#7C3AED', withdraw: '#8A93A0', finishReq: '#B97A0B', reviewApprove: '#34A853', reviewReject: '#E5484D', autoDone: '#34A853', archive: '#E5484D', replan: '#2F80ED', visit: '#16A34A', resched: '#2F80ED', visitAutoSubmit: '#34A853', visitAutoCancel: '#8A93A0' };
 function fmtT8(ts) {
@@ -2076,9 +2111,16 @@ let trackMap = null, trackLibLoaded = false, trackSelId = null;
 let trackMarkers = null, trackPolyline = null, trackLocsCache = [];
 let visitTrackMap = null, visitTrackPolyline = null;
 // 控制项（2026-09-08 老板定：全部/轨迹/客户点/大小/图例开关）
-let trackShowAll = false, trackShowLine = true, custLayerOn = true, custSize = 12;
-let custKindOn = { ongoing: true, pending: true, visited: true, gray: false };
+let trackShowAll = false, trackShowLine = true, custLayerOn = true, custSize = 16;
+let custKindOn = { ongoing: true, pending: true, visited: true, gray: true };
 let custLayer = null, custInfoWin = null, trackCustCache = null, trackCustCacheAt = 0;
+// 仓库星（2026-09-08 老板定）：控件卡「仓库」勾选项控制显隐（默认勾选显示，与选店页口径一致）
+const TRACK_WH = { lat: 28.970802, lng: 120.154526 };
+let trackWhOn = true, trackWhStar = null;
+// 实时路况（2026-09-08 老板定）：开关默认关闭，开启后 opacity 恒为 1（透明度滑块已按老板要求移除）
+let trafficOn = false, trafficOpacity = 1;
+// 地图拾取器（2026-09-08 老板定，官方示例口径）：开关开启后点击地图显示坐标（后台口径：经度在前）
+let pickOn = false;
 
 function loadTrackMapLib() {
   if (trackMap || trackLibLoaded) return;
@@ -2089,14 +2131,184 @@ function loadTrackMapLib() {
   document.head.appendChild(s);
 }
 
-function buildTrackMap() {
+function buildTrackMap(keep) {
   if (trackMap || !$('trackMap')) return;
+  const baseMap = [{ type: 'vector', features: ['base', 'building3d', 'label'] }];
+  if (trafficOn) baseMap.push({ type: 'traffic', opacity: trafficOpacity }); // 实时路况（2026-09-08 老板定）
   trackMap = new TMap.Map($('trackMap'), {
-    center: new TMap.LatLng(28.970802, 120.154526),
-    zoom: 12, pitch: 0, rotation: 0, zoomControl: false, rotationControl: false,
-    baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] }
+    center: (keep && keep.center) ? keep.center : new TMap.LatLng(28.970802, 120.154526),
+    zoom: (keep && keep.zoom != null) ? keep.zoom : 12,
+    pitch: 0, rotation: 0, baseMap
+  });
+  // 控件定制（2026-09-08 老板定）：只留 3D 导航球；移除 +/− 缩放与比例尺（官方 API removeControl）
+  try { trackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 静默 */ }
+  try { trackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.SCALE); } catch (e) { /* 静默 */ }
+  trackMap.on('bounds_changed', () => positionTrackWhStar()); // 地图移动/缩放时仓库星跟随
+  // 地图拾取器（2026-09-08 老板定）：拾取开关开启时点击地图 → 胶囊显示坐标
+  trackMap.on('click', evt => {
+    if (!pickOn || !evt || !evt.latLng) return;
+    showPickCoord(evt.latLng.getLat().toFixed(6), evt.latLng.getLng().toFixed(6));
   });
   refreshTrackPage();
+}
+
+// 地图拾取器（2026-09-08 老板定）：拾取开关开启时点击地图，胶囊显示坐标于地图左上角（点胶囊=复制）
+let pickCoordVal = '';
+function showPickCoord(lat, lng) {
+  pickCoordVal = lng + ',' + lat; // 后台口径：经度在前
+  const el = $('pickCapsule');
+  if (el) {
+    el.textContent = '坐标：' + pickCoordVal;
+    el.style.display = '';
+    // 捕获阶段处理（2026-09-08 老板报障修复）：点击直接执行复制+截断事件，防穿透到地图；
+    // 注意不能靠冒泡阶段 inline onclick——捕获 stopPropagation 会把它一并拦掉
+    if (!el._pickGuard) {
+      el._pickGuard = true;
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        copyPickCore(); // 捕获阶段直接复制（inline onclick 已被此机制取代）
+      }, true);
+      ['mousedown', 'mouseup', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach(ev => {
+        el.addEventListener(ev, e => { e.stopPropagation(); }, true);
+      });
+    }
+  }
+}
+
+// 复制坐标核心（2026-09-08 老板定）：由胶囊捕获阶段 click 直接调用；剪贴板 API + execCommand 兜底
+function copyPickCore() {
+  if (!pickCoordVal) return;
+  const done = () => {
+    const el = $('pickCapsule');
+    if (el) {
+      // 播放音效：预加载实例优先（2026-09-08 老板定：同步迅速）；失败则走 playDing 兜底
+      if (pickAudio) {
+        try { pickAudio.currentTime = 0; pickAudio.play().catch(() => playDing('voice/DJ.mp3')); } catch (e) { playDing('voice/DJ.mp3'); }
+      } else {
+        playDing('voice/DJ.mp3');
+      }
+      // 弹一下（2026-09-08 老板定）：JS 定时器驱动缩放，文字保持不变
+      el.style.transform = 'scale(1.15)';
+      setTimeout(() => { if (el) el.style.transform = 'scale(1)'; }, 80);
+    }
+  };
+  const fallback = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = pickCoordVal;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    } catch (err) { /* 静默 */ }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(pickCoordVal).then(done).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+
+// ===== 店铺搜索（2026-09-08 老板定：本地缓存匹配，点候选定位高亮，零接口） =====
+let custSearchTimer = null, custSearchHit = null, custSearchHitTimer = null;
+function onCustSearch() {
+  const kw = ($('custSearchInput').value || '').trim();
+  const clear = $('custSearchClear');
+  if (clear) clear.style.display = kw ? '' : 'none';
+  clearTimeout(custSearchTimer);
+  custSearchTimer = setTimeout(() => doCustSearch(kw), 200); // 防抖 200ms
+}
+
+async function doCustSearch(kw) {
+  const drop = $('custSearchDrop');
+  if (!drop) return;
+  if (!kw) { drop.style.display = 'none'; drop.innerHTML = ''; return; }
+  const list = await loadCustData(false); // 复用 60 秒缓存（49 回访 + 1219 商城）
+  const matched = list.filter(c => c && c.name && c.name.includes(kw));
+  const total = matched.length;
+  const hits = matched.slice(0, 8);
+  if (!total) {
+    drop.style.display = '';
+    drop.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--sub)">无匹配店铺</div>';
+    return;
+  }
+  drop.style.display = '';
+  let html = hits.map(c =>
+    `<div style="padding:8px 12px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--line)" onmouseover="this.style.background='#F5F7FA'" onmouseout="this.style.background=''" onclick="gotoCust('${c._id}')"><b>${esc(c.name)}</b><div style="font-size:11px;color:var(--sub);margin-top:2px">${esc(c.address || '')}</div></div>`
+  ).join('');
+  // 超出 8 条：底部常驻灰字提示（2026-09-08 老板定）
+  if (total > 8) {
+    html += `<div style="padding:7px 12px;font-size:11.5px;color:var(--sub);background:#FAFBFC">仅显示前 8 条，共 ${total} 条匹配，继续输入缩小范围</div>`;
+  }
+  drop.innerHTML = html;
+}
+
+function gotoCust(id) {
+  const c = (trackCustCache || []).find(x => x && x._id === id);
+  if (!c || !trackMap) return;
+  trackMap.setCenter(new TMap.LatLng(c.lat, c.lng));
+  trackMap.setZoom(16);
+  // 高亮标记（金色，5 秒后自动消失）
+  if (custSearchHit) custSearchHit.setGeometries([]);
+  custSearchHit = new TMap.MultiMarker({
+    map: trackMap,
+    styles: { h: new TMap.MarkerStyle({ width: 30, height: 30, anchor: { x: 15, y: 15 }, src: dotIcon('#FFB300', '#FFFFFF') }) },
+    geometries: [{ id: 'hit', styleId: 'h', position: new TMap.LatLng(c.lat, c.lng) }]
+  });
+  clearTimeout(custSearchHitTimer);
+  custSearchHitTimer = setTimeout(() => { if (custSearchHit) custSearchHit.setGeometries([]); }, 5000);
+  const drop = $('custSearchDrop');
+  if (drop) { drop.style.display = 'none'; drop.innerHTML = ''; }
+  const inp = $('custSearchInput');
+  if (inp) inp.blur();
+}
+
+function clearCustSearch() {
+  const inp = $('custSearchInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  const drop = $('custSearchDrop');
+  if (drop) { drop.style.display = 'none'; drop.innerHTML = ''; }
+  const clear = $('custSearchClear');
+  if (clear) clear.style.display = 'none';
+}
+
+// 路况开关/透明度变化 → 销毁重建地图（2026-09-08 老板定；traffic 图层不支持运行时改透明度）
+function rebuildTrackMap() {
+  if (!trackMap) return;
+  trafficOn = !!$('trafficSw').checked;
+  const keep = { center: trackMap.getCenter(), zoom: trackMap.getZoom() }; // 保留当前视野
+  try { trackMap.destroy(); } catch (e) { /* 静默 */ }
+  trackMap = null;
+  trackMarkers = null; trackPolyline = null; custLayer = null; custInfoWin = null; custSearchHit = null; // 旧实例随地图作废
+  if (trackWhStar) { try { trackWhStar.remove(); } catch (e) { /* 静默 */ } trackWhStar = null; }
+  buildTrackMap(keep); // 重建后 refreshTrackPage 会重画全部图层
+}
+
+// 拾取开关（2026-09-08 老板定）：开启=点地图出坐标胶囊（十字光标）+预加载音效；关闭=恢复并隐藏胶囊
+let pickAudio = null;
+function togglePick() {
+  pickOn = !!$('pickSw').checked;
+  const el = $('trackMap');
+  if (el) el.style.cursor = pickOn ? 'crosshair' : '';
+  const cap = $('pickCapsule');
+  if (cap && !pickOn) cap.style.display = 'none';
+  if (pickOn) {
+    // 预加载 DJ 音效（2026-09-08 老板定：严格一次性——只在首次创建时 load，之后仅复位进度）
+    if (!pickAudio) {
+      pickAudio = new Audio('voice/DJ.mp3');
+      pickAudio.volume = 0.8;
+      pickAudio.preload = 'auto';
+      try { pickAudio.load(); } catch (e) { /* 静默 */ }
+    }
+    try { pickAudio.currentTime = 0; } catch (e) { /* 静默 */ }
+    // 静默取地图中心点坐标 → 胶囊立即出现（2026-09-08 老板定；不发鼠标事件，不影响鼠标）
+    if (trackMap && trackMap.getCenter) {
+      const c = trackMap.getCenter();
+      showPickCoord(c.getLat().toFixed(6), c.getLng().toFixed(6));
+    }
+  }
 }
 
 function fmtClock(ts) {
@@ -2116,17 +2328,20 @@ async function refreshTrackPage() {
     return `<span class="ctab ${trackSelId === l.salesmanId ? 'on' : ''}" style="${stale ? 'opacity:.55' : ''}" onclick="selectTrackMan('${l.salesmanId}')">${label}</span>`;
   }).join('') || '<span style="color:var(--sub)">暂无位置数据（业务员手机未上报或未开启定位）</span>';
   $('trackStat').textContent = '刷新于 ' + fmtClock(Date.now());
-  drawTrackMarkers();
-  if (trackSelId) drawTrackLine(trackSelId);
-  else if (trackPolyline) trackPolyline.setGeometries([]); // 未选中：确保旧轨迹清除
-  drawCustLayer(); // 客户点位图层（60 秒缓存数据，15 秒仅重绘）
+  // 2026-09-08 审查加固：各绘制步骤独立 try——任何一步出错都不影响其余图层更新
+  try { drawTrackMarkers(); } catch (e) { /* 静默 */ }
+  if (trackSelId) drawTrackLine(trackSelId).catch(() => {});
+  else if (trackPolyline) { try { trackPolyline.setGeometries([]); } catch (e) { /* 静默 */ } } // 未选中：确保旧轨迹清除
+  drawCustLayer().catch(() => {});
+  try { positionTrackWhStar(); } catch (e) { /* 静默 */ } // 仓库星随刷新同步（2026-09-08 老板定）
 }
 
 function drawTrackMarkers() {
   if (!trackMap) return;
   const styles = {};
   // 「全部」开关（2026-09-08 老板定）：默认只画选中业务员；点全部显示所有业务员位置
-  const src = trackShowAll ? trackLocsCache : trackLocsCache.filter(l => l.salesmanId === trackSelId);
+  const src = (trackShowAll ? trackLocsCache : trackLocsCache.filter(l => l.salesmanId === trackSelId))
+    .filter(l => l && l.lat && l.lng && l.salesmanId); // 2026-09-08 审查加固：缺坐标/缺 id 的脏数据不绘制
   const geos = src.map(l => {
     styles['m' + l.salesmanId] = new TMap.MarkerStyle({
       width: 24, height: 24, anchor: { x: 12, y: 12 },
@@ -2138,6 +2353,34 @@ function drawTrackMarkers() {
   else trackMarkers = new TMap.MultiMarker({ map: trackMap, styles, geometries: geos });
 }
 
+// ===== 仓库星（2026-09-08 老板定：控件卡「仓库」勾选项，默认显示） =====
+function ensureTrackWhStar() {
+  if (trackWhStar) return trackWhStar;
+  const div = document.createElement('div');
+  div.textContent = '⭐';
+  div.style.cssText = 'position:absolute;z-index:11;transform:translate(-50%,-50%);font-size:20px;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.3);display:none';
+  $('trackMap').appendChild(div);
+  trackWhStar = div;
+  return div;
+}
+
+function positionTrackWhStar() {
+  if (!trackMap) return;
+  const star = ensureTrackWhStar();
+  if (!trackWhOn) { star.style.display = 'none'; return; }
+  try {
+    const p = trackMap.projectToContainer(new TMap.LatLng(TRACK_WH.lat, TRACK_WH.lng));
+    star.style.left = p.getX() + 'px';
+    star.style.top = p.getY() + 'px';
+    star.style.display = '';
+  } catch (e) { /* 投影失败静默 */ }
+}
+
+function toggleWhStar() {
+  trackWhOn = !!$('whSw').checked;
+  positionTrackWhStar();
+}
+
 async function selectTrackMan(id) {
   // 再点同一个 = 取消选中（2026-09-08 老板定）；点选不自动移动地图
   if (trackSelId === id) {
@@ -2145,8 +2388,10 @@ async function selectTrackMan(id) {
     if (trackPolyline) trackPolyline.setGeometries([]);
   } else {
     trackSelId = id;
+    // 选中业务员：客户点自动切换为「该业务员的任务客户点」（B 口径，drawCustLayer 内部过滤；
+    // 2026-09-08 老板定：点业务员后他的任务客户点同时显示，不再显示其他业务员的客户）
   }
-  refreshTrackPage(); // 重新渲染 chips 高亮，内部会按 trackSelId 画轨迹（避免双画双请求）
+  refreshTrackPage().catch(() => {}); // 重新渲染 chips 高亮，内部会按 trackSelId 画轨迹（2026-09-08 审查加固：失败不打断）
 }
 
 async function drawTrackLine(id) {
@@ -2197,7 +2442,12 @@ async function loadCustData(force) {
   if (!force && trackCustCache && Date.now() - trackCustCacheAt < 60000) return trackCustCache;
   const [cc, tt] = await Promise.all([api('listCustomers', {}), api('listTasks', {})]);
   const taskMap = {};
-  (tt.ok ? (tt.tasks || []) : []).forEach(t => { (t.customerIds || []).forEach(id => { taskMap[id] = t.salesmanId; }); });
+  (tt.ok ? (tt.tasks || []) : []).forEach(t => {
+    // 2026-09-08 修复：优先新接口顶层 customerIds；老云端兜底用 dayPlan 各天合并
+    const ids = (t.customerIds && t.customerIds.length) ? t.customerIds
+      : ((t.dayPlan || []).reduce((a, d) => a.concat(d.customerIds || []), []));
+    ids.forEach(id => { taskMap[id] = t.salesmanId; });
+  });
   trackCustCache = (cc.ok ? (cc.customers || []) : []).filter(c => c && c.lat && c.lng).map(c => ({ ...c, taskSalesmanId: taskMap[c._id] || null }));
   trackCustCacheAt = Date.now();
   return trackCustCache;
@@ -2208,7 +2458,8 @@ async function drawCustLayer() {
   if (custInfoWin) { try { custInfoWin.close(); } catch (e) { /* 静默 */ } custInfoWin = null; }
   if (!custLayerOn) { if (custLayer) custLayer.setGeometries([]); return; }
   const list = await loadCustData(false);
-  // B 口径（老板定）：默认只显示选中业务员的任务客户；「全部」模式显示所有
+  // 最终口径（2026-09-08 老板定）：选中业务员 → 只显示他自己的任务客户点；
+  // 其他客户点无论什么状态（含无任务灰点）全部消失；「全部」模式/未选中 → 显示所有客户点
   const sel = trackSelId;
   const items = list.filter(c => {
     if (!sel || trackShowAll) return true;
@@ -2223,9 +2474,13 @@ async function drawCustLayer() {
   });
   const COLOR = { ongoing: '#2F80ED', pending: '#F5531C', visited: '#34A853', gray: '#9CA3AF' };
   const ST = { ongoing: '拜访中', pending: '未拜访', visited: '已回访', gray: '无任务' };
+  // 图层叠放顺序（2026-09-08 老板定）：已回访（最上层）→ 拜访中 → 未拜访 → 无任务（最底层）
+  const kindOf = c => (c.visitState === 'in_task' ? (c.visitStatus || 'pending') : 'gray');
+  const Z_ORDER = { gray: 0, pending: 1, ongoing: 2, visited: 3 };
+  items.sort((a, b) => Z_ORDER[kindOf(a)] - Z_ORDER[kindOf(b)]);
   const styles = {};
   const geos = items.map(c => {
-    const kind = c.visitState === 'in_task' ? (c.visitStatus || 'pending') : 'gray';
+    const kind = kindOf(c);
     const color = COLOR[kind] || COLOR.gray;
     const sid = 'c' + color.replace('#', '');
     if (!styles[sid]) {
@@ -2294,9 +2549,12 @@ async function openVisitTrack(visitId) {
   if (!visitTrackMap) {
     visitTrackMap = new TMap.Map($('visitTrackMap'), {
       center: new TMap.LatLng(28.970802, 120.154526),
-      zoom: 14, pitch: 0, rotation: 0, zoomControl: false, rotationControl: false,
+      zoom: 14, pitch: 0, rotation: 0,
       baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] }
     });
+    // 控件定制（2026-09-08 老板定）：只留 3D 导航球；移除 +/− 缩放与比例尺
+    try { visitTrackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 静默 */ }
+    try { visitTrackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.SCALE); } catch (e) { /* 静默 */ }
   }
   const paths = pts.map(p => ({ position: new TMap.LatLng(p.lat, p.lng) }));
   const geos = paths.length > 1 ? [{ id: 'v', styleId: 'line', paths }] : [];
@@ -3895,6 +4153,71 @@ async function saveTrackSetting() {
   const r4 = await api('setSetting', { key: 'trackKeepDays', value: days });
   if (!r4.ok) { alert(r4.msg || '保存失败'); return; }
   alert(`已保存：工作时段 ${r1.value}:00~${r2.value}:00 · 非工作档位 ${odt} · 轨迹保留 ${r4.value} 天`);
+}
+
+// ===== 版本检查与更新（2026-09-08 老板定：仅设置页手动触发；标题栏刷新不查版本） =====
+// 状态文字情绪化配色：绿=最新/完成 · 橙=发现新版 · 灰=暂无 · 蓝=进行中 · 红=失败
+async function checkDist() {
+  const btn = $('distBtn');
+  const st = $('distStatus');
+  if (!btn || !st) return;
+  btn.disabled = true; btn.textContent = '检查中…';
+  st.textContent = ''; st.style.color = '';
+  try {
+    const chk = await fetch('/admin-dist/check', { method: 'POST' }).then(r => r.json());
+    if (chk && chk.ok) {
+      if (chk.version && chk.version !== APP_VERSION) {
+        st.innerHTML = `发现新版本 <b>v${esc(chk.version)}</b>`;
+        st.style.color = '#EA8A00'; // 橙：有新版本可更新
+        btn.textContent = '⬇ 立即更新';
+        btn.onclick = applyDist;
+      } else {
+        st.innerHTML = `已是最新版本 <b>v${APP_VERSION}</b> ✓`;
+        st.style.color = '#16A34A'; // 绿：一切就绪
+        btn.textContent = '🔍 检查更新';
+        btn.onclick = checkDist;
+      }
+    } else {
+      st.textContent = (chk && chk.msg) || '云端暂无更新包';
+      st.style.color = '#8A94A6'; // 灰：中性提示
+      btn.textContent = '🔍 检查更新';
+      btn.onclick = checkDist;
+    }
+  } catch (e) {
+    st.textContent = '检查失败：' + (e && e.message ? e.message : '网络错误');
+    st.style.color = '#DC2626'; // 红：出错
+    btn.textContent = '🔍 检查更新';
+    btn.onclick = checkDist;
+  }
+  btn.disabled = false;
+}
+
+async function applyDist() {
+  const btn = $('distBtn');
+  const st = $('distStatus');
+  if (!btn || !st) return;
+  btn.disabled = true; btn.textContent = '更新中…';
+  st.textContent = '正在下载并覆盖本地文件…';
+  st.style.color = '#1D4ED8'; // 蓝：进行中
+  try {
+    const ap = await fetch('/admin-dist/apply', { method: 'POST' }).then(r => r.json());
+    if (ap && ap.ok) {
+      st.textContent = '更新完成，正在重载…';
+      st.style.color = '#16A34A'; // 绿：成功
+      location.reload();
+      return;
+    }
+    st.textContent = (ap && ap.msg) || '更新失败';
+    st.style.color = '#DC2626'; // 红：出错
+    btn.textContent = '⬇ 立即更新';
+    btn.onclick = applyDist;
+  } catch (e) {
+    st.textContent = '更新失败：' + (e && e.message ? e.message : '网络错误');
+    st.style.color = '#DC2626'; // 红：出错
+    btn.textContent = '⬇ 立即更新';
+    btn.onclick = applyDist;
+  }
+  btn.disabled = false;
 }
 
 // ===== 服务号长期通知配置 =====

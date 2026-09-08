@@ -254,10 +254,11 @@ function buildMap() {
     zoom: 12,
     pitch: 0,
     rotation: 0,
-    zoomControl: false,      // 去掉加减缩放按钮（2026-09-07 老板定）
-    rotationControl: false,  // 去掉导航球/罗盘（2026-09-07 老板定）
     baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] }
   });
+  // 控件定制（2026-09-08 老板定）：只留 3D 导航球；移除 +/− 缩放与比例尺（官方 API removeControl）
+  try { ntMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 控件不存在则静默 */ }
+  try { ntMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.SCALE); } catch (e) { /* 控件不存在则静默 */ }
   // ===== 圆点 5 层显示层级（老板 2026-09-05 定）：创建顺序即叠放顺序，后建者在上 =====
   // ⑤ 最底：已拜访（深灰蓝，不可点）
   ntLayerVisited = new TMap.MultiMarker({

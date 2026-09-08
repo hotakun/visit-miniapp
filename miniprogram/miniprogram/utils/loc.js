@@ -161,6 +161,9 @@ function trackToday(ts) {
   const d = new Date(ts + 8 * 3600 * 1000);
   return d.toISOString().slice(0, 10);
 }
+// 防漂移（2026-09-08 M3 老板拍板）：精度>150m 的点不入轨迹；与上一轨迹点速度>30m/s（108km/h）判为漂移剔除
+let lastTrackPt = null;
+let lastTrackDay = '';
 function sampleTrack(pt) {
   const now = Date.now();
   try {
@@ -178,7 +181,18 @@ function sampleTrack(pt) {
     const uploadMs = isWork ? 60000 : pair[1];
     if (!seg.last || now - seg.last >= sampleMs) {
       seg.last = now;
-      seg.buffer.push({ lat: pt.lat, lng: pt.lng, acc: pt.accuracy || 0, t: now });
+      const acc = Number(pt.accuracy) || 0;
+      const day = trackToday(now);
+      let drift = acc > 150; // 精度差直接丢弃
+      if (!drift && lastTrackPt && lastTrackDay === day) {
+        const dt = (now - lastTrackPt.t) / 1000;
+        if (dt > 0 && haversineM(lastTrackPt.lat, lastTrackPt.lng, pt.lat, pt.lng) / dt > 30) drift = true; // 速度超 30m/s
+      }
+      if (!drift) {
+        seg.buffer.push({ lat: pt.lat, lng: pt.lng, acc, t: now });
+        lastTrackPt = { lat: pt.lat, lng: pt.lng, t: now };
+        lastTrackDay = day;
+      }
       if (seg.buffer.length > 120) seg.buffer.shift();
     }
     if (seg.buffer.length && now - seg.lastUpload >= uploadMs) {

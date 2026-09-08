@@ -368,6 +368,43 @@ const server = http.createServer(async (req, res) => {
     });
     return;
   }
+  // 后台文件分发（2026-09-08 老板定：文员点刷新自动对齐版本号；老板手动上传后才更新）
+  if (req.method === 'POST' && req.url === '/admin-dist/check') {
+    try {
+      const meta = await callApi({ action: 'getAdminDistMeta' });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(meta);
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, msg: e.message }));
+    }
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/admin-dist/apply') {
+    try {
+      const meta = JSON.parse(await callApi({ action: 'getAdminDistMeta' }));
+      if (!meta.ok) throw new Error(meta.msg || '云端暂无分发文件');
+      const grab = async (kind, parts) => {
+        let out = '';
+        for (let p = 0; p < parts; p++) {
+          const r = JSON.parse(await callApi({ action: 'getAdminDistPart', kind, part: p }));
+          if (!r.ok) throw new Error('分片获取失败：' + r.msg);
+          out += r.content;
+        }
+        return out;
+      };
+      const html = await grab('adminHtml', meta.adminHtmlParts);
+      const ntmap = await grab('ntMapJs', meta.ntMapJsParts);
+      require('fs').writeFileSync(require('path').join(__dirname, 'admin.html'), html, 'utf8');
+      require('fs').writeFileSync(require('path').join(__dirname, 'nt-map.js'), ntmap, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, version: meta.version }));
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, msg: e.message }));
+    }
+    return;
+  }
   const raw = req.url.split('?')[0]; // 剥掉 query（如 nt-map.js?v=0906 防缓存版本号）
   const file = raw === '/' ? 'admin.html' : (() => { try { return decodeURIComponent(raw.slice(1)); } catch (e) { return raw.slice(1); } })();
   const safe = path.normalize(path.join(__dirname, file));

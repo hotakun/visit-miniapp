@@ -123,11 +123,19 @@ async function reportLocation(user, e) {
 // 轨迹片段写入（2026-09-08 M2）：端上按时间分层采样后打包上传，一条=一个片段文档
 async function reportTrack(user, e) {
   const raw = Array.isArray(e.pts) ? e.pts : [];
-  const pts = raw
+  const base = raw
     .filter(p => p && isFinite(Number(p.lat)) && isFinite(Number(p.lng)))
     .slice(0, 120)
     .map(p => ({ lat: Number(p.lat), lng: Number(p.lng), acc: Number(p.acc) || 0, t: Number(p.t) || Date.now() }));
-  if (!pts.length) return { ok: false, code: 'BAD_ARG', msg: '没有有效轨迹点' };
+  // 防漂移（2026-09-08 M3 老板拍板，云端二道防线）：精度>150m 或 与前保留点速度>30m/s 的点剔除
+  const pts = [];
+  for (const p of base) {
+    if (p.acc > 150) continue;
+    const prev = pts[pts.length - 1];
+    if (prev && p.t - prev.t > 0 && haversine(prev.lat, prev.lng, p.lat, p.lng) / ((p.t - prev.t) / 1000) > 30) continue;
+    pts.push(p);
+  }
+  if (pts.length < 2) return { ok: true, n: 0, dropped: true, msg: '片段有效点不足（漂移过滤后），已丢弃' };
   const day = /^\d{4}-\d{2}-\d{2}$/.test(String(e.day || '')) ? String(e.day) : todayStr();
   await db.collection('salesman_locations').add({
     data: {
