@@ -1,0 +1,34 @@
+<!-- 我的（对齐演示设计） -->
+<view class="page">
+  <view class="profile card">
+    <view class="avatar">{{user.name[0]}}</view>
+    <view>
+      <view class="nm">{{user.name}}</view>
+      <view class="rl">业务员 · 聚火拜访</view>
+    </view>
+  </view>
+
+  <view class="stats card">
+    <view class="s"><view class="v">{{stats.monthCount}}</view><view class="k">本月拜访</view></view>
+    <view class="s"><view class="v">{{stats.monthCust}}</view><view class="k">本月拜访客户</view></view>
+    <view class="s"><view class="v">{{stats.taskRate}}%</view><view class="k">任务完成率</view></view>
+  </view>
+
+  <view class="menu card">
+    <view class="mi" bindtap="subscribe">
+      <view class="ic" style="background:var(--primary-tint)">🔔</view>新任务提醒<text wx:if="{{mpBound}}" style="font-size:11px;color:#18A058;font-weight:700;margin-left:6px">服务号已开通</text>
+      <view class="sw {{subOn ? 'on' : ''}}" id="subSwitch"></view>
+    </view>
+    <view class="mi" bindtap="tapSetting"><view class="ic" style="background:#EFF1F4">⚙️</view>设置<view class="arrow">›</view></view>
+    <view class="mi" bindtap="tapAbout"><view class="ic" style="background:#EFF1F4">ℹ️</view>关于聚火拜访<view class="arrow">›</view></view>
+    <view class="loc-note">📍 工作时段记录位置轨迹，仅管理员可见</view>
+  </view>
+  <!-- 版本号（2026-09-08 老板定：内容界面左下角小灰字；双方统一口径改动才 bump） -->
+  <view class="ver">v{{version}}</view>
+
+  <view class="tabbar">
+    <view class="tb" bindtap="tabHome"><view class="tic">🏠</view>任务</view>
+    <view class="tb" bindtap="tabMap"><view class="tic">🗺</view>地图</view>
+    <view class="tb on"><view class="tic">👤</view>我的</view>
+  </view>
+</view>

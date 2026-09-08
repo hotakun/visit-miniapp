@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聚火拜访 · 管理后台演示</title>
+<style>
+:root{
+  --primary:#F5531C; --primary-deep:#D93E0E; --primary-tint:#FFEDE5;
+  --green:#16A34A; --green-tint:#E7F6EC; --blue:#2F80ED; --blue-tint:#E8F1FD;
+  --warn:#F5A623; --warn-tint:#FDF3E2; --danger:#E5484D; --red-tint:#FCEBEC;
+  --bg:#F5F6F8; --card:#FFFFFF; --ink:#1F2430; --sub:#66707A; --line:#EAEDF1;
+  --side:#1F2430; --radius:14px; --shadow:0 2px 10px rgba(31,36,48,.06);
+  --font:"MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei UI",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);min-height:100vh;display:flex;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;background:radial-gradient(700px 400px at 85% -5%,rgba(245,83,28,.06),transparent 60%);pointer-events:none}
+/* ===== 侧边栏 ===== */
+.side{width:232px;background:var(--side);color:#B9C0CA;display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:20}
+.side .logo{display:flex;align-items:center;gap:10px;padding:22px 20px 18px}
+.side .logo .flame{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#FF8A50,var(--primary));
+  display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 6px 16px rgba(245,83,28,.4)}
+.side .logo .nm{color:#fff;font-size:17px;font-weight:800;letter-spacing:1px}
+.side .logo .nm small{display:block;color:#7A8290;font-size:10.5px;font-weight:500;letter-spacing:.5px;margin-top:1px}
+.side .grp{font-size:11px;color:#6B7280;padding:14px 22px 7px;letter-spacing:2px}
+.nav{display:flex;flex-direction:column;gap:3px;padding:0 12px}
+.nav .ni{display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:11px;font-size:14px;font-weight:600;
+  cursor:pointer;color:#B9C0CA;transition:.15s;position:relative}
+.nav .ni:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav .ni.on{color:#fff;background:linear-gradient(135deg,#F5531C,#E0440C);box-shadow:0 6px 16px rgba(245,83,28,.35)}
+.nav .ni .ic{width:20px;text-align:center;font-size:15px}
+.nav .ni .badge{margin-left:auto;background:var(--danger);color:#fff;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:99px}
+.side .foot{padding:16px 22px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;margin-top:auto}
+.side .foot .av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FF8A50,#F5531C);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+.side .foot .nm{color:#fff;font-size:13.5px;font-weight:700}
+.side .foot .rl{color:#7A8290;font-size:11px}
+/* ===== 主区 ===== */
+.main{flex:1;margin-left:232px;padding:26px 30px 64px;max-width:1280px}
+.topbar{display:flex;align-items:center;gap:16px;margin-bottom:24px}
+.topbar .pt{font-size:22px;font-weight:800;letter-spacing:.5px}
+.topbar .pt small{display:block;font-size:12px;color:var(--sub);font-weight:500;margin-top:3px}
+.topbar .search{margin-left:auto;width:300px;height:42px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:9px;padding:0 14px;color:var(--sub);font-size:13.5px}
+/* 工作台选择页 */
+#workbenchGate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(900px 600px at 20% 0%,rgba(245,83,28,.25),transparent 55%),
+             radial-gradient(800px 500px at 85% 100%,rgba(47,128,237,.18),transparent 55%),#141821}
+.gate-box{text-align:center}
+.gate-logo{color:#fff;font-size:30px;font-weight:800;letter-spacing:2px;margin-bottom:8px}
+.gate-sub{color:#8A93A3;font-size:13.5px;font-weight:600;margin-bottom:30px}
+.gate-cards{display:flex;gap:20px;justify-content:center}
+.gate-card{width:280px;background:#fff;border-radius:20px;padding:28px 24px;text-align:left;cursor:pointer;
+  transition:.2s;position:relative;overflow:hidden}
+.gate-card:hover{transform:translateY(-4px);box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.gate-card .ic{font-size:34px}
+.gate-card .t{font-size:19px;font-weight:800;margin:10px 0 6px}
+.gate-card .d{font-size:12.5px;color:var(--sub);font-weight:600;line-height:1.7;min-height:44px}
+.gate-card .go{margin-top:14px;font-size:13px;font-weight:800}
+.gate-card.mall{border-top:5px solid var(--primary)}
+.gate-card.mall .go{color:var(--primary-deep)}
+.gate-card.new{border-top:5px solid var(--blue)}
+.gate-card.new .go{color:var(--blue)}
+.gate-all{margin-top:22px;color:#9AA3AD;font-size:13px;font-weight:700;cursor:pointer}
+.gate-all:hover{color:#fff}
+.topbar .date{height:42px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;
+  gap:8px;padding:0 14px;font-size:13.5px;font-weight:700}
+.topbar .notif{position:relative;width:42px;height:42px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);
+  display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer}
+.topbar .notif::after{content:"";position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:1.5px solid #fff}
+/* ===== 通用 ===== */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow)}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.kpi{padding:18px 20px;position:relative;overflow:hidden;animation:rise .5s cubic-bezier(.22,.8,.3,1) backwards}
+.kpi:nth-child(2){animation-delay:.06s}.kpi:nth-child(3){animation-delay:.12s}.kpi:nth-child(4){animation-delay:.18s}
+@keyframes rise{from{transform:translateY(18px);opacity:0}}
+.kpi .lb{font-size:12.5px;color:var(--sub);font-weight:700;display:flex;align-items:center;gap:7px}
+.kpi .num{font-size:34px;font-weight:800;margin:8px 0 4px;letter-spacing:.5px;font-variant-numeric:tabular-nums}
+.kpi .num small{font-size:14px;color:var(--sub);font-weight:600}
+.kpi .tr{font-size:12px;font-weight:700}
+.kpi .tr.up{color:var(--green)}.kpi .tr.down{color:var(--danger)}
+.kpi .ic{position:absolute;right:16px;top:16px;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px}
+.sect{display:grid;grid-template-columns:1.9fr 1fr;gap:16px;margin-top:16px}
+.sec-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 4px}
+.sec-head .t{font-size:15.5px;font-weight:800}
+.sec-head .more{font-size:12px;color:var(--primary-deep);font-weight:700;cursor:pointer}
+.chart-body{padding:10px 18px 18px}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--sub);font-weight:600;padding:0 20px}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+@keyframes draw{to{stroke-dashoffset:0}}
+.sman{padding:8px 20px 14px}
+.sman .row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.sman .row:last-child{margin-bottom:0}
+.sman .av{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;flex-shrink:0}
+.sman .info{flex:1}
+.sman .nm{font-size:13.5px;font-weight:700;display:flex;justify-content:space-between}
+.sman .nm span{color:var(--sub);font-weight:600;font-size:12px}
+.sman .bar{height:8px;background:#F0F2F5;border-radius:99px;margin-top:6px;overflow:hidden}
+.sman .bar i{display:block;height:100%;border-radius:99px}
+.todo-list{padding:6px 20px 16px}
+.todo{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px dashed var(--line);cursor:pointer}
+.todo:last-child{border-bottom:none}
+.todo .tg{font-size:11px;font-weight:800;padding:4px 10px;border-radius:99px;flex-shrink:0}
+.todo .tx{flex:1;font-size:13px;font-weight:600;color:#39414C}
+.todo .ct{margin-left:auto;font-size:12px;color:var(--sub);font-weight:700;flex-shrink:0}
+.todo .arrow{color:#C3C9D1;flex-shrink:0}
+/* ===== 任务向导 ===== */
+.wizard{max-width:1060px;margin:0 auto}
+.steps{display:flex;align-items:center;margin-bottom:22px}
+.step{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;color:#A6ADB8}
+.step .no{width:32px;height:32px;border-radius:50%;background:#E8EBEF;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:800;transition:.25s}
+.step.on{color:var(--ink)}
+.step.on .no{background:linear-gradient(135deg,#FF8A50,var(--primary));color:#fff;box-shadow:0 6px 14px rgba(245,83,28,.35)}
+.step.done .no{background:var(--green);color:#fff}
+.step-line{flex:1;height:3px;background:#E8EBEF;margin:0 14px;border-radius:9px;position:relative;overflow:hidden}
+.step-line i{position:absolute;inset:0;width:0;background:linear-gradient(90deg,#FF8A50,var(--primary));transition:width .5s}
+.wizard .panel{animation:rise .4s cubic-bezier(.22,.8,.3,1)}
+.whead{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 14px}
+.whead .t{font-size:17px;font-weight:800}
+.whead .hint{font-size:12.5px;color:var(--sub);font-weight:600}
+.wbody{padding:8px 24px 22px}
+.frow{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.frow label{font-size:13px;font-weight:800}
+.frow label span{color:var(--danger)}
+.frow input,.frow select{height:44px;border:1.5px solid var(--line);border-radius:11px;padding:0 14px;font-size:14px;font-family:var(--font);outline:none;background:#FBFCFD}
+.frow input:focus{border-color:var(--primary);background:#fff}
+.salesman-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.sm-card{padding:15px;border:1.5px solid var(--line);border-radius:13px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:12px;background:#fff}
+.sm-card.on{border-color:var(--primary);background:var(--primary-tint);box-shadow:0 6px 16px rgba(245,83,28,.15)}
+.sm-card .av{width:42px;height:42px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.sm-card .nm{font-size:14px;font-weight:800}
+.sm-card .rl{font-size:11.5px;color:var(--sub);margin-top:2px}
+.days-pills{display:flex;gap:10px}
+.days-pills .p{width:58px;height:44px;border-radius:12px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--sub);cursor:pointer;background:#FBFCFD}
+.days-pills .p.on{border-color:var(--primary);background:var(--primary);color:#fff;box-shadow:0 6px 14px rgba(245,83,28,.3)}
+.ctabs{display:flex;gap:8px;padding:0 24px}
+.ctab{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:700;color:var(--sub);background:#EFF1F4;cursor:pointer}
+.ctab.on{background:var(--primary-tint);color:var(--primary-deep)}
+.csel-wrap{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;padding:14px 24px 22px}
+.ctable{overflow:hidden}
+.ctable .th,.ctable .tr{display:grid;grid-template-columns:34px 1.6fr 1fr 1fr 64px;align-items:center;gap:8px;padding:11px 16px;font-size:12.5px}
+.ctable .th{background:#F8F9FB;color:var(--sub);font-weight:800}
+.ctable .tr{border-top:1px solid var(--line);cursor:pointer}
+.ctable .tr:hover{background:#FBFCFD}
+.ctable .tr.sel{background:var(--primary-tint)}
+.ck{width:18px;height:18px;border-radius:6px;border:1.5px solid #C9CFD6;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;cursor:pointer}
+.ck.on{background:var(--primary);border-color:var(--primary)}
+.ctable .nm{font-weight:700;font-size:13px}
+.ctable .sub{color:var(--sub);font-size:12px;font-weight:500}
+.dist{color:var(--primary-deep);font-weight:800;font-size:12px}
+.mini-map{position:relative;border-radius:13px;overflow:hidden;min-height:322px;background:#EDEFF2}
+.mini-map svg{display:block;width:100%;height:100%}
+.mini-map .cap{position:absolute;left:12px;top:12px;background:rgba(255,255,255,.95);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:800;box-shadow:var(--shadow)}
+.mini-map .zoom{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:6px}
+.mini-map .zoom div{width:32px;height:32px;background:#fff;border-radius:9px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-weight:800;cursor:pointer}
+.sel-side{padding:16px 18px;display:flex;flex-direction:column;min-height:322px}
+.sel-side .t{font-size:14px;font-weight:800}
+.sel-side .n{font-size:30px;font-weight:800;color:var(--primary-deep);margin:6px 0 2px}
+.sel-side .sl{font-size:12px;color:var(--sub);font-weight:600}
+.sel-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;overflow-y:auto;flex:1;align-content:flex-start}
+.sel-tags .tg{background:var(--primary-tint);color:var(--primary-deep);font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:99px;display:flex;gap:6px;align-items:center}
+.sel-tags .tg span{cursor:pointer;opacity:.6}
+.day-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 24px 20px}
+.day-col{border:1.5px solid var(--line);border-radius:13px;padding:12px;min-height:150px;background:#FBFCFD}
+.day-col .dh{font-size:12.5px;font-weight:800;color:var(--sub);margin-bottom:9px;display:flex;justify-content:space-between}
+.day-col .dh b{color:var(--ink)}
+.day-col.today{border-color:var(--primary);background:var(--primary-tint)}
+.cchip{background:#fff;border:1px solid var(--line);border-radius:9px;padding:7px 9px;font-size:11.5px;font-weight:700;margin-bottom:7px;cursor:grab}
+.sum-row{display:flex;gap:14px;padding:0 24px 20px}
+.sum{flex:1;border-radius:13px;padding:15px 18px;background:#F8F9FB}
+.sum .k{font-size:12px;color:var(--sub);font-weight:700}
+.sum .v{font-size:21px;font-weight:800;margin-top:5px}
+.sum .v small{font-size:12px;color:var(--sub);font-weight:600}
+.wfoot{display:flex;justify-content:flex-end;gap:12px;padding:18px 24px;border-top:1px solid var(--line)}
+.btn{height:44px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 22px;
+  font-size:14.5px;font-weight:800;cursor:pointer;border:none;font-family:var(--font)}
+.btn.ghost{background:#fff;border:1.5px solid var(--line);color:var(--sub)}
+.btn.primary{background:linear-gradient(135deg,#FF7A3D,var(--primary));color:#fff;box-shadow:0 8px 18px rgba(245,83,28,.32)}
+.btn.primary:active{transform:scale(.98)}
+.btn.green{background:linear-gradient(135deg,#2AC46A,#16A34A);color:#fff;box-shadow:0 8px 18px rgba(22,163,74,.3)}
+/* ===== 报表 ===== */
+.filters{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.filters .f{height:42px;background:var(--card);border-radius:11px;box-shadow:var(--shadow);display:flex;align-items:center;gap:8px;padding:0 13px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid transparent}
+.filters .f span{color:var(--sub);font-weight:600}
+.filters .f.on{border-color:var(--primary)}
+.bignum-card{background:linear-gradient(125deg,#1F2430 0%,#2A313F 100%);color:#fff;border-radius:16px;padding:20px 22px;position:relative;overflow:hidden}
+.bignum-card::after{content:"";position:absolute;right:-40px;top:-40px;width:170px;height:170px;border-radius:50%;background:rgba(245,83,28,.22)}
+.bignum-card .lb{font-size:13px;opacity:.85;font-weight:600}
+.bignum-card .num{font-size:40px;font-weight:800;margin:8px 0;letter-spacing:1px;font-variant-numeric:tabular-nums}
+.bignum-card .num span{color:#FF8A50;font-size:20px}
+.bignum-card .sub{font-size:12.5px;opacity:.75}
+.rank{padding:12px 20px 18px}
+.rank-row{display:flex;align-items:center;gap:12px;margin-bottom:13px}
+.rank-row .no{width:24px;height:24px;border-radius:8px;background:#F0F2F5;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--sub);flex-shrink:0}
+.rank-row:nth-child(2) .no{background:var(--primary);color:#fff}
+.rank-row .nm{width:52px;font-size:13px;font-weight:700;flex-shrink:0}
+.rank-row .bar{flex:1;height:10px;background:#F0F2F5;border-radius:99px;overflow:hidden}
+.rank-row .bar i{display:block;height:100%;border-radius:99px}
+.rank-row .v{width:66px;text-align:right;font-size:12.5px;font-weight:800;flex-shrink:0}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{background:#F8F9FB;color:var(--sub);font-weight:800;text-align:left;padding:11px 16px;font-size:12px}
+.tbl td{padding:12px 16px;border-top:1px solid var(--line);font-weight:600}
+.tbl .sub{color:var(--sub);font-size:12px;font-weight:500}
+.tbl .pill{font-size:11px;font-weight:800;padding:4px 10px;border-radius:99px}
+.placeholder{padding:60px;text-align:center;font-size:15px;color:var(--sub);font-weight:700}
+/* 人员管理弹窗 */
+.pmodal{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center}
+.pmodal.open{display:flex}
+.pmodal .mask{position:absolute;inset:0;background:rgba(15,18,22,.5)}
+.pmodal .box{position:relative;width:430px;background:#fff;border-radius:16px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.3)}
+.pmodal .box .t{font-size:17px;font-weight:800;margin-bottom:18px}
+.pmodal .row{margin-bottom:14px}
+.pmodal .row label{display:block;font-size:13px;font-weight:800;margin-bottom:7px}
+.pmodal .row input{width:100%;height:42px;border:1.5px solid var(--line);border-radius:10px;padding:0 13px;font-size:14px;font-family:var(--font);outline:none}
+.pmodal .row input:focus{border-color:var(--primary)}
+.pmodal .btns{display:flex;justify-content:flex-end;gap:10px;margin-top:6px}
+.toggle-mini{width:40px;height:22px;border-radius:99px;background:#E4E7EB;position:relative;cursor:pointer;display:inline-block;vertical-align:middle}
+.toggle-mini::after{content:"";position:absolute;top:2.5px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.2s}
+.toggle-mini.on{background:var(--green)}
+.toggle-mini.on::after{left:20px}
+.tbl .act{color:var(--blue);font-weight:800;cursor:pointer;margin-right:12px}
+.tbl .act.del{color:var(--danger)}
+.toast-adm{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(14px);background:#1F2430;color:#fff;
+  font-size:13.5px;font-weight:600;padding:11px 20px;border-radius:999px;opacity:0;pointer-events:none;z-index:99;transition:.25s}
+.toast-adm.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.steps-mini .smp{font-size:12px;font-weight:700;color:#A6ADB8}
+.steps-mini .smp.on{color:var(--primary-deep)}
+.note{position:fixed;bottom:16px;left:252px;background:#1F2430;color:#C6CBD4;padding:9px 15px;border-radius:99px;font-size:12px;font-weight:600;z-index:30;pointer-events:none}
+</style>
+</head>
+<body>
+<!-- ===== 工作台选择页（登录后入口，0.6 双工作台） ===== -->
+<div id="workbenchGate">
+  <div class="gate-box">
+    <div class="gate-logo">🔥 聚火拜访</div>
+    <div class="gate-sub">欢迎回来，卿燕 · 请选择要进入的工作台</div>
+    <div class="gate-cards">
+      <div class="gate-card mall" onclick="enterWorkbench('mall')">
+        <div class="ic">🔥</div>
+        <div class="t">回访工作台</div>
+        <div class="d">商城客户激活 · 追单跟进<br>回访效果报表 · 沉睡客户唤醒</div>
+        <div class="go">进入 →</div>
+      </div>
+      <div class="gate-card new" onclick="enterWorkbench('new')">
+        <div class="ic">🌱</div>
+        <div class="t">新客开发工作台</div>
+        <div class="d">新客户拜访 · 引导注册商城<br>入商城认领 · 开发转化统计</div>
+        <div class="go">进入 →</div>
+      </div>
+    </div>
+    <div class="gate-all" onclick="enterWorkbench('all')">或进入全部总览（混合视图）›</div>
+  </div>
+</div>
+<aside class="side">
+  <div class="logo"><div class="flame">🔥</div><div class="nm">聚火拜访<small>管理后台 · Admin</small></div></div>
+  <div class="grp">工作台</div>
+  <nav class="nav">
+    <div class="ni on" data-p="dash"><span class="ic">📊</span>仪表盘</div>
+    <div class="ni" data-p="wizard"><span class="ic">🧭</span>任务管理<span class="badge">向导</span></div>
+    <div class="ni" data-p="visits"><span class="ic">📝</span>拜访记录<span class="badge">3</span></div>
+    <div class="ni" data-p="report"><span class="ic">📈</span><span id="reportMenuText">拜访效果</span></div>
+    <div class="ni" data-p="cust"><span class="ic">🏪</span>客户管理</div>
+    <div class="ni" data-p="sales"><span class="ic">📥</span>销售导入</div>
+  </nav>
+  <div class="grp">系统</div>
+  <nav class="nav">
+    <div class="ni" data-p="people"><span class="ic">👥</span>人员管理</div>
+    <div class="ni" data-p="backup"><span class="ic">💾</span>数据备份</div>
+    <div class="ni" data-p="set"><span class="ic">⚙️</span>系统设置</div>
+  </nav>
+  <div class="foot"><div class="av">卿</div><div><div class="nm">卿燕</div><div class="rl">超级管理员</div></div></div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="pt" id="pageTitle">仪表盘<small>2026年7月24日 · 周三 · 早上好，卿燕 🔥</small></div>
+    <div class="search">🔍 搜索客户 / 订单 / 业务员…</div>
+    <div class="date" id="wbChip" style="cursor:pointer" onclick="openGate()">🏠 全部总览 ▾</div>
+    <div class="date">📅 2026-07-24</div>
+    <div class="notif">🔔</div>
+  </div>
+
+  <!-- ============ 仪表盘 ============ -->
+  <section id="p-dash">
+    <div id="dashMall">
+    <div class="grid-4">
+      <div class="kpi card"><div class="lb">🏃 今日拜访</div><div class="num" data-count="12">0</div><div class="tr up">▲ 较昨日 +3 家</div><div class="ic" style="background:var(--primary-tint)">🔥</div></div>
+      <div class="kpi card"><div class="lb">🎯 本周任务完成率</div><div class="num" data-count="68" data-suffix="%">0%</div><div class="tr up">▲ 3 个任务进行中</div><div class="ic" style="background:var(--blue-tint)">🎯</div></div>
+      <div class="kpi card"><div class="lb">💰 回访后下单率</div><div class="num" data-count="31.6" data-dec="1" data-suffix="%">0%</div><div class="tr up">▲ 窗口 30 天 · 上周 27.3%</div><div class="ic" style="background:var(--green-tint)">📈</div></div>
+      <div class="kpi card"><div class="lb">⏰ 待处理事项</div><div class="num" data-count="5">0</div><div class="tr down">待复核 2 · 待补标 2 · 纠错 1</div><div class="ic" style="background:var(--warn-tint)">⏰</div></div>
+    </div>
+    <div class="sect">
+      <div class="card">
+        <div class="sec-head"><span class="t">回访下单率趋势（近 8 周）</span><span class="more">查看报表 ›</span></div>
+        <div class="legend"><span><i class="dot" style="background:var(--primary)"></i>回访后下单率</span><span><i class="dot" style="background:#C9CFD6"></i>目标线 30%</span></div>
+        <div class="chart-body">
+          <svg viewBox="0 0 640 220" width="100%">
+            <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F5531C" stop-opacity=".25"/><stop offset="1" stop-color="#F5531C" stop-opacity="0"/></linearGradient></defs>
+            <g stroke="#EEF0F3"><line x1="40" y1="180" x2="620" y2="180"/><line x1="40" y1="140" x2="620" y2="140" stroke-dasharray="4 6"/><line x1="40" y1="100" x2="620" y2="100" stroke-dasharray="4 6"/><line x1="40" y1="60" x2="620" y2="60" stroke-dasharray="4 6"/><line x1="40" y1="20" x2="620" y2="20" stroke-dasharray="4 6"/></g>
+            <g fill="#9AA3AD" font-size="10.5" font-weight="600"><text x="2" y="183">0%</text><text x="2" y="103">20%</text><text x="2" y="23">40%</text></g>
+            <line x1="40" y1="130" x2="620" y2="130" stroke="#C9CFD6" stroke-width="1.6" stroke-dasharray="6 6"/>
+            <path d="M40,150 L120,138 L200,142 L280,126 L360,118 L440,108 L520,96 L600,80 L600,180 L40,180 Z" fill="url(#ag)"/>
+            <path d="M40,150 L120,138 L200,142 L280,126 L360,118 L440,108 L520,96 L600,80" stroke="#F5531C" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-dasharray="760" stroke-dashoffset="760" style="animation:draw 1.6s .3s ease forwards"/>
+            <g fill="#1F2430" font-size="11" font-weight="700" text-anchor="middle">
+              <text x="40" y="200">5/26</text><text x="120" y="200">6/2</text><text x="200" y="200">6/9</text><text x="280" y="200">6/16</text><text x="360" y="200">6/23</text><text x="440" y="200">6/30</text><text x="520" y="200">7/7</text><text x="600" y="200">7/14</text>
+            </g>
+            <circle cx="600" cy="80" r="5.5" fill="#F5531C" stroke="#fff" stroke-width="2.5"/>
+          </svg>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-head"><span class="t">业务员任务进度</span><span class="more">任务管理 ›</span></div>
+        <div class="sman">
+          <div class="row"><div class="av" style="background:linear-gradient(135deg,#FF8A50,#F5531C)">丰</div><div class="info"><div class="nm">丰炳全 <span>12 / 20 家 · 8 家待拜访</span></div><div class="bar"><i style="width:60%;background:linear-gradient(90deg,#FF8A50,#F5531C)"></i></div></div></div>
+          <div class="row"><div class="av" style="background:linear-gradient(135deg,#5B9DFF,#2F80ED)">程</div><div class="info"><div class="nm">大程 <span>6 / 15 家 · 9 家待拜访</span></div><div class="bar"><i style="width:40%;background:linear-gradient(90deg,#5B9DFF,#2F80ED)"></i></div></div></div>
+          <div class="row"><div class="av" style="background:linear-gradient(135deg,#2AC46A,#16A34A)">宋</div><div class="info"><div class="nm">宋大队 <span>15 / 15 家 · 已完成</span></div><div class="bar"><i style="width:100%;background:linear-gradient(90deg,#2AC46A,#16A34A)"></i></div></div></div>
+        </div>
+        <div class="sec-head"><span class="t">今日动态</span></div>
+        <div class="sman">
+          <div class="row"><div class="av" style="background:var(--green-tint);color:var(--green)">✓</div><div class="info"><div class="nm">丰炳全 拜访了「正宗淮南牛肉汤西站店」<span>10:42 · 有意向</span></div></div></div>
+          <div class="row"><div class="av" style="background:var(--primary-tint);color:var(--primary-deep)">📷</div><div class="info"><div class="nm">宋大队 提交 3 张照片 + 1 段录音<span>10:15 · 已下单</span></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="sect" style="grid-template-columns:1.9fr 1fr">
+      <div class="card">
+        <div class="sec-head"><span class="t">待办事项</span><span class="more">全部处理 ›</span></div>
+        <div class="todo-list">
+          <div class="todo"><span class="tg" style="background:var(--warn-tint);color:#B97A0B">待复核</span><span class="tx">丰炳全 · 「镇雄羊肉米线」拜访记录（距客户 1.2km 超出阈值）</span><span class="ct">10:32</span><span class="arrow">›</span></div>
+          <div class="todo"><span class="tg" style="background:var(--warn-tint);color:#B97A0B">待复核</span><span class="tx">大程 · 「友福饭堂」拜访记录（定位校验失败）</span><span class="ct">09:48</span><span class="arrow">›</span></div>
+          <div class="todo"><span class="tg" style="background:var(--blue-tint);color:var(--blue)">待补标</span><span class="tx">2 家商城导入客户无坐标，请在地图补标</span><span class="ct">昨天</span><span class="arrow">›</span></div>
+          <div class="todo"><span class="tg" style="background:var(--red-tint);color:var(--danger)">纠错申请</span><span class="tx">「江西大众小炒王」位置报错，新坐标待审核</span><span class="ct">昨天</span><span class="arrow">›</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-head"><span class="t">业务员今日轨迹</span><span class="more">查看位置 ›</span></div>
+        <div style="padding:8px 20px 18px">
+          <svg viewBox="0 0 300 170" width="100%" style="border-radius:10px">
+            <rect width="300" height="170" fill="#EDEFF2"/>
+            <g stroke="#fff" stroke-width="6" fill="none"><path d="M40,0V170M120,0V170M210,0V170M280,0V170M0,50H300M0,110H300"/></g>
+            <path d="M20,150 C60,140 80,120 110,110 S180,80 210,70 S260,40 285,30" stroke="#F5531C" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="5 6"/>
+            <g fill="#F5531C"><circle cx="20" cy="150" r="6"/><circle cx="110" cy="110" r="5"/><circle cx="210" cy="70" r="5"/></g>
+            <circle cx="285" cy="30" r="9" fill="#2F80ED" stroke="#fff" stroke-width="3"/>
+          </svg>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--sub);font-weight:700">
+            <span>丰炳全 · 今日 11 个点</span><span style="color:var(--primary-deep);cursor:pointer">📍 查询位置</span></div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /dashMall -->
+    <!-- ===== 新客开发工作台 · 仪表盘（0.6） ===== -->
+    <div id="dashNew" style="display:none">
+      <div class="grid-4">
+        <div class="kpi card"><div class="lb">🌱 今日新客拜访</div><div class="num">5 <small>家</small></div><div class="tr up">▲ 较昨日 +2 家</div><div class="ic" style="background:var(--blue-tint)">🌱</div></div>
+        <div class="kpi card"><div class="lb">🗓 本月拜访新客户</div><div class="num">18 <small>家</small></div><div class="tr up">▲ 3 个开发任务进行中</div><div class="ic" style="background:var(--blue-tint)">🗓</div></div>
+        <div class="kpi card"><div class="lb">✅ 添加商城成功率</div><div class="num">38.9<small>%</small></div><div class="tr up">已入商城 7 ÷ 拜访 18</div><div class="ic" style="background:var(--green-tint)">✅</div></div>
+        <div class="kpi card"><div class="lb">🛒 新客下单率</div><div class="num">57.1<small>%</small></div><div class="tr up">首单 4 ÷ 已入商城 7</div><div class="ic" style="background:var(--warn-tint)">🛒</div></div>
+      </div>
+      <div class="sect">
+        <div class="card">
+          <div class="sec-head"><span class="t">新客户开发漏斗（本月）</span><span class="more">拜访效果 ›</span></div>
+          <div class="chart-body">
+            <svg viewBox="0 0 640 200" width="100%">
+              <g font-size="12" font-weight="700" fill="#4A5360">
+                <rect x="20" y="30" width="600" height="34" rx="17" fill="#E8F1FD"/>
+                <text x="36" y="52">🌱 拜访新客户 18 家</text>
+                <rect x="60" y="82" width="520" height="34" rx="17" fill="#D8EADF"/>
+                <text x="76" y="104">✅ 已入商城 7 家（添加成功率 38.9%）</text>
+                <rect x="110" y="134" width="420" height="34" rx="17" fill="#FDF3E2"/>
+                <text x="126" y="156">🛒 产生首单 4 家（新客下单率 57.1%）</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-head"><span class="t">业务员开发排行 · 入商城 / 首单</span></div>
+          <div class="rank">
+            <div class="rank-row"><span class="no">1</span><span class="nm">大程</span><div class="bar"><i style="width:90%;background:linear-gradient(90deg,#5B9DFF,#2F80ED)"></i></div><span class="v">入商城 4<br><small style="font-size:10.5px;color:var(--warn);font-weight:800">首单 2</small></span></div>
+            <div class="rank-row"><span class="no">2</span><span class="nm">丰炳全</span><div class="bar"><i style="width:70%;background:linear-gradient(90deg,#5B9DFF,#2F80ED)"></i></div><span class="v">入商城 3<br><small style="font-size:10.5px;color:var(--warn);font-weight:800">首单 2</small></span></div>
+            <div class="rank-row"><span class="no">3</span><span class="nm">宋大队</span><div class="bar"><i style="width:45%;background:linear-gradient(90deg,#5B9DFF,#2F80ED)"></i></div><span class="v">入商城 2<br><small style="font-size:10.5px;color:var(--warn);font-weight:800">首单 1</small></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sect" style="grid-template-columns:1.9fr 1fr">
+        <div class="card">
+          <div class="sec-head"><span class="t">新客开发待办</span><span class="more">全部处理 ›</span></div>
+          <div class="todo-list">
+            <div class="todo"><span class="tg" style="background:var(--blue-tint);color:var(--blue)">认领核对</span><span class="tx">2 家新客户疑似已入商城，待确认认领（本周名单导入比对）</span><span class="ct">今天</span><span class="arrow">›</span></div>
+            <div class="todo"><span class="tg" style="background:var(--warn-tint);color:#B97A0B">待补录</span><span class="tx">3 家新客户补录了手机号/联系人，待更新档案</span><span class="ct">今天</span><span class="arrow">›</span></div>
+            <div class="todo"><span class="tg" style="background:var(--blue-tint);color:var(--blue)">待补标</span><span class="tx">2 家新客户无坐标，请在地图补标</span><span class="ct">昨天</span><span class="arrow">›</span></div>
+            <div class="todo"><span class="tg" style="background:var(--warn-tint);color:#B97A0B">待复核</span><span class="tx">1 条新客户拜访记录（定位校验失败）</span><span class="ct">昨天</span><span class="arrow">›</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-head"><span class="t">今日开发动态</span></div>
+          <div class="sman">
+            <div class="row"><div class="av" style="background:var(--blue-tint);color:var(--blue)">🌱</div><div class="info"><div class="nm">大程 拜访「阿明烧烤」· 已注册商城<span>10:05 · 待认领</span></div></div></div>
+            <div class="row"><div class="av" style="background:var(--green-tint);color:var(--green)">✓</div><div class="info"><div class="nm">「老王砂锅店」名单认领成功，已入商城<span>09:40 · 自动认领</span></div></div></div>
+            <div class="row"><div class="av" style="background:var(--blue-tint);color:var(--blue)">📞</div><div class="info"><div class="nm">丰炳全 补录「小李面馆」联系人手机号<span>09:12 · 待更新档案</span></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 任务向导 ============ -->
+  <section id="p-wizard" style="display:none">
+    <!-- ===== 任务列表（默认视图） ===== -->
+    <div id="taskListView">
+      <div class="filters">
+        <div class="f on">状态：<span>全部 ▾</span></div>
+        <div class="f">业务员：<span>全部 ▾</span></div>
+        <div class="f">目的：<span>全部 ▾</span></div>
+        <div class="f" style="max-width:220px">🔍 <span>搜索任务名…</span></div>
+        <div class="btn primary" style="height:42px;margin-left:auto" onclick="showWizard()">＋ <span id="newTaskText">新建任务</span></div>
+      </div>
+      <div class="card">
+        <div class="sec-head" style="padding:12px 20px 8px"><span class="t">全部任务 · 8 个</span><span class="more">草稿 1 · 进行中 3 · 已过期 1 ›</span></div>
+        <table class="tbl">
+          <thead><tr><th>任务</th><th>业务员</th><th>目的</th><th>进度</th><th>截止日</th><th>状态</th><th style="width:250px">操作</th></tr></thead>
+          <tbody>
+            <tr data-ctype="mall" onclick="showTaskDetail()" style="cursor:pointer"><td><b>古山镇沉睡客户激活 · 第一批</b><div class="sub">7-22 发送 · 20 家</div></td><td>丰炳全</td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">🔥 激活回访</span></td><td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:7px;background:#F0F2F5;border-radius:99px;overflow:hidden;max-width:90px"><i style="display:block;height:100%;width:40%;background:var(--primary);border-radius:99px"></i></div>8/20</div></td><td>07-26</td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">进行中</span></td><td><span class="act" onclick="event.stopPropagation();showTaskDetail()">查看</span><span class="act" onclick="event.stopPropagation();showWizard();toast2('已载入任务（演示预填）')">编辑</span><span class="act" onclick="event.stopPropagation();toast2('已延期 3 天 ✓ 业务员将收到"任务已更新"通知')">延期</span><span class="act" onclick="event.stopPropagation();toast2('已改派业务员 ✓')">改派</span><span class="act del" onclick="event.stopPropagation();toast2('已撤回至草稿 ✓ 可修改后重新发送')">撤回</span></td></tr>
+            <tr data-ctype="new" onclick="showTaskDetail()" style="cursor:pointer"><td><b>东城街道新客开发 · 第一批</b><div class="sub">7-23 发送 · 18 家</div></td><td>大程</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">🌱 新客开发</span></td><td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:7px;background:#F0F2F5;border-radius:99px;overflow:hidden;max-width:90px"><i style="display:block;height:100%;width:17%;background:var(--blue);border-radius:99px"></i></div>3/18</div></td><td>07-28</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">进行中</span></td><td><span class="act" onclick="event.stopPropagation();showTaskDetail()">查看</span><span class="act" onclick="event.stopPropagation();showWizard();toast2('已载入任务（演示预填）')">编辑</span><span class="act" onclick="event.stopPropagation();toast2('已延期 ✓')">延期</span><span class="act" onclick="event.stopPropagation();toast2('已复制为新草稿 ✓')">复制</span></td></tr>
+            <tr data-ctype="mall" onclick="showTaskDetail()" style="cursor:pointer"><td><b>未购买客户首访 · 东城街道</b><div class="sub">草稿 · 15 家</div></td><td>宋大队</td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">🔥 激活回访</span></td><td>—</td><td>07-31</td><td><span class="pill" style="background:#EEF1F4;color:var(--sub)">草稿</span></td><td><span class="act" onclick="event.stopPropagation();showWizard();toast2('已载入草稿（演示预填）')">编辑</span><span class="act" style="color:var(--primary-deep)" onclick="event.stopPropagation();toast2('已发送 ✓ 业务员收到新任务通知')">发送</span><span class="act del" onclick="event.stopPropagation();toast2('草稿已删除')">删除</span></td></tr>
+            <tr data-ctype="mall" onclick="showTaskDetail()" style="cursor:pointer"><td><b>上月有意向客户跟进</b><div class="sub">7-10 发送 · 12 家</div></td><td>丰炳全</td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">🔥 激活回访</span></td><td>12/12</td><td>07-18</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已完成</span></td><td><span class="act" onclick="event.stopPropagation();showTaskDetail()">查看</span><span class="act" onclick="event.stopPropagation();toast2('已复制为新草稿 ✓')">复制</span></td></tr>
+            <tr data-ctype="mall" onclick="showTaskDetail()" style="cursor:pointer"><td><b>西城街道沉睡客户激活</b><div class="sub">7-12 发送 · 15 家</div></td><td>宋大队</td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">🔥 激活回访</span></td><td>9/15</td><td>07-20</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">已过期</span></td><td><span class="act" onclick="event.stopPropagation();showTaskDetail()">查看</span><span class="act" onclick="event.stopPropagation();toast2('已延期 5 天 ✓ 恢复进行中')">延期恢复</span><span class="act" onclick="event.stopPropagation();toast2('已复制为新草稿 ✓')">复制</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="wizard" id="wizardBox" style="display:none">
+      <div class="steps">
+        <div class="step on" id="st1"><span class="no">1</span>基础信息</div><div class="step-line"><i id="sl1"></i></div>
+        <div class="step" id="st2"><span class="no">2</span>选择客户</div><div class="step-line"><i id="sl2"></i></div>
+        <div class="step" id="st3"><span class="no">3</span>排期 & 路线</div>
+      </div>
+      <div class="card panel" id="w1">
+        <div class="whead"><span class="t">① 基础信息</span><span class="hint">选好业务员和完成天数，下一步选客户</span></div>
+        <div class="wbody">
+          <div class="frow"><label>任务名称 <span>*</span></label><input value="古山镇沉睡客户激活 · 第二批" placeholder="例：东城街道未购买客户首访"></div>
+          <div class="frow"><label>分配给业务员 <span>*</span></label>
+            <div class="salesman-cards">
+              <div class="sm-card on" onclick="pickSm(this)"><div class="av" style="background:linear-gradient(135deg,#FF8A50,#F5531C)">丰</div><div><div class="nm">丰炳全</div><div class="rl">本月拜访 42 家 · 空余</div></div></div>
+              <div class="sm-card" onclick="pickSm(this)"><div class="av" style="background:linear-gradient(135deg,#5B9DFF,#2F80ED)">程</div><div><div class="nm">大程</div><div class="rl">本月拜访 28 家 · 空余</div></div></div>
+              <div class="sm-card" onclick="pickSm(this)"><div class="av" style="background:linear-gradient(135deg,#2AC46A,#16A34A)">宋</div><div><div class="nm">宋大队</div><div class="rl">本月拜访 51 家 · 满载</div></div></div>
+            </div>
+          </div>
+          <div class="frow"><label>拜访目的（按客户类型自动建议，可手改）</label>
+            <div class="ctabs" style="padding:0" id="purposePills">
+              <div class="ctab on" data-mode="mall" onclick="pickPurpose(this)">🔥 激活回访</div>
+              <div class="ctab" data-mode="new" onclick="pickPurpose(this)">🌱 新客开发</div>
+            </div>
+          </div>
+          <div class="frow"><label>完成天数（系统自动把客户平均分摊到每天）</label>
+            <div class="days-pills">
+              <div class="p">1</div><div class="p">2</div><div class="p">3</div><div class="p on">4</div><div class="p">5</div><div class="p">6</div><div class="p">7</div>
+            </div>
+          </div>
+          <div class="frow"><label>截止日期 <span>*</span></label><input type="text" value="2026-07-28" style="width:220px"></div>
+        </div>
+        <div class="wfoot"><div class="btn ghost" onclick="showTaskList()">← 返回任务列表</div><div class="btn primary" onclick="wstep(2)">下一步 · 选择客户 →</div></div>
+      </div>
+      <div class="card panel" id="w2" style="display:none">
+        <div class="whead"><span class="t">② 选择客户</span><span class="hint">列表勾选 / 导入名单 / 地图点选，三种方式可混用</span></div>
+        <div class="ctabs">
+          <div class="ctab on" onclick="ctab(this,0)">📋 列表勾选</div>
+          <div class="ctab" onclick="ctab(this,1)">📥 导入名单</div>
+          <div class="ctab" onclick="ctab(this,2)">🗺 地图点选</div>
+        </div>
+        <div class="csel-wrap">
+          <div class="ctable card" id="ctab0">
+            <div class="th"><span></span><span>客户</span><span>区域</span><span>最近下单</span><span>状态</span></div>
+            <div class="tr sel" onclick="rowSel(this)"><span class="ck on">✓</span><span class="nm">正宗淮南牛肉汤西站店<div class="sub">159****2611</div></span><span>西城街道</span><span class="dist">98 天前</span><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">沉睡</span></div>
+            <div class="tr sel" onclick="rowSel(this)"><span class="ck on">✓</span><span class="nm">贵州安顺快餐小炒李<div class="sub">159****0748</div></span><span>古山镇</span><span class="dist">95 天前</span><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">沉睡</span></div>
+            <div class="tr sel" onclick="rowSel(this)"><span class="ck on">✓</span><span class="nm">江西大众小炒王<div class="sub">159****5201</div></span><span>古山镇</span><span class="dist">92 天前</span><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">沉睡</span></div>
+            <div class="tr" onclick="rowSel(this)"><span class="ck">✓</span><span class="nm">佰家味·连锁中式快餐<div class="sub">138****1592</div></span><span>东城街道</span><span class="dist">90 天前</span><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">沉睡</span></div>
+            <div class="tr" onclick="rowSel(this)"><span class="ck">✓</span><span class="nm">霸王逛西北凉皮砂锅面<div class="sub">150****6611</div></span><span>东城街道</span><span class="dist">87 天前</span><span class="pill" style="background:var(--warn-tint);color:#B97A0B">观望</span></div>
+            <div class="tr" onclick="rowSel(this)"><span class="ck">✓</span><span class="nm">川蜀麻辣香锅<div class="sub">134****6192</div></span><span>古山镇</span><span class="dist">85 天前</span><span class="pill" style="background:var(--warn-tint);color:#B97A0B">观望</span></div>
+          </div>
+          <div class="ctable card" id="ctab1" style="display:none">
+            <div style="padding:30px 26px;text-align:center">
+              <div style="width:74px;height:74px;border-radius:22px;background:var(--primary-tint);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px">📥</div>
+              <div style="font-size:15px;font-weight:800">上传商城筛选名单</div>
+              <div style="font-size:12.5px;color:var(--sub);font-weight:600;margin:6px 0 16px">支持 xls / csv · 自动按店名+手机号匹配，匹配不上的可一键新建</div>
+              <div style="border:2px dashed #D8DCE2;border-radius:14px;padding:22px;font-size:13px;color:var(--sub);font-weight:700">点击选择文件，或拖拽到此处<br><span style="color:var(--primary-deep)">三个月未下单-客户列表.xls（483 行）</span></div>
+            </div>
+          </div>
+          <div class="ctable card" id="ctab2" style="display:none">
+            <div class="mini-map">
+              <svg viewBox="0 0 430 340" preserveAspectRatio="xMidYMid slice">
+                <rect width="430" height="340" fill="#EDEFF2"/>
+                <g fill="#E4E7EA"><rect x="10" y="10" width="80" height="52" rx="5"/><rect x="100" y="10" width="66" height="52" rx="5"/><rect x="176" y="10" width="84" height="52" rx="5"/><rect x="270" y="10" width="70" height="52" rx="5"/><rect x="350" y="10" width="70" height="52" rx="5"/><rect x="10" y="80" width="70" height="60" rx="5"/><rect x="90" y="80" width="90" height="60" rx="5"/><rect x="190" y="80" width="80" height="60" rx="5"/><rect x="280" y="80" width="76" height="60" rx="5"/><rect x="10" y="158" width="88" height="56" rx="5"/><rect x="108" y="158" width="70" height="56" rx="5"/><rect x="188" y="158" width="84" height="56" rx="5"/><rect x="282" y="158" width="78" height="56" rx="5"/><rect x="10" y="234" width="76" height="62" rx="5"/><rect x="96" y="234" width="90" height="62" rx="5"/><rect x="196" y="234" width="80" height="62" rx="5"/><rect x="286" y="234" width="80" height="62" rx="5"/></g>
+                <g stroke="#fff" stroke-width="7" fill="none"><path d="M60,0V340M160,0V340M260,0V340M350,0V340M0,66H430M0,150H430M0,226H430"/></g>
+                <g class="mmk" transform="translate(150,200)" onclick="mmk(this)"><circle r="12" fill="#F5531C" stroke="#fff" stroke-width="2.5"/><text y="4" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">✓</text></g>
+                <g class="mmk" transform="translate(220,120)" onclick="mmk(this)"><circle r="12" fill="#F5531C" stroke="#fff" stroke-width="2.5"/><text y="4" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">✓</text></g>
+                <g class="mmk" transform="translate(300,260)" onclick="mmk(this)"><circle r="12" fill="#F5531C" stroke="#fff" stroke-width="2.5"/><text y="4" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">✓</text></g>
+                <g class="mmk" transform="translate(110,280)" onclick="mmk(this)"><circle r="12" fill="#C9CFD6" stroke="#fff" stroke-width="2.5"/><text y="4" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">＋</text></g>
+                <g class="mmk" transform="translate(330,60)" onclick="mmk(this)"><circle r="12" fill="#C9CFD6" stroke="#fff" stroke-width="2.5"/><text y="4" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">＋</text></g>
+              </svg>
+              <div class="cap">🗺 地图点选 · 点击标点选中</div>
+              <div class="zoom"><div>＋</div><div>−</div></div>
+            </div>
+          </div>
+          <div class="sel-side card">
+            <div class="t">已选客户</div>
+            <div class="n" id="selCount">3</div>
+            <div class="sl">家 · 覆盖古山镇 / 西城街道</div>
+            <div class="sel-tags" id="selTags">
+              <span class="tg">正宗淮南牛肉汤西站店 <span>✕</span></span>
+              <span class="tg">贵州安顺快餐小炒李 <span>✕</span></span>
+              <span class="tg">江西大众小炒王 <span>✕</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="wfoot"><div class="btn ghost" onclick="wstep(1)">← 上一步</div><div class="btn primary" onclick="wstep(3)">下一步 · 排期 & 路线 →</div></div>
+      </div>
+      <div class="card panel" id="w3" style="display:none">
+        <div class="whead"><span class="t">③ 排期 & 路线预览</span><span class="hint">已按路线顺序平均分摊到 4 天，可拖动微调</span></div>
+        <div class="day-cols">
+          <div class="day-col"><div class="dh">第 1 天 <b>6 家</b></div><div class="cchip">🏪 正宗淮南牛肉汤</div><div class="cchip">🏪 贵州安顺快餐小炒李</div><div class="cchip">🏪 江西大众小炒王</div><div class="cchip">🏪 佰家味·连锁快餐</div><div class="cchip">🏪 霸王逛西北凉皮</div><div class="cchip">🏪 川蜀麻辣香锅</div></div>
+          <div class="day-col"><div class="dh">第 2 天 <b>6 家</b></div><div class="cchip">🏪 重庆小面</div><div class="cchip">🏪 淮南牛肉汤(松石西路)</div><div class="cchip">🏪 友福饭堂</div><div class="cchip">🏪 一甲天下(文溪路)</div><div class="cchip">🏪 傣香云云南菜</div><div class="cchip">🏪 饼之家小吃(芝英)</div></div>
+          <div class="day-col"><div class="dh">第 3 天 <b>6 家</b></div><div class="cchip">🏪 兰州拉面(邵宅)</div><div class="cchip">🏪 遵义宋记豆花面</div><div class="cchip">🏪 贵州赫章羊肉粉</div><div class="cchip">🏪 大后平价菜店</div><div class="cchip">🏪 江西实惠饭店</div><div class="cchip">🏪 重庆熟食</div></div>
+          <div class="day-col today"><div class="dh">第 4 天 <b>5 家</b></div><div class="cchip">🏪 镇雄羊肉米线</div><div class="cchip">🏪 兰州拉面</div><div class="cchip">🏪 夏禧记糖水小吃</div><div class="cchip">🏪 小海快餐店(古山)</div><div class="cchip">🏪 正宗重庆卤味</div></div>
+        </div>
+        <div class="sum-row">
+          <div class="sum"><div class="k">🏪 客户总数</div><div class="v">23 <small>家</small></div></div>
+          <div class="sum"><div class="k">📅 完成天数</div><div class="v">4 <small>天</small></div></div>
+          <div class="sum"><div class="k">🛣 路线总里程</div><div class="v">48.6 <small>km</small></div></div>
+          <div class="sum"><div class="k">⏱ 预计总时长</div><div class="v">5.2 <small>小时</small></div></div>
+          <div class="sum"><div class="k">👤 业务员</div><div class="v">丰炳全</div></div>
+        </div>
+        <div class="wfoot"><div class="btn ghost" onclick="wstep(2)">← 上一步</div><div class="btn ghost">💾 存草稿</div><div class="btn green" onclick="sendTask(this)">📨 发送给业务员</div></div>
+      </div>
+    </div>
+    <!-- ===== 任务详情视图 ===== -->
+    <div id="taskDetailView" style="display:none">
+      <div id="tdMall">
+      <div class="card">
+        <div class="sec-head" style="align-items:center">
+          <span class="t">古山镇沉睡客户激活 · 第一批</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">🔥 激活回访</span>
+            <span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">进行中</span>
+            <div class="btn ghost" style="height:36px" onclick="showTaskList()">← 返回列表</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;padding:6px 20px 18px;flex-wrap:wrap">
+          <div class="sum"><div class="k">业务员</div><div class="v" style="font-size:15px">丰炳全</div></div>
+          <div class="sum"><div class="k">发送时间</div><div class="v" style="font-size:15px">2026-07-22 09:10</div></div>
+          <div class="sum"><div class="k">截止日</div><div class="v" style="font-size:15px">2026-07-26</div></div>
+          <div class="sum"><div class="k">完成进度</div><div class="v" style="font-size:15px">8 / 20 家（40%）</div></div>
+          <div class="sum"><div class="k">完成天数</div><div class="v" style="font-size:15px">5 天排期</div></div>
+        </div>
+      </div>
+      <div class="grid-4" style="margin-top:14px">
+        <div class="card" style="padding:18px 20px;border-left:4px solid var(--primary)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🏃 已拜访</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px">8 <span style="font-size:14px;color:var(--sub)">家</span></div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">本任务累计拜访记录 8 条</div></div>
+        <div class="card" style="padding:18px 20px;border-left:4px solid var(--green)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🛒 回访后下单</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px;color:var(--green)">3 <span style="font-size:14px;color:var(--sub)">家</span></div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">窗口 30 天内产生新订单</div></div>
+        <div class="card" style="padding:18px 20px;border-left:4px solid var(--primary-deep)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">💰 带回金额</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px;color:var(--primary-deep)">¥2,340</div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">本组任务效果小结（销售导入后自动统计）</div></div>
+        <div class="card" style="padding:18px 20px;border-left:4px solid var(--warn)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">⏰ 待处理</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px;color:#B97A0B">1</div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">待复核拜访 1 条</div></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="sec-head"><span class="t">📅 每天计划（可拖拽调户 / 挪天）</span><span class="more" onclick="toast2('已重新分摊 ✓ 业务员端实时同步并收到通知')">重新分摊 ›</span></div>
+        <div class="day-cols">
+          <div class="day-col"><div class="dh">第 1 天 <b>6 家 ✓</b></div><div class="cchip" style="background:var(--green-tint)">✓ 兰州拉面(邵宅)</div><div class="cchip" style="background:var(--green-tint)">✓ 遵义宋记豆花面</div><div class="cchip" style="background:var(--green-tint)">✓ 正宗淮南牛肉汤</div><div class="cchip" style="background:var(--green-tint)">✓ 贵州安顺快餐小炒李</div><div class="cchip" style="background:var(--green-tint)">✓ 江西大众小炒王</div><div class="cchip" style="background:var(--green-tint)">✓ 佰家味·连锁快餐</div></div>
+          <div class="day-col"><div class="dh">第 2 天 <b>6 家 · 2 完成</b></div><div class="cchip" style="background:var(--green-tint)">✓ 霸王逛西北凉皮</div><div class="cchip" style="background:var(--green-tint)">✓ 川蜀麻辣香锅</div><div class="cchip">重庆小面</div><div class="cchip">淮南牛肉汤(松石西路)</div><div class="cchip">友福饭堂</div><div class="cchip">一甲天下(文溪路)</div></div>
+          <div class="day-col today"><div class="dh">第 3 天 <b>8 家 · 今天</b></div><div class="cchip">傣香云云南菜</div><div class="cchip">饼之家小吃(芝英)</div><div class="cchip">兰州拉面(邵宅)</div><div class="cchip">贵州赫章羊肉粉</div><div class="cchip">大后平价菜店</div><div class="cchip">江西实惠饭店</div><div class="cchip">重庆熟食</div><div class="cchip">镇雄羊肉米线</div></div>
+          <div class="day-col"><div class="dh">第 4 天 <b>6 家</b></div><div class="cchip">兰州拉面</div><div class="cchip">夏禧记糖水小吃</div><div class="cchip">小海快餐店(古山)</div><div class="cchip">正宗重庆卤味</div><div class="cchip">青海拉面</div><div class="cchip">福建沙县小吃(清溪)</div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="sec-head"><span class="t">📝 本任务拜访记录（8 条）</span><span class="more" onclick="visReview()">待复核 1 ›</span></div>
+        <table class="tbl">
+          <thead><tr><th>时间</th><th>客户</th><th>结果</th><th>时长</th><th>定位</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>07-24 10:42</td><td>正宗淮南牛肉汤西站店</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">有意向</span></td><td>23 分钟</td><td>62 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(1)">查看</span></td></tr>
+            <tr><td>07-24 09:20</td><td>老王砂锅店</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">已注册商城</span></td><td>16 分钟</td><td>40 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(1)">查看</span></td></tr>
+            <tr><td>07-24 10:32</td><td>镇雄羊肉米线</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">极有意向</span></td><td>11 分钟</td><td style="color:var(--danger)">1.2km ✗</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">待复核</span></td><td><span class="act" style="color:var(--primary-deep)" onclick="visReview()">审核 ›</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <div class="btn ghost" onclick="showWizard();toast2('已载入任务（演示预填）')">✏️ 编辑任务</div>
+        <div class="btn ghost" onclick="toast2('已延期 3 天 ✓ 业务员将收到"任务已更新"通知')">⏰ 延期</div>
+        <div class="btn ghost" onclick="toast2('已改派业务员 ✓')">👤 改派</div>
+        <div class="btn ghost" onclick="toast2('已撤回至草稿 ✓ 可修改后重新发送')">↩ 撤回</div>
+        <div class="btn ghost" onclick="toast2('已复制为新草稿 ✓')">📄 复制任务</div>
+        <div class="btn primary" style="margin-left:auto" onclick="toast2('任务已提前结束 ✓')">🏁 结束任务</div>
+      </div>
+      </div><!-- /tdMall -->
+      <!-- 新客开发任务详情（0.6） -->
+      <div id="tdNew" style="display:none">
+        <div class="card">
+          <div class="sec-head" style="align-items:center">
+            <span class="t">东城街道新客开发 · 第一批</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="pill" style="background:var(--blue-tint);color:var(--blue)">🌱 新客开发</span>
+              <span class="pill" style="background:var(--blue-tint);color:var(--blue)">进行中</span>
+              <div class="btn ghost" style="height:36px" onclick="showTaskList()">← 返回列表</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:14px;padding:6px 20px 18px;flex-wrap:wrap">
+            <div class="sum"><div class="k">业务员</div><div class="v" style="font-size:15px">大程</div></div>
+            <div class="sum"><div class="k">发送时间</div><div class="v" style="font-size:15px">2026-07-23 08:30</div></div>
+            <div class="sum"><div class="k">截止日</div><div class="v" style="font-size:15px">2026-07-28</div></div>
+            <div class="sum"><div class="k">开发进度</div><div class="v" style="font-size:15px">拜访 3 / 18 家 · 已入商城 2</div></div>
+            <div class="sum"><div class="k">完成天数</div><div class="v" style="font-size:15px">3 天排期</div></div>
+          </div>
+        </div>
+        <div class="grid-4" style="margin-top:14px">
+          <div class="card" style="padding:18px 20px;border-left:4px solid var(--blue)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🌱 已拜访新客户</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px">3 <span style="font-size:14px;color:var(--sub)">家</span></div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">本任务累计开发拜访 3 条</div></div>
+          <div class="card" style="padding:18px 20px;border-left:4px solid var(--green)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">✅ 已入商城</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px;color:var(--green)">2 <span style="font-size:14px;color:var(--sub)">家</span></div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">添加成功率 66.7%（名单认领 1 + 手动 1）</div></div>
+          <div class="card" style="padding:18px 20px;border-left:4px solid var(--warn)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🛒 产生首单</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px;color:#B97A0B">1 <span style="font-size:14px;color:var(--sub)">家</span></div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">新客下单率 50% · 首单金额 ¥420</div></div>
+          <div class="card" style="padding:18px 20px;border-left:4px solid var(--blue)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🔗 待认领核对</div><div class="num" style="font-size:28px;font-weight:800;margin:6px 0 2px;color:var(--blue)">1</div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">「阿明烧烤」疑似已入商城（综合分 78）</div></div>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div class="sec-head"><span class="t">📅 每天计划（3 天 · 可拖拽调户）</span></div>
+          <div class="day-cols" style="grid-template-columns:repeat(3,1fr)">
+            <div class="day-col"><div class="dh">第 1 天 <b>6 家 ✓</b></div><div class="cchip" style="background:var(--green-tint)">✓ 老王砂锅店 <b>已入商城</b></div><div class="cchip" style="background:var(--green-tint)">✓ 阿明烧烤</div><div class="cchip" style="background:var(--green-tint)">✓ 小李面馆</div><div class="cchip" style="background:var(--green-tint)">✓ 阿珍快餐</div><div class="cchip" style="background:var(--green-tint)">✓ 老陈早餐</div><div class="cchip" style="background:var(--green-tint)">✓ 小芳麻辣烫</div></div>
+            <div class="day-col today"><div class="dh">第 2 天 <b>6 家 · 今天</b></div><div class="cchip">川味鲜卤现捞</div><div class="cchip">模具城烧饼</div><div class="cchip">老百姓大米批发</div><div class="cchip">越香包(高镇店)</div><div class="cchip">江西菜馆(高山头)</div><div class="cchip">贵州水城羊肉粉</div></div>
+            <div class="day-col"><div class="dh">第 3 天 <b>6 家</b></div><div class="cchip">吴记柳州螺蛳粉</div><div class="cchip">平价果蔬店</div><div class="cchip">江西大众小炒</div><div class="cchip">花溪牛肉粉(高镇)</div><div class="cchip">新疆大盘鸡</div><div class="cchip">镇雄老味道酸汤猪脚</div></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div class="sec-head"><span class="t">📝 本任务开发拜访记录（3 条）</span></div>
+          <table class="tbl">
+            <thead><tr><th>时间</th><th>新客户</th><th>结果</th><th>时长</th><th>定位</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td>07-24 10:05</td><td>阿明烧烤</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">已注册商城</span></td><td>16 分钟</td><td>40 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(2)">查看</span></td></tr>
+              <tr><td>07-24 09:20</td><td>老王砂锅店</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">已注册商城</span></td><td>22 分钟</td><td>35 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(1)">查看</span></td></tr>
+              <tr><td>07-24 08:50</td><td>小李面馆</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">有意向</span></td><td>14 分钟</td><td>52 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(3)">查看</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <div class="btn ghost" onclick="showWizard();toast2('已载入任务（演示预填）')">✏️ 编辑任务</div>
+          <div class="btn ghost" onclick="toast2('已延期 3 天 ✓ 业务员将收到"任务已更新"通知')">⏰ 延期</div>
+          <div class="btn ghost" onclick="toast2('已改派业务员 ✓')">👤 改派</div>
+          <div class="btn ghost" onclick="toast2('已撤回至草稿 ✓ 可修改后重新发送')">↩ 撤回</div>
+          <div class="btn ghost" onclick="toast2('已复制为新草稿 ✓')">📄 复制任务</div>
+          <div class="btn primary" style="margin-left:auto" onclick="toast2('任务已提前结束 ✓')">🏁 结束任务</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 报表 ============ -->
+  <section id="p-report" style="display:none">
+    <div class="filters">
+      <div class="f on">客户类型：<span>全部 ▾</span></div>
+      <div class="f on">窗口：<span>30 天 ▾</span></div>
+      <div class="f">业务员：<span>全部 ▾</span></div>
+      <div class="f">拜访结果：<span>全部 ▾</span></div>
+      <div class="f">📅 时间范围：<span>2026-06-24 ~ 07-24 ▾</span></div>
+      <div class="f" style="background:var(--primary);color:#fff;border-color:var(--primary)">📤 导出 Excel</div>
+    </div>
+    <div class="grid-4" id="reportMallGroup">
+      <div class="bignum-card"><div class="lb">回访客户总数</div><div class="num">126 <span>家</span></div><div class="sub">本周新增回访 18 家</div></div>
+      <div class="bignum-card"><div class="lb">回访后下单客户</div><div class="num">41 <span>家</span></div><div class="sub">窗口期内产生新订单</div></div>
+      <div class="bignum-card"><div class="lb">回访后下单率</div><div class="num">32.5<span>%</span></div><div class="sub">较上周 +2.1%，趋势向上 📈</div></div>
+      <div class="bignum-card"><div class="lb">带回订单金额</div><div class="num">¥86,4<span>20</span></div><div class="sub">41 家客户 · 窗口期内订单金额</div></div>
+    </div>
+    <div class="grid-4" id="reportNewGroup" style="margin-top:16px">
+      <div class="card" style="padding:18px 20px;border-left:4px solid var(--blue)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🌱 拜访新客户</div><div class="num" style="font-size:30px;font-weight:800;margin:8px 0 2px">18</div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">本月新客开发任务</div></div>
+      <div class="card" style="padding:18px 20px;border-left:4px solid var(--green)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">✅ 已入商城</div><div class="num" style="font-size:30px;font-weight:800;margin:8px 0 2px;color:var(--green)">7</div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">5 家名单认领 + 2 家手动标记</div></div>
+      <div class="card" style="padding:18px 20px;border-left:4px solid var(--primary)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🎯 开发转化率</div><div class="num" style="font-size:30px;font-weight:800;margin:8px 0 2px;color:var(--primary-deep)">38.9<span style="font-size:16px">%</span></div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">已入商城 ÷ 拜访新客户</div></div>
+      <div class="card" style="padding:18px 20px;border-left:4px solid var(--warn)"><div class="lb" style="font-size:12.5px;color:var(--sub);font-weight:700">🛒 其中首单</div><div class="num" style="font-size:30px;font-weight:800;margin:8px 0 2px;color:#B97A0B">4</div><div class="sl" style="font-size:12px;color:var(--sub);font-weight:600">首单率 57.1% · 入商城后窗口期内</div></div>
+    </div>
+    <div class="sect">
+      <div class="card">
+        <div class="sec-head"><span class="t">回访后下单率 · 近 8 周</span></div>
+        <div class="chart-body">
+          <svg viewBox="0 0 640 220" width="100%">
+            <defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F5531C" stop-opacity=".22"/><stop offset="1" stop-color="#F5531C" stop-opacity="0"/></linearGradient></defs>
+            <g stroke="#EEF0F3"><line x1="40" y1="180" x2="620" y2="180"/><line x1="40" y1="100" x2="620" y2="100" stroke-dasharray="4 6"/><line x1="40" y1="20" x2="620" y2="20" stroke-dasharray="4 6"/></g>
+            <path d="M40,150 L120,138 L200,142 L280,126 L360,118 L440,108 L520,96 L600,80 L600,180 L40,180 Z" fill="url(#bg2)"/>
+            <path d="M40,150 L120,138 L200,142 L280,126 L360,118 L440,108 L520,96 L600,80" stroke="#F5531C" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <circle cx="600" cy="80" r="5.5" fill="#F5531C" stroke="#fff" stroke-width="2.5"/>
+          </svg>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-head"><span class="t">业务员排行 · 带回订单 / 开发客户</span></div>
+        <div class="rank">
+          <div class="rank-row"><span class="no">1</span><span class="nm">丰炳全</span><div class="bar"><i style="width:92%;background:linear-gradient(90deg,#FF8A50,#F5531C)"></i></div><span class="v">¥32,480<br><small style="font-size:10.5px;color:var(--blue);font-weight:800">开发 3 家</small></span></div>
+          <div class="rank-row"><span class="no">2</span><span class="nm">宋大队</span><div class="bar"><i style="width:78%;background:linear-gradient(90deg,#FF8A50,#F5531C)"></i></div><span class="v">¥28,150<br><small style="font-size:10.5px;color:var(--blue);font-weight:800">开发 2 家</small></span></div>
+          <div class="rank-row"><span class="no">3</span><span class="nm">大程</span><div class="bar"><i style="width:60%;background:linear-gradient(90deg,#FF8A50,#F5531C)"></i></div><span class="v">¥21,920<br><small style="font-size:10.5px;color:var(--blue);font-weight:800">开发 2 家</small></span></div>
+          <div class="rank-row"><span class="no">4</span><span class="nm">陈玉玲</span><div class="bar"><i style="width:34%;background:linear-gradient(90deg,#FF8A50,#F5531C)"></i></div><span class="v">¥3,870<br><small style="font-size:10.5px;color:var(--blue);font-weight:800">开发 0 家</small></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px" id="reportTableMall">
+      <div class="sec-head"><span class="t">客户级明细</span><span class="hint" style="font-size:12px;color:var(--sub);font-weight:600">点击任意一行查看该客户的全部拜访与订单</span></div>
+      <table class="tbl">
+        <thead><tr><th>客户</th><th>最近回访</th><th>拜访结果</th><th>回访后订单数</th><th>回访后订单金额</th><th>业务员</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><b>正宗淮南牛肉汤西站店</b><div class="sub">西城街道</div></td><td>2026-07-18</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">有意向</span></td><td><b>3</b></td><td><b>¥2,340</b></td><td>丰炳全</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(1)">详情 ›</td></tr>
+          <tr><td><b>贵州安顺快餐小炒李</b><div class="sub">古山镇</div></td><td>2026-07-16</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">极有意向</span></td><td><b>5</b></td><td><b>¥6,880</b></td><td>丰炳全</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(2)">详情 ›</td></tr>
+          <tr><td><b>友福饭堂</b><div class="sub">龙山镇</div></td><td>2026-07-15</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已下单</span></td><td><b>2</b></td><td><b>¥1,056</b></td><td>宋大队</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(3)">详情 ›</td></tr>
+          <tr><td><b>一甲天下(文溪路店)</b><div class="sub">东城街道</div></td><td>2026-07-14</td><td><span class="pill" style="background:#EEF1F4;color:var(--sub)">无需求</span></td><td><b>0</b></td><td>—</td><td>大程</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(4)">详情 ›</td></tr>
+          <tr><td><b>傣香云云南菜</b><div class="sub">东城街道</div></td><td>2026-07-12</td><td><span class="pill" style="background:var(--red-tint);color:var(--danger)">有抵触</span></td><td><b>0</b></td><td>—</td><td>大程</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(5)">详情 ›</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:16px;display:none" id="reportTableNew">
+      <div class="sec-head"><span class="t">新客户开发明细</span><span class="hint" style="font-size:12px;color:var(--sub);font-weight:600">开发轨迹：拜访 → 入商城 → 首单</span></div>
+      <table class="tbl">
+        <thead><tr><th>新客户</th><th>最近拜访</th><th>拜访结果</th><th>入商城时间</th><th>入商城方式</th><th>首单时间/金额</th><th>业务员</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><b>老王砂锅店</b><div class="sub">东城街道</div></td><td>2026-07-24</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">已注册商城</span></td><td>2026-07-23</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">名单认领</span></td><td><b>07-23 · ¥420</b></td><td>大程</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(1)">详情 ›</td></tr>
+          <tr><td><b>阿明烧烤</b><div class="sub">古山镇</div></td><td>2026-07-24</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">已注册商城</span></td><td>2026-07-24</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">手动标记</span></td><td>—</td><td>大程</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(2)">详情 ›</td></tr>
+          <tr><td><b>小李面馆</b><div class="sub">古山镇</div></td><td>2026-07-24</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">有意向</span></td><td>—</td><td>—</td><td>—</td><td>丰炳全</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(3)">详情 ›</td></tr>
+          <tr><td><b>阿珍快餐</b><div class="sub">龙山镇</div></td><td>2026-07-23</td><td><span class="pill" style="background:#EEF1F4;color:var(--sub)">无需求</span></td><td>—</td><td>—</td><td>—</td><td>宋大队</td><td style="color:var(--primary-deep);font-weight:800;cursor:pointer" onclick="custDetail(4)">详情 ›</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:14px 20px;font-size:12px;color:var(--sub);font-weight:600;border-top:1px solid var(--line)">💡 每周导入商城名单后自动比对认领；入商城方式=名单认领/手动标记；首单按下单时间判定。</div>
+    </div>
+  </section>
+
+  <!-- ============ 人员管理 ============ -->
+  <section id="p-people" style="display:none">
+    <div class="card">
+      <div class="sec-head" style="align-items:center">
+        <div style="display:flex;gap:8px">
+          <div class="ctab on" id="ptab0" onclick="peopleTab(0)">🏃 业务员（3）</div>
+          <div class="ctab" id="ptab1" onclick="peopleTab(1)">👤 管理员（1）</div>
+        </div>
+        <div class="btn primary" style="height:38px;padding:0 18px" onclick="openPModal()">＋ 新增</div>
+      </div>
+      <table class="tbl" id="ptable0">
+        <thead><tr><th>姓名</th><th>手机号</th><th>微信绑定</th><th>本月拜访</th><th>状态</th><th style="width:130px">操作</th></tr></thead>
+        <tbody>
+          <tr><td><b>丰炳全</b></td><td>159 **** 6111</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已绑定</span></td><td>42</td><td><span class="toggle-mini on"></span> 启用</td><td><span class="act">编辑</span><span class="act del" onclick="delRow(this)">删除</span></td></tr>
+          <tr><td><b>大程</b></td><td>182 **** 8669</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已绑定</span></td><td>28</td><td><span class="toggle-mini on"></span> 启用</td><td><span class="act">编辑</span><span class="act del" onclick="delRow(this)">删除</span></td></tr>
+          <tr><td><b>宋大队</b></td><td>188 **** 2309</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">待绑定</span></td><td>51</td><td><span class="toggle-mini on"></span> 启用</td><td><span class="act">编辑</span><span class="act del" onclick="delRow(this)">删除</span></td></tr>
+        </tbody>
+      </table>
+      <table class="tbl" id="ptable1" style="display:none">
+        <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>最近登录</th><th>状态</th><th style="width:130px">操作</th></tr></thead>
+        <tbody>
+          <tr><td><b>qingyan</b></td><td>卿燕</td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">超级管理员</span></td><td>今天 08:12</td><td><span class="toggle-mini on"></span> 启用</td><td><span class="act">重置密码</span><span class="act del" onclick="delRow(this)">删除</span></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:14px 20px;font-size:12px;color:var(--sub);font-weight:600;border-top:1px solid var(--line)">💡 系统预置超级管理员「卿燕」（唯一），其余管理员由她在这里动态增删；新增业务员后，业务员首次登录小程序即自动绑定微信。</div>
+    </div>
+  </section>
+
+  <!-- ============ 占位页 ============ -->
+  <!-- ============ 客户管理 ============ -->
+  <section id="p-cust" style="display:none">
+    <div class="filters">
+      <div class="f" style="max-width:260px">🔍 <span>搜索店名 / 编号 / 手机号…</span></div>
+      <div class="f">区域：<span>全部 ▾</span></div>
+      <div class="f">坐标：<span>全部 ▾</span></div>
+      <div class="f">类型：<span>全部 ▾</span></div>
+      <div class="f">状态：<span>启用 ▾</span></div>
+      <div style="margin-left:auto;display:flex;gap:10px">
+        <div class="btn ghost" style="height:42px" onclick="custImport()">📥 <span id="custImportText">导入客户</span></div>
+        <div class="btn ghost" style="height:42px" onclick="custExport()">📤 导出客户列表</div>
+        <div class="btn primary" style="height:42px" onclick="toast2('新增客户表单（开发实现）')">＋ 新增客户</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec-head" style="padding:12px 20px 8px"><span class="t">全部客户 · 1,286 家</span><span class="more">待补标 3 · 纠错申请 1 ›</span></div>
+      <table class="tbl">
+        <thead><tr><th>客户</th><th>类型</th><th>区域</th><th>地址</th><th id="custMallTh">商城档案</th><th>坐标</th><th>状态</th><th style="width:190px">操作</th></tr></thead>
+        <tbody>
+          <tr data-ctype="mall"><td><b>正宗淮南牛肉汤西站店</b><div class="sub">159****2611</div></td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">商城客户</span></td><td>西城街道</td><td>双飞路16-1号</td><td>98 天前下单 · 3 天前浏览</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td>启用</td><td><span class="act">编辑</span><span class="act">补标</span><span class="act del" onclick="toast2('删除客户（软删除，开发实现）')">删除</span></td></tr>
+          <tr data-ctype="mall"><td><b>贵州安顺快餐小炒李</b><div class="sub">159****0748</div></td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">商城客户</span></td><td>古山镇</td><td>古后路148号</td><td>95 天前下单 · 未浏览</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td>启用</td><td><span class="act">编辑</span><span class="act">补标</span><span class="act del" onclick="toast2('删除客户（软删除，开发实现）')">删除</span></td></tr>
+          <tr data-ctype="new"><td><b>老王砂锅店</b><div class="sub">暂无手机号</div></td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">新客户</span></td><td>东城街道</td><td>长恬新村八街38号</td><td>未加入商城</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">待补标</span><span class="act" style="margin-left:6px">地图标点 ›</span></td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">待开发</span></td><td><span class="act">编辑</span><span class="act">标记已入商城</span><span class="act del" onclick="toast2('删除客户（软删除，开发实现）')">删除</span></td></tr>
+          <tr data-ctype="new"><td><b>阿明烧烤</b><div class="sub">暂无手机号</div></td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">新客户</span></td><td>古山镇</td><td>经纬东路185号旁</td><td>未加入商城</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">待补标</span><span class="act" style="margin-left:6px">地图标点 ›</span></td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">待开发</span></td><td><span class="act">编辑</span><span class="act">标记已入商城</span><span class="act del" onclick="toast2('删除客户（软删除，开发实现）')">删除</span></td></tr>
+          <tr data-ctype="mall"><td><b>正宗重庆卤味</b><div class="sub">137****2361</div></td><td><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep)">商城客户</span></td><td>古山镇</td><td>文德大街5号</td><td>85 天前下单 · 未浏览</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">手动修正</span></td><td>启用</td><td><span class="act">编辑</span><span class="act">补标</span><span class="act del" onclick="toast2('删除客户（软删除，开发实现）')">删除</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:14px" id="claimCard">
+      <div class="sec-head"><span class="t">🔗 入商城认领 · 待确认（2）</span><span class="more">认领规则 ›</span></div>
+      <div class="todo-list">
+        <div class="todo"><span class="tg" style="background:var(--blue-tint);color:var(--blue)">新客户</span><span class="tx">「老王砂锅店」→ 名单「老王砂锅·东城店」：手机号精确命中</span><span class="ct">综合分 92</span><span class="arrow" onclick="claimReview()">核对 ›</span></div>
+        <div class="todo"><span class="tg" style="background:var(--blue-tint);color:var(--blue)">新客户</span><span class="tx">「阿明烧烤」→ 名单「阿明烧烤店」：店名相似 + 坐标距 180 米</span><span class="ct">综合分 78</span><span class="arrow" onclick="claimReview()">核对 ›</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 导出客户列表 -->
+  <div class="pmodal" id="custExportModal">
+    <div class="mask" onclick="closePmodal2()"></div>
+    <div class="box" style="width:640px;max-height:84vh;overflow-y:auto">
+      <div class="t">📤 导出客户列表</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div class="sum"><div class="k">导出范围</div><div class="v" style="font-size:15px">当前筛选 · 全部客户</div></div>
+        <div class="sum"><div class="k">条数</div><div class="v" style="font-size:15px">1,286 家</div></div>
+        <div class="sum"><div class="k">格式</div><div class="v" style="font-size:15px">Excel（.xlsx）</div></div>
+      </div>
+      <div style="font-size:13.5px;font-weight:800;margin-bottom:8px">导出列清单（36 列详细分列）：</div>
+      <table class="tbl" style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
+        <thead><tr><th style="width:110px">分组</th><th>列名</th></tr></thead>
+        <tbody>
+          <tr><td><b>基础信息</b></td><td>序号 · 编号 · 店名 · 客户类型 · 状态 · 联系人 · 手机号 · 备选手机号 · 来源</td></tr>
+          <tr><td><b>区域坐标</b></td><td>省 · 市 · 区 · 地址 · 经度 · 纬度 · 坐标状态（正常/待补标/自动解析/手动修正）</td></tr>
+          <tr><td><b>商城档案</b></td><td>添加商城时间 · 最近下单时间 · 最近浏览商城时间 · 入商城时间 · 入商城方式（名单认领/手动标记）· 商城等级 · 客户分类 · 商城业务负责人 · 客单价 · 购买频次 · 购买次数</td></tr>
+          <tr><td><b>拜访统计</b></td><td>累计拜访次数 · 最近拜访时间 · 最近拜访结果 · 最近拜访业务员</td></tr>
+          <tr><td><b>订单统计</b></td><td>回访后订单数 · 累计订单数 · 累计订单金额</td></tr>
+          <tr><td><b>其他</b></td><td>管理员备注 · 创建时间 · 更新时间</td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:12px;color:var(--sub);font-weight:600;margin:12px 0 4px">💡 导出范围跟随当前筛选（可按类型/区域/坐标/状态筛选后导出子集）；文件命名：聚火客户列表-2026-07-24.xlsx；商城客户与新客户分列保存，留档可追溯。</div>
+      <div class="btns" style="margin-top:12px"><div class="btn ghost" onclick="closePmodal2()">取消</div><div class="btn green" onclick="custExportGo()">确认导出</div></div>
+    </div>
+  </div>
+
+  <!-- 认领核对弹窗 -->
+  <div class="pmodal" id="claimModal">
+    <div class="mask" onclick="closePmodal2()"></div>
+    <div class="box" style="width:620px">
+      <div class="t">🔗 入商城认领核对 · 综合分 78</div>
+      <div style="font-size:12.5px;color:var(--sub);font-weight:600;margin-bottom:12px">名单导入时综合模糊比对：手机号精确 +50 · 坐标距离 180 米 +20 · 店名相似 +8 · 联系人/地址辅助 0</div>
+      <table class="tbl" style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
+        <thead><tr><th>字段</th><th>我方 · 新客户</th><th>商城名单</th><th>对比</th></tr></thead>
+        <tbody>
+          <tr><td>店名</td><td><b>阿明烧烤</b></td><td><b>阿明烧烤店</b></td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">相似</span></td></tr>
+          <tr><td>联系人</td><td>（拜访补录中）</td><td>明先生</td><td><span class="pill" style="background:#EEF1F4;color:var(--sub)">待补</span></td></tr>
+          <tr><td>手机号</td><td>暂无</td><td>138****4521</td><td><span class="pill" style="background:#EEF1F4;color:var(--sub)">无对照</span></td></tr>
+          <tr><td>坐标</td><td>120.1536, 28.9210</td><td>120.1552, 28.9214</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">距 180 米</span></td></tr>
+          <tr><td>地址</td><td>经纬东路185号旁</td><td>经纬东路185号</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">一致</span></td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:12px;color:var(--sub);font-weight:600;margin:12px 0 4px">💡 确认后：客户标记"已入商城"（时间取名单添加时间 2026-07-23），商城档案自动回填，之后按商城客户全链路统计。</div>
+      <div class="btns" style="margin-top:12px"><div class="btn ghost" onclick="closePmodal2()">驳回</div><div class="btn green" onclick="closePmodal2();toast2('已确认认领 ✓ 该客户标记已入商城，档案已回填')">确认已入商城</div></div>
+    </div>
+  </div>
+
+  <!-- 客户导入向导 -->
+  <div class="pmodal" id="custImportModal">
+    <div class="mask" onclick="closePmodal2()"></div>
+    <div class="box" style="width:640px">
+      <div class="t" style="display:flex;align-items:center;gap:10px">📥 导入客户
+        <span style="margin-left:auto;display:flex;gap:7px" class="steps-mini">
+          <span class="smp on" id="ci1">1 选择文件</span><span>›</span><span class="smp" id="ci2">2 预览解析</span><span>›</span><span class="smp" id="ci3">3 确认入库</span>
+        </span>
+      </div>
+      <div id="ciStep1">
+        <div class="ctabs" style="padding:0 0 14px">
+          <div class="ctab on" id="ciMode0" onclick="ciMode(0)">➕ 追加模式（默认）</div>
+          <div class="ctab" id="ciMode1" onclick="ciMode(1)">♻️ 替换模式</div>
+        </div>
+        <div id="ciModeNote" style="font-size:12.5px;color:var(--sub);font-weight:600;margin-bottom:14px">已存在则更新、不存在则新增；历史拜访与订单全部保留。</div>
+        <div style="border:2px dashed #D8DCE2;border-radius:14px;padding:30px;text-align:center;cursor:pointer" onclick="ciNext()">
+          <div style="font-size:26px">📄</div>
+          <div style="font-size:14px;font-weight:800;margin:8px 0 4px">点击选择文件，或拖拽到此处</div>
+          <div style="font-size:12px;color:var(--sub);font-weight:600">支持原始客户表（xls/csv）与商城客户名单（47列自动识别），如：<b style="color:var(--primary-deep)">三个月未下单-客户列表.xls</b></div>
+        </div>
+      </div>
+      <div id="ciStep2" style="display:none">
+        <div style="display:flex;gap:12px;margin-bottom:14px">
+          <div class="sum"><div class="k">总行数</div><div class="v">483</div></div>
+          <div class="sum"><div class="k">可导入</div><div class="v" style="color:var(--green)">476</div></div>
+          <div class="sum"><div class="k">自动解析坐标</div><div class="v" style="color:var(--blue)">233</div></div>
+          <div class="sum"><div class="k">待补标</div><div class="v" style="color:var(--warn)">7</div></div>
+          <div class="sum"><div class="k">格式缺失</div><div class="v" style="color:var(--danger)">0</div></div>
+        </div>
+        <table class="tbl" style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
+          <thead><tr><th>客户名称</th><th>地区/地址</th><th>联系人手机</th><th>坐标</th><th>处理</th></tr></thead>
+          <tbody>
+            <tr><td>正宗淮南牛肉汤西站店</td><td>西城街道双飞路16-1号</td><td>159****2611</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已解析</span></td><td>更新（编号/名称命中）</td></tr>
+            <tr><td>永康云路菜店</td><td>唐先东街8号</td><td>153****2098</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已解析</span></td><td>新增</td></tr>
+            <tr><td>石磨营养肠粉</td><td>凤凰路（描述过短）</td><td>139****6148</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">解析失败</span></td><td>新增 · 待补标</td></tr>
+            <tr><td>…（共 483 行）</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="ciStep3" style="display:none;text-align:center;padding:20px 0">
+        <div style="width:74px;height:74px;border-radius:50%;background:var(--green-tint);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 14px">✓</div>
+        <div style="font-size:16px;font-weight:800">导入完成</div>
+        <div style="font-size:13px;color:var(--sub);font-weight:600;margin-top:7px">成功 476 条（新增 45 / 更新 431）· 待补标 7 条已入清单 · 替换模式未启用</div>
+      </div>
+      <div class="btns" style="margin-top:8px">
+        <div class="btn ghost" id="ciBack" onclick="ciBack()">← 上一步</div>
+        <div class="btn primary" id="ciGo" onclick="ciNext()">下一步</div>
+      </div>
+    </div>
+  </div>
+  <!-- 纠错审核 -->
+  <div class="pmodal" id="custFixModal">
+    <div class="mask" onclick="closePmodal2()"></div>
+    <div class="box">
+      <div class="t">📍 坐标纠错审核</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">客户：江西大众小炒王（古山镇广源路121号）</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div class="sum"><div class="k">旧坐标</div><div class="v" style="font-size:14px">120.1536,<br>28.9210</div></div>
+        <div class="sum"><div class="k" style="color:var(--primary-deep)">上报新坐标</div><div class="v" style="font-size:14px;color:var(--primary-deep)">120.1541,<br>28.9205</div></div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;height:120px;background:#EDEFF2;margin-bottom:16px;position:relative">
+        <svg viewBox="0 0 400 120" width="100%" height="100%"><g stroke="#fff" stroke-width="6" fill="none"><path d="M80,0V120M200,0V120M320,0V120M0,60H400"/></g><circle cx="186" cy="52" r="10" fill="#C9CFD6"/><circle cx="196" cy="56" r="10" fill="#F5531C" stroke="#fff" stroke-width="3"/></svg>
+        <div style="position:absolute;left:10px;top:8px;background:rgba(255,255,255,.95);padding:5px 10px;border-radius:9px;font-size:11px;font-weight:800">灰=旧 · 橙=新（间距约 55 米）</div>
+      </div>
+      <div style="font-size:12.5px;color:var(--sub);font-weight:600;margin-bottom:16px">业务员在客户门口点击"位置报错"上传，审批后客户坐标更新为手动修正。</div>
+      <div class="btns"><div class="btn ghost" onclick="closePmodal2()">驳回</div><div class="btn green" onclick="closePmodal2();toast2('已批准，客户坐标已更新 ✓')">批准并更新</div></div>
+    </div>
+  </div>
+  <!-- ============ 拜访记录管理 ============ -->
+  <section id="p-visits" style="display:none">
+    <div class="filters">
+      <div class="f">业务员：<span>全部 ▾</span></div>
+      <div class="f">拜访结果：<span>全部 ▾</span></div>
+      <div class="f">状态：<span>全部 ▾</span></div>
+      <div class="f">📅 <span>2026-07-18 ~ 07-24 ▾</span></div>
+      <div class="f on" style="margin-left:auto">🔔 待复核（2）</div>
+    </div>
+    <div class="card">
+      <div class="sec-head" style="padding:12px 20px 8px"><span class="t">全部拜访记录 · 最近 7 天</span><span class="more" onclick="visFilter()">只看待复核 ›</span></div>
+      <table class="tbl">
+        <thead><tr><th>拜访时间</th><th>客户</th><th>业务员</th><th>结果</th><th>时长</th><th>照片/录音</th><th>定位</th><th>状态</th><th style="width:130px">操作</th></tr></thead>
+        <tbody>
+          <tr><td>07-24 10:42</td><td><b>正宗淮南牛肉汤西站店</b></td><td>丰炳全</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">有意向</span></td><td>23 分钟</td><td>2 / 2 段</td><td>62 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(1)">查看</span><span class="act del" onclick="toast2('验证权限后再删（开发实现）')">删除</span></td></tr>
+          <tr><td>07-24 10:15</td><td><b>友福饭堂</b></td><td>宋大队</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已下单</span></td><td>18 分钟</td><td>3 / 1 段</td><td>85 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(2)">查看</span><span class="act del" onclick="toast2('删除拜访记录（开发实现）')">删除</span></td></tr>
+          <tr><td>07-24 10:32</td><td><b>镇雄羊肉米线</b></td><td>丰炳全</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">极有意向</span></td><td>11 分钟</td><td>0 / 1 段</td><td style="color:var(--danger)">1.2 km ✗</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">待复核</span></td><td><span class="act" style="color:var(--primary-deep)" onclick="visReview()">审核 ›</span></td></tr>
+          <tr><td>07-24 09:48</td><td><b>青海拉面</b></td><td>大程</td><td><span class="pill" style="background:var(--red-tint);color:var(--danger)">有抵触</span></td><td>9 分钟</td><td>1 / 0</td><td style="color:var(--danger)">定位失败</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">待复核</span></td><td><span class="act" style="color:var(--primary-deep)" onclick="visReview()">审核 ›</span></td></tr>
+          <tr><td>07-23 16:20</td><td><b>佰家味·连锁中式快餐</b></td><td>丰炳全</td><td><span class="pill" style="background:#EEF1F4;color:var(--sub)">无需求</span></td><td>15 分钟</td><td>4 / 0</td><td>48 米 ✓</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">正常</span></td><td><span class="act" onclick="visDetail(3)">查看</span><span class="act del" onclick="toast2('删除拜访记录（开发实现）')">删除</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 拜访详情/审核弹窗 -->
+  <div class="pmodal" id="visModal">
+    <div class="mask" onclick="closePmodal2()"></div>
+    <div class="box" style="width:560px">
+      <div class="t" id="visTitle">拜访详情</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="sum"><div class="k">客户/业务员</div><div class="v" style="font-size:14px">镇雄羊肉米线<br>丰炳全</div></div>
+        <div class="sum"><div class="k">拜访时间/时长</div><div class="v" style="font-size:14px">07-24 10:32<br>11 分钟</div></div>
+        <div class="sum"><div class="k">距离校验</div><div class="v" style="font-size:14px;color:var(--danger)">1.2km ✗</div></div>
+        <div class="sum"><div class="k">照片/录音</div><div class="v" style="font-size:14px">0 张 / 1 段</div></div>
+      </div>
+      <div style="background:#F8F9FB;border-radius:12px;padding:13px 15px;font-size:13.5px;line-height:1.7;margin-bottom:12px"><b>拜访记录：</b>老板说最近生意一般，下月看情况再补货；对 650 方盒大仍感兴趣，让留样品。</div>
+      <div style="font-size:12.5px;color:var(--sub);font-weight:600;margin-bottom:6px">🎙 录音（多段，业务员不可删）：</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px"><span class="pill" style="background:var(--primary-tint);color:var(--primary-deep);cursor:pointer" onclick="toast2('播放第 1 段（开发实现）▶️')">第 1 段 · 0'42"</span></div>
+      <div id="visReviewBtns" class="btns">
+        <div class="btn ghost" onclick="toast2('已驳回：计入异常记录')">驳回（异常）</div>
+        <div class="btn green" onclick="visPass()">通过 ✓ 转为正常记录</div>
+      </div>
+    </div>
+  </div>
+  <!-- ============ 销售导入 ============ -->
+  <section id="p-sales" style="display:none">
+    <div class="card">
+      <div class="sec-head"><span class="t">📥 销售数据导入 · 三步向导</span><span class="hint" id="salesModeNote" style="font-size:12px;color:var(--sub);font-weight:600">每周一次 · 自动关联客户 · 手机号回填</span></div>
+      <div style="padding:0 24px">
+        <div class="steps" style="margin:8px 0 20px">
+          <div class="step on" id="ss1"><span class="no">1</span>上传文件</div><div class="step-line"><i id="ssl1"></i></div>
+          <div class="step" id="ss2"><span class="no">2</span>预览解析</div><div class="step-line"><i id="ssl2"></i></div>
+          <div class="step" id="ss3"><span class="no">3</span>确认入库</div>
+        </div>
+        <div id="salesStep1" style="text-align:center;padding:16px 0 24px">
+          <div style="border:2px dashed #D8DCE2;border-radius:16px;padding:34px;cursor:pointer;max-width:560px;margin:0 auto" onclick="salesNext()">
+            <div style="font-size:30px">🗂</div>
+            <div style="font-size:15px;font-weight:800;margin:10px 0 5px">点击选择销售表文件，或拖拽到此处</div>
+            <div style="font-size:12.5px;color:var(--sub);font-weight:600">支持商城导出的 csv / xls（32 列自动识别，如 <b style="color:var(--primary-deep)">7月24日订单导出.csv</b>）· 混合编码自动容错 · 按订单号去重</div>
+          </div>
+        </div>
+        <div id="salesStep2" style="display:none">
+          <div style="display:flex;gap:12px;margin-bottom:14px">
+            <div class="sum"><div class="k">总行数</div><div class="v">4,000</div></div>
+            <div class="sum"><div class="k">关联客户</div><div class="v" style="color:var(--green)">3,972</div></div>
+            <div class="sum"><div class="k">未关联</div><div class="v" style="color:var(--warn)">28</div></div>
+            <div class="sum"><div class="k">手机号可回填</div><div class="v" style="color:var(--blue)">—</div></div>
+            <div class="sum"><div class="k">重复订单(跳过)</div><div class="v" style="color:var(--sub)">0</div></div>
+          </div>
+          <table class="tbl" style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
+            <thead><tr><th>订单号</th><th>客户单位</th><th>联系信息</th><th>金额</th><th>下单时间</th><th>匹配</th></tr></thead>
+            <tbody>
+              <tr><td>2334120118410908</td><td>AA028 古山三村菜场蔬菜摊3号</td><td>李-156****6578</td><td>250</td><td>2026-07-23</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">编号✓</span></td></tr>
+              <tr><td>2334119619777715</td><td>a79 高台朋友面馆</td><td>a79 高台朋友面馆-188****7977</td><td>75</td><td>2026-07-23</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">编号✓</span></td></tr>
+              <tr><td>2334119155446228</td><td>c329 余记水城羊肉粉</td><td>伍-152****5305</td><td>201</td><td>2026-07-23</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">店名✓</span></td></tr>
+              <tr><td>2334119046699904</td><td>d112 上海脆皮薄饼(经纬路店)</td><td>彭先生-176****4957</td><td>135</td><td>2026-07-23</td><td><span class="pill" style="background:var(--blue-tint);color:var(--blue)">店名✓</span></td></tr>
+              <tr><td>2334119***0000</td><td>新客户·未注册商城</td><td>刘-135****8927</td><td>96</td><td>2026-07-23</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">未关联 → 可手选</span></td></tr>
+              <tr><td>…（共 4,000 行）</td><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:12.5px;color:var(--sub);font-weight:600;margin-top:10px">💡 未关联的 28 行进入"未关联订单"清单，可手动关联客户（店名/手机号匹配或新建客户）。</div>
+        </div>
+        <div id="salesStep3" style="display:none;text-align:center;padding:14px 0 22px">
+          <div style="width:74px;height:74px;border-radius:50%;background:var(--green-tint);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 14px">✓</div>
+          <div style="font-size:16px;font-weight:800">导入完成 · 批次 #20260724</div>
+          <div style="font-size:13px;color:var(--sub);font-weight:600;margin-top:8px;line-height:1.8">入库订单 3,972 条 · 关联客户 3,972 条<br>手机号回填客户档案 126 家 · 未关联 28 条已入清单</div>
+        </div>
+        <div class="wfoot" style="padding:12px 0 18px">
+          <div class="btn ghost" id="salesBack" onclick="salesBack()">← 上一步</div>
+          <div class="btn primary" id="salesGo" onclick="salesNext()">下一步</div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ============ 数据备份 ============ -->
+  <section id="p-backup" style="display:none">
+    <div class="grid-4" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi card"><div class="lb">⏰ 自动备份时间</div><div class="num" style="font-size:26px">02:00</div><div class="tr up">每天凌晨自动执行</div></div>
+      <div class="kpi card"><div class="lb">📦 已备份天数</div><div class="num" style="font-size:26px">7</div><div class="tr up">最近一次：今天 02:00 ✓</div></div>
+      <div class="kpi card"><div class="lb">💾 备份内容</div><div class="num" style="font-size:26px">全量</div><div class="tr up">数据 + 录音 + 照片</div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="sec-head"><span class="t">备份清单 · 最近 7 天</span><span class="more" onclick="backupNow()">立即备份 ›</span></div>
+      <table class="tbl">
+        <thead><tr><th>日期</th><th>大小</th><th>内容</th><th>状态</th><th style="width:120px">操作</th></tr></thead>
+        <tbody id="backupTbody">
+          <tr><td><b>2026-07-24</b></td><td>48.2 MB</td><td>数据 + 录音 38 段 + 照片 96 张</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">完成</span></td><td><span class="act" onclick="backupDl(this)">下载 zip</span></td></tr>
+          <tr><td><b>2026-07-23</b></td><td>51.7 MB</td><td>数据 + 录音 44 段 + 照片 102 张</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">完成</span></td><td><span class="act" onclick="backupDl(this)">下载 zip</span></td></tr>
+          <tr><td><b>2026-07-22</b></td><td>46.0 MB</td><td>数据 + 录音 35 段 + 照片 88 张</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">完成</span></td><td><span class="act" onclick="backupDl(this)">下载 zip</span></td></tr>
+          <tr><td><b>2026-07-21</b></td><td>44.3 MB</td><td>数据 + 录音 32 段 + 照片 81 张</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">完成</span></td><td><span class="act" onclick="backupDl(this)">下载 zip</span></td></tr>
+          <tr><td><b>2026-07-20</b></td><td>49.8 MB</td><td>数据 + 录音 40 段 + 照片 94 张</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">完成</span></td><td><span class="act" onclick="backupDl(this)">下载 zip</span></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:14px 20px;font-size:12.5px;color:var(--sub);font-weight:600;border-top:1px solid var(--line)">💡 每周五顺手下载一次到本地即可；录音与照片随每日备份一起打包，云端永久保留。</div>
+    </div>
+  </section>
+
+  <!-- ============ 系统设置 ============ -->
+  <section id="p-set" style="display:none">
+    <div class="grid-4" style="grid-template-columns:1fr 1fr">
+      <div class="card">
+        <div class="sec-head"><span class="t">📍 定位校验</span></div>
+        <div style="padding:4px 20px 18px">
+          <div class="setRow" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px dashed var(--line)">
+            <b style="font-size:13.5px;flex:1">开启到店距离校验（提交拜访时）</b>
+            <span class="toggle-mini on" id="setLoc" onclick="this.classList.toggle('on')"></span>
+          </div>
+          <div class="setRow" style="display:flex;align-items:center;gap:12px;padding:11px 0">
+            <b style="font-size:13.5px;flex:1">允许距离阈值</b>
+            <div class="days-pills" style="flex:none">
+              <div class="p">300米</div><div class="p on">500米</div><div class="p">800米</div><div class="p">1公里</div>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--sub);font-weight:600;padding-top:6px">客户缺坐标时自动跳过校验；校验失败降级为"待复核"记录。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-head"><span class="t">📊 报表口径</span></div>
+        <div style="padding:4px 20px 18px">
+          <div class="setRow" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px dashed var(--line)">
+            <b style="font-size:13.5px;flex:1">回访后下单窗口</b>
+            <div class="days-pills" style="flex:none"><div class="p">14天</div><div class="p on">30天</div><div class="p">60天</div></div>
+          </div>
+          <div class="setRow" style="display:flex;align-items:center;gap:12px;padding:11px 0">
+            <b style="font-size:13.5px;flex:1">同客户每日拜访次数上限</b>
+            <div class="days-pills" style="flex:none"><div class="p on">1次</div><div class="p">2次</div><div class="p">不限</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-head"><span class="t">📱 业务员端</span></div>
+        <div style="padding:4px 20px 18px">
+          <div class="setRow" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px dashed var(--line)">
+            <b style="font-size:13.5px;flex:1">客户手机号可见性</b>
+            <div class="days-pills" style="flex:none"><div class="p on">任务内可见</div><div class="p">拜访时才可见</div><div class="p">不可见</div></div>
+          </div>
+          <div class="setRow" style="display:flex;align-items:center;gap:12px;padding:11px 0">
+            <b style="font-size:13.5px;flex:1">单段录音时长上限</b>
+            <div class="days-pills" style="flex:none"><div class="p">1分钟</div><div class="p">3分钟</div><div class="p on">5分钟</div><div class="p">10分钟</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-head"><span class="t">🔔 订阅消息</span></div>
+        <div style="padding:4px 20px 18px">
+          <div class="setRow" style="display:flex;align-items:center;gap:12px;padding:11px 0">
+            <b style="font-size:13.5px;flex:1">发送任务时推送"新任务通知"</b>
+            <span class="toggle-mini on" onclick="this.classList.toggle('on')"></span>
+          </div>
+          <div style="font-size:11.5px;color:var(--sub);font-weight:600;padding-top:6px">一次性订阅，业务员需在首页点一下授权；不做每日待拜访推送。</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:16px">
+      <div class="btn ghost" onclick="toast2('已恢复默认')">恢复默认</div>
+      <div class="btn primary" onclick="toast2('设置已保存 ✓（正式版持久化到云端）')">保存设置</div>
+    </div>
+  </section>
+
+  <div class="note">🔥 聚火拜访 · 设计演示 — 所有数据均为示意</div>
+  <div class="toast-adm" id="toastAdm"></div>
+
+  <!-- 客户级明细（回访效果·详情） -->
+  <div class="pmodal" id="custDetailModal">
+    <div class="mask" onclick="closePmodal2()"></div>
+    <div class="box" style="width:720px;max-height:84vh;overflow-y:auto">
+      <div class="t" id="cdTitle">客户详情</div>
+      <div id="cdBody"></div>
+      <div class="btns" style="margin-top:14px"><div class="btn ghost" onclick="closePmodal2()">关闭</div></div>
+    </div>
+  </div>
+
+  <!-- 人员新增弹窗 -->
+  <div class="pmodal" id="pmodal">
+    <div class="mask" onclick="closePModal()"></div>
+    <div class="box">
+      <div class="t" id="pmTitle">新增业务员</div>
+      <div class="row" id="pmRow1"><label>姓名 *</label><input id="pmName" placeholder="例：大程"></div>
+      <div class="row" id="pmRow2"><label>手机号 *</label><input id="pmPhone" placeholder="业务员微信绑定的手机号"></div>
+      <div class="row" id="pmRow3" style="display:none"><label>登录账号 *</label><input id="pmAccount" placeholder="例：boss2"></div>
+      <div class="row" id="pmRow4" style="display:none"><label>登录密码 *</label><input id="pmPwd" type="password" placeholder="初始密码"></div>
+      <div class="btns"><div class="btn ghost" onclick="closePModal()">取消</div><div class="btn primary" onclick="addPerson()">保存</div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const titles={dash:['仪表盘','2026年7月24日 · 周三 · 早上好，卿燕 🔥'],wizard:['任务管理','创建回访任务 · 三步向导'],report:['回访效果','回访后下单率 · 业务员排行 · 客户级明细'],people:['人员管理','业务员 / 管理员账号 · 新增 · 停用 · 删除'],cust:['客户管理','导入 / 地图补标 / 纠错审核'],visits:['拜访记录','全部拜访记录与待复核'],sales:['销售导入','每周上传销售表'],backup:['数据备份','每日自动备份'],set:['系统设置','定位校验 · 报表口径']};
+document.querySelectorAll('.nav .ni').forEach(n=>n.onclick=()=>{
+  document.querySelectorAll('.nav .ni').forEach(x=>x.classList.remove('on'));n.classList.add('on');
+  const p=n.dataset.p;
+  document.querySelectorAll('main section').forEach(s=>s.style.display='none');
+  document.getElementById('p-'+p).style.display='block';
+  document.getElementById('pageTitle').innerHTML=titles[p][0]+'<small>'+titles[p][1]+'</small>';
+  if(p==='wizard')showTaskList();
+  window.scrollTo({top:0});
+});
+// KPI 数字滚动
+document.querySelectorAll('.kpi .num[data-count]').forEach(el=>{
+  const target=parseFloat(el.dataset.count),dec=+(el.dataset.dec||0),suf=el.dataset.suffix||'';
+  const t0=performance.now(),dur=1100;
+  function tick(t){
+    const k=Math.min((t-t0)/dur,1),e=1-Math.pow(1-k,3);
+    el.textContent=(target*e).toFixed(dec)+suf;
+    if(k<1)requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+});
+// 向导
+let step=1;
+// 任务管理三层视图（0.6）
+function showTaskList(){
+  document.getElementById('taskListView').style.display='block';
+  document.getElementById('wizardBox').style.display='none';
+  document.getElementById('taskDetailView').style.display='none';
+}
+function showWizard(){
+  document.getElementById('taskListView').style.display='none';
+  document.getElementById('wizardBox').style.display='block';
+  document.getElementById('taskDetailView').style.display='none';
+  wstep(1);
+}
+function showTaskDetail(){
+  document.getElementById('taskListView').style.display='none';
+  document.getElementById('wizardBox').style.display='none';
+  document.getElementById('taskDetailView').style.display='block';
+  const isNew=curMode==='new';
+  document.getElementById('tdMall').style.display=isNew?'none':'block';
+  document.getElementById('tdNew').style.display=isNew?'block':'none';
+}
+function wstep(n){
+  step=n;
+  [1,2,3].forEach(i=>{
+    document.getElementById('w'+i).style.display=i===n?'block':'none';
+    document.getElementById('st'+i).classList.toggle('on',i===n);
+    document.getElementById('st'+i).classList.toggle('done',i<n);
+  });
+  document.getElementById('sl1').style.width=n>1?'100%':'0';
+  document.getElementById('sl2').style.width=n>2?'100%':'0';
+}
+function pickSm(el){document.querySelectorAll('.sm-card').forEach(c=>c.classList.remove('on'));el.classList.add('on')}
+document.querySelectorAll('.days-pills .p').forEach(p=>p.onclick=()=>{document.querySelectorAll('.days-pills .p').forEach(x=>x.classList.remove('on'));p.classList.add('on')});
+function ctab(el,i){document.querySelectorAll('.ctab').forEach(t=>t.classList.remove('on'));el.classList.add('on');
+  ['ctab0','ctab1','ctab2'].forEach((id,j)=>document.getElementById(id).style.display=j===i?'block':'none')}
+function rowSel(tr){
+  const ck=tr.querySelector('.ck');const on=!ck.classList.contains('on');
+  ck.classList.toggle('on',on);tr.classList.toggle('sel',on);
+  document.getElementById('selCount').textContent=document.querySelectorAll('#ctab0 .tr.sel').length;
+}
+function mmk(g){
+  const c=g.querySelector('circle');const sel=c.getAttribute('fill')==='#F5531C';
+  c.setAttribute('fill',sel?'#C9CFD6':'#F5531C');
+  g.querySelector('text').textContent=sel?'＋':'✓';
+  const base=+document.getElementById('selCount').textContent;
+  document.getElementById('selCount').textContent=sel?base-1:base+1;
+}
+function sendTask(btn){
+  btn.textContent='✓ 已发送！业务员将收到"新任务通知"';
+  btn.style.pointerEvents='none';btn.style.opacity=.85;
+}
+// ===== 人员管理 =====
+let pType=0;
+function peopleTab(i){
+  pType=i;
+  document.getElementById('ptab0').classList.toggle('on',i===0);
+  document.getElementById('ptab1').classList.toggle('on',i===1);
+  document.getElementById('ptable0').style.display=i===0?'table':'none';
+  document.getElementById('ptable1').style.display=i===1?'table':'none';
+}
+function openPModal(){
+  document.getElementById('pmTitle').textContent=pType===0?'新增业务员':'新增管理员';
+  document.getElementById('pmRow1').style.display='block';
+  document.getElementById('pmRow2').style.display=pType===0?'block':'none';
+  document.getElementById('pmRow3').style.display=pType===1?'block':'none';
+  document.getElementById('pmRow4').style.display=pType===1?'block':'none';
+  document.getElementById('pmodal').classList.add('open');
+}
+function closePModal(){document.getElementById('pmodal').classList.remove('open')}
+function addPerson(){
+  const tb=document.querySelector('#ptable'+pType+' tbody');
+  if(pType===0){
+    const nm=document.getElementById('pmName').value.trim(),ph=document.getElementById('pmPhone').value.trim();
+    if(!nm){alert('请填写姓名');return}
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><b>'+nm+'</b></td><td>'+(ph||'—')+'</td><td><span class="pill" style="background:var(--warn-tint);color:#B97A0B">待绑定</span></td><td>0</td><td><span class="toggle-mini on"></span> 启用</td><td><span class="act">编辑</span><span class="act del" onclick="delRow(this)">删除</span></td>';
+    tb.appendChild(tr);
+    document.getElementById('ptab0').textContent='🏃 业务员（'+(tb.children.length)+'）';
+  }else{
+    const acc=document.getElementById('pmAccount').value.trim(),pwd=document.getElementById('pmPwd').value.trim(),nm=document.getElementById('pmName').value.trim();
+    if(!acc||!pwd){alert('请填写账号和密码');return}
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><b>'+acc+'</b></td><td>'+nm+'</td><td><span class="pill" style="background:#EEF1F4;color:var(--sub)">管理员</span></td><td>—</td><td><span class="toggle-mini on"></span> 启用</td><td><span class="act">重置密码</span><span class="act del" onclick="delRow(this)">删除</span></td>';
+    tb.appendChild(tr);
+    document.getElementById('ptab1').textContent='👤 管理员（'+(tb.children.length)+'）';
+  }
+  closePModal();
+  document.getElementById('pmName').value='';document.getElementById('pmPhone').value='';
+  document.getElementById('pmAccount').value='';document.getElementById('pmPwd').value='';
+}
+function delRow(btn){btn.closest('tr').remove()}
+document.querySelectorAll('.toggle-mini').forEach(t=>t.onclick=()=>t.classList.toggle('on'));
+// ===== 公共 toast / 弹窗 =====
+let toast2Timer;
+function toast2(msg){
+  const t=document.getElementById('toastAdm');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toast2Timer);toast2Timer=setTimeout(()=>t.classList.remove('show'),2000);
+}
+function closePmodal2(){['custImportModal','custFixModal','visModal','custDetailModal','claimModal','custExportModal'].forEach(id=>document.getElementById(id).classList.remove('open'))}
+// ===== 客户导出 =====
+function custExport(){document.getElementById('custExportModal').classList.add('open')}
+function custExportGo(){closePmodal2();toast2('已导出 ✓ 聚火客户列表-2026-07-24.xlsx（1,286 家 · 36 列）已下载到本地')}
+// ===== 0.6：拜访目的 / 入商城认领 =====
+function pickPurpose(el){document.querySelectorAll('#purposePills .ctab').forEach(t=>t.classList.remove('on'));el.classList.add('on')}
+function claimReview(){document.getElementById('claimModal').classList.add('open')}
+// ===== 0.6：双工作台（登录后选择入口） =====
+let curMode='all';
+function openGate(){document.getElementById('workbenchGate').style.display='flex'}
+function enterWorkbench(m){
+  document.getElementById('workbenchGate').style.display='none';
+  setMode(m);
+  const label={all:'🏠 全部总览',mall:'🔥 回访工作台',new:'🌱 新客开发工作台'}[m];
+  document.getElementById('wbChip').textContent=label+' ▾';
+}
+function setMode(m){
+  curMode=m;
+  const isNew=m==='new', isMall=m==='mall';
+  // 列表过滤
+  document.querySelectorAll('#p-cust tbody tr[data-ctype]').forEach(tr=>{
+    tr.style.display=(m==='all'||tr.dataset.ctype===m)?'':'none';
+  });
+  document.querySelectorAll('#p-wizard tbody tr[data-ctype]').forEach(tr=>{
+    tr.style.display=(m==='all'||tr.dataset.ctype===m)?'':'none';
+  });
+  const label={all:'全部',mall:'激活回访',new:'新客开发'}[m];
+  toast2(m==='all'?'已进入：全部总览':('已进入：'+label+'工作台 ✓ 各页面已切换'));
+  const f=document.querySelector('#p-report .filters .f.on span');
+  if(f)f.textContent=label+' ▾';
+  // 菜单与报表随工作台切换（回访工作台=回访效果，新客开发工作台=拜访效果）
+  const menuLabel={all:'拜访效果',mall:'回访效果',new:'拜访效果'}[m];
+  document.getElementById('reportMenuText').textContent=menuLabel;
+  titles.report[0]=menuLabel;
+  document.getElementById('reportMallGroup').style.display=isNew?'none':'grid';
+  document.getElementById('reportNewGroup').style.display=isMall?'none':'grid';
+  document.getElementById('reportTableMall').style.display=isNew?'none':'block';
+  document.getElementById('reportTableNew').style.display=isNew?'block':'none';
+  // 仪表盘双版本
+  document.getElementById('dashMall').style.display=isNew?'none':'block';
+  document.getElementById('dashNew').style.display=isNew?'block':'none';
+  titles.dash[1]=isNew?'新客开发工作台 · 拜访 / 入商城 / 首单转化':'2026年7月24日 · 周三 · 早上好，卿燕 🔥';
+  // 客户管理文案（工作台语境）
+  document.getElementById('custImportText').textContent=isNew?'导入新客户':(isMall?'导入回访客户':'导入客户');
+  document.getElementById('custMallTh').textContent=isNew?'开发状态':'商城档案';
+  document.getElementById('claimCard').style.display=isMall?'none':'block';
+  // 任务管理（新建按钮/目的选项/详情双版）
+  document.getElementById('newTaskText').textContent=isNew?'新建开发任务':'新建任务';
+  document.querySelectorAll('#purposePills .ctab').forEach(t=>{
+    const visible=(m==='all'||t.dataset.mode===m);
+    t.style.display=visible?'':'none';
+    if(m!=='all')t.classList.toggle('on',t.dataset.mode===m);
+  });
+  document.getElementById('tdMall').style.display=isNew?'none':'block';
+  document.getElementById('tdNew').style.display=isNew?'block':'none';
+  // 销售导入说明
+  document.getElementById('salesModeNote').textContent=isNew
+    ?'每周一次 · 导入后自动：新客户认领入商城（综合比对）+ 统计新客首单/下单率'
+    :'每周一次 · 自动关联客户 · 手机号回填';
+}
+// ===== 客户级明细（回访效果·详情） =====
+const custProfiles={
+  1:{name:'正宗淮南牛肉汤西站店',area:'西城街道',before:'0 单',amt:'¥2,340',
+    visits:[
+      {d:'2026-07-18 10:42',s:'丰炳全',r:'有意向',rc:'var(--green-tint);color:var(--green)',dur:'23 分钟',text:'老板对 650 方盒大感兴趣，说下月新店开业要一批。样品已给 1 件，跟进新店开业时间。',p:2,rec:2},
+      {d:'2026-06-30 15:20',s:'丰炳全',r:'极有意向',rc:'var(--blue-tint);color:var(--blue)',dur:'15 分钟',text:'首次拜访。老板夫妻经营，每天用盒量约 200 个，目前在别家进货。价格敏感，可报阶梯价。',p:1,rec:1}],
+    orders:[
+      {d:'2026-07-23',no:'2334118※※※※※',amt:'¥280',pay:'微信支付'},
+      {d:'2026-07-21',no:'2334120※※※※※',amt:'¥1,240',pay:'微信支付'},
+      {d:'2026-07-19',no:'2334131※※※※※',amt:'¥820',pay:'预定金抵扣'}]},
+  2:{name:'贵州安顺快餐小炒李',area:'古山镇',before:'1 单（¥150）',amt:'¥6,880',
+    visits:[
+      {d:'2026-07-16 11:05',s:'丰炳全',r:'极有意向',rc:'var(--blue-tint);color:var(--blue)',dur:'19 分钟',text:'老板对 1000 圆碗大很认可，之前停用是因为隔壁价格低 2 分钱。已报阶梯价，约定下周试单。',p:3,rec:2}],
+    orders:[
+      {d:'2026-07-24',no:'2334109※※※※※',amt:'¥2,150',pay:'微信支付'},
+      {d:'2026-07-22',no:'2334112※※※※※',amt:'¥1,530',pay:'微信支付'},
+      {d:'2026-07-20',no:'2334116※※※※※',amt:'¥1,120',pay:'现金'},
+      {d:'2026-07-19',no:'2334121※※※※※',amt:'¥1,280',pay:'微信支付'},
+      {d:'2026-07-18',no:'2334128※※※※※',amt:'¥800',pay:'微信支付'}]},
+  3:{name:'友福饭堂',area:'龙山镇',before:'0 单',amt:'¥1,056',
+    visits:[
+      {d:'2026-07-15 14:40',s:'宋大队',r:'已下单',rc:'var(--green-tint);color:var(--green)',dur:'18 分钟',text:'老板现场下单 750 方盒大 2 件，要求明天配送。顺带处理了上月破损补发 1 件。',p:3,rec:1}],
+    orders:[
+      {d:'2026-07-16',no:'2334133※※※※※',amt:'¥560',pay:'微信支付'},
+      {d:'2026-07-15',no:'2334139※※※※※',amt:'¥496',pay:'预定金抵扣'}]},
+  4:{name:'一甲天下(文溪路店)',area:'东城街道',before:'0 单',amt:'—',
+    visits:[
+      {d:'2026-07-14 09:55',s:'大程',r:'无需求',rc:'#EEF1F4;color:var(--sub)',dur:'9 分钟',text:'老板表示已有固定供货商，近期不打算换。留下名片，约定换季时再联系。',p:1,rec:0}],
+    orders:[]},
+  5:{name:'傣香云云南菜',area:'东城街道',before:'0 单',amt:'—',
+    visits:[
+      {d:'2026-07-12 16:10',s:'大程',r:'有抵触',rc:'var(--red-tint);color:var(--danger)',dur:'12 分钟',text:'老板对上次送货时间不满意，情绪较大。已道歉并说明会提前一天预约确认，暂未谈业务。',p:1,rec:1}],
+    orders:[]}
+};
+function custDetail(i){
+  const d=custProfiles[i];
+  if(!d)return;
+  let h='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 16px">'
+    +'<div class="sum"><div class="k">回访次数</div><div class="v">'+d.visits.length+' 次</div></div>'
+    +'<div class="sum"><div class="k">最近回访</div><div class="v" style="font-size:14px">'+d.visits[0].d.slice(0,10)+'</div></div>'
+    +'<div class="sum"><div class="k">回访后订单</div><div class="v" style="color:var(--green)">'+d.orders.length+' 单</div></div>'
+    +'<div class="sum"><div class="k">回访后金额</div><div class="v" style="color:var(--primary-deep);font-size:16px">'+d.amt+'</div></div>'
+    +'<div class="sum"><div class="k">回访前 30 天</div><div class="v" style="font-size:14px;color:var(--sub)">'+d.before+'</div></div>'
+    +'</div>';
+  h+='<div style="font-size:14px;font-weight:800;margin-bottom:10px">🕑 拜访时间线（'+d.visits.length+' 次）</div>';
+  d.visits.forEach(v=>{
+    h+='<div style="background:#F8F9FB;border-radius:12px;padding:13px 15px;margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span class="pill" style="background:'+v.rc+'">'+v.r+'</span><b style="font-size:13px">'+v.s+'</b><span style="margin-left:auto;font-size:12px;color:var(--sub);font-weight:600">'+v.d+' · 时长 '+v.dur+'</span></div>'
+      +'<div style="font-size:13px;color:#4A5360;margin-top:8px;line-height:1.65">'+v.text+'</div>'
+      +'<div style="margin-top:8px;font-size:11.5px;color:var(--sub);font-weight:600">📷 '+v.p+' 张照片 · 🎙 '+v.rec+' 段录音'+(v.rec?'<span style="margin-left:8px;color:var(--primary-deep);cursor:pointer" onclick="toast2(\'▶ 播放录音（开发实现）\')">▶ 试听</span>':'')+'</div>'
+      +'</div>';
+  });
+  h+='<div style="font-size:14px;font-weight:800;margin:16px 0 10px">📦 回访后订单（窗口 30 天 · 按下单时间判定）</div>';
+  if(d.orders.length){
+    h+='<table class="tbl" style="border:1px solid var(--line);border-radius:12px;overflow:hidden"><thead><tr><th>日期</th><th>订单号</th><th>金额</th><th>支付方式</th><th>状态</th></tr></thead><tbody>';
+    d.orders.forEach(o=>{h+='<tr><td>'+o.d+'</td><td>'+o.no+'</td><td><b>'+o.amt+'</b></td><td>'+o.pay+'</td><td><span class="pill" style="background:var(--green-tint);color:var(--green)">已完成</span></td></tr>'});
+    h+='</tbody></table>';
+  }else{
+    h+='<div style="border:1.5px dashed var(--line);border-radius:12px;padding:22px;text-align:center;font-size:13px;color:var(--sub);font-weight:600">窗口期内暂无新订单 —— 建议持续跟进</div>';
+  }
+  h+='<div style="font-size:12px;color:var(--sub);font-weight:600;margin-top:10px;line-height:1.7">💡 判定口径：拜访日期 D 起 30 天内的新订单计入回访效果；同一客户被多名业务员回访过时，订单功劳计最近一次回访者。</div>';
+  document.getElementById('cdTitle').textContent='客户详情 · '+d.name+'（'+d.area+'）';
+  document.getElementById('cdBody').innerHTML=h;
+  document.getElementById('custDetailModal').classList.add('open');
+}
+// ===== 客户管理 =====
+function custImport(){
+  document.getElementById('custImportModal').classList.add('open');
+  ['ciStep1','ciStep2','ciStep3'].forEach((id,i)=>document.getElementById(id).style.display=i===0?'block':'none');
+  ['ci1','ci2','ci3'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===0));
+  document.getElementById('ciBack').style.display='none';
+  document.getElementById('ciGo').textContent='下一步';
+}
+function ciMode(i){
+  document.getElementById('ciMode0').classList.toggle('on',i===0);
+  document.getElementById('ciMode1').classList.toggle('on',i===1);
+  document.getElementById('ciModeNote').textContent=i===0?'已存在则更新、不存在则新增；历史拜访与订单全部保留。':'旧客户全部停用后按新表导入（历史拜访与订单仍保留），可一键恢复。';
+}
+let ciStep=1;
+function ciNext(){
+  if(ciStep<3){
+    ciStep++;
+    ['ciStep1','ciStep2','ciStep3'].forEach((id,i)=>document.getElementById(id).style.display=i===ciStep-1?'block':'none');
+    ['ci1','ci2','ci3'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i<ciStep));
+    document.getElementById('ciBack').style.display=ciStep>1?'':'none';
+    document.getElementById('ciGo').textContent=ciStep===3?'完成':'下一步';
+  }else{closePmodal2();ciStep=1;toast2('客户导入完成 ✓ 追加 45 / 更新 431 / 待补标 7');}
+}
+function ciBack(){if(ciStep>1){ciStep--;ciNext();}}
+function custFix(){document.getElementById('custFixModal').classList.add('open')}
+// ===== 拜访记录 =====
+function visDetail(n){document.getElementById('visTitle').textContent='拜访详情 · '+(n===1?'正宗淮南牛肉汤西站店':n===2?'友福饭堂':'佰家味·连锁中式快餐');
+  document.getElementById('visReviewBtns').style.display='none';document.getElementById('visModal').classList.add('open')}
+function visReview(){document.getElementById('visTitle').textContent='待复核审核 · 定位校验失败';
+  document.getElementById('visReviewBtns').style.display='flex';document.getElementById('visModal').classList.add('open')}
+function visPass(){closePmodal2();toast2('已通过 ✓ 该拜访转为正常记录')}
+function visFilter(){toast2('已筛选：仅看待复核记录')}
+// ===== 销售导入 =====
+let salesStep=1;
+function salesNext(){
+  if(salesStep<3){
+    salesStep++;
+    ['salesStep1','salesStep2','salesStep3'].forEach((id,i)=>document.getElementById(id).style.display=i===salesStep-1?'block':'none');
+    ['ss1','ss2','ss3'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===salesStep-1));
+    ['ssl1','ssl2'].forEach((id,i)=>document.getElementById(id).style.width=salesStep>i+1?'100%':'0');
+    document.getElementById('salesBack').style.display=salesStep>1?'':'none';
+    document.getElementById('salesGo').textContent=salesStep===3?'完成':'下一步';
+  }else{toast2('销售表导入完成 ✓ 3,972 条 · 手机号回填 126 家');salesStep=1;}
+}
+function salesBack(){if(salesStep>1){salesStep--;salesNext();}}
+// ===== 数据备份 =====
+function backupDl(el){const old=el.textContent;el.textContent='下载中…';setTimeout(()=>{el.textContent='已下载 ✓';toast2('备份已下载到本地（演示）')},1200);setTimeout(()=>{el.textContent=old},2600)}
+function backupNow(){toast2('立即备份已触发（正式版云函数每日 02:00 自动执行）')}
+</script>
+</body>
+</html>

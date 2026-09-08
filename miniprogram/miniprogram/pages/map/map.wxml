@@ -1,0 +1,35 @@
+<!-- 地图页（2026-09-08 二期核心：天页签 + 客户点/绿色路线 + 下一家引导 + 底部客户卡） -->
+<view class="page">
+  <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
+       latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
+       bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap"></map>
+
+  <!-- 加载/空态 -->
+  <view class="center-box" wx:if="{{loading}}">加载中…</view>
+  <view class="center-box" wx:if="{{!loading && empty}}">{{empty}}</view>
+
+  <block wx:if="{{!loading && !empty}}">
+    <!-- 天页签（任务 ≤5 天=「第N天」胶囊；≥6 天整排变纯数字圆标整齐排列，2026-09-08 老板定） -->
+    <view class="daybar" wx:if="{{days.length > 1}}">
+      <view class="dtag {{days.length > 5 ? 'dot' : ''}} {{curDay === item ? 'on' : ''}}" wx:for="{{days}}" wx:key="*this"
+            bindtap="switchDay" data-d="{{item}}">{{days.length > 5 ? item : '第' + item + '天'}}</view>
+    </view>
+
+    <!-- 下一家引导条（顺序引导：当天顺序中第一家未完成；右侧重排按钮=以我的位置重排） -->
+    <view class="nextbar" wx:if="{{nextCust}}" bindtap="openNext">
+      <view class="ntxt"><text class="nlab">👉 下一家</text><text class="nname">{{nextCust.name}}</text><text class="ndist" wx:if="{{nextDist}}">{{nextDist}}</text></view>
+      <view class="nbtn" wx:if="{{canReplan}}" catchtap="replanDay">{{replanBusy ? '重排中…' : '重排'}}</view>
+    </view>
+
+    <!-- 底部客户卡 -->
+    <view class="custcard" wx:if="{{selCust}}">
+      <view class="cc-close" bindtap="closeCard">✕</view>
+      <view class="cc-name">{{selCust.name}}<text class="cc-st {{selCust.visitedToday ? 'v' : (selCust.visitOngoing ? 'o' : '')}}">{{selCust.visitedToday ? '已拜访' : (selCust.visitOngoing ? '拜访中' : '待拜访')}}</text></view>
+      <view class="cc-sub">{{selCust.address || '暂无地址'}}<text wx:if="{{selDist}}"> · 距你 {{selDist}}</text></view>
+      <view class="cc-btns">
+        <view class="ccb nav" bindtap="navSel">🧭 导航</view>
+        <view class="ccb go" bindtap="goVisit">去拜访</view>
+      </view>
+    </view>
+  </block>
+</view>

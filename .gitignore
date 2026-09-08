@@ -1,0 +1,24 @@
+# ===== 敏感信息（绝不上传）=====
+SecretKey.csv
+聚火拜访服务号SecretKey.csv
+聚火拜访服务号模板ID.txt
+admin/config.json
+*.xls
+*.xlsx
+*.csv
+
+# ===== 本地临时 / 私有配置 =====
+TMP/
+miniprogram/project.private.config.json
+
+# ===== 依赖 / 缓存 / 产物 =====
+node_modules/
+admin/voice/
+admin/JuHuoVisitAdmin.exe.WebView2/
+packager/build/
+packager/output/
+packager/inputs/node-v24.16.0-win-x64.zip
+_scratch/
+*.log
+backup_icon_old.ico
+.DS_Store

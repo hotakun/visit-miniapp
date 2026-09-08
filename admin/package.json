@@ -1,0 +1,9 @@
+{
+  "name": "juhuo-visit-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "聚火拜访 · 管理后台本地服务（静态页面 + 微信云开发 HTTP API 代理 + xls 解析）",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

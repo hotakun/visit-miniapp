@@ -1,0 +1,17 @@
+.page { padding: 20px 18px 40px; }
+.task-card { background: #fff; border-radius: 16px; padding: 20px 18px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(31,36,48,.06); }
+/* 已完成任务：比页面背景稍深的灰底 + 整体色彩减淡，与新任务区分 */
+.task-card.done { background: #E9EBEF; border: 1px solid #E0E3E7; opacity: .85; }
+.task-card.done .pfill { filter: grayscale(.5); }
+.row1 { display: flex; align-items: center; gap: 8px; }
+.tname { flex: 1; font-size: 16.5px; font-weight: 700; }
+.state { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
+.state.going { background: var(--primary-tint); color: var(--primary-deep); }
+.state.review { background: var(--warn-tint); color: #B97A0B; }
+.state.expired { background: #FCEBEC; color: var(--danger); }
+.state.done { background: var(--green-tint); color: var(--green); }
+.row2 { display: flex; justify-content: space-between; margin: 14px 0 10px; font-size: 13px; color: var(--sub); font-weight: 600; }
+.pbar { height: 8px; background: #F0F2F5; border-radius: 99px; overflow: hidden; }
+.pfill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#FF8A50,#F5531C); }
+.empty { text-align: center; color: var(--sub); font-size: 14px; margin-top: 60px; }
+.loading { text-align: center; color: var(--sub); font-size: 13px; margin-top: 40px; }

@@ -1,0 +1,120 @@
+<!-- 客户详情（按类型分流：商城档案卡 / 新客户开发卡） -->
+<view class="page" wx:if="{{c}}">
+  <view class="hero">
+    <view class="nm">{{c.name}}</view>
+    <view class="tag" style="{{c.typeName === 'new' ? 'background:#E8F1FD;color:#2F80ED' : 'background:var(--primary-tint);color:var(--primary-deep)'}}">{{c.typeName === 'new' ? '新客户' : (c.mallJoinedAt ? '已入商城' : '沉睡客户')}}</view>
+  </view>
+  <view class="addr">📍 {{c.address}}<text wx:if="{{c.coordFixPending}}" class="cfa">坐标审核中</text></view>
+
+  <view class="phoneRow">
+    <view class="call" wx:if="{{c.phone && !isTrial}}" bindtap="callPhone" data-phone="{{c.phone}}">📞</view>
+    <view class="call none" wx:elif="{{!c.phone}}">📵</view>
+    <view class="call none" wx:else>🔒</view>
+    <view class="pwrap">
+      <view class="ph" wx:if="{{c.phone}}">{{isTrial ? c.phoneShow : c.phone}}</view>
+      <view class="ph none" wx:else>暂无手机号</view>
+      <view class="lb">{{c.phone ? '联系人：' + (c.contactName || '—') : '拜访时补录联系方式'}}</view>
+    </view>
+    <view class="posfix {{c.coordFixPending ? 'off' : ''}}" bindtap="reportFix">{{c.coordFixPending ? '审核中' : '📍 报错'}}</view>
+  </view>
+  <view class="phoneRow" wx:if="{{c.phone2}}">
+    <view class="call" wx:if="{{!isTrial}}" bindtap="callPhone" data-phone="{{c.phone2}}">📞</view>
+    <view class="call none" wx:else>🔒</view>
+    <view class="pwrap">
+      <view class="ph">{{isTrial ? c.phone2Show : c.phone2}}</view>
+      <view class="lb">备用号码</view>
+    </view>
+  </view>
+
+  <!-- 档案区 -->
+  <view class="card">
+    <view class="ct">🏪 商城档案</view>
+    <view class="rows">
+      <view class="r"><text class="k">注册商城时间</text><text class="v">{{c.mallJoinedAt || c.mallAddedAt || '—'}}</text></view>
+      <view class="r"><text class="k">签约业务员</text><text class="v">{{c.mallSalesman || '—'}}</text></view>
+      <view class="r"><text class="k">最近下单</text><text class="v warn">{{c.lastOrderAgo ? c.lastOrderAgo + ' · ' : ''}}{{c.lastOrderAt || '—'}}</text></view>
+      <view class="r"><text class="k">最近浏览商城</text><text class="v">{{c.lastBrowseAgo ? c.lastBrowseAgo + ' · ' : ''}}{{c.lastBrowseAt || '—'}}</text></view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{c.typeName === 'new'}}">
+    <view class="ct">🌱 新客户开发</view>
+    <view class="rows">
+      <view class="r"><text class="k">商城状态</text><text class="v blue">{{c.mallJoinedAt ? '已入商城 ' + c.mallJoinedAt : '未加入商城'}}</text></view>
+      <view class="r"><text class="k">开发目标</text><text class="v">引导注册商城 · 争取首单</text></view>
+      <view class="r"><text class="k">备注</text><text class="v">{{c.remark || '—'}}</text></view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{c.typeName !== 'new' && c.remark}}">
+    <view class="ct">📝 管理员备注</view>
+    <view class="remark">{{c.remark}}</view>
+  </view>
+
+  <!-- 拜访历史 -->
+  <view class="tl">
+    <view class="tl-t">🕑 拜访历史（{{history.length}} 次）</view>
+    <view class="tl-item {{index === 0 ? 'latest' : ''}} {{item.status === 'ongoing' ? 'ongoing' : ''}}" wx:for="{{history}}" wx:key="_id">
+      <view class="hrow">
+        <text class="hr-tag {{item.status === 'ongoing' ? 'ong' : ''}}">{{item.status === 'ongoing' ? '拜访中' : (item.status === 'cancelled' ? '已取消' : item.result)}}</text>
+        <text class="hm">{{item.dateMD}}{{item.timeHM ? ' ' + item.timeHM : ''}} · {{item.salesmanName}}</text>
+        <text class="hd">{{item.mins ? '时长 ' + item.mins + ' 分钟' : ''}}</text>
+      </view>
+      <view class="htxt" wx:if="{{item.text}}">{{item.text}}</view>
+      <view class="hsamp" wx:if="{{item.samples}}">📦 样品：{{item.samples}}</view>
+      <!-- 现场证据（2026-09-07）：照片缩略点开大图 + 录音播放控件（▶/⏸+进度条+时间） -->
+      <view class="hev" wx:if="{{item.evPhotos.length}}">
+        <image class="hev-pic" wx:for="{{item.evPhotos}}" wx:for-item="ph" wx:key="index"
+               src="{{ph.t}}" data-src="{{ph.o}}" data-list="{{item.evListJson}}"
+               bindtap="previewEv" mode="scaleToFill"/>
+      </view>
+      <view class="hev-audio {{evPlay === item._id ? 'on' : ''}}" wx:if="{{item.audioUrl}}">
+        <view class="ha-play" catchtap="playEv" data-id="{{item._id}}" data-url="{{item.audioUrl}}" data-dur="{{item.audioText}}">{{evPlay === item._id ? '⏸' : '▶'}}</view>
+        <slider class="ha-slider" min="0" max="{{item.audioDurMs || 1}}" value="{{evPlay === item._id ? evCurMs : 0}}"
+                block-size="14" activeColor="#2F80ED" backgroundColor="#D4DBE4"
+                disabled="{{evPlay !== item._id}}" bindchange="onEvSeek" data-id="{{item._id}}"/>
+        <text class="ha-time">{{evPlay === item._id ? (evCurText + ' / ' + (item.audioText || '00:00')) : (item.audioText || '')}}</text>
+      </view>
+    </view>
+    <view class="empty" wx:if="{{!history.length}}">暂无拜访记录</view>
+  </view>
+
+  <view class="foot">
+    <view class="btn-primary {{c.visitOngoing ? 'visiting' : ''}}" style="flex:1" bindtap="goVisit">{{c.visitOngoing ? '⏱ 拜访中 · 计时中' : '▶ 开始拜访 · 自动计时'}}</view>
+  </view>
+
+  <!-- 坐标报错确认弹窗：提交当前位置，管理员审核后更新客户坐标 -->
+  <view class="c-mask" wx:if="{{coordConfirmShow}}">
+    <view class="c-box">
+      <view class="ct">提交坐标修正？</view>
+      <!-- 现场照片（2026-09-08 真拍照启用：固定三框，空框点拍/有图可删，提交时上传） -->
+      <view class="c-photos">
+        <view class="c-ph {{coordPics[pi] ? 'has' : ''}}" wx:for="{{[0,1,2]}}" wx:for-item="pi" wx:key="*this">
+          <block wx:if="{{coordPics[pi]}}">
+            <image class="c-ph-img" src="{{coordPics[pi].thumb}}" data-src="{{coordPics[pi].orig}}" bindtap="previewCoordPhoto" mode="scaleToFill"/>
+            <view class="c-ph-del" data-id="{{coordPics[pi].id}}" catchtap="delCoordPhoto">✕</view>
+          </block>
+          <view wx:else class="c-ph-empty {{coordPicBusy ? 'busy' : ''}}" bindtap="addCoordPhoto">
+            <text class="c-ph-ic">{{coordPicBusy ? '⏳' : '📷'}}</text>
+          </view>
+        </view>
+      </view>
+      <view class="c-ph-tip" wx:if="{{!coordPics.length}}">点框拍照（最多 3 张，建议拍门头/门牌便于核对）</view>
+      <view class="crow">
+        <view class="cic loc {{coordCooldown > 0 ? 'used' : ''}}" bindtap="onCoordRefresh">
+          <text wx:if="{{coordRefreshing}}">{{coordSpinChar}}</text>
+          <text wx:elif="{{coordCooldown > 0}}">{{coordCooldown}}</text>
+          <text wx:else>📍</text>
+        </view>
+        <view class="clb">
+          <view>{{coordNewText}}</view>
+          <view class="csl">{{coordRefreshing ? '🛰️ 正在精确定位 · 请保持不动' : coordQuality}}</view>
+        </view>
+      </view>
+      <view class="crow"><view class="cic" style="background:var(--primary-tint)">📏</view><view class="clb"><view>{{coordDistLine1}}</view><view>{{coordDistLine2}}</view></view><view class="csl">与原坐标对比</view></view>
+      <textarea class="c-note" placeholder="备注（选填）：" value="{{coordNote}}" bindinput="onCoordNote" maxlength="100" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
+      <view class="btn-primary" bindtap="confirmCoordFix">确认提交</view>
+      <view class="again" bindtap="hideCoordConfirm">再看看</view>
+    </view>
+  </view>
+</view>

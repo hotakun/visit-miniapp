@@ -1,0 +1,19 @@
+.page { min-height: 100vh; display: flex; flex-direction: column; padding: 60px 32px 40px; box-sizing: border-box; }
+.hero { display: flex; flex-direction: column; align-items: center; }
+.logo { width: 110px; height: 110px; border-radius: 50%; box-shadow: 0 12px 30px rgba(245,83,28,.25); }
+.name { margin-top: 20px; font-size: 26px; font-weight: 800; letter-spacing: 2px; }
+.sub { margin-top: 6px; font-size: 14px; color: var(--sub); font-weight: 600; }
+.tip { margin-top: 48px; font-size: 14px; color: var(--ink); font-weight: 700; text-align: center; }
+/* 游客体验（2026-09-08 老板定：审核/演示用） */
+.trial-banner { margin-top: 40px; background: #EFF6FF; border: 1px solid #C9E0FA; border-radius: 12px; padding: 10px 14px; font-size: 12.5px; color: #1E5FA8; font-weight: 600; line-height: 1.6; }
+.sman.trial { border: 1.5px solid #C9E0FA; }
+.sman .tag { display: inline-block; margin-left: 8px; vertical-align: 2px; background: #E8F1FD; color: #2F80ED; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.sman-list { margin-top: 18px; }
+.sman { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(31,36,48,.06); }
+.sman .av { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg,#FF8A50,#F5531C); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; }
+.sman .info { flex: 1; }
+.sman .nm { font-size: 16px; font-weight: 800; }
+.sman .ph { margin-top: 2px; font-size: 12px; color: var(--sub); font-weight: 600; }
+.sman .go { font-size: 13px; color: var(--primary-deep); font-weight: 800; }
+.empty { margin-top: 16px; text-align: center; font-size: 13px; color: var(--sub); line-height: 1.7; }
+.loading { margin-top: 80px; text-align: center; color: var(--sub); font-size: 14px; }

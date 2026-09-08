@@ -1,0 +1,278 @@
+const api = require('../../utils/api');
+const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
+
+// 每日鸡汤短语（随机显示，可随时增删替换；100 条）
+const PHRASES = [
+  '今天也加油，多走一家是一家 💪',
+  '每一家店门背后，都是机会 ✨',
+  '好状态就是最好的开场白 🔥',
+  '走起来，路就顺了 🚶',
+  '真诚敲门，用心沟通 🤝',
+  '今天的汗水，明天的单子 💧',
+  '先混脸熟，再谈成交 😄',
+  '多拜访一家，就多一个可能 🚪',
+  '别怕拒绝，那是筛选客户 ⚡',
+  '你跑的每一公里，都算数 🛵',
+  '好心态，好业绩 🌤',
+  '微笑是免费的敲门砖 😊',
+  '客户不是等来的，是走出来的 👣',
+  '今天多努力一点，明天轻松一点 📈',
+  '认真记录，客户都看在眼里 📝',
+  '把每一次拜访都当第一次 🌱',
+  '稳扎稳打，细水长流 🏔',
+  '你的坚持，客户会记得 🕰',
+  '出门早一点，机会多一点 ☀️',
+  '用脚步丈量市场，用真诚打动客户 🗺',
+  '累一点没关系，成长看得见 🌳',
+  '今天也要元气满满地出发 🎒',
+  '相信积累的力量，拜访不会白跑 💎',
+  '天气不背锅，行动出结果 🌦',
+  '一家店一家店，跑出自己的版图 🗺',
+  '被拒一次，就离成交近一步 🎯',
+  '心里有目标，脚下有方向 🧭',
+  '拜访是体力活，更是用心活 ❤️',
+  '今天流的汗，都是明天的底气 💪',
+  '加油，把今天的客户都拿下！🏆',
+  '店门开着，就是邀请你进去 🤗',
+  '多问一句，就多懂一分 🎓',
+  '客户记住你，生意就快了一半 🌟',
+  '把路走熟，把脸混熟，把话聊熟 ☕',
+  '每一个老板，都值得认真对待 🤝',
+  '勤快的人，运气都不会太差 🍀',
+  '今天比昨天多走一步，就是进步 📏',
+  '别让昨天的遗憾，拖慢今天的脚步 ⏩',
+  '订单是聊出来的，不是等出来的 💬',
+  '你的专业，就是你的名片 🎖',
+  '拜访路上，风景都是努力的样子 🌄',
+  '先解决问题，再谈生意 🔧',
+  '客户的一句"下次再来"，就是种子 🌾',
+  '生意不在大小，在于开始 🚀',
+  '别怕说错话，就怕不开口 🗣',
+  '把客户的难处记心上，客户把你记心里 ❤️',
+  '每天进步一点点，复利看得见 📊',
+  '路上辛苦，回头都是故事 📖',
+  '热情一点，门就开得大一点 🚪',
+  '成交从信任开始，信任从见面开始 🤝',
+  '没单子的时候，就去刷脸熟 😎',
+  '你的耐心，正在攒一个大单 🧱',
+  '时间花在哪，收获就在哪 ⏳',
+  '拜访不积极，思想有问题 🤣',
+  '老板见你笑，气氛就好了 😁',
+  '把今天当作旺季来跑 🏃',
+  '少一点犹豫，多一点行动 ⚡',
+  '走遍大街小巷，才知生意冷暖 🏙',
+  '客户夸你一句，胜过十张广告 📣',
+  '脚踏实地，单子自来 🌍',
+  '别把拒绝当结局，它只是开场 🎬',
+  '每一条街，都有你的机会 🛣',
+  '今天不跑客户，明天客户跑别人 😉',
+  '用心服务，回头客自然来 🔄',
+  '你的坚持，正在悄悄改变局面 🌊',
+  '再小的店，也是大生意的开始 🏪',
+  '面带笑容，走路带风 🌬',
+  '客户的选择很多，你的真诚唯一 💎',
+  '把拜访当朋友见面，轻松又有效 🍵',
+  '今天多拜访，月底多收获 💰',
+  '市场不会辜负勤快的人 📢',
+  '别想太多，先出门再说 🚴',
+  '单子大小不重要，开口最重要 🔑',
+  '每一次沟通，都是积累 🔗',
+  '老板的认可，是最大的动力 ⛽',
+  '保持热爱，保持出发 🌻',
+  '辛苦的脚印，终会变成订单 📦',
+  '你认真做事的模样，客户看得见 👀',
+  '早起的业务员，有单接 🌅',
+  '一单接一单，细流汇成河 🌊',
+  '别怕路远，怕的是不起步 🦶',
+  '拜访像种地，勤浇水才有收成 🚿',
+  '客户有需求，你有方案，正好相遇 🤝',
+  '今天也要笑得像太阳一样 ☀️',
+  '把每个"下次"都变成"这次" ✅',
+  '你的能量，会传染给客户 🔋',
+  '走慢一点没关系，别停下来 🐢',
+  '生意的门，越敲越开 🚪',
+  '记录好每一家，客户跑不掉 📒',
+  '好话一句，生意三分 🍬',
+  '让客户觉得你靠谱，就赢了一半 🧗',
+  '平凡的一天，也能跑出不平凡的业绩 🌟',
+  '出门就有 50% 的机会，在家只有 0 🎲',
+  '客户的信任，一天天攒出来 🏦',
+  '别让情绪，挡住了你的客户 😤',
+  '拜访达人，都是练出来的 🥇',
+  '今天的你，比昨天更专业 📚',
+  '市场很大，你的努力要配得上它 🗺',
+  '干就完了，单子在路上 🛣',
+  '明天会感谢今天努力拜访的你 🌈'
+];
+
+// 把短语拆成文字与 emoji 两段（emoji 单独渲染，避免被文字灰色染色）
+function splitEmoji(s) {
+  const m = String(s).match(/^(.*?)([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\s]+)$/u);
+  if (m && m[2].trim()) return { text: m[1].trim(), emoji: m[2].trim() };
+  return { text: s, emoji: '' };
+}
+
+// 每人每天一条固定鸡汤：业务员 ID + 日期做确定性种子（同一天多次进入不换，跨天自动换，业务员之间各自不同）
+function dailyPhrase(uid) {
+  const d = new Date(Date.now() + 8 * 3600 * 1000);
+  const day = d.toISOString().slice(0, 10);
+  const seed = String(uid || '') + '|' + day;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h * 31 + seed.charCodeAt(i)) | 0;
+  }
+  return PHRASES[Math.abs(h) % PHRASES.length];
+}
+
+Page({
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty' },
+  onShow() {
+    const app = getApp();
+    if (!this._revFn) {
+      // 注册审核观察员：审核结果变化时静默刷新首页数据（15 秒被动感知）
+      this._revFn = (list) => { if (this._shown) this.load(); };
+      app.registerReviewListener(this._revFn);
+    }
+    this._shown = true;
+    const u = app.globalData.user;
+    if (!u || u.role !== 'salesman') {
+      wx.redirectTo({ url: '/pages/login/login' });
+      return;
+    }
+    const now = new Date(Date.now() + 8 * 3600 * 1000);
+    const week = ['日', '一', '二', '三', '四', '五', '六'];
+    const dateText = `今日计划 · ${now.getUTCMonth() + 1}月${now.getUTCDate()}日 周${week[now.getUTCDay()]}`;
+    const pepText = dailyPhrase(u._id || 'guest');
+    const pep = splitEmoji(pepText);
+    this.setData({ user: u, dateText, pepText: pep.text, pepEmoji: pep.emoji, logoUrl: getApp().globalData.logoUrl });
+    this.load();
+    this.checkSubStatus();
+  },
+  onHide() {
+    this._shown = false;
+    if (this._revFn) { getApp().unregisterReviewListener(this._revFn); this._revFn = null; }
+  },
+  onUnload() {
+    if (this._revFn) { getApp().unregisterReviewListener(this._revFn); this._revFn = null; }
+  },
+  // 订阅状态识别：有可用订阅凭证或已绑定服务号（长期通知）则隐藏订阅横幅；无则一直显示提醒
+  async checkSubStatus() {
+    try {
+      const res = await api.call('tasks', { action: 'subStatus' });
+      if (res.ok) this.setData({ showSubBanner: !res.hasSub && !res.mpBound });
+    } catch (e) { /* 查询失败保持当前显示 */ }
+  },
+  async subscribe() {
+    try {
+      const r = await new Promise((resolve, reject) => {
+        wx.requestSubscribeMessage({ tmplIds: [SUBSCRIBE_TEMPLATE_ID], success: resolve, fail: reject });
+      });
+      const token = r[SUBSCRIBE_TEMPLATE_ID];
+      if (token === 'accept') {
+        const res = await api.call('subscribe', { token });
+        if (res.ok) {
+          this.setData({ showSubBanner: false });
+          api.toast('订阅成功 ✓ 有新任务会微信通知你');
+        } else {
+          api.toast(res.msg || '订阅保存失败');
+        }
+      } else {
+        api.toast('未授权订阅（一次性订阅，每次授权可收一条）');
+      }
+    } catch (e) {
+      api.toast('订阅失败，请重试');
+    }
+  },
+  async load() {
+    this.setData({ loading: true });
+    try {
+      const res = await api.call('tasks', { action: 'list' });
+      if (res.ok) {
+        // 截止日期显示格式：YYYY-MM-DD → X月X日
+        const fmtDeadline = s => {
+          const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+          return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : (s || '—');
+        };
+        const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
+        // 首页只显示最近 5 个任务，更多在"全部任务"页查看
+        this.setData({ tasks, showTasks: tasks.slice(0, 5) });
+        // 有审核中任务：启动全局审核观察员（15 秒轮询等待审批结果；无则维持现状）
+        if (tasks.some(t => t.status === 'reviewing')) getApp().startReviewWatcher();
+        // 今日计划：各进行中任务"今天该拜访名单"合计（云函数按任务创建日=第1天推算）
+        // 兜底：云端 tasks 旧版没有 todayTotal 字段时，退化为总家数口径（保证卡片不消失）
+        const active = tasks.filter(t => t.status !== 'done');
+        const hasTodayField = tasks.some(t => t.todayTotal !== undefined);
+        const total = active.reduce((s, t) => s + (hasTodayField ? (t.todayTotal || 0) : (t.total || 0)), 0);
+        const done = active.reduce((s, t) => s + (hasTodayField ? (t.todayDone || 0) : (t.visited || 0)), 0);
+        const left = Math.max(0, total - done);
+        const pct = total ? Math.round(done / total * 100) : 0;
+        // 大卡四场景：今日有计划 / 有任务但今日无安排 / 任务全部结束 / 无任何任务
+        let cardMode = 'empty';
+        if (total > 0) cardMode = 'today';
+        else if (active.length) cardMode = 'rest';
+        else if (tasks.length) cardMode = 'allDone';
+        this.setData({ todayTotal: total, todayDone: done, todayLeft: left, todayPct: pct, cardMode });
+        if (cardMode === 'today') this.drawRing();
+      } else {
+        api.toast(res.msg || '加载失败');
+      }
+    } catch (e) {
+      api.toast('任务加载失败，请确认已部署 tasks');
+    }
+    this.setData({ loading: false });
+  },
+  goTodayTask() {
+    const t = this.data.tasks.find(x => x.status !== 'done') || this.data.tasks[0];
+    if (!t) return;
+    this.reportLocOnce(); // 2026-09-08 老板定：点击我的任务时获取一次定位并上报
+    wx.navigateTo({ url: `/pages/task/task?taskId=${t._id}` });
+  },
+  // 点任务：获取一次定位并上报一次（不阻塞跳转；失败静默）
+  reportLocOnce() {
+    const loc = require('../../utils/loc');
+    loc.startForeground();
+    loc.getOne(8000).then(p => {
+      if (!p || !p.lat) return;
+      return api.call('visits', {
+        action: 'reportLocation',
+        lat: p.lat, lng: p.lng, accuracy: p.accuracy || 0,
+        visitOngoing: !!(getApp().globalData.visitOngoing),
+        force: true // 2026-09-08 老板定：点任务的上报不受工作时段/移动阈值限制，必须写
+      }).catch(() => { /* 静默 */ });
+    }).catch(() => { /* 静默 */ });
+  },
+  drawRing() {
+    const pct = this.data.todayPct || 0;
+    const ctx = wx.createCanvasContext('ringCanvas', this);
+    const c = 36, r = 29;
+    ctx.setLineWidth(7);
+    ctx.setLineCap('round');
+    ctx.setStrokeStyle('rgba(255,255,255,.3)');
+    ctx.beginPath();
+    ctx.arc(c, c, r, 0, 2 * Math.PI);
+    ctx.stroke();
+    const start = -Math.PI / 2;
+    const end = start + 2 * Math.PI * pct / 100;
+    if (pct > 0) {
+      ctx.setStrokeStyle('#fff');
+      ctx.beginPath();
+      ctx.arc(c, c, r, start, end);
+      ctx.stroke();
+    }
+    ctx.draw();
+  },
+  goTask(e) {
+    this.reportLocOnce(); // 2026-09-08 老板定：点击任务时获取一次定位并上报
+    wx.navigateTo({ url: `/pages/task/task?taskId=${e.currentTarget.dataset.id}` });
+  },
+  goAllTasks() { wx.navigateTo({ url: '/pages/tasks-all/tasks-all' }); },
+  hideSubBanner() { this.setData({ showSubBanner: false }); },
+  // LOGO 云端加载失败 → 回退本地图，避免白板
+  onLogoError() {
+    if (this.data.logoUrl !== '/images/logo.png') {
+      this.setData({ logoUrl: '/images/logo.png' });
+    }
+  },
+  tabMap() { wx.redirectTo({ url: '/pages/map/map' }); },
+  tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); }
+});

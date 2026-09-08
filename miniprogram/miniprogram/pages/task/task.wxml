@@ -1,0 +1,63 @@
+<!-- 任务详情：按天计划（对齐演示设计） -->
+<view class="page">
+  <view class="tinfo" wx:if="{{task}}">
+    <view class="tleft">
+      <view class="tname">{{task.name}}</view>
+      <view class="tmeta">共 {{customers.length}} 家 · 截止 {{task.deadline}} · 还有 {{task.aboutToVisit}} 家待拜访</view>
+    </view>
+    <view class="early-finish" wx:if="{{task.status === 'published' && !task.expired}}" hover-class="ef-hover" bindtap="finishTask">提前交任务</view>
+    <view class="expired-tag" wx:elif="{{task.expired}}">已过期</view>
+    <view class="reviewing-tag" wx:elif="{{task.status === 'reviewing'}}">审核中…</view>
+    <view class="finish-tag" wx:else>已完成 ✓</view>
+  </view>
+
+  <scroll-view scroll-x enhanced show-scrollbar class="days" wx:if="{{task}}">
+    <view class="days-inner">
+      <view class="day {{activeDay === d.day ? 'on' : ''}} {{dayDone[d.day] ? 'done' : ''}} {{ongoingDays[d.day] ? 'ong' : ''}}" wx:for="{{task.dayPlan}}" wx:for-item="d" wx:key="day" bindtap="switchDay" data-day="{{d.day}}">
+        <view class="day-check" wx:if="{{ongoingDays[d.day]}}">✓</view>
+        <text class="dd" wx:if="{{d.dateLabel}}">{{d.dateLabel}}</text>
+        <text class="dt">第 {{d.day}} 天</text>
+        <text class="dc">{{d.customerIds.length}} 家{{dayDone[d.day] ? ' ✓' : ''}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="customers">
+    <view class="cust {{item.visitOngoing ? 'cust-cur' : ''}}" wx:for="{{showCustomers}}" wx:key="_id"
+          style="opacity:{{item.visitedToday ? 0.55 : 1}}"
+          bindtap="goCustomer" data-id="{{item._id}}">
+      <view class="mdot {{item.visitedToday ? 'ok' : (item.visitOngoing ? 'cur' : (item.typeName === 'new' ? 'new' : 'todo'))}}">{{item.visitedToday ? '✓' : item.seq}}</view>
+      <view class="info">
+        <view class="cname">{{item.name}}
+          <text class="tag" style="{{item.typeName === 'new' ? 'background:#E8F1FD;color:#2F80ED' : ''}}">{{item.typeName === 'new' ? '新客户' : '回访'}}</text>
+        </view>
+        <view class="caddr">{{item.address}}</view>
+      </view>
+      <view class="cright">
+        <view wx:if="{{item.distText}}" class="dist">{{item.distText}}</view>
+        <view class="st {{item.visitedToday ? 'st-done' : (item.visitOngoing ? 'st-cur' : '')}}">{{item.visitedToday ? '已拜访' : (item.visitOngoing ? '拜访中' : '未拜访')}}</view>
+        <view wx:if="{{item.lastVisit}}" class="last">上次 {{item.lastVisit.visitedAt}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{!loading && !showCustomers.length}}">当天暂无客户安排</view>
+
+  <view class="foot" wx:if="{{task}}">
+    <view class="btn-primary" wx:if="{{task.status === 'published' && !task.expired && allDone}}" hover-class="btn-hover" bindtap="finishTask">🎉 全部完成 · 交任务</view>
+    <view class="btn-primary" wx:elif="{{task.status === 'published' && !task.expired}}" hover-class="btn-hover" bindtap="openMap">{{nextSeq ? '🗺 打开地图 · 拜访第 ' + nextSeq + ' 家' : '🎉 当天已全部完成'}}</view>
+    <view class="btn-expired" wx:elif="{{task.expired}}">⏰ 已过期，请联系管理员延期</view>
+    <view class="btn-wait" wx:elif="{{task.status === 'reviewing'}}">⏳ 审核中，等待管理员确认…</view>
+    <view class="btn-done" wx:else>任务已完成 🎉</view>
+  </view>
+
+  <!-- 交任务确认弹层（页内自定义，不依赖原生弹窗） -->
+  <view class="c-mask" wx:if="{{confirmShow}}">
+    <view class="c-box">
+      <view class="ct">交任务确认</view>
+      <view class="cm">{{confirmMsg}}</view>
+      <view class="btn-primary" style="height:46px" hover-class="btn-hover" bindtap="doFinish">确认交任务</view>
+      <view class="again" bindtap="hideFinishConfirm">再看看</view>
+    </view>
+  </view>
+</view>

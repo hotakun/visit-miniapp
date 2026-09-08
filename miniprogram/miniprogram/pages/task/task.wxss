@@ -1,0 +1,56 @@
+.page { padding: 16px 18px 110px; }
+.tname { font-size: 19px; font-weight: 800; }
+.tinfo { display: flex; align-items: flex-start; gap: 10px; }
+.tleft { flex: 1; min-width: 0; }
+.early-finish { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--primary-deep); background: var(--primary-tint); border: 1px solid #FFCBB2; border-radius: 999px; padding: 6px 12px; }
+.ef-hover { opacity: .6; }
+.btn-hover { opacity: .85; }
+.finish-tag { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--green); background: var(--green-tint); border-radius: 999px; padding: 6px 12px; }
+.reviewing-tag { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: #B97A0B; background: var(--warn-tint); border-radius: 999px; padding: 6px 12px; }
+.expired-tag { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--danger); background: #FCEBEC; border-radius: 999px; padding: 6px 12px; }
+.btn-expired { height: 52px; border-radius: 14px; background: #FCEBEC; color: var(--danger); font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.btn-wait { height: 52px; border-radius: 14px; background: var(--warn-tint); color: #B97A0B; font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.btn-done { height: 52px; border-radius: 14px; background: #E7E9ED; color: var(--sub); font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+/* 交任务确认弹层 */
+.c-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(31,36,48,.5); display: flex; align-items: center; justify-content: center; z-index: 99; padding: 0 34px; }
+.c-box { width: 100%; max-width: 320px; background: #fff; border-radius: 18px; padding: 20px 18px 16px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+.c-box .ct { font-size: 16px; font-weight: 800; text-align: center; margin-bottom: 12px; }
+.c-box .cm { font-size: 13.5px; color: #4A5360; line-height: 1.7; text-align: center; margin-bottom: 14px; }
+.c-box .again { text-align: center; font-size: 13px; color: var(--sub); font-weight: 600; padding: 10px 0 0; }
+.tmeta { margin-top: 6px; font-size: 12.5px; color: var(--sub); font-weight: 600; }
+.days { white-space: nowrap; margin: 16px -18px 4px; box-sizing: border-box; height: 90px; }
+.days-inner { display: inline-flex; align-items: center; padding: 0 18px; height: 90px; box-sizing: border-box; }
+.day { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 82px; box-sizing: border-box; padding: 9px 10px; margin-right: 8px; border-radius: 13px; background: #fff; box-shadow: 0 2px 10px rgba(31,36,48,.06); border: 1.5px solid transparent; position: relative; }
+.day-check { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; } /* 拜访中客户所在天：蓝色对勾角标 */
+.day .dd { font-size: 10.5px; color: var(--sub); font-weight: 600; margin-bottom: 3px; opacity: .8; }
+.day .dt { font-size: 13.5px; font-weight: 800; color: var(--sub); }
+.day .dc { font-size: 10.5px; font-weight: 600; margin-top: 3px; color: var(--sub); }
+.day.on { background: var(--primary-tint); border-color: var(--primary); }
+.day.on .dt { color: var(--primary-deep); }
+.day.on .dd { color: var(--primary-deep); }
+.day.on .dc { color: var(--primary-deep); }
+.day.done { background: var(--green-tint); border-color: #BEE7CB; }
+.day.done .dt { color: var(--green); }
+.day.done .dd { color: var(--green); }
+.day.done .dc { color: var(--green); }
+.customers { margin-top: 14px; }
+.cust { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 16px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(31,36,48,.06); }
+/* 拜访中的卡片：蓝色边框高亮（老板 2026-09-04 定） */
+.cust-cur { border: 1.5px solid var(--blue); box-shadow: 0 2px 12px rgba(47,128,237,.16); }
+.mdot { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: #fff; flex-shrink: 0; }
+.mdot.ok { background: var(--green); }
+.mdot.todo { background: linear-gradient(135deg,#FF8A50,#F5531C); }
+.mdot.new { background: linear-gradient(135deg,#5B9DFF,#2F80ED); }
+.mdot.cur { background: var(--blue); }
+.info { flex: 1; min-width: 0; }
+.cname { font-size: 15px; font-weight: 700; }
+.cname .tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--primary-tint); color: var(--primary-deep); margin-left: 6px; }
+.caddr { margin-top: 3px; font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cright { text-align: right; flex-shrink: 0; }
+.cright .dist { font-size: 13px; color: var(--ink); font-weight: 700; }
+.last { font-size: 11px; color: var(--sub); font-weight: 600; }
+.st { margin-top: 3px; font-size: 12px; color: var(--sub); font-weight: 700; }
+.st-done { color: #5FB88A; } /* 已拜访：灰绿色（亮档，明显可辨） */
+.st-cur { color: var(--blue); } /* 拜访中：蓝色 */
+.empty { text-align: center; color: var(--sub); font-size: 13px; margin-top: 30px; }
+.foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(246,247,249,0), #F6F7F9 30%); }

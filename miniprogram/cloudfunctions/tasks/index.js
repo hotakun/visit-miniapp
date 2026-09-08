@@ -1,0 +1,532 @@
+// 云函数 tasks：业务员任务列表 / 任务详情（含客户与拜访状态）
+const cloud = require('wx-server-sdk');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
+const db = cloud.database();
+const _ = db.command;
+
+exports.main = async (event) => {
+  const { OPENID } = cloud.getWXContext();
+  const { action, taskId } = event || {};
+
+  const me = await db.collection('users').where({ openid: OPENID }).get();
+  if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
+  const salesmanId = me.data[0]._id;
+
+  if (action === 'list') return await list(salesmanId);
+  if (action === 'detail') return await detail(salesmanId, taskId);
+  if (action === 'finish') return await finish(salesmanId, taskId, me.data[0]);
+  if (action === 'subStatus') return await subStatus(salesmanId);
+  if (action === 'reviewStatus') return await reviewStatus(salesmanId);
+  if (action === 'replanDay') return await replanDay(salesmanId, event);
+  return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
+};
+
+// 审核观察员：返回该业务员所有审核中任务的精简信息（供手机端 15 秒轮询等待审批结果）
+async function reviewStatus(salesmanId) {
+  const res = await db.collection('tasks').where({ salesmanId, status: 'reviewing' })
+    .field({ _id: true, name: true, status: true })
+    .limit(20).get();
+  return { ok: true, list: res.data };
+}
+
+// 订阅状态：是否还有可用的订阅凭证（一次性订阅，发送后失效）
+// mpBound：业务员已绑定服务号 OpenID 且后台启用服务号通知 → 手机端无需再引导一次性订阅
+async function subStatus(salesmanId) {
+  const res = await db.collection('settings').where({ key: `subToken_${salesmanId}` }).limit(1).get();
+  const info = res.data[0];
+  const me = await db.collection('users').doc(salesmanId).get().catch(() => null);
+  const mpRes = await db.collection('settings').where({ key: 'mpConfig' }).limit(1).get();
+  const mpCfg = mpRes.data[0] && mpRes.data[0].value;
+  const mpBound = !!(me && me.data && me.data.mpOpenid && mpCfg && mpCfg.enabled);
+  return { ok: true, hasSub: !!(info && info.value && info.value.token), mpBound };
+}
+
+// 业务员交任务：全部完成且未开启"需管理员确认"→直接 done；
+// 提前交（有未完成）或开启确认开关 → reviewing（审核中）+ finishReq 留痕，等管理员审批
+async function finish(salesmanId, taskId, user) {
+  // 游客（实习账号）硬拦（2026-09-08 老板定：游客不能提交数据）
+  if (user && user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
+  if (!taskId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务' };
+  const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+  const t = tRes && tRes.data;
+  if (!t || t.salesmanId !== salesmanId) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  if (t.status === 'reviewing') return { ok: false, code: 'REVIEWING', msg: '已在审核中，等待管理员确认' };
+  if (t.status !== 'published') return { ok: false, code: 'STATE', msg: t.status === 'done' ? '任务已结束' : '任务状态异常' };
+  if (t.deadline && String(t.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
+
+  // 制约（2026-09-05 老板定）：有客户拜访中时不能提交任务结束（提前交也不行），先完成或取消拜访
+  const ong = await db.collection('visits')
+    .where({ taskId, status: 'ongoing', visitedAt: todayStr() })
+    .limit(1).get();
+  if (ong.data.length) {
+    const o = ong.data[0];
+    const cRes = await db.collection('customers').doc(o.customerId).get().catch(() => null);
+    return { ok: false, code: 'ONGOING_VISIT', msg: `「${(cRes && cRes.data && cRes.data.name) || '有客户'}」正在拜访中，请先完成或取消拜访` };
+  }
+
+  // 未拜访家数
+  const ids = t.customerIds || [];
+  const left = ids.length - await countVisitedCustomers(taskId);
+  // 是否自动审核通过（勾选=全部完成自动结束；不勾选=必须人工审核）
+  const setRes = await db.collection('settings').where({ key: 'autoApproveFinish' }).get();
+  const autoPass = !!(setRes.data[0] && setRes.data[0].value);
+
+  const now = Date.now();
+  if (left <= 0 && autoPass) {
+    // 全部完成且开启自动通过：直接结束（留 autoDone 流水，2026-09-08 历史任务板块）
+    const logs = [...(Array.isArray(t.logs) ? t.logs : []), { at: now, by: t.salesmanName || '业务员', role: 'salesman', type: 'autoDone', detail: { auto: true } }];
+    await db.collection('tasks').doc(taskId).update({
+      data: { status: 'done', finishedAt: now, finishedBy: t.salesmanName || '', logs }
+    });
+    return { ok: true, status: 'done', msg: '任务已结束 ✓' };
+  }
+  // 提前交（left>0）或未勾选自动通过：进入审核中，等待管理员审批（提交申请事件留痕）
+  // finishReq 用 _.set 整体替换（否则数据库按子字段合并，finishReq 为 null 时会报 -502001）
+  const logs = [...(Array.isArray(t.logs) ? t.logs : []), { at: now, by: t.salesmanName || '业务员', role: 'salesman', type: 'finishReq', detail: { left, type: left > 0 ? 'early' : 'full' } }];
+  await db.collection('tasks').doc(taskId).update({
+    data: {
+      status: 'reviewing',
+      finishReq: _.set({ at: now, left, type: left > 0 ? 'early' : 'full' }),
+      logs
+    }
+  });
+  return { ok: true, status: 'reviewing', msg: left > 0 ? '已向管理员提交提前结束申请，等待确认' : '已提交结束申请，等待管理员审核' };
+}
+
+async function list(salesmanId) {
+  // 已归档任务业务员端不再显示（2026-09-08 老板定：过期归档=终态封存）
+  const res = await db.collection('tasks')
+    .where({ salesmanId, status: _.in(['published', 'reviewing', 'done']), archivedAt: _.exists(false) })
+    .orderBy('createdAt', 'desc')
+    .limit(100)
+    .get();
+
+  // 统计各任务拜访进度（按客户家数去重：同一客户多次拜访只算 1 家；ongoing 拜访中不算）
+  // 今日计划：任务创建日=第 1 天推算今天该拜访的客户名单，统计名单内已完成家数
+  // 今日有拜访中客户的任务集合（首页任务卡蓝边框用）
+  const ongSet = new Set();
+  {
+    const allIds = res.data.map(t => t._id);
+    if (allIds.length) {
+      let skip = 0;
+      const PAGE = 100;
+      while (true) {
+        const r = await db.collection('visits')
+          .where({ taskId: _.in(allIds), status: 'ongoing', visitedAt: todayStr() })
+          .field({ taskId: true })
+          .skip(skip).limit(PAGE).get();
+        r.data.forEach(v => ongSet.add(v.taskId));
+        if (r.data.length < PAGE) break;
+        skip += PAGE;
+      }
+    }
+  }
+  const tasks = [];
+  for (const t of res.data) {
+    const visited = await countVisitedCustomers(t._id);
+    const dayIdx = dayIndexOf(t.startDate, t.createdAt);
+    const plan = (t.dayPlan || []).find(p => p.day === dayIdx);
+    const todayIds = plan ? (plan.customerIds || []) : [];
+    let todayDone = 0;
+    if (todayIds.length) {
+      const doneSet = new Set();
+      let skip = 0;
+      const PAGE = 100;
+      while (true) {
+        const r = await db.collection('visits')
+          .where({ taskId: t._id, customerId: _.in(todayIds), status: _.in(['normal', 'pending_review']) })
+          .field({ customerId: true })
+          .skip(skip).limit(PAGE).get();
+        r.data.forEach(v => doneSet.add(v.customerId));
+        if (r.data.length < PAGE) break;
+        skip += PAGE;
+      }
+      todayDone = doneSet.size;
+    }
+    const total = (t.customerIds || []).length;
+    const expired = t.status === 'published' && t.deadline && String(t.deadline) <= todayStr();
+    tasks.push({
+      _id: t._id,
+      name: t.name,
+      taskNo: t.taskNo || '',
+      purpose: t.purpose,
+      deadline: t.deadline,
+      plannedDays: t.plannedDays,
+      status: t.status,
+      expired,
+      total,
+      visited,
+      percent: total ? Math.round(visited / total * 100) : 0,
+      todayTotal: todayIds.length,
+      todayDone,
+      hasOngoing: ongSet.has(t._id)
+    });
+  }
+  return { ok: true, tasks };
+}
+
+// 今天对应任务第几天（优先任务开始日期 startDate；否则按创建日=第 1 天；东八区日期差 +1）
+function dayIndexOf(startDate, createdAt) {
+  let d0 = '';
+  if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate))) {
+    d0 = String(startDate);
+  } else if (createdAt) {
+    d0 = new Date(Number(createdAt) + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  } else {
+    return 1;
+  }
+  const d1 = todayStr();
+  const diff = Math.round((new Date(d1 + 'T00:00:00Z').getTime() - new Date(d0 + 'T00:00:00Z').getTime()) / 86400000);
+  return diff + 1;
+}
+
+// 任务内已拜访家数：有完成拜访记录（normal/pending_review）的客户去重计数，分页取防超时
+async function countVisitedCustomers(taskId) {
+  const set = new Set();
+  let skip = 0;
+  const PAGE = 100;
+  while (true) {
+    const r = await db.collection('visits')
+      .where({ taskId, status: _.in(['normal', 'pending_review']) })
+      .field({ customerId: true })
+      .skip(skip).limit(PAGE).get();
+    r.data.forEach(v => set.add(v.customerId));
+    if (r.data.length < PAGE) break;
+    skip += PAGE;
+  }
+  return set.size;
+}
+
+async function detail(salesmanId, taskId) {
+  const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+  const t = tRes && tRes.data;
+  if (!t || t.salesmanId !== salesmanId) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+
+  // 任务内客户（保持任务内排列顺序：有 dayPlan 按计划顺序，否则按 customerIds 原序）
+  const ids = t.customerIds || [];
+  let customers = [];
+  if (ids.length) {
+    const cRes = await db.collection('customers').where({ _id: _.in(ids) }).get();
+    const map = {};
+    cRes.data.forEach(c => { map[c._id] = c; });
+    customers = ids.filter(id => map[id]).map(id => map[id]);
+  }
+
+  // 每个客户的拜访状态（该任务内最新一次已完成记录；有记录即"已拜访"，跨天保持不变；ongoing 拜访中不算）
+  // 分页取全：避免客户多时 limit 100 漏掉后段记录
+  const lastMap = {};
+  {
+    let skip = 0;
+    const PAGE = 100;
+    while (true) {
+      const r = await db.collection('visits')
+        .where({ taskId, customerId: _.in(ids), status: _.in(['normal', 'pending_review']) })
+        .orderBy('createdAt', 'desc')
+        .skip(skip).limit(PAGE).get();
+      r.data.forEach(v => { if (!lastMap[v.customerId]) lastMap[v.customerId] = v; });
+      if (r.data.length < PAGE) break;
+      skip += PAGE;
+    }
+  }
+  // 今日拜访中（ongoing）的客户：显示"拜访中"蓝状态（仅当天有效）
+  const ongSet = new Set();
+  {
+    const ongRes = await db.collection('visits')
+      .where({ taskId, customerId: _.in(ids), status: 'ongoing', visitedAt: todayStr() })
+      .field({ customerId: true })
+      .limit(100)
+      .get();
+    ongRes.data.forEach(v => ongSet.add(v.customerId));
+  }
+  // 坐标审核中标记（报错待审）
+  const fixSet = {};
+  if (ids.length) {
+    const fx = await db.collection('coord_fix_requests')
+      .where({ customerId: _.in(ids), status: 'pending' })
+      .field({ customerId: true })
+      .get();
+    fx.data.forEach(f => { fixSet[f.customerId] = true; });
+  }
+  // 定位校验设置（阈值以后台设置页保存的为准，前端弹窗展示用；真实拦截在 visits submit）
+  const locRes = await db.collection('settings').where({ key: 'locationCheck' }).limit(1).get();
+  const locCfg = locRes.data[0] ? locRes.data[0].value : { enabled: true, threshold: 100 };
+  // 距离自动刷新双档位（2026-09-06 老板定）：正常页 30/45/60 默认 30；重要定位页 8/12/15/20 默认 15
+  const lrRes = await db.collection('settings').where({ key: 'locRefreshInterval' }).limit(1).get();
+  const lrVal = Number(lrRes.data[0] && lrRes.data[0].value) || 30;
+  const locRefresh = [30, 45, 60].includes(lrVal) ? lrVal : 30;
+  const lkrRes = await db.collection('settings').where({ key: 'locKeyRefreshInterval' }).limit(1).get();
+  const lkrVal = Number(lkrRes.data[0] && lkrRes.data[0].value) || 15;
+  const locKeyRefresh = [8, 12, 15, 20].includes(lkrVal) ? lkrVal : 15;
+  // 拜访录音时长上限（秒；2026-09-07 启用预留设置项 recordingDurationLimit：档位 3/5/10 分钟，默认 5 分钟=300 秒）
+  const recRes = await db.collection('settings').where({ key: 'recordingDurationLimit' }).limit(1).get();
+  const recVal = Number(recRes.data[0] && recRes.data[0].value) || 300;
+  const recordingDurationLimit = [180, 300, 600].includes(recVal) ? recVal : 300;
+  // 拜访时长上限（秒；2026-09-08 M1：档位 30 分钟/1 小时/2 小时，默认 1 小时=3600 秒）
+  const vdRes = await db.collection('settings').where({ key: 'visitDurationLimit' }).limit(1).get();
+  const vdVal = Number(vdRes.data[0] && vdRes.data[0].value) || 3600;
+  const visitDurationLimit = [1800, 3600, 7200].includes(vdVal) ? vdVal : 3600;
+  // 定位轨迹时间分层（2026-09-08 M2）：工作时段 + 非工作档位，供端上采集器使用
+  const wsRes = await db.collection('settings').where({ key: 'workStartHour' }).limit(1).get();
+  const workStartHour = Number.isInteger(Number(wsRes.data[0] && wsRes.data[0].value)) ? Number(wsRes.data[0].value) : 7;
+  const weRes = await db.collection('settings').where({ key: 'workEndHour' }).limit(1).get();
+  const workEndHour = Number.isInteger(Number(weRes.data[0] && weRes.data[0].value)) ? Number(weRes.data[0].value) : 20;
+  const odRes = await db.collection('settings').where({ key: 'offDutyTier' }).limit(1).get();
+  const offDutyTier = ['5_30', '10_60', '20_120', '30_180'].includes(String(odRes.data[0] && odRes.data[0].value)) ? String(odRes.data[0].value) : '10_60';
+  const enriched = [];
+  for (const c of customers) {
+    const last = lastMap[c._id] || null;
+    enriched.push({
+      _id: c._id,
+      name: c.name,
+      address: c.address,
+      lat: c.lat,
+      lng: c.lng,
+      phone: c.phone,
+      phone2: c.phone2 || '',
+      contactName: c.contactName,
+      customerType: c.customerType,
+      mallJoinedAt: c.mallJoinedAt,
+      mallAddedAt: c.mallAddedAt,
+      lastOrderAt: c.lastOrderAt,
+      lastBrowseAt: c.lastBrowseAt,
+      mallSalesman: c.mallSalesman,
+      mallLevel: c.mallLevel,
+      remark: c.remark,
+      coordFixPending: !!fixSet[c._id],
+      visitedToday: !!last,
+      visitOngoing: ongSet.has(c._id),
+      lastVisit: last ? { visitedAt: last.visitedAt, result: last.result, salesmanName: last.salesmanName } : null
+    });
+  }
+
+  return {
+    ok: true,
+    task: {
+      _id: t._id,
+      name: t.name,
+      taskNo: t.taskNo || '',
+      purpose: t.purpose,
+      deadline: t.deadline,
+      plannedDays: t.plannedDays,
+      dayPlan: t.dayPlan || [],
+      status: t.status,
+      expired: t.status === 'published' && t.deadline && String(t.deadline) <= todayStr(),
+      startDate: t.startDate || '',
+      createdAt: t.createdAt || null,
+      todayDay: dayIndexOf(t.startDate, t.createdAt),
+      locCheck: { enabled: !!(locCfg && locCfg.enabled), threshold: Number((locCfg && locCfg.threshold) || 0) },
+      locRefresh,
+      locKeyRefresh,
+      recordingDurationLimit,
+      visitDurationLimit,
+      workStartHour, workEndHour, offDutyTier,
+      aboutToVisit: enriched.filter(c => !c.visitedToday).length
+    },
+    customers: enriched
+  };
+}
+
+// 东八区今日日期 YYYY-MM-DD
+function todayStr() {
+  const d = new Date(Date.now() + 8 * 3600 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+// ================= 手机端：以我的位置重排当天未完成客户（2026-09-08 老板拍板） =================
+// 口径：只重排当天「未完成且非拜访中」的客户；已完成/拜访中保持原相对位置；
+// 结果写回任务 dayPlan（顺序+真实路线），老板后台同步可见；logs 留痕。
+async function replanDay(salesmanId, event) {
+  const { taskId, day, origin, customerIds } = event || {};
+  if (!taskId || !day || !origin || !origin.lat || !origin.lng) {
+    return { ok: false, code: 'BAD_ARG', msg: '缺少任务/天/定位参数' };
+  }
+  if (!Array.isArray(customerIds) || customerIds.length < 2) {
+    return { ok: false, code: 'BAD_ARG', msg: '当天未完成客户不足 2 家，无需重排' };
+  }
+  const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+  const t = tRes && tRes.data;
+  if (!t || t.salesmanId !== salesmanId) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  if (t.status !== 'published') return { ok: false, code: 'STATE', msg: '仅进行中任务可重排' };
+  if (t.deadline && String(t.deadline) <= todayStr()) {
+    return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
+  }
+
+  // 参与重排客户坐标
+  const cRes = await db.collection('customers').where({ _id: _.in(customerIds) }).get();
+  const cmap = {};
+  cRes.data.forEach(c => { cmap[c._id] = c; });
+  const todo = customerIds.map(id => cmap[id]).filter(Boolean);
+  const withCoord = todo.filter(c => c && c.lat && c.lng);
+  const noCoord = todo.filter(c => !(c && c.lat && c.lng));
+
+  const dist = (a, b) => haversine(a.lat, a.lng, b.lat, b.lng);
+  let newOrder = [], dm = 0, durationMin = null, pts = null, fallback = false;
+
+  if (withCoord.length >= 2) {
+    // 第 1 层：贪心候选（起手店=离我最近的前 3 家，逐点最近邻）
+    const byOrigin = [...withCoord].sort((a, b) => dist(origin, a) - dist(origin, b));
+    const startPool = byOrigin.slice(0, Math.min(3, byOrigin.length));
+    const candidates = [];
+    for (const first of startPool) {
+      const ord = [first];
+      let cur = first;
+      const pool = withCoord.filter(c => c !== first);
+      while (pool.length) {
+        let bi = 0, bd = Infinity;
+        for (let i = 0; i < pool.length; i++) {
+          const d = dist(cur, pool[i]);
+          if (d < bd) { bd = d; bi = i; }
+        }
+        cur = pool[bi];
+        ord.push(cur);
+        pool.splice(bi, 1);
+      }
+      candidates.push(ord);
+    }
+    // 第 2 层：腾讯 driving 验真（from=我的位置；失败换下个候选）
+    const key = await getMpKey();
+    const URL = 'https://apis.map.qq.com/ws/direction/v1/driving/';
+    let best = null;
+    for (const ord of candidates) {
+      try {
+        const from = `${origin.lat},${origin.lng}`;
+        const to = `${ord[ord.length - 1].lat},${ord[ord.length - 1].lng}`;
+        const wpList = dist(origin, ord[0]) < 1 ? ord.slice(1, -1) : ord.slice(0, -1);
+        const wp = wpList.map(c => `${c.lat},${c.lng}`).join(';');
+        let q = `?from=${from}&to=${to}&key=${encodeURIComponent(key)}&output=json`;
+        if (wp) q += `&waypoints=${encodeURIComponent(wp)}`;
+        const r = await httpGetJson(URL + q);
+        if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
+          const route = r.result.routes[0];
+          const d = Math.round(route.distance || 0);
+          if (!best || d < best.distanceMeters) {
+            best = {
+              order: ord.map(c => c._id),
+              distanceMeters: d,
+              durationMin: Math.max(1, Math.round((route.duration || 60) / 60)),
+              polyline: route.polyline || null
+            };
+          }
+        }
+      } catch (e) { /* 单候选失败继续 */ }
+    }
+    if (best) {
+      newOrder = best.order;
+      dm = best.distanceMeters;
+      durationMin = best.durationMin;
+      pts = (Array.isArray(best.polyline) && best.polyline.length >= 4) ? decodePolyline(best.polyline) : null;
+      if (!pts || pts.length < 2) pts = fallbackPts(origin, withCoord, best.order); // 无轨迹直线兜底
+    } else {
+      newOrder = candidates[0].map(c => c._id);
+      dm = Math.round(candidates[0].reduce((s, c, i, a) => i ? s + dist(a[i - 1], c) : s, 0));
+      pts = fallbackPts(origin, withCoord, newOrder);
+      fallback = true;
+    }
+  } else if (withCoord.length === 1) {
+    newOrder = [withCoord[0]._id];
+    dm = Math.round(dist(origin, withCoord[0]));
+    pts = null;
+  }
+  newOrder = newOrder.concat(noCoord.map(c => c._id)); // 无坐标垫后
+  if (!newOrder.length) return { ok: false, code: 'BAD_ARG', msg: '没有可重排的客户' };
+
+  // 写回 dayPlan：已完成/拜访中保持原相对位置在前，未完成按新序
+  const pl = (t.dayPlan || []).find(p => p.day === Number(day));
+  const planIds = (pl && Array.isArray(pl.customerIds)) ? pl.customerIds : (t.customerIds || []);
+  const doneSet = await visitedSet(taskId, planIds, ['normal', 'pending_review']);
+  const ongSet = await visitedSet(taskId, planIds, ['ongoing']);
+  const todoSet = new Set(customerIds);
+  const rest = planIds.filter(id => !todoSet.has(id) || doneSet.has(id) || ongSet.has(id));
+  const newIds = rest.concat(newOrder.filter(id => !doneSet.has(id) && !ongSet.has(id)));
+
+  const dayPlan = (t.dayPlan || []).map(p =>
+    p.day === Number(day) ? { ...p, customerIds: newIds, route: pts ? { pts, distanceMeters: dm, durationMin } : (p.route || null) } : p
+  );
+  // 同步任务全序 customerIds：当天客户按新序重新排位，其他天客户相对位置不动（后台任务详情行序一致）
+  const daySet = new Set(planIds);
+  let fill = 0;
+  const fullIds = (t.customerIds || []).map(id => daySet.has(id) ? newIds[fill++] : id);
+  const now = Date.now();
+  const logs = [...(Array.isArray(t.logs) ? t.logs : []), {
+    at: now, by: t.salesmanName || '业务员', role: 'salesman', type: 'replan',
+    detail: { day: Number(day), distanceMeters: dm, fallback }
+  }];
+  await db.collection('tasks').doc(taskId).update({ data: { dayPlan, customerIds: fullIds, logs } });
+  return {
+    ok: true, distanceMeters: dm, durationMin, fallback,
+    msg: fallback ? '已按你的位置重排（路线接口不可用，直线估算）' : '已按你的位置重排'
+  };
+}
+
+// 任务内某批客户的状态集合（按状态）——分页防超时
+async function visitedSet(taskId, ids, statuses) {
+  const set = new Set();
+  if (!ids.length) return set;
+  let skip = 0;
+  const PAGE = 100;
+  while (true) {
+    const r = await db.collection('visits')
+      .where({ taskId, customerId: _.in(ids), status: _.in(statuses) })
+      .field({ customerId: true })
+      .skip(skip).limit(PAGE).get();
+    r.data.forEach(v => set.add(v.customerId));
+    if (r.data.length < PAGE) break;
+    skip += PAGE;
+  }
+  return set;
+}
+
+// 腾讯 WebService Key（后台可配；默认内置）
+async function getMpKey() {
+  const res = await db.collection('settings').where({ key: 'mpKey' }).limit(1).get();
+  const v = res.data[0] && res.data[0].value;
+  return String(v || 'SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D').trim();
+}
+
+// 通用 HTTPS GET JSON（腾讯地图等公网接口；Referer 需匹配 key 白名单）
+function httpGetJson(url) {
+  const https = require('https');
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { Referer: 'https://localhost/' } }, res => {
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { buf += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(buf)); } catch (e) { reject(new Error('接口返回非 JSON')); }
+      });
+    });
+    req.setTimeout(6000, () => req.destroy(new Error('请求超时')));
+    req.on('error', reject);
+  });
+}
+
+// 腾讯 driving polyline 差分解压：[lat0, lng0, dlat1, dlng1...]，差分单位 1e-6 度（纬度在前，与后台 nt-map.js 一致）
+function decodePolyline(pl) {
+  const pts = [];
+  if (!Array.isArray(pl) || pl.length < 2) return pts;
+  let lat = pl[0], lng = pl[1];
+  pts.push([lat, lng]);
+  for (let i = 2; i + 1 < pl.length; i += 2) {
+    lat += pl[i] / 1e6;
+    lng += pl[i + 1] / 1e6;
+    pts.push([lat, lng]);
+  }
+  return pts;
+}
+
+// 直线兜底折线：起点=我的位置 → 按新序逐店（[lat,lng]，纬度在前）
+function fallbackPts(start, ordered, ids) {
+  const map = {};
+  ordered.forEach(c => { map[c._id] = c; });
+  const pts = [[start.lat, start.lng]];
+  ids.forEach(id => { if (map[id]) pts.push([map[id].lat, map[id].lng]); });
+  return pts.length >= 2 ? pts : null;
+}
+
+// 球面距离（米）——与 adminapi/前端口径一致
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}

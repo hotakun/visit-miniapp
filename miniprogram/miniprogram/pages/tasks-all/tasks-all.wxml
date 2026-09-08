@@ -1,0 +1,18 @@
+<!-- 全部任务：历史所有任务卡片 -->
+<view class="page">
+  <view class="task-card {{item.status === 'done' ? 'done' : ''}}" wx:for="{{tasks}}" wx:key="_id" bindtap="goTask" data-id="{{item._id}}">
+    <view class="row1">
+      <view class="tname">{{item.name}}</view>
+      <view class="state {{item.status === 'done' ? 'done' : (item.status === 'reviewing' ? 'review' : (item.expired ? 'expired' : 'going'))}}"
+            style="{{item.purpose === 'develop' ? 'background:#E8F1FD;color:#2F80ED' : ''}}">{{item.purpose === 'develop' ? '🌱 新客开发' : (item.status === 'done' ? '已完成' : (item.status === 'reviewing' ? '审核中' : (item.expired ? '已过期' : '进行中')))}}</view>
+    </view>
+    <view class="row2">
+      <text>已拜访 {{item.visited}} / {{item.total}} 家</text>
+      <text>截止 {{item.deadline}}</text>
+    </view>
+    <view class="pbar"><view class="pfill" style="width:{{item.percent}}%;{{item.purpose === 'develop' ? 'background:linear-gradient(90deg,#5B9DFF,#2F80ED)' : ''}}"></view></view>
+  </view>
+
+  <view class="empty" wx:if="{{!loading && !tasks.length}}">暂无任务，等管理员派发后即可看到</view>
+  <view class="loading" wx:if="{{loading}}">加载中…</view>
+</view>

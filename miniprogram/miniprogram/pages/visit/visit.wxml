@@ -1,0 +1,108 @@
+<!-- 拜访记录：结果集按客户类型动态显示 -->
+<view class="page">
+  <view class="vhead">
+    <view class="vname">{{c.name}}</view>
+    <view class="timer">⏱ {{timerText}}</view>
+  </view>
+  <!-- 超时预警条（2026-09-08 M1）：上限前 5 分钟出现 -->
+  <view class="timeout-warn" wx:if="{{timeoutWarn}}">⏰ 拜访将在 {{timeoutLeftMin}} 分钟后自动{{result ? '提交' : '取消'}}，请尽快处理</view>
+
+  <!-- 区块顺序（2026-09-08 老板定）：现场拍照 → 现场录音 → 样品/物料 → 拜访记录 → 拜访结果 -->
+  <view class="sec">
+    <view class="st">📷 现场拍照</view>
+    <!-- 固定三个框（2026-09-08 老板定）：有图显示可删，空框点击拍照；永远三等分无浮动添加块 -->
+    <view class="picgrid">
+      <view class="pictile" wx:for="{{[0,1,2]}}" wx:for-item="pi" wx:key="*this">
+        <block wx:if="{{pics[pi]}}">
+          <image class="picimg" src="{{pics[pi].thumb}}" data-src="{{pics[pi].orig}}" bindtap="previewPhoto" mode="scaleToFill"/>
+          <view class="picdel" data-id="{{pics[pi].id}}" catchtap="delPhoto">✕</view>
+        </block>
+        <view wx:else class="picempty {{prepBusy ? 'busy' : ''}}" bindtap="addPhoto">
+          <text class="addic">{{prepBusy ? '⏳' : '📷'}}</text>
+          <text class="addt">{{prepBusy ? '处理中' : '拍照'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="sec">
+    <view class="st">🎙️ 现场录音 · 最长 {{recLimitMin}} 分钟</view>
+    <view class="recbox">
+      <view class="recbtn" wx:if="{{recState === 'idle'}}" bindtap="onRecTap"><text class="rcdot"/>开始录音</view>
+      <block wx:elif="{{recState === 'rec'}}">
+        <view class="recinfo"><text class="rcdot blink"/>录音中 {{recText}}</view>
+        <view class="recstop" bindtap="onRecTap">■ 停止</view>
+      </block>
+      <block wx:else>
+        <view class="recinfo done">🎙️ 已录 {{recText}}</view>
+        <view class="recops">
+          <view class="recop {{recPlaying ? 'on' : ''}}" bindtap="onRecTap">{{recPlaying ? '⏸ 停' : '▶ 试听'}}</view>
+          <view class="recop" bindtap="reRec">↻ 重录</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="sec">
+    <view class="st">📦 样品 / 物料</view>
+    <input class="inp" placeholder="例：带 24 标准白 1 件样品给客户" value="{{samples}}" bindinput="onSamples"/>
+  </view>
+
+  <view class="sec">
+    <view class="st">✍️ 拜访记录</view>
+    <textarea class="inp area" placeholder="客户反馈、跟进事项、下次计划……" value="{{text}}" bindinput="onText" maxlength="-1" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
+  </view>
+
+  <view class="sec">
+    <view class="st">🎯 拜访结果</view>
+    <view class="tags">
+      <view class="rtag {{result === item ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="*this"
+            bindtap="pickResult" data-r="{{item}}">{{item === '极有意向' ? item + ' 🔥' : item}}</view>
+    </view>
+  </view>
+
+  <view class="foot">
+    <view class="btn-primary btn-blue" bindtap="submit">✓ 提交拜访</view>
+  </view>
+
+  <view class="cancel" wx:if="{{!blocked}}" bindtap="askCancel">取消拜访</view>
+
+  <!-- 单开拦截大弹窗：任务内已有别家拜访中（停留至点击「知道了」） -->
+  <view class="c-mask" wx:if="{{blocked}}">
+    <view class="c-box block-box">
+      <view class="block-ic">⚠️</view>
+      <view class="block-msg">{{blockMsg}}</view>
+      <view class="block-sub">请先完成或取消该家的拜访，再开始新的拜访</view>
+      <view class="btn-primary" bindtap="goBackFromBlock">知道了</view>
+    </view>
+  </view>
+
+  <!-- 取消确认弹窗：客户状态不变，任何地方可取消 -->
+  <view class="c-mask" wx:if="{{cancelShow}}">
+    <view class="c-box">
+      <view class="ct">取消本次拜访？</view>
+      <view class="csub">取消后该客户仍为「待回访」，可稍后重新开始拜访。</view>
+      <view class="btn-primary" style="background:var(--danger)" bindtap="doCancel">确认取消</view>
+      <view class="again" bindtap="hideCancel">再看看</view>
+    </view>
+  </view>
+
+  <!-- 提交确认弹窗（2026-09-06：纯距离展示，左侧图标可点一次做收敛精确定位） -->
+  <view class="c-mask" wx:if="{{confirmShow}}">
+    <view class="c-box">
+      <view class="ct">确认提交本次拜访？</view>
+      <view class="crow" wx:if="{{distShow}}">
+        <view class="cic loc {{locCooldown > 0 ? 'used' : ''}}" bindtap="onLocRefresh">
+          <text wx:if="{{locRefreshing}}">{{locSpinChar}}</text>
+          <text wx:elif="{{locCooldown > 0}}">{{locCooldown}}</text>
+          <text wx:else>📍</text>
+        </view>
+        <view class="clb">{{distText}}</view>
+      </view>
+      <view class="crow"><view class="cic" style="background:var(--primary-tint)">⏱</view><view class="clb">{{durMins}} 分钟</view></view>
+      <view class="crow" wx:if="{{evDesc}}"><view class="cic" style="background:#FFF3E0">📎</view><view class="clb">{{evDesc}}</view></view>
+      <view class="btn-primary" bindtap="confirmSubmit">确认提交</view>
+      <view class="again" bindtap="hideConfirm">再看看</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,32 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/login/login",
+    "pages/task/task",
+    "pages/customer/customer",
+    "pages/visit/visit",
+    "pages/map/map",
+    "pages/mine/mine",
+    "pages/tasks-all/tasks-all"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#F5531C",
+    "navigationBarTitleText": "聚火拜访",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F6F7F9",
+    "backgroundTextStyle": "dark"
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于拜访到店位置校验"
+    },
+    "scope.userLocationBackground": {
+      "desc": "拜访期间记录位置轨迹（仅管理员可见）"
+    }
+  },
+  "requiredPrivateInfos": ["getLocation", "onLocationChange", "startLocationUpdate", "startLocationUpdateBackground"],
+  "requiredBackgroundModes": ["location"],
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
