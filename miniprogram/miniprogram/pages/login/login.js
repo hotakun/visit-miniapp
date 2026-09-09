@@ -152,16 +152,20 @@ Page({
   enterAsSalesman() {
     const u = this.data.devUser;
     if (!u) { this.check(); return; }
-    getApp().setBossMode(false);
-    getApp().setUser(u);
+    const app = getApp();
+    app.setBossMode(false);
+    app.setUser(u);
+    app.globalData.devAuthed = true; // 会话级放行：本次运行期 TAB 来回切换不弹回登录页
     try { wx.setStorageSync('dev_session', 1); } catch (e) { /* 静默 */ }
     wx.redirectTo({ url: '/pages/home/home' });
   },
   enterAsBoss() {
     const u = this.data.devUser;
     if (!u) { this.check(); return; }
-    getApp().setUser(u);
-    getApp().setBossMode(true);
+    const app = getApp();
+    app.setUser(u);
+    app.setBossMode(true);
+    app.globalData.devAuthed = true; // 会话级放行：本次运行期 TAB 来回切换不弹回登录页
     try { wx.setStorageSync('dev_session', 1); } catch (e) { /* 静默 */ }
     wx.redirectTo({ url: '/pages/home/home' });
   },

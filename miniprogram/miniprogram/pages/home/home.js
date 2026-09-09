@@ -224,8 +224,9 @@ Page({
     const boss = app.globalData.bossMode; // 老板模式（2026-09-09 §7.13）
     const u = app.globalData.user;
     // 2026-09-09 开发者范宇琨双身份：dev 冷启动（没经过选择页）→ 强制回两按钮选择页；
-    // dev_session 由选择页按钮设置，进入首页后立即清除（只放行这一次）
-    if (app.globalData.isDev && !wx.getStorageSync('dev_session')) {
+    // dev_session=一次性放行（选择页按钮设置，进入后清除）；devAuthed=会话级放行（本次运行期内
+    // TAB 来回切换不再弹回登录页；冷启动不恢复，重开小程序仍走选择页）
+    if (app.globalData.isDev && !app.globalData.devAuthed && !wx.getStorageSync('dev_session')) {
       wx.redirectTo({ url: '/pages/login/login' });
       return;
     }

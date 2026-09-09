@@ -25,6 +25,9 @@ App({
     this.globalData.bossMode = !!wx.getStorageSync('boss_mode');
     // 开发者双身份标记恢复（2026-09-09 开发者范宇琨：登录云函数确认后持久，登录页据此显示两按钮选择页）
     this.globalData.isDev = !!wx.getStorageSync('is_dev');
+    // devAuthed：会话级放行标志（2026-09-09 修复：选过身份后本次运行期内 TAB 来回切换不再被弹回登录页；
+    // 冷启动不恢复=每次重开小程序仍走选择页）
+    this.globalData.devAuthed = false;
   },
 
   setUser(u) {
@@ -36,6 +39,7 @@ App({
     wx.removeStorageSync('user');
     wx.removeStorageSync('boss_mode');
     this.globalData.bossMode = false;
+    this.globalData.devAuthed = false; // 2026-09-09 修复：退出身份后放行标志一并重置
   },
   setBossMode(v) {
     this.globalData.bossMode = !!v;
