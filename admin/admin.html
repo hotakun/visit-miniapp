@@ -318,18 +318,18 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .ptab-i{padding:6px 15px;border-radius:8px;font-weight:800;color:var(--sub);cursor:pointer;white-space:nowrap}
 .ptab-i.on{background:#fff;color:var(--primary-deep);box-shadow:0 1px 4px rgba(31,36,48,.14)}
 
-/* ===== 任务管理大卡（2026-09-09 老板定：Edge 式标签页——页签相连，激活页签白底与内容区融合）===== */
-.task-shell{background:#F1F3F6;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden;min-height:580px} /* 2026-09-09 老板定：最小高度按任务地图标签（地图56vh+标签条+图例）固定，切标签页面不跳动 */
-.task-shell-head{background:#F1F3F6;padding:14px 18px 0}
-.task-shell-body{background:#fff;border-radius:14px 14px 0 0;margin-top:-1px;border-top:1px solid var(--line)}
+/* ===== 任务管理大卡（2026-09-09 老板定：整体纯白 + Edge 式页签；任务卡浅灰底悬浮其上）===== */
+.task-shell{background:#fff;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden;min-height:580px} /* 2026-09-09 老板定：最小高度按任务地图标签固定，切标签页面不跳动 */
+.task-shell-head{background:#fff;padding:14px 18px 0}
+.task-shell-body{background:#fff;border-top:1px solid var(--line);margin-top:-1px}
 .ts-tabs{display:flex;gap:4px;align-items:flex-end}
-.ts-tab{padding:9px 22px 10px;border-radius:10px 10px 0 0;background:#EDEFF3;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid transparent;border-bottom:0;transition:background .15s,color .15s}
-.ts-tab:hover{background:#E3E6EB;color:#333A44}
+.ts-tab{padding:9px 22px 10px;border-radius:10px 10px 0 0;background:#F1F3F6;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid transparent;border-bottom:0;transition:background .15s,color .15s}
+.ts-tab:hover{background:#E9ECF0;color:#333A44}
 .ts-tab.on{background:#fff;color:#1F2430;font-weight:700;border-color:var(--line);position:relative;z-index:2}
-/* 当前任务精致卡（2026-09-09：整行大卡 + hover/点击动效 + 点击音效） */
-.tk-grid{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-.tk-card{background:#fff;border:1px solid var(--line);border-left:4px solid #2F80ED;border-radius:14px;padding:14px 18px;cursor:pointer;transition:transform .18s,box-shadow .18s,border-left-width .18s}
-.tk-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(31,36,48,.12);border-left-width:7px}
+/* 当前任务精致卡（2026-09-09：整行悬浮卡——浅灰底浮在纯白大卡上，hover 转白上浮，点击音效） */
+.tk-grid{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.tk-card{background:#FAFBFC;border:1px solid #EDEFF3;border-left:4px solid #2F80ED;border-radius:14px;padding:14px 18px;cursor:pointer;box-shadow:0 2px 8px rgba(31,36,48,.05);transition:transform .18s,box-shadow .18s,border-left-width .18s,background .18s}
+.tk-card:hover{background:#fff;transform:translateY(-3px);box-shadow:0 12px 28px rgba(31,36,48,.13);border-left-width:7px}
 .tk-card:active{transform:translateY(0) scale(.992);box-shadow:0 3px 10px rgba(31,36,48,.10)}
 .tkc-top{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .tkc-name{font-size:14.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
