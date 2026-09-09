@@ -411,8 +411,7 @@ async function cleanExpiredTracks() {
 // ===================== 后台文件分发（2026-09-08 老板定：文员点刷新自动对齐版本号） =====================
 // 云端存 {version, adminHtml, ntMapJs}（settings 单文档）；云函数出入参 100KB 限制 → 90KB 分片。
 // 上传需鉴权（老板手动触发）；读取免鉴权（代码文件非敏感，文员 server 转发）。
-// 2026-09-09 实测：微信 HTTP API 对较大请求体（约 2.5KB+）偶发 INVALID_ENV，分片降为 2000 字符（与 tools/upload_dist.py 一致）
-const DIST_CHUNK = 2000;
+const DIST_CHUNK = 90000;
 const DIST_DOC = 'admin_dist';
 
 async function readDist() {
@@ -422,11 +421,11 @@ async function readDist() {
 
 async function uploadAdminDist(event) {
   const { kind, part, total, content, version } = event;
-  if (!['adminHtml', 'ntMapJs', 'serverJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
   const p = parseInt(part, 10), t = parseInt(total, 10);
   if (!(p >= 0 && t >= 1 && p < t)) return { ok: false, code: 'BAD_ARG', msg: '分片参数不合法' };
   if (typeof content !== 'string' || !content) return { ok: false, code: 'BAD_ARG', msg: '分片内容为空' };
-  const prev = (await readDist()) || { version: '', adminHtml: '', ntMapJs: '', serverJs: '' };
+  const prev = (await readDist()) || { version: '', adminHtml: '', ntMapJs: '' };
   if (p === 0) prev[kind] = '';
   prev[kind] += content;
   if (p === t - 1) {
@@ -444,14 +443,13 @@ async function getAdminDistMeta() {
     ok: true,
     version: d.version,
     adminHtmlParts: Math.ceil(d.adminHtml.length / DIST_CHUNK),
-    ntMapJsParts: Math.ceil(d.ntMapJs.length / DIST_CHUNK),
-    serverJsParts: d.serverJs ? Math.ceil(d.serverJs.length / DIST_CHUNK) : 0 // 2026-09-09：server.js 纳入分发（旧数据无此片=0）
+    ntMapJsParts: Math.ceil(d.ntMapJs.length / DIST_CHUNK)
   };
 }
 
 async function getAdminDistPart(event) {
   const { kind, part } = event;
-  if (!['adminHtml', 'ntMapJs', 'serverJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
   const d = await readDist();
   if (!d || !d[kind]) return { ok: false, code: 'NO_DIST', msg: '分片不存在' };
   const p = parseInt(part, 10);

@@ -11,9 +11,7 @@
 import json, re, sys, urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else 'http://localhost:8581'
-# 2026-09-09 实测：微信 HTTP API 对较大请求体（约 2.5KB+）偶发 INVALID_ENV，
-# 分片降为 2000 字符（实测 2574 bytes 安全）——片数变多但每片必过
-CHUNK = 2000  # 与云端 DIST_CHUNK 一致
+CHUNK = 90000  # 与云端 DIST_CHUNK 一致
 
 
 def api(body):
@@ -39,14 +37,12 @@ def upload_file(kind, text, version):
 def main():
     html = open(r'admin\admin.html', encoding='utf-8').read()
     ntmap = open(r'admin\nt-map.js', encoding='utf-8').read()
-    serverjs = open(r'admin\server.js', encoding='utf-8').read()  # 2026-09-09：server.js 纳入分发
     m = re.search(r"const APP_VERSION = '([^']+)'", html)
     version = m.group(1) if m else '0.9.00'
-    print('目标版本：v%s | admin.html %d 字符 | nt-map.js %d 字符 | server.js %d 字符' % (version, len(html), len(ntmap), len(serverjs)))
+    print('目标版本：v%s | admin.html %d 字符 | nt-map.js %d 字符' % (version, len(html), len(ntmap)))
     print('正在上传到 %s ...' % BASE)
     upload_file('adminHtml', html, version)
     upload_file('ntMapJs', ntmap, version)
-    upload_file('serverJs', serverjs, version)
     print('[完成] 上传完成：云端分发版本 = v%s（文员点 检查更新 即可对齐）' % version)
 
 
