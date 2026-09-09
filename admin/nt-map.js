@@ -699,7 +699,10 @@ function fallbackPts(start, ordered) {
   return startIsFirst ? coordPts : [[start.lat, start.lng], ...coordPts];
 }
 // ---------- smartSortCurDay ----------
+let planBusy = 0; // 2026-09-09 防连点：智能/手动规划 15 秒窗口锁
 async function smartSortCurDay() {
+  if (Date.now() - planBusy < 15000) return;
+  planBusy = Date.now();
   const d = ntCurDay;
   const list = selOf(d);
   if (!list.length) { showToast('第 ' + d + ' 天还没有选中店铺，无法规划'); return; }
@@ -749,6 +752,8 @@ async function smartSortCurDay() {
 
 // ---------- manualPlanCurDay（2026-09-06 老板定：按鼠标点选顺序规划；框选批量加入的垫后） ----------
 async function manualPlanCurDay() {
+  if (Date.now() - planBusy < 15000) return;
+  planBusy = Date.now();
   const d = ntCurDay;
   const list = selOf(d); // selOf 已按 _seq（=点选顺序）排序，框选批量加入的序号靠后
   if (!list.length) { showToast('第 ' + d + ' 天还没有选中店铺，无法规划'); return; }

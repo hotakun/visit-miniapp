@@ -733,7 +733,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <div class="frow"><label>批次名称 *</label><input class="inp" id="copyBatchName" placeholder="如：9月扫街新增第二批（留空自动命名）"></div>
           <div class="frow"><label>副标题/说明</label><input class="inp" id="copyBatchSub" placeholder="选填"></div>
         </div>
-        <div class="mf"><button class="btn ghost" onclick="$('copyBatchOvl').style.display='none'">取消</button><button class="btn primary" onclick="confirmCopyBatch()">创建并复制</button></div>
+        <div class="mf"><button class="btn ghost" onclick="$('copyBatchOvl').style.display='none'">取消</button><button class="btn primary" id="copyBatchBtn" onclick="confirmCopyBatch()">创建并复制</button></div>
       </div>
     </div>
 
@@ -3054,7 +3054,10 @@ function recalcDeadline() {
   $('ntDeadline').value = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（周${week[d.getDay()]}）`;
 }
 
+let taskCreateBusy = 0; // 2026-09-09 防连点：15 秒窗口锁
 async function createTask(publish) {
+  if (Date.now() - taskCreateBusy < 15000) return; // 防连点（老板报障：反馈慢连点三次创建三个任务同源问题）
+  taskCreateBusy = Date.now();
   // 强制修正校验（老板 2026-09-06 定）：天数与初始设置不同 → 不允许存草稿/发送
   if (needsFixDays()) {
     alert('任务天数与初始设置不同，请先点击「🔧 修正任务天数」后再' + (publish ? '发送' : '存草稿'));
@@ -3166,7 +3169,10 @@ function showCustDetail(id) {
 
 // 客户备注保存（2026-09-08 老板定：后台编辑，业务员手机端「管理员备注」卡显示）
 let curCustId = null;
+let remarkBusy = 0; // 2026-09-09 防连点
 async function saveCustRemark() {
+  if (Date.now() - remarkBusy < 15000) return;
+  remarkBusy = Date.now();
   if (!curCustId) return;
   const remark = ($('cmRemark').value || '').trim().slice(0, 500);
   const res = await api('updateCustomerRemark', { customerId: curCustId, remark });
@@ -3410,19 +3416,31 @@ function openCopyBatch() {
   $('copyBatchOvl').style.display = 'flex';
 }
 
+let copyBatchBusy = false; // 2026-09-09 防重复点击：创建并复制按钮忙碌锁
+
 async function confirmCopyBatch() {
-  const name = $('copyBatchName').value.trim();
-  const subtitle = $('copyBatchSub').value.trim();
-  const res = await api('createManualBatch', {
-    name, subtitle,
-    customerIds: [...batchChecked]
-  });
-  if (!res.ok) { alert(res.msg || '创建失败'); return; }
-  $('copyBatchOvl').style.display = 'none';
-  alert(res.msg || '已复制到新批次 ✓');
-  batchChecked = new Set(); // 清勾选
-  loadBatches(); // 批次列表出现新批次
-  if ($('page-batchDetail').style.display === 'block') loadCustomers(curBatchId, curBatchName); // 刷新当前表（勾选清空）
+  // 2026-09-09 老板报障：反馈慢连点三次创建了三个批次 → 防重复点击（按钮禁用+忙碌锁）
+  if (copyBatchBusy) return;
+  copyBatchBusy = true;
+  const btn = $('copyBatchBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '创建中…'; }
+  try {
+    const name = $('copyBatchName').value.trim();
+    const subtitle = $('copyBatchSub').value.trim();
+    const res = await api('createManualBatch', {
+      name, subtitle,
+      customerIds: [...batchChecked]
+    });
+    if (!res.ok) { alert(res.msg || '创建失败'); return; }
+    $('copyBatchOvl').style.display = 'none';
+    alert(res.msg || '已复制到新批次 ✓');
+    batchChecked = new Set(); // 清勾选
+    loadBatches(); // 批次列表出现新批次
+    if ($('page-batchDetail').style.display === 'block') loadCustomers(curBatchId, curBatchName); // 刷新当前表（勾选清空）
+  } finally {
+    copyBatchBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = '创建并复制'; }
+  }
 }
 
 // ===== 批次详情按「最近下单/最近拜访」列排序（2026-09-08 老板定） =====
@@ -3544,7 +3562,10 @@ function openBatchRename(batchId) {
   $('batchSubInput').value = b.subtitle || '';
   $('batchRenameOvl').style.display = 'flex';
 }
+let renameBatchBusy = 0; // 2026-09-09 防连点
 async function saveBatchRename() {
+  if (Date.now() - renameBatchBusy < 15000) return;
+  renameBatchBusy = Date.now();
   const name = $('batchNameInput').value.trim();
   const subtitle = $('batchSubInput').value.trim();
   if (!name) { alert('请填写批次名称'); return; }
@@ -3615,7 +3636,10 @@ function toggleMbSel(id) {
   if (mbSelected.has(id)) mbSelected.delete(id); else mbSelected.add(id);
   renderManualBatchList();
 }
+let mbBusy = 0; // 2026-09-09 防连点
 async function saveManualBatch() {
+  if (Date.now() - mbBusy < 15000) return;
+  mbBusy = Date.now();
   if (!mbSelected.size) { alert('请至少勾选一家客户'); return; }
   const res = await api('createManualBatch', {
     name: $('mbNameInput').value.trim(),
@@ -3657,7 +3681,10 @@ function toggleAddCustSel(id) {
   if (addCustSelected.has(id)) addCustSelected.delete(id); else addCustSelected.add(id);
   renderAddCustList();
 }
+let addCustBusy = 0; // 2026-09-09 防连点
 async function saveAddCusts() {
+  if (Date.now() - addCustBusy < 15000) return;
+  addCustBusy = Date.now();
   if (!addCustSelected.size) { alert('请至少勾选一家客户'); return; }
   const res = await api('addCustomersToBatch', { batchId: curBatchId, customerIds: [...addCustSelected] });
   if (!res.ok) { alert(res.msg || '加入失败'); return; }
@@ -3915,7 +3942,10 @@ function openUserModal() {
   $('userOvl').style.display = 'flex';
 }
 
+let userSaveBusy = 0; // 2026-09-09 防连点
 async function saveUser() {
+  if (Date.now() - userSaveBusy < 15000) return;
+  userSaveBusy = Date.now();
   const isSm = userModalKind === 0;
   const body = isSm
     ? { action: 'addSalesman', name: $('umName').value, phone: $('umPhone').value, remark: $('umRemark') ? $('umRemark').value : '', trial: $('umTrial') ? !!$('umTrial').checked : false }
@@ -3951,7 +3981,10 @@ function openMpBind(id, name, mask) {
   $('mpBindOvl').style.display = 'flex';
 }
 
+let mpBindBusy = 0; // 2026-09-09 防连点
 async function saveMpBind(unbind) {
+  if (Date.now() - mpBindBusy < 15000) return;
+  mpBindBusy = Date.now();
   if (unbind) {
     if (!window.confirm('确认解绑该业务员的服务号 OpenID？解绑后新任务将回退到小程序订阅提醒。')) return;
     const res = await api('setMpOpenid', { userId: mpBindUserId, mpOpenid: '' });
@@ -4024,7 +4057,10 @@ async function openCoordFix(customerId) {
   $('coordFixOvl').style.display = 'flex';
 }
 
+let coordFixBusy = 0; // 2026-09-09 防连点
 async function reviewCoordFix(approve) {
+  if (Date.now() - coordFixBusy < 15000) return;
+  coordFixBusy = Date.now();
   if (!curFix) return;
   const res = await api('reviewCoordFix', { fixId: curFix._id, approve });
   if (!res.ok) { alert(res.msg || '操作失败'); return; }
