@@ -1,7 +1,7 @@
 <!-- 地图页（2026-09-08 二期核心：天页签 + 客户点/绿色路线 + 下一家引导 + 底部客户卡） -->
 <view class="page">
   <view class="m-wrap">
-    <map class="m" id="mp" markers="{{markers}}" polyline="{{polyline}}"
+    <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
          show-traffic="{{trafficOn}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="{{scale}}"
          bindmarkertap="onMarkerTap"></map>

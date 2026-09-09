@@ -143,9 +143,7 @@ Page({
     if (next) { centerLat = next.lat; centerLng = next.lng; }
     else if (list.length) { centerLat = list[0].lat; centerLng = list[0].lng; }
     const nextDist = next ? this.fmtDist(next) : '';
-    // 自绘"我的位置"点随 renderDay 重建保留（2026-09-09 老板定：弃用系统蓝点）
-    const allMarkers = this._meMarker ? markers.concat([this._meMarker]) : markers;
-    this.setData({ markers: allMarkers, polyline, centerLat, centerLng, nextCust: next, nextDist, selCust: null, selDist: '', canReplan });
+    this.setData({ markers, polyline, centerLat, centerLng, nextCust: next, nextDist, selCust: null, selDist: '', canReplan });
   },
 
   switchDay(e) {
@@ -303,28 +301,19 @@ Page({
       padding: [110, 16, 24, 16] // 上留 110px 避开天页签+横幅条；右/下/左贴边
     });
   },
-  // 回到我的位置：取一次定位 → 视野移过去 + 显示自绘定位点（2026-09-09 老板定：
-  // 微信自带 show-location 蓝点在模拟器/部分真机上与实际差很远，弃用，改自绘 me.png 定位点，中心锚点精确压在定位坐标上）
+  // 回到我的位置：切回当天 + 视野居中到定位坐标（2026-09-09 老板定：蓝点用微信自带 show-location，
+  // 自带方向扇叶样式；此处只负责把视野移过去）
   backToMe() {
     if (this._locBusy) return;
     this._locBusy = true;
-    // 2026-09-09 老板定：点「我的位置」自动切回今天的天页签（换了天数也能一键回当天）
+    // 点「我的位置」自动切回今天的天页签（换了天数也能一键回当天）
     if (this.data.todayDay && this.data.curDay !== this.data.todayDay) {
       this.setData({ curDay: this.data.todayDay });
       this.renderDay();
     }
     loc.getOne(8000).then(p => {
       if (p && p.lat) {
-        const me = {
-          id: 9999, // 特殊 id：无 custId，点按不弹客户卡
-          latitude: p.lat, longitude: p.lng,
-          iconPath: '/pages/map/pins/me.png',
-          width: 36, height: 36,
-          anchor: { x: 0.5, y: 0.5 } // 中心锚点：蓝点圆心精确压定位坐标（微信默认 0.5,1 底部锚会偏上半图标高）
-        };
-        this._meMarker = me;
-        const others = (this.data.markers || []).filter(m => m.id !== 9999); // 防重复叠加
-        this.setData({ centerLat: p.lat, centerLng: p.lng, markers: others.concat([me]) });
+        this.setData({ centerLat: p.lat, centerLng: p.lng });
         api.toast('已回到我的位置', 'success');
       } else {
         api.toast('定位失败，请到开阔处重试');
