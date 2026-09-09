@@ -3,7 +3,7 @@
   <view class="m-wrap">
     <map class="m" id="mp" markers="{{markers}}" polyline="{{polyline}}"
          show-traffic="{{trafficOn}}"
-         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
+         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="{{scale}}"
          bindmarkertap="onMarkerTap"></map>
     <!-- 地图小圆钮（2026-09-09 老板定：横幅条下方靠右横排——路况/我的位置/刷新） -->
     <view class="m-ctrl">

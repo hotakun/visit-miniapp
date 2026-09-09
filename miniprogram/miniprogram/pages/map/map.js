@@ -13,6 +13,7 @@ Page({
     canReplan: false, replanBusy: false,
     // 地图浮层控件（2026-09-09 老板定：三个小圆钮横排在横幅条下方靠右——🚦路况/📍我的位置/↻刷新）
     trafficOn: false,
+    scale: 12, // 路况开启时联动放大到街道级（路况数据只在较大缩放级别渲染）
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
     bossMode: false, bossMen: [], curBossIdx: 0
   },
@@ -54,7 +55,7 @@ Page({
     await this.loadTask(m.taskId);
   },
 
-  async loadTask(taskId) {
+  async loadTask(taskId, keepDay) {
     try {
       let t = null;
       if (taskId) {
@@ -80,7 +81,9 @@ Page({
       if (app) app.globalData.locCfg = { workStartHour: this.task.workStartHour, workEndHour: this.task.workEndHour, offDutyTier: this.task.offDutyTier };
       const days = (this.task.dayPlan || []).map(p => p.day);
       const td = Math.max(1, Math.min(this.task.todayDay || 1, days.length || 1));
-      this.setData({ loading: false, task: this.task, days, todayDay: td, curDay: td });
+      // 2026-09-09 老板定：刷新保持用户所选天（换天后点刷新不再跳回今天）；首次加载默认今天
+      const cd = (keepDay && days.includes(keepDay)) ? keepDay : td;
+      this.setData({ loading: false, task: this.task, days, todayDay: td, curDay: cd });
       this.renderDay();
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
@@ -262,21 +265,27 @@ Page({
   goHome() { wx.redirectTo({ url: '/pages/home/home' }); },
 
   // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——🚦路况/📍我的位置/↻刷新）=====
-  // 路况开关：微信 map 组件原生 show-traffic（默认关省流量）
-  toggleTraffic() { this.setData({ trafficOn: !this.data.trafficOn }); },
-  // 手动刷新：重拉当前任务数据 + 所有客户点满屏撑满显示（不含我的位置；顶部避开横幅与天页签）
+  // 路况开关：微信 map 组件原生 show-traffic；路况数据只在较大缩放级别（街道级）渲染，
+  // 老板真机反馈点了没变化 → 开启时联动放大到 16 级让路况立即可见
+  toggleTraffic() {
+    if (this.data.trafficOn) {
+      this.setData({ trafficOn: false });
+    } else {
+      this.setData({ trafficOn: true, scale: Math.max(Number(this.data.scale) || 12, 16) });
+    }
+  },
+  // 手动刷新：先用现有数据立即撑满（秒响应），再后台拉新数据更新（保持所选天，不跳回今天）
   async refreshMap() {
+    this.fitAllCustomers();
+    const keepDay = this.data.curDay;
     if (this.data.bossMode) {
       const m = this.data.bossMen[this.data.curBossIdx];
       if (!m) { api.toast('暂无任务可刷新'); return; }
-      this._loaded = false;
-      await this.loadTask(m.taskId);
+      await this.loadTask(m.taskId, keepDay);
     } else {
-      this._loaded = false;
-      await this.loadTask();
+      await this.loadTask(null, keepDay);
     }
     if (this.data.empty) { api.toast(this.data.empty); return; }
-    this.fitAllCustomers();
     api.toast('已刷新 ✓', 'success');
   },
   // 满屏撑满：视野缩放到当天全部客户点，顶部留白避开横幅条与天页签（2026-09-09 老板定）
@@ -299,6 +308,11 @@ Page({
   backToMe() {
     if (this._locBusy) return;
     this._locBusy = true;
+    // 2026-09-09 老板定：点「我的位置」自动切回今天的天页签（换了天数也能一键回当天）
+    if (this.data.todayDay && this.data.curDay !== this.data.todayDay) {
+      this.setData({ curDay: this.data.todayDay });
+      this.renderDay();
+    }
     loc.getOne(8000).then(p => {
       if (p && p.lat) {
         const me = {
