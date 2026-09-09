@@ -128,7 +128,10 @@ Page({
     const list = ids.map(id => customers.find(c => c._id === id)).filter(c => c && c.lat && c.lng);
     // 先定下一家：当前天顺序中第一家未完成（未拜访且非拜访中）——它的圆标用黄描边高亮（2026-09-09 老板定）
     const next = list.find(c => !c.visitedToday && !c.visitOngoing) || null;
-    const markers = list.map((c, i) => {
+    // 2026-09-09 老板定：按状态分层组装（markers 数组越靠后渲染越在上层）——
+    // 自底到顶：已拜访 → 仓库星 → 未拜访（序号大的在下、数字小的在上）→ 拜访中 → 业务员蓝点（show-location 系统层，天然最顶）
+    const grpVisited = [], grpTodo = [], grpOngoing = [];
+    list.forEach((c, i) => {
       const visited = !!c.visitedToday;
       const n = Math.min(i + 1, 20); // 一天 ≤15 家；越界兜底 20 号
       // 2026-09-09 老板定：圆标全部重写——弃用微信 label（真机圆角不圆、锚点相对图标渲染框导致偏移，已两次退货）。
@@ -139,7 +142,7 @@ Page({
         : isNext
           ? `/pages/map/pins/pin_${n}_red_hl.png` // 下一家：红底白数字 + 黄色描边（比别家白描边粗 1px）
           : `/pages/map/pins/pin_${n}_${c.visitOngoing ? 'blue' : 'red'}.png`; // 拜访中蓝/待拜访橙红
-      return {
+      const m = {
         id: i + 1, // 当天顺序序号即 id
         custId: c._id,
         latitude: c.lat,
@@ -157,7 +160,12 @@ Page({
           display: 'BYCLICK'
         }
       };
+      if (visited) grpVisited.push(m);
+      else if (c.visitOngoing) grpOngoing.push(m);
+      else grpTodo.push(m);
     });
+    grpTodo.sort((a, b) => b.id - a.id); // 未拜访：序号大的先入数组（下层），数字小的后入（上层）
+    let markers = [...grpVisited, ...grpTodo, ...grpOngoing];
     // 路线：真实道路轨迹（后台规划存任务）；无轨迹 → 按顺序直线兜底
     let polyline = [];
     const route = plan && plan.route;
@@ -173,17 +181,18 @@ Page({
       }];
     }
     // 2026-09-09 老板定：线路起点是仓库（起点距仓库 300 米内）→ 显示小五角星；
-    // unshift 到数组最前 = 渲染在最下层，不盖未拜访/拜访中客户圆标
+    // z 序：已拜访（底）→ 仓库星 → 未拜访 → 拜访中（顶）——星星压在已拜访上、垫在未拜访下
     if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
       const sp = route.pts[0];
       if (sp && sp.length >= 2 && haversine(Number(sp[0]), Number(sp[1]), WH.lat, WH.lng) < 300) {
-        markers.unshift({
+        const star = {
           id: 999, // 特殊 id：无 custId，点按不弹客户卡
           latitude: Number(sp[0]), longitude: Number(sp[1]),
           iconPath: '/pages/map/pins/star.png',
           width: 20, height: 20, // 比客户圆标（24）小一号
           anchor: { x: 0.5, y: 0.5 } // 中心锚点精确压仓库点
-        });
+        };
+        markers = [...grpVisited, star, ...grpTodo, ...grpOngoing];
       }
     }
     // 重排按钮：当天未完成（非拜访中）客户 ≥2 家才显示（1 家无需排）；老板模式去重排（2026-09-09 §7.13）
