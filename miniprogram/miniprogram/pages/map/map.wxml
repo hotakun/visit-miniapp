@@ -3,7 +3,7 @@
   <view class="m-wrap">
     <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
-         bindmarkertap="onMarkerTap"></map>
+         bindmarkertap="onMarkerTap" bindcallouttap="onCalloutTap"></map>
     <!-- 地图小圆钮（2026-09-09 老板定：横幅条下方靠右横排——我的位置/刷新；路况按钮已按老板要求移除） -->
     <view class="m-ctrl">
       <view class="mfab" bindtap="backToMe">📍</view>

@@ -114,7 +114,13 @@ Page({
         height: 24,
         // 2026-09-09 老板核查定稿：微信 marker 默认锚点是 {0.5, 1}（图标底部中心）——
         // 不显式声明会整体偏上半图标高，必须声明中心锚点让圆心精确压在经纬度上
-        anchor: { x: 0.5, y: 0.5 }
+        anchor: { x: 0.5, y: 0.5 },
+        // 2026-09-09 老板定：点圆标 → 弹出店家名字气泡；点气泡 → 再出底部详情卡（导航/去拜访）
+        callout: {
+          content: c.name,
+          color: '#333A44', fontSize: 12, borderRadius: 8, bgColor: '#FFFFFF', padding: 7,
+          display: 'BYCLICK'
+        }
       };
     });
     // 路线：真实道路轨迹（后台规划存任务）；无轨迹 → 按顺序直线兜底
@@ -188,6 +194,11 @@ Page({
   },
 
   onMarkerTap(e) {
+    // 2026-09-09 老板定：点圆标=店家名字气泡（callout BYCLICK 自动弹出）；此处只负责收起旧详情卡
+    this.setData({ selCust: null, selDist: '' });
+  },
+  onCalloutTap(e) {
+    // 点店名气泡 → 出底部详情卡（导航/去拜访）
     const m = (this.data.markers || []).find(x => x.id === Number(e.detail.markerId));
     if (!m) return;
     const c = (this.customers || []).find(x => x._id === m.custId);
@@ -195,8 +206,10 @@ Page({
     this.setData({ selCust: c, selDist: this.fmtDist(c) });
   },
   openNext() {
-    if (!this.data.nextCust) return;
-    this.setData({ selCust: this.data.nextCust, selDist: this.fmtDist(this.data.nextCust) });
+    // 2026-09-09 老板定：点「下一家」→ 该店滑动到屏幕中心（map 经纬度属性变化自带平滑动画）
+    const c = this.data.nextCust;
+    if (!c) return;
+    this.setData({ centerLat: c.lat, centerLng: c.lng, selCust: null, selDist: '' });
   },
   closeCard() { this.setData({ selCust: null, selDist: '' }); },
   navSel() { this.nav(this.data.selCust); },
