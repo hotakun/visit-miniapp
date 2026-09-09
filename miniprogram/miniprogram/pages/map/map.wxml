@@ -42,5 +42,11 @@
         <view class="ccb go" bindtap="goVisit">去拜访</view>
       </view>
     </view>
-  </block>
+  <!-- 底部矮 TAB 栏（2026-09-09 老板定：只显示文字、很矮；业务员三栏/老板四栏） -->
+  <view class="tabbar-slim">
+    <view class="ts" bindtap="goHome">首页</view>
+    <view class="ts on">{{bossMode ? '任务地图' : '地图'}}</view>
+    <view class="ts" wx:if="{{bossMode}}" bindtap="tabWar">战况</view>
+    <view class="ts" bindtap="tabMine">我的</view>
+  </view>
 </view>

@@ -274,6 +274,8 @@ Page({
     wx.navigateTo({ url: '/pages/customer/customer' });
   },
   goHome() { wx.redirectTo({ url: '/pages/home/home' }); },
+  tabWar() { wx.redirectTo({ url: '/pages/bossWar/bossWar' }); }, // 老板四栏：战况（2026-09-09）
+  tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); },
 
   // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新）=====
   // 手动刷新（老板定：静默刷新不弹窗）：先用现有数据立即撑满（秒响应），再后台拉新数据更新（保持所选天，不跳回今天）

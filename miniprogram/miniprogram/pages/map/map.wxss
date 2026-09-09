@@ -23,8 +23,8 @@
 .ndist { font-size: 11.5px; color: var(--sub); flex-shrink: 0; }
 .nbtn { display: flex; align-items: center; background: var(--blue-tint); color: var(--blue); border: 0.5rpx solid rgba(47,128,237,.28); font-size: 11px; font-weight: 400; padding: 2px 9px; border-radius: 999px; flex-shrink: 0; line-height: 1.4; }
 
-/* 底部客户卡 */
-.custcard { position: absolute; left: 14px; right: 14px; bottom: 26px; background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(31,36,48,.22); z-index: 10; }
+/* 底部客户卡（2026-09-09 老板定：bottom 抬到矮 TAB 上方，不与 TAB 重叠） */
+.custcard { position: absolute; left: 14px; right: 14px; bottom: 56px; background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(31,36,48,.22); z-index: 10; }
 .cc-close { position: absolute; top: 10px; right: 12px; width: 22px; height: 22px; line-height: 21px; text-align: center; background: #F0F2F5; color: var(--sub); border-radius: 50%; font-size: 11px; }
 .cc-name { font-size: 16px; font-weight: 800; padding-right: 28px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cc-st { font-size: 11px; font-weight: 400; padding: 3px 10px; border-radius: 999px; background: #FFF4EE; color: var(--primary-deep); }
@@ -35,3 +35,8 @@
 .ccb { flex: 1; text-align: center; padding: 11px 0; border-radius: 12px; font-size: 14px; font-weight: 400; }
 .ccb.nav { background: var(--blue); color: #fff; }
 .ccb.go { background: var(--primary); color: #fff; }
+
+/* 底部矮 TAB 栏（2026-09-09 老板定：只显示文字、很矮 40px；业务员三栏/老板四栏） */
+.tabbar-slim { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: #fff; border-top: 1rpx solid var(--line); display: flex; z-index: 20; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; }
+.ts { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 400; color: var(--sub); }
+.ts.on { color: var(--primary); font-weight: 700; }
