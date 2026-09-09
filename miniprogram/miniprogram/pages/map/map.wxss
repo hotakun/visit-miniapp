@@ -23,8 +23,8 @@
 .ndist { font-size: 11.5px; color: var(--sub); flex-shrink: 0; }
 .nbtn { display: flex; align-items: center; background: var(--blue-tint); color: var(--blue); border: 0.5rpx solid rgba(47,128,237,.28); font-size: 11px; font-weight: 400; padding: 2px 9px; border-radius: 999px; flex-shrink: 0; line-height: 1.4; }
 
-/* 底部客户卡（2026-09-09 老板定：bottom 抬到矮 TAB 上方，不与 TAB 重叠） */
-.custcard { position: absolute; left: 14px; right: 14px; bottom: 56px; background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(31,36,48,.22); z-index: 10; }
+/* 底部客户卡（2026-09-09 老板定：动态抬到矮 TAB+安全区上方 14px，手机不被遮挡） */
+.custcard { position: absolute; left: 14px; right: 14px; bottom: calc(40px + env(safe-area-inset-bottom) + 14px); background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(31,36,48,.22); z-index: 10; }
 .cc-close { position: absolute; top: 10px; right: 12px; width: 22px; height: 22px; line-height: 21px; text-align: center; background: #F0F2F5; color: var(--sub); border-radius: 50%; font-size: 11px; }
 .cc-name { font-size: 16px; font-weight: 800; padding-right: 28px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cc-st { font-size: 11px; font-weight: 400; padding: 3px 10px; border-radius: 999px; background: #FFF4EE; color: var(--primary-deep); }
