@@ -5,7 +5,7 @@ Page({
   data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.04', bossMode: false, isDev: false },
   onShow() {
     const app = getApp();
-    this.setData({ version: app.globalData.APP_VERSION || '0.9.00', isDev: !!app.globalData.isDev }); // 版本号（2026-09-08 老板定）；isDev=开发者切换入口（2026-09-09 范宇琨）
+    this.setData({ version: app.globalData.APP_VERSION || '0.9.00', isDev: !!app.globalData.isDev || (app.globalData.user && app.globalData.user.phone === '13067737286') }); // 版本号（2026-09-08 老板定）；isDev=开发者切换入口（2026-09-09 范宇琨，手机号兜底防冷启动未激活标志）
     // 老板模式（2026-09-09 §7.13）：无业务员数据要求，显示老板卡+退出入口
     if (app.globalData.bossMode) {
       this.setData({ bossMode: true, user: { name: '老板' } });

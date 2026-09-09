@@ -154,6 +154,7 @@ Page({
     if (!u) { this.check(); return; }
     getApp().setBossMode(false);
     getApp().setUser(u);
+    try { wx.setStorageSync('dev_session', 1); } catch (e) { /* 静默 */ }
     wx.redirectTo({ url: '/pages/home/home' });
   },
   enterAsBoss() {
@@ -161,6 +162,7 @@ Page({
     if (!u) { this.check(); return; }
     getApp().setUser(u);
     getApp().setBossMode(true);
+    try { wx.setStorageSync('dev_session', 1); } catch (e) { /* 静默 */ }
     wx.redirectTo({ url: '/pages/home/home' });
   },
   // LOGO 云端加载失败 → 回退本地图，避免白板
