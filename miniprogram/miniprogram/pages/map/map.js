@@ -154,6 +154,7 @@ Page({
     if (d === this.data.curDay) return;
     this.setData({ curDay: d });
     this.renderDay();
+    this.fitAllCustomers(); // 2026-09-09 老板定：切换天数卡后自动撑满当天客户点（相当于自动刷新，但不动到单店）
   },
 
   fmtDist(c) {
