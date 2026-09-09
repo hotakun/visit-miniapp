@@ -110,7 +110,10 @@ Page({
         longitude: c.lng,
         iconPath: icon,
         width: 24,   // 2026-09-09 老板定：24×24 实心圆标+细白描边（微软雅黑数字，GDI+ 抗锯齿渲染）
-        height: 24
+        height: 24,
+        // 2026-09-09 老板核查定稿：微信 marker 默认锚点是 {0.5, 1}（图标底部中心）——
+        // 不显式声明会整体偏上半图标高，必须声明中心锚点让圆心精确压在经纬度上
+        anchor: { x: 0.5, y: 0.5 }
       };
     });
     // 路线：真实道路轨迹（后台规划存任务）；无轨迹 → 按顺序直线兜底
@@ -302,7 +305,8 @@ Page({
           id: 9999, // 特殊 id：无 custId，点按不弹客户卡
           latitude: p.lat, longitude: p.lng,
           iconPath: '/pages/map/pins/me.png',
-          width: 36, height: 36
+          width: 36, height: 36,
+          anchor: { x: 0.5, y: 0.5 } // 中心锚点：蓝点圆心精确压定位坐标（微信默认 0.5,1 底部锚会偏上半图标高）
         };
         this._meMarker = me;
         const others = (this.data.markers || []).filter(m => m.id !== 9999); // 防重复叠加
