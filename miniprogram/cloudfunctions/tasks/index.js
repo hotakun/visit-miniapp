@@ -40,10 +40,16 @@ async function bossBoard(salesmanId, isBoss) {
   let todayTotal = 0, todayDone = 0, visitedSum = 0, totalSum = 0;
   tasks.forEach(t => { todayTotal += (t.todayTotal || 0); todayDone += (t.todayDone || 0); visitedSum += (t.visited || 0); totalSum += (t.total || 0); });
   // 在线/拜访中：latest 位置 ≤10 分钟算在线；visitOngoing 位算拜访中
+  // 2026-09-09 老板定：实习（trial 游客账号）不出现在老板手机端任何统计/点列表——统计只算非 trial 业务员
   const now = Date.now();
-  const lRes = await db.collection('salesman_locations').where({ type: 'latest' }).get();
+  const [lRes, smRes] = await Promise.all([
+    db.collection('salesman_locations').where({ type: 'latest' }).get(),
+    db.collection('users').where({ role: 'salesman', active: true, trial: _.neq(true) }).field({ _id: true }).get()
+  ]);
+  const realIds = new Set(smRes.data.map(u => u._id));
   let online = 0, ongoing = 0;
   lRes.data.forEach(l => {
+    if (!realIds.has(l.salesmanId)) return; // 实习的 latest 不参与统计
     if (l.visitOngoing) ongoing++;
     if (l.t && now - Number(l.t) <= 10 * 60 * 1000) online++;
   });
@@ -57,7 +63,8 @@ async function bossWar(isBoss) {
   if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
   const now = Date.now();
   const [uRes, lRes] = await Promise.all([
-    db.collection('users').where({ role: 'salesman', active: true }).field({ name: true, phone: true }).get(),
+    // 2026-09-09 老板定：战况地图不显示实习（trial 游客账号）的任何信息
+    db.collection('users').where({ role: 'salesman', active: true, trial: _.neq(true) }).field({ name: true, phone: true }).get(),
     db.collection('salesman_locations').where({ type: 'latest' }).get()
   ]);
   const lMap = {};
@@ -75,19 +82,22 @@ async function bossWar(isBoss) {
       state: l.visitOngoing ? 'ongoing' : (ageMin <= 10 ? 'moving' : 'still')
     };
   });
-  // 今日动态：今天全部拜访记录（开始/提交）+ 客户名映射
+  // 今日动态：今天全部拜访记录（开始/提交）+ 客户名映射；2026-09-09 老板定：实习记录不出现在动态流
   const day = todayStr();
   const vRes = await db.collection('visits')
     .where({ visitedAt: day, status: _.in(['ongoing', 'normal', 'pending_review']) })
     .limit(200)
     .get();
-  const events = vRes.data.map(v => ({
-    t: (v.status === 'ongoing' ? (v.startedAt || v.createdAt) : (v.finishedAt || v.createdAt)) || 0,
-    type: v.status === 'ongoing' ? 'start' : 'submit',
-    salesmanName: v.salesmanName || '',
-    customerId: v.customerId || '',
-    result: v.result || ''
-  }));
+  const realIdSet = new Set(uRes.data.map(u => u._id)); // 非 trial 业务员集合
+  const events = vRes.data
+    .filter(v => realIdSet.has(v.salesmanId)) // 排除实习
+    .map(v => ({
+      t: (v.status === 'ongoing' ? (v.startedAt || v.createdAt) : (v.finishedAt || v.createdAt)) || 0,
+      type: v.status === 'ongoing' ? 'start' : 'submit',
+      salesmanName: v.salesmanName || '',
+      customerId: v.customerId || '',
+      result: v.result || ''
+    }));
   const cids = [...new Set(events.map(e => e.customerId).filter(Boolean))];
   const cNameMap = {};
   if (cids.length) {
