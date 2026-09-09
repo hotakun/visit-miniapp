@@ -216,7 +216,7 @@ Page({
     if (d === this.data.curDay) return;
     this.setData({ curDay: d });
     this.renderDay();
-    this.fitAllCustomers(); // 2026-09-09 老板定：切换天数卡后自动撑满当天客户点（相当于自动刷新，但不动到单店）
+    this.fitAllCustomers(true); // 2026-09-09 老板定：切天数只撑满未拜访+拜访中（全部已拜访则撑满全部）
   },
 
   fmtDist(c) {
@@ -371,15 +371,20 @@ Page({
     }
     // 静默刷新：成功后不再弹「已刷新」提示（老板 2026-09-09 定）
   },
-  // 满屏撑满：视野缩放到当天全部客户点，四边留白避开横幅条/天页签/矮TAB/安全区/店名气泡（2026-09-09 老板定）
-  fitAllCustomers() {
+  // 满屏撑满：视野缩放到当天客户点，四边留白避开横幅条/天页签/矮TAB/安全区/店名气泡（2026-09-09 老板定）
+  // activeOnly=true（2026-09-09 老板定）：切换天数卡时只撑满「未拜访+拜访中」；若当天全部已拜访则撑满全部
+  fitAllCustomers(activeOnly) {
     const task = this.task;
     const curDay = this.data.curDay;
     const plan = (task && task.dayPlan || []).find(p => p.day === curDay);
     const ids = plan ? (plan.customerIds || []) : [];
-    const pts = ids.map(id => (this.customers || []).find(c => c._id === id))
-      .filter(c => c && c.lat && c.lng)
-      .map(c => ({ latitude: c.lat, longitude: c.lng }));
+    let list = ids.map(id => (this.customers || []).find(c => c._id === id))
+      .filter(c => c && c.lat && c.lng);
+    if (activeOnly) {
+      const act = list.filter(c => !c.visitedToday); // 未拜访 + 拜访中
+      if (act.length) list = act; // 有未完成的 → 只撑满这些；全部已拜访 → 保留全部
+    }
+    const pts = list.map(c => ({ latitude: c.lat, longitude: c.lng }));
     if (!pts.length) return; // 静默：当天无客户点不打扰（2026-09-09 老板定）
     // 2026-09-09 冲突修复：底部必须动态算（矮TAB 40px + 手机安全区 + 14 空隙）——
     // 之前写死 36 是在加 TAB 栏之前定的，TAB 加高后底部客户点被压住，撑满限制形同失效
