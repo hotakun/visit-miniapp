@@ -5,6 +5,9 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
+// 老板手机号（2026-09-09 老板定：谁用这个号码注册，谁就是老板——免审核直接通过、自动进老板模式）
+const BOSS_PHONE = '15055492888';
+
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
   const { bindUserId } = event || {};
@@ -18,7 +21,9 @@ exports.main = async (event) => {
   if (adminRes.data.length > 0) {
     const a = adminRes.data[0];
     await users.doc(a._id).update({ data: { lastLoginAt: Date.now() } });
-    return { ok: true, isAdmin: true, canBoss: a.boss === true, user: publicUser(a) };
+    // 2026-09-09 老板定：boss 白名单账号登录后直接进老板模式，不用再点「进入老板模式」按钮
+    const boss = a.boss === true || a.phone === BOSS_PHONE;
+    return { ok: true, isAdmin: true, canBoss: boss, boss, user: publicUser(a) };
   }
 
   // 1. 业务员已绑定：直接返回（审核通过后 openid 已写入，免登录）
@@ -28,7 +33,9 @@ exports.main = async (event) => {
     // 正式业务员优先——多命中时非 trial 的排在前面
     const u = bound.data.slice().sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0))[0];
     await users.doc(u._id).update({ data: { lastLoginAt: Date.now() } });
-    return { ok: true, user: publicUser(u) };
+    // 老板手机号兜底（口径与 tasks/visits 云函数一致：仅管理员角色认 boss）
+    const boss = ['super_admin', 'admin'].includes(u.role) && (u.boss === true || u.phone === BOSS_PHONE);
+    return { ok: true, boss, user: publicUser(u) };
   }
 
   // 2. 绑定指定人（2026-09-09 老板定：正式账号一律走注册审核，此入口仅保留给游客「实习」体验）
@@ -64,11 +71,38 @@ exports.main = async (event) => {
 };
 
 // 注册申请（2026-09-09 老板拍板）：姓名+手机号；同一 openid 有 pending 不重复提交；拒绝后可重提
+// 2026-09-09 老板定：手机号=15055492888 就是老板本人——免审核直接通过、账号打 boss 标、自动进老板模式
 async function register(OPENID, e) {
   const name = String((e && e.name) || '').trim();
   const phone = String((e && e.phone) || '').trim();
   if (!name) return { ok: false, code: 'BAD_NAME', msg: '请填写姓名' };
   if (!/^1\d{10}$/.test(phone)) return { ok: false, code: 'BAD_PHONE', msg: '请填写正确的 11 位手机号' };
+
+  // ===== 老板专属通道（免审核）=====
+  if (phone === BOSS_PHONE) {
+    // 谁用老板号注册谁就是老板：清掉本微信此前的所有绑定（含 trial/测试账号），再绑到老板账号
+    await users.where({ openid: OPENID }).update({ data: { openid: '' } });
+    const exist = await users.where({ phone: BOSS_PHONE }).get();
+    let u;
+    if (exist.data.length) {
+      const doc = exist.data[0];
+      await users.doc(doc._id).update({
+        data: { openid: OPENID, name, role: 'admin', boss: true, active: true, lastLoginAt: Date.now() }
+      });
+      u = await users.doc(doc._id).get();
+    } else {
+      const add = await users.add({
+        data: {
+          openid: OPENID, name, phone: BOSS_PHONE,
+          role: 'admin', boss: true, active: true, trial: false,
+          remark: '老板手机号注册（免审核）', createdAt: Date.now(), lastLoginAt: Date.now()
+        }
+      });
+      u = await users.doc(add._id).get();
+    }
+    return { ok: true, boss: true, user: publicUser(u.data), msg: '老板身份已激活' };
+  }
+
   const pend = await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).count();
   if (pend.total > 0) return { ok: false, code: 'PENDING', msg: '申请已提交，请等待管理员审核' };
   await db.collection('registrations').add({

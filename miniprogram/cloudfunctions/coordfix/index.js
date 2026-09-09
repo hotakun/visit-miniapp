@@ -10,7 +10,8 @@ exports.main = async (event) => {
   const me = await db.collection('users').where({ openid: OPENID }).get();
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
   // 老板模式（2026-09-09 §7.13 修订：仅 boss===true 的指定管理员账号启用老板页面，报错走完校验后模拟提交）
-  const isBoss = ['super_admin', 'admin'].includes(me.data[0].role) && me.data[0].boss === true;
+  // 2026-09-09 老板定：手机号=15055492888 即老板本人（注册时已打 boss 标，phone 兜底防字段缺失）
+  const isBoss = ['super_admin', 'admin'].includes(me.data[0].role) && (me.data[0].boss === true || me.data[0].phone === '15055492888');
   if (!customerId || !lat || !lng) return { ok: false, code: 'BAD_ARG', msg: '缺少坐标' };
   if (lat < 18 || lat > 54 || lng < 73 || lng > 135) return { ok: false, code: 'BAD_COORD', msg: '坐标范围异常' };
   const noteText = String(note || '').trim().slice(0, 100);

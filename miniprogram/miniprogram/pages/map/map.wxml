@@ -1,8 +1,19 @@
 <!-- 地图页（2026-09-08 二期核心：天页签 + 客户点/绿色路线 + 下一家引导 + 底部客户卡） -->
 <view class="page">
-  <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
-       latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
-       bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap"></map>
+  <view class="m-wrap">
+    <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
+         show-traffic="{{trafficOn}}"
+         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
+         bindmarkertap="onMarkerTap"></map>
+    <!-- 地图浮层控件（2026-09-09 老板定：路况开关/手动刷新/回到我的位置） -->
+    <view class="m-ctrl">
+      <view class="mc {{trafficOn ? 'on' : ''}}" bindtap="toggleTraffic">
+        <view class="mc-ic">🚦</view><view class="mc-tx">{{trafficOn ? '路况开' : '路况'}}</view>
+      </view>
+      <view class="mc" bindtap="refreshMap"><view class="mc-ic">↻</view><view class="mc-tx">刷新</view></view>
+      <view class="mc" bindtap="backToMe"><view class="mc-ic">📍</view><view class="mc-tx">我的位置</view></view>
+    </view>
+  </view>
 
   <!-- 加载/空态 -->
   <view class="center-box" wx:if="{{loading}}">加载中…</view>

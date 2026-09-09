@@ -32,7 +32,7 @@
     <view class="state-card">
       <view class="sc-ic">⏳</view>
       <view class="sc-t">申请已提交，等待审核</view>
-      <view class="sc-d">提交时间：{{pendingAt}}<br>管理员审核通过后，重新打开小程序即可使用</view>
+      <view class="sc-d"><text>提交时间：{{pendingAt}}\n管理员审核通过后，重新打开小程序即可使用</text></view>
       <view class="btn-primary" style="margin-top:20px;background:#F6F7F9;color:var(--ink)" bindtap="refresh">🔄 刷新状态</view>
     </view>
   </block>

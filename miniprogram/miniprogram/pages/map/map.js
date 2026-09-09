@@ -11,6 +11,8 @@ Page({
     nextCust: null, nextDist: '',
     selCust: null, selDist: '',
     canReplan: false, replanBusy: false,
+    // 地图浮层控件（2026-09-09 老板定：第二梯队=路况开关/手动刷新/回到我的位置；去掉气泡针）
+    trafficOn: false,
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
     bossMode: false, bossMen: [], curBossIdx: 0
   },
@@ -96,22 +98,22 @@ Page({
     const markers = list.map((c, i) => {
       const visited = !!c.visitedToday;
       const color = visited ? COLOR.visited : (c.visitOngoing ? COLOR.ongoing : COLOR.pending);
+      // 2026-09-09 老板定：去掉 callout 气泡针（点按弹店名白气泡显乱）；点 marker 直接出底部客户卡
       const m = {
         id: i + 1, // 当天顺序序号即 id（一天 ≤15 家，唯一）
         custId: c._id,
         latitude: c.lat,
         longitude: c.lng,
+        // 基础库 3.4.10 强制所有 marker 必须提供 width/height（2026-09-09 老板报障 15 个同类错误）
+        width: visited ? 1 : 30,
+        height: visited ? 1 : 30,
         label: {
           content: visited ? '✓' : String(i + 1),
           color: '#FFFFFF', bgColor: color, borderRadius: 10, padding: 5, fontSize: 11
-        },
-        callout: {
-          content: c.name + (visited ? ' ✓' : ''),
-          color: '#333A44', fontSize: 12, borderRadius: 8, bgColor: '#FFFFFF', padding: 7, display: 'BYCLICK'
         }
       };
       // 已拜访：灰勾圆标 + 隐藏默认定位针（2026-09-08 老板定：绿勾与路线绿混杂、定位针多余）
-      if (visited) { m.iconPath = '/pages/map/transparent.png'; m.width = 1; m.height = 1; }
+      if (visited) { m.iconPath = '/pages/map/transparent.png'; }
       return m;
     });
     // 路线：真实道路轨迹（后台规划存任务）；无轨迹 → 按顺序直线兜底
@@ -255,7 +257,37 @@ Page({
     });
     wx.navigateTo({ url: '/pages/customer/customer' });
   },
-  goHome() { wx.redirectTo({ url: '/pages/home/home' }); }
+  goHome() { wx.redirectTo({ url: '/pages/home/home' }); },
+
+  // ===== 地图浮层控件（2026-09-09 老板定：第二梯队）=====
+  // 路况开关：微信 map 组件原生 show-traffic（默认关省流量）
+  toggleTraffic() { this.setData({ trafficOn: !this.data.trafficOn }); },
+  // 手动刷新：按当前身份/选中的业务员重新拉数据（不打断天页签选中）
+  async refreshMap() {
+    if (this.data.bossMode) {
+      const m = this.data.bossMen[this.data.curBossIdx];
+      if (!m) { api.toast('暂无任务可刷新'); return; }
+      this._loaded = false;
+      await this.loadTask(m.taskId);
+    } else {
+      this._loaded = false;
+      await this.loadTask();
+    }
+    if (!this.data.empty) api.toast('已刷新 ✓', 'success');
+  },
+  // 回到我的位置：取一次定位并把视野移过去（老板模式同样可用，本地定位不落库）
+  backToMe() {
+    if (this._locBusy) return;
+    this._locBusy = true;
+    loc.getOne(8000).then(p => {
+      if (p && p.lat) {
+        this.setData({ centerLat: p.lat, centerLng: p.lng });
+        api.toast('已回到我的位置', 'success');
+      } else {
+        api.toast('定位失败，请到开阔处重试');
+      }
+    }).catch(() => api.toast('定位失败，请到开阔处重试')).then(() => { this._locBusy = false; });
+  }
 });
 
 function haversine(lat1, lng1, lat2, lng2) {

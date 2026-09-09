@@ -956,11 +956,11 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <div class="ctab" id="ptab2" onclick="peopleTab(2)">⏳ 待审核<span class="pill" style="margin-left:6px;background:#E5484D;color:#fff" id="regPendPill" hidden>0</span></div>
         </div>
         <table class="tbl" id="ptable0">
-          <thead><tr><th>姓名</th><th>手机号</th><th>微信绑定</th><th>服务号绑定</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
+          <thead><tr><th>姓名</th><th>手机号</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
           <tbody id="smTbody"></tbody>
         </table>
         <table class="tbl" id="ptable1" style="display:none">
-          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>状态</th><th style="width:130px">👑 老板</th><th style="width:110px">操作</th></tr></thead>
+          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>当前状态</th><th>状态</th><th style="width:130px">👑 老板</th><th style="width:110px">操作</th></tr></thead>
           <tbody id="adTbody"></tbody>
         </table>
         <!-- 注册审核（2026-09-09 老板拍板：登录改「注册→后台审核→通过后免登进入」） -->
@@ -3694,6 +3694,45 @@ function toggleHtml(id, active) {
   return `<span class="toggle-mini ${active ? 'on' : ''}" onclick="toggleUserActive('${id}', ${!!active})"></span> ${active ? '启用' : '停用'}`;
 }
 
+// 人员当前状态胶囊（2026-09-09 老板定：人员列表能看到业务员在线/离线/拜访中；数据同位置监控 latest）
+function agoTxt(ts) {
+  if (!ts) return '';
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return '刚刚';
+  if (m < 60) return m + ' 分钟前';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' 小时前';
+  return Math.floor(h / 24) + ' 天前';
+}
+
+function salesmanStatusHtml(s) {
+  if (!s.active) return '<span class="pill" style="background:#F1F3F5;color:#8A939C">⏸ 已停用</span>';
+  if (!s.bound) return '<span class="pill warn">⚪ 未绑定微信</span>';
+  const loc = s.loc;
+  let pill = '<span class="pill" style="background:#F1F3F5;color:#8A939C">🕘 今天无上报</span>';
+  if (loc && loc.t) {
+    const ageMin = (Date.now() - loc.t) / 60000;
+    if (loc.visitOngoing && ageMin <= 15) pill = '<span class="pill" style="background:#E8F1FD;color:#2F80ED">🔵 拜访中</span>';
+    else if (ageMin <= 10) pill = '<span class="pill" style="background:#DCFCE7;color:#16A34A">🟢 在线</span>';
+    else pill = `<span class="pill" style="background:#F1F3F5;color:#8A939C">⚫ 离线</span>`;
+  }
+  const sub = [
+    loc && loc.t ? agoTxt(loc.t) : '',
+    s.todayCount > 0 ? '今日 ' + s.todayCount + ' 家' : ''
+  ].filter(Boolean).join(' · ');
+  return pill + (sub ? `<div style="font-size:11px;color:var(--sub);margin-top:2px">${sub}</div>` : '');
+}
+
+function adminActiveHtml(a) {
+  // 2026-09-09 老板定：老板账号最近活跃显示（老板行由 isBossPhone 特殊渲染）
+  const t = a.lastLoginAt;
+  if (!t) return '<span class="pill" style="background:#F1F3F5;color:#8A939C">🕘 从未活跃</span>';
+  const d = (Date.now() - t) / 86400000;
+  return d < 1
+    ? '<span class="pill" style="background:#DCFCE7;color:#16A34A">🟢 今天活跃</span>'
+    : `<span class="pill" style="background:#F1F3F5;color:#8A939C">${Math.floor(d)} 天前活跃</span>`;
+}
+
 async function loadPeople() {
   refreshRegs(); // 注册审核角标+列表（2026-09-09 老板拍板）
   const sm = await api('listSalesmen');
@@ -3705,21 +3744,38 @@ async function loadPeople() {
         <td>${s.mpBound
           ? `<span class="pill green" title="${esc(s.mpOpenidMask)}">已绑定</span> <button class="btn ghost" style="height:24px;font-size:11px" onclick="openMpBind('${s._id}','${esc(s.name)}','${esc(s.mpOpenidMask)}')">更换</button>`
           : `<button class="btn ghost" style="height:24px;font-size:11px;color:var(--primary-deep)" onclick="openMpBind('${s._id}','${esc(s.name)}','')">＋ 绑定</button>`}</td>
+        <td>${salesmanStatusHtml(s)}</td>
         <td>${toggleHtml(s._id, s.active)}</td>
         <td><button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${s._id}','${esc(s.name)}')">删除</button></td>
       </tr>`).join('')
-    : '<tr><td colspan="6" class="empty">加载失败</td></tr>';
+    : '<tr><td colspan="7" class="empty">加载失败</td></tr>';
   const ad = await api('listAdmins');
   $('adTbody').innerHTML = ad.ok
-    ? ad.admins.map(a => `<tr>
-        <td><b>${esc(a.username)}</b></td>
+    ? ad.admins.map(a => {
+      // 2026-09-09 老板定：老板手机号注册的账号专属显示（锁定启用/锁定老板模式/不可删除）
+      const isBossPhone = a.phone === '15055492888';
+      if (isBossPhone) {
+        return `<tr>
+        <td><span style="color:var(--sub)">📱 手机注册</span></td>
+        <td><b>${esc(a.name)}</b></td>
+        <td><span class="pill" style="background:#1F2430;color:#fff">👑 老板</span></td>
+        <td>${adminActiveHtml(a)}</td>
+        <td><span class="pill green">启用</span></td>
+        <td><span class="pill" style="background:#1F2430;color:#fff">👑 老板</span></td>
+        <td><span style="color:#C4CAD1;font-size:12px">—</span></td>
+      </tr>`;
+      }
+      return `<tr>
+        <td><b>${esc(a.username || '')}</b></td>
         <td>${esc(a.name)}</td>
         <td><span class="pill ${a.role === 'super_admin' ? 'orange' : 'gray'}">${a.role === 'super_admin' ? '超级管理员' : '管理员'}</span></td>
+        <td>${adminActiveHtml(a)}</td>
         <td>${a.role === 'super_admin' ? '<span class="pill green">启用</span>' : toggleHtml(a._id, a.active)}</td>
         <td>${a.boss ? `<span class="pill" style="background:#1F2430;color:#fff">👑 老板</span> <button class="btn ghost" style="height:24px;font-size:11px" onclick="setUserBoss('${a._id}',false)">停用</button>` : `<button class="btn ghost" style="height:24px;font-size:11px" onclick="setUserBoss('${a._id}',true)">👑 启用老板</button>`}</td>
         <td>${a.role === 'super_admin' ? '<span style="color:#C4CAD1;font-size:12px">—</span>' : `<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${a._id}','${esc(a.name)}')">删除</button>`}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="6" class="empty">加载失败</td></tr>';
+      </tr>`;
+    }).join('')
+    : '<tr><td colspan="7" class="empty">加载失败</td></tr>';
 }
 
 // 老板白名单开关（2026-09-09 老板定：仅指定管理员账号可进老板页面/战况地图）

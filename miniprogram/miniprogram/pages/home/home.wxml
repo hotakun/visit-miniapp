@@ -3,7 +3,7 @@
   <view class="head">
     <image class="head-logo" src="{{logoUrl}}" mode="aspectFit" binderror="onLogoError"></image>
     <view class="head-txt">
-      <view class="hi">你好，{{user.name}}</view>
+      <view class="hi">你好，{{user.name}}<text class="boss-crown" wx:if="{{bossMode}}"> 👑</text></view>
       <view class="pep"><text class="pep-t">{{pepText}}</text><text class="pep-e">{{pepEmoji}}</text></view>
     </view>
   </view>

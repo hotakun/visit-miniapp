@@ -9,6 +9,8 @@ const db = cloud.database();
 const _ = db.command;
 
 const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
+// 老板手机号（2026-09-09 老板定：谁用这个号码注册谁就是老板；老板账号后台不可停用/不可关老板模式/不可删除）
+const BOSS_PHONE = '15055492888';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
 const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'ping'];
@@ -1603,6 +1605,14 @@ async function listSalesmen(event) {
   const tRes = await db.collection('tasks').where({ status: _.in(['published', 'reviewing']) }).field({ salesmanId: true }).limit(100).get();
   const busy = {};
   tRes.data.forEach(t => { busy[t.salesmanId] = true; });
+  // 2026-09-09 老板定：人员列表显示当前状态——latest 位置（在线/离线/拜访中）+ 今日拜访数
+  const locRows = await fetchAll('salesman_locations', { type: 'latest' }, { salesmanId: true, t: true, visitOngoing: true });
+  const locMap = {};
+  locRows.forEach(r => { if (r.salesmanId) locMap[r.salesmanId] = { t: r.t || 0, visitOngoing: !!r.visitOngoing }; });
+  const today = todayStr();
+  const vRows = await fetchAll('visits', { visitedAt: today }, { salesmanId: true });
+  const todayMap = {};
+  vRows.forEach(v => { todayMap[v.salesmanId] = (todayMap[v.salesmanId] || 0) + 1; });
   return {
     ok: true,
     salesmen: res.data.map(s => ({
@@ -1611,14 +1621,24 @@ async function listSalesmen(event) {
       bound: !!s.openid,
       trial: !!s.trial,
       mpBound: !!(s.mpOpenid),
-      mpOpenidMask: s.mpOpenid ? String(s.mpOpenid).slice(0, 8) + '…' + String(s.mpOpenid).slice(-6) : ''
+      mpOpenidMask: s.mpOpenid ? String(s.mpOpenid).slice(0, 8) + '…' + String(s.mpOpenid).slice(-6) : '',
+      lastLoginAt: s.lastLoginAt || 0,
+      loc: locMap[s._id] || null,
+      todayCount: todayMap[s._id] || 0
     }))
   };
 }
 
 async function listAdmins(event) {
   const res = await db.collection('users').where({ role: _.in(['super_admin', 'admin']) }).get();
-  return { ok: true, admins: res.data.map(a => ({ _id: a._id, name: a.name, username: a.username, role: a.role, active: a.active !== false, boss: a.boss === true })) };
+  return {
+    ok: true,
+    admins: res.data.map(a => ({
+      _id: a._id, name: a.name, username: a.username, role: a.role,
+      active: a.active !== false, boss: a.boss === true,
+      phone: a.phone || '', lastLoginAt: a.lastLoginAt || 0
+    }))
+  };
 }
 
 // 老板白名单开关（2026-09-09 老板定：仅指定账号启用老板页面/战况地图）
@@ -1629,6 +1649,8 @@ async function setUserBoss(event) {
   const u = uRes && uRes.data;
   if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
   if (!['super_admin', 'admin'].includes(u.role)) return { ok: false, code: 'FORBIDDEN', msg: '仅管理员账号可设为老板' };
+  // 2026-09-09 老板定：老板手机号账号永远启用老板模式，不可停用
+  if (u.phone === BOSS_PHONE && !boss) return { ok: false, code: 'FORBIDDEN', msg: '老板账号不可停用老板模式' };
   await db.collection('users').doc(userId).update({ data: { boss: !!boss } });
   return { ok: true, msg: boss ? '已启用老板模式' : '已停用老板模式' };
 }
@@ -1734,6 +1756,8 @@ async function setUserActive(event) {
   const u = uRes && uRes.data;
   if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
   if (u.role === 'super_admin') return { ok: false, code: 'FORBIDDEN', msg: '超级管理员不可停用' };
+  // 2026-09-09 老板定：老板手机号账号不可停用
+  if (u.phone === BOSS_PHONE && !active) return { ok: false, code: 'FORBIDDEN', msg: '老板账号不可停用' };
   await db.collection('users').doc(userId).update({ data: { active: !!active } });
   return { ok: true, active: !!active };
 }
@@ -1745,6 +1769,8 @@ async function deleteUser(event) {
   const u = uRes && uRes.data;
   if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
   if (u.role === 'super_admin') return { ok: false, code: 'FORBIDDEN', msg: '超级管理员不可删除' };
+  // 2026-09-09 老板定：老板手机号账号不可删除
+  if (u.phone === BOSS_PHONE) return { ok: false, code: 'FORBIDDEN', msg: '老板账号不可删除' };
   if (u.role === 'salesman') {
     const t = await db.collection('tasks').where({ salesmanId: userId, status: 'published' }).count();
     if (t.total > 0) return { ok: false, code: 'HAS_TASK', msg: '该业务员有进行中任务，请先处理任务再删除' };

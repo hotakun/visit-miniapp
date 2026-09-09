@@ -105,6 +105,60 @@ const PHRASES = [
   '明天会感谢今天努力拜访的你 🌈'
 ];
 
+// 老板专属鸡汤（2026-09-09 老板拍板：与业务员版完全分开；看全局/带团队/管生意口吻；第 11 句老板钦定「道路」不用「路」）
+const BOSS_PHRASES = [
+  '数据不会撒谎，进度条就是人心 📊',
+  '你在看报表，员工在看你 👀',
+  '盯过程的人，才有资格谈结果 🎯',
+  '今天的轨迹，就是明天的回款 🛵',
+  '好团队是盯出来的，不是等出来的 🔍',
+  '老板的勤快，是替所有人兜底 🧱',
+  '市场不会辜负天天看地图的人 🗺',
+  '谁在跑、谁在歇，数据一清二楚 📡',
+  '把流程管严，人情才好谈 ⚖️',
+  '进度慢一点没关系，方向不能偏 🧭',
+  '员工跑的是道路，你跑的是版图 🏙',
+  '一家店的背后，是一个回头客 🤝',
+  '复盘比抱怨值钱 💰',
+  '今天不较真，月底就上火 🔥',
+  '让干活的人被看见，团队才有劲 ⭐',
+  '管理松一寸，市场丢一尺 📏',
+  '老板的状态，就是团队的天花板 🏔',
+  '客户记住的是聚火，不是你一个人 🏷',
+  '盯紧待审核，别让流程卡壳 ⏳',
+  '一个客户被服务好，十条街都传 🗣',
+  '先看数据，再拍桌子 📋',
+  '拜访数上不去，别的都别谈 🚦',
+  '好的制度让懒人也动起来 ⚙️',
+  '老板要的是确定性，不是惊喜 🎲',
+  '每个业务员的今天，都写进你的账本 📒',
+  '别替员工找借口，帮他们找方法 🛠',
+  '市场的门，是脚步敲开的 🚪',
+  '你今天定的标准，就是明天的结果 📐',
+  '把重复的事管好，就是本事 🔁',
+  '迟到的人最会讲理由，数据不会 ⏰',
+  '生意是守出来的，也是盯出来的 🏰',
+  '干得好要当场说，干不好要当面说 💬',
+  '老板心里有数，员工脚下有路 🧮',
+  '三分钟热度做不出回头客 ☕',
+  '每个拜访点，都是你的棋子 ♟',
+  '松一松，大家舒服；紧一紧，大家有肉 🍖',
+  '好结果先奖，坏苗头早掐 🌱',
+  '市场很大，你的版图要靠人跑出来 🌏',
+  '别让一个懒人，凉了一群勤快人 ❄️',
+  '报表冷冰冰，生意热腾腾 🔥',
+  '员工看今天，老板看三个月 📅',
+  '流程跑通了，人就好管了 🚦',
+  '每一个红点，都是一次提醒 🔴',
+  '客情是攒出来的，不是补出来的 🧧',
+  '你盯得越细，返工就越少 🔬',
+  '让多跑的人多赚，队伍才稳 ⚖️',
+  '团队的成绩单，就是你的成绩单 🏆',
+  '别跟情绪较劲，跟数据较劲 💪',
+  '门店在变少，你的地盘不能变小 🗺',
+  '聚火要旺，先让底下的人热起来 🔥'
+];
+
 // 把短语拆成文字与 emoji 两段（emoji 单独渲染，避免被文字灰色染色）
 function splitEmoji(s) {
   const m = String(s).match(/^(.*?)([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\s]+)$/u);
@@ -114,6 +168,16 @@ function splitEmoji(s) {
 
 // 每人每天一条固定鸡汤：业务员 ID + 日期做确定性种子（同一天多次进入不换，跨天自动换，业务员之间各自不同）
 function dailyPhrase(uid) {
+  return phraseOf(PHRASES, uid);
+}
+
+// 老板每天一条固定鸡汤（2026-09-09 老板定：老板版与业务员版分开，用老板 ID 做种子）
+function bossPhrase(uid) {
+  return phraseOf(BOSS_PHRASES, uid);
+}
+
+// 通用取句：uid + 日期做确定性种子
+function phraseOf(list, uid) {
   const d = new Date(Date.now() + 8 * 3600 * 1000);
   const day = d.toISOString().slice(0, 10);
   const seed = String(uid || '') + '|' + day;
@@ -121,7 +185,7 @@ function dailyPhrase(uid) {
   for (let i = 0; i < seed.length; i++) {
     h = (h * 31 + seed.charCodeAt(i)) | 0;
   }
-  return PHRASES[Math.abs(h) % PHRASES.length];
+  return list[Math.abs(h) % list.length];
 }
 
 Page({
@@ -140,7 +204,10 @@ Page({
       const now = new Date(Date.now() + 8 * 3600 * 1000);
       const week = ['日', '一', '二', '三', '四', '五', '六'];
       const dateText = `${now.getUTCMonth() + 1}月${now.getUTCDate()}日 周${week[now.getUTCDay()]}`;
-      this.setData({ bossMode: true, user: { name: '老板' }, dateText, logoUrl: app.globalData.logoUrl });
+      // 2026-09-09 老板定：显示老板注册时填的名字（皇冠在 wxml 里拼）+ 老板专属鸡汤
+      const bname = (u && u.name) || '老板';
+      const bp = splitEmoji(bossPhrase(u && u._id ? u._id : 'boss'));
+      this.setData({ bossMode: true, user: { name: bname }, dateText, pepText: bp.text, pepEmoji: bp.emoji, logoUrl: app.globalData.logoUrl });
       this.load();
       return;
     }

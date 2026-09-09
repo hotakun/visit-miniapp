@@ -20,7 +20,12 @@ Page({
   async check() {
     try {
       const res = await api.call('login');
-      if (res.ok && res.user && res.user.role === 'salesman') {
+      if (res.ok && res.boss) {
+        // 2026-09-09 老板定：老板账号（手机号白名单）直接进老板模式，跳过登录页
+        getApp().setUser(res.user);
+        getApp().setBossMode(true);
+        wx.redirectTo({ url: '/pages/home/home' });
+      } else if (res.ok && res.user && res.user.role === 'salesman') {
         getApp().setUser(res.user);
         wx.redirectTo({ url: '/pages/home/home' });
       } else if (res.ok) {
@@ -63,7 +68,13 @@ Page({
     this.setData({ regBusy: true });
     try {
       const res = await api.call('login', { action: 'register', name, phone });
-      if (res.ok) {
+      if (res.ok && res.boss) {
+        // 2026-09-09 老板定：老板手机号注册免审核直接通过 → 自动进老板模式
+        getApp().setUser(res.user);
+        getApp().setBossMode(true);
+        api.toast('老板身份已激活 ✓', 'success');
+        setTimeout(() => wx.redirectTo({ url: '/pages/home/home' }), 800);
+      } else if (res.ok) {
         this.setData({ registerMode: false, pendingMode: true });
         const d = new Date(Date.now() + 8 * 3600 * 1000);
         const p = n => String(n).padStart(2, '0');
