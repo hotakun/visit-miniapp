@@ -33,6 +33,7 @@ Page({
     selCust: null, selDist: '',
     canReplan: false, replanBusy: false,
     // 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新；路况已移除）
+    refreshing: false, // ↻ 按钮旋转动效（2026-09-09：静默刷新也要有视觉反馈）
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
     bossMode: false, bossMen: [], curBossIdx: 0
   },
@@ -323,14 +324,23 @@ Page({
   // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新）=====
   // 手动刷新（老板定：静默刷新不弹窗）：先用现有数据立即撑满（秒响应），再后台拉新数据更新（保持所选天，不跳回今天）
   async refreshMap() {
-    this.fitAllCustomers();
-    const keepDay = this.data.curDay;
-    if (this.data.bossMode) {
-      const m = this.data.bossMen[this.data.curBossIdx];
-      if (!m) return; // 无任务时静默
-      await this.loadTask(m.taskId, keepDay);
-    } else {
-      await this.loadTask(null, keepDay);
+    if (this._refreshing) return;
+    this._refreshing = true;
+    // 2026-09-09 修复：按钮旋转 0.8 秒动效（静默刷新也要有视觉反馈，否则老板点了几次像没反应）
+    this.setData({ refreshing: true });
+    setTimeout(() => this.setData({ refreshing: false }), 800);
+    try {
+      this.fitAllCustomers();
+      const keepDay = this.data.curDay;
+      if (this.data.bossMode) {
+        const m = this.data.bossMen[this.data.curBossIdx];
+        if (!m) { api.toast('暂无任务可刷新'); return; }
+        await this.loadTask(m.taskId, keepDay);
+      } else {
+        await this.loadTask(null, keepDay);
+      }
+    } finally {
+      this._refreshing = false;
     }
     // 静默刷新：成功后不再弹「已刷新」提示（老板 2026-09-09 定）
   },

@@ -7,7 +7,7 @@
     <!-- 地图小圆钮（2026-09-09 老板定：横幅条下方靠右横排——我的位置/刷新；路况按钮已按老板要求移除） -->
     <view class="m-ctrl">
       <view class="mfab" bindtap="backToMe">📍</view>
-      <view class="mfab" bindtap="refreshMap">↻</view>
+      <view class="mfab {{refreshing ? 'spin' : ''}}" bindtap="refreshMap">↻</view>
     </view>
   </view>
 
