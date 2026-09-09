@@ -94,30 +94,24 @@ Page({
     const plan = (task.dayPlan || []).find(p => p.day === curDay);
     const ids = plan ? (plan.customerIds || []) : [];
     const list = ids.map(id => customers.find(c => c._id === id)).filter(c => c && c.lat && c.lng);
-    const COLOR = { pending: '#F5531C', visited: '#9AA3AD', ongoing: '#2F80ED' };
     const markers = list.map((c, i) => {
       const visited = !!c.visitedToday;
-      const color = visited ? COLOR.visited : (c.visitOngoing ? COLOR.ongoing : COLOR.pending);
-      // 2026-09-09 老板定：取消默认红气球针——全部 marker 用透明图标，地图上只显示数字圆标/灰勾。
-      // 位置铁律（老板两次退货后核查定稿）：label 的 anchor 是相对 marker 图标渲染框的锚点，
-      // 图标必须与圆标同尺寸（数字圆标约 18~24×25），anchor(50,50) 圆标中心才正好压在客户经纬度上；
-      // 之前用 1×1 透明图导致 label 左上角贴坐标点、圆标整体向右下偏移半个圆标。
-      const m = {
-        id: i + 1, // 当天顺序序号即 id（一天 ≤15 家，唯一）
+      const n = Math.min(i + 1, 20); // 一天 ≤15 家；越界兜底 20 号
+      // 2026-09-09 老板定：圆标全部重写——弃用微信 label（真机圆角不圆、锚点相对图标渲染框导致偏移，已两次退货）。
+      // 大师级方案：预生成 36×36 抗锯齿正圆 PNG（pins/ 目录，数字 5×7 点阵字体超采样绘制），
+      // marker 默认锚点=图标中心(0.5,0.5) → 圆标圆心天然精确落在客户经纬度，零运行时不确定。
+      const icon = visited
+        ? '/pages/map/pins/pin_done.png' // 已拜访：灰底白勾
+        : `/pages/map/pins/pin_${n}_${c.visitOngoing ? 'blue' : 'red'}.png`; // 拜访中蓝/待拜访橙红
+      return {
+        id: i + 1, // 当天顺序序号即 id
         custId: c._id,
         latitude: c.lat,
         longitude: c.lng,
-        iconPath: '/pages/map/transparent21.png',
-        width: 21,
-        height: 25,
-        label: {
-          content: visited ? '✓' : String(i + 1),
-          color: '#FFFFFF', bgColor: color, borderRadius: 20, padding: 6, fontSize: 11,
-          textAlign: 'center',
-          anchorX: 50, anchorY: 50
-        }
+        iconPath: icon,
+        width: 36,
+        height: 36
       };
-      return m;
     });
     // 路线：真实道路轨迹（后台规划存任务）；无轨迹 → 按顺序直线兜底
     let polyline = [];
