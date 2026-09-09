@@ -107,8 +107,10 @@ Page({
 
   // 自动检测仓库开关（2026-09-09 老板定）：进入地图/切换天数时执行——当天线路起点是仓库（50 米内，仓库周围有店不能用 300）→ 自动开；其他起点 → 自动关；
   // 手动点击开关后以手动为准，直到下次进入/切天再次自动检测
-  autoWhStarFrom(map, day) {
-    const plan = (map && map.task && map.task.dayPlan || []).find(p => p.day === day);
+  // src 兼容两种：{task:{...}} 包装（applyMapData 传 map）或任务对象本身（switchDay 传 this.task）
+  autoWhStarFrom(src, day) {
+    const task = src && src.task ? src.task : src;
+    const plan = (task && task.dayPlan || []).find(p => p.day === day);
     const route = plan && plan.route;
     const on = !!(route && Array.isArray(route.pts) && route.pts.length >= 2
       && haversine(Number(route.pts[0][0]), Number(route.pts[0][1]), WH.lat, WH.lng) < 50);
