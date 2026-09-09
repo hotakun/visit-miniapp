@@ -1,5 +1,6 @@
 // 战况地图（2026-09-09 §7.13 老板拍板）：业务员实时位置三色点+静止预警+今日动态流+点人抽屉卡
 const api = require('../../utils/api');
+const loc = require('../../utils/loc'); // 2026-09-09 老板定：📍我的位置按钮用
 
 // 点状态色（与后台位置监控同口径）
 const P_COLOR = { ongoing: '#2F80ED', moving: '#F5531C', still: '#9CA3AF' };
@@ -9,7 +10,7 @@ Page({
   data: {
     loading: true, empty: '',
     points: [], events: [], stats: null,
-    markers: [], includePoints: [], centerLat: 28.970802, centerLng: 120.154526,
+    markers: [], centerLat: 28.970802, centerLng: 120.154526,
     selMan: null, warnCount: 0, updateText: '',
     trackPolyline: [], trackOn: false, // 2026-09-09 老板定：今日轨迹（绿色折线，点地图空白清除）
     tabIdx: 2 // 战况 tab 高亮
@@ -35,7 +36,6 @@ Page({
         api.call('tasks', { action: 'bossWar' })
       ]);
       if (!w.ok) { this.setData({ loading: false, empty: w.msg || '加载失败' }); return; }
-      const points = (w.points || []).filter(p => p && !p.noData && p.lat && p.lng);
       const allPts = w.points || [];
       const warnCount = allPts.filter(p => p && !p.noData && p.state === 'still' && p.ageMin > 40).length;
       const upd = new Date(Date.now() + 8 * 3600 * 1000);
@@ -46,12 +46,39 @@ Page({
       this.setData({
         loading: false, empty: '',
         points: allPts, events, stats: b.ok ? (b.stats || null) : null,
-        warnCount, updateText, includePoints: points.map(p => ({ latitude: p.lat, longitude: p.lng }))
+        warnCount, updateText
       });
       this.renderMarkers();
+      // 2026-09-09 老板定：只在首次进入战况地图时自动撑满一次；之后 30 秒自动刷新只更新数据不动视野
+      if (!this._fitted) { this._fitted = true; this.fitAll(); }
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
     }
+  },
+
+  // 撑满：全部业务员点入屏（手动刷新/首次进入才调用）
+  fitAll() {
+    const pts = (this._points || [])
+      .filter(p => p && !p.noData && p.lat && p.lng)
+      .map(p => ({ latitude: p.lat, longitude: p.lng }));
+    if (!pts.length) return;
+    wx.createMapContext('wmp', this).includePoints({ points: pts, padding: [16, 16, 16, 16] });
+  },
+  // ↻ 刷新：静默重拉数据 + 撑满（2026-09-09 老板定）
+  async refreshMap() {
+    await this.load(true);
+    this.fitAll();
+  },
+  // 📍 我的位置：定位并移动视野到老板自己位置（2026-09-09 老板定；本地定位不落库）
+  backToMe() {
+    loc.getOne(8000).then(p => {
+      if (p && p.lat) {
+        this.setData({ centerLat: p.lat, centerLng: p.lng });
+        api.toast('已回到我的位置', 'success');
+      } else {
+        api.toast('定位失败，请到开阔处重试');
+      }
+    }).catch(() => api.toast('定位失败，请到开阔处重试'));
   },
 
   // 三色点：蓝=拜访中 / 橙=在移动 / 灰=静止；静止>40 分钟=红圈预警（红底感叹号）

@@ -15,11 +15,16 @@
     <view class="bs"><view class="bs-n c-red">{{stats.review}}</view><view class="bs-l">待审核</view></view>
   </view>
 
-  <!-- 地图（约 55vh；include-points 自动缩放到全部业务员） -->
+  <!-- 地图（约 55vh；不再自动 include-points 撑满——首次进入撑一次，之后点 ↻ 才撑满，2026-09-09 老板定） -->
   <view class="wmap-wrap">
-    <map class="wmap" id="wmp" markers="{{markers}}" polyline="{{trackPolyline}}" include-points="{{includePoints}}"
+    <map class="wmap" id="wmp" show-location="{{true}}" markers="{{markers}}" polyline="{{trackPolyline}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
          bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap" bindtap="clearTrack"></map>
+    <!-- 小圆钮（同任务地图）：📍我的位置 / ↻刷新 -->
+    <view class="wctrl">
+      <view class="wfab" bindtap="backToMe">📍</view>
+      <view class="wfab" bindtap="refreshMap">↻</view>
+    </view>
     <view class="wlegend">
       <view class="lg"><view class="dot" style="background:#2F80ED"></view>拜访中</view>
       <view class="lg"><view class="dot" style="background:#F5531C"></view>在移动</view>
