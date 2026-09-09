@@ -2,7 +2,7 @@ const api = require('../../utils/api');
 const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
 
 Page({
-  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.07', bossMode: false, isDev: false },
+  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.07', bossMode: false, isDev: false, aboutShow: false, aboutText: '' },
   onShow() {
     const app = getApp();
     this.setData({ version: app.globalData.APP_VERSION || '0.9.00', isDev: !!app.globalData.isDev || (app.globalData.user && app.globalData.user.phone === '13067737286') }); // 版本号（2026-09-08 老板定）；isDev=开发者切换入口（2026-09-09 范宇琨，手机号兜底防冷启动未激活标志）
@@ -62,7 +62,17 @@ Page({
     }
   },
   tapSetting() { api.toast('设置功能开发中'); },
-  tapAbout() { api.toast('聚火拜访 · 客户回访管理'); },
+  tapAbout() {
+    // 2026-09-09 老板定：关于弹层按角色显示不同简介（业务员=跑店视角；老板=管理视角）
+    this.setData({
+      aboutShow: true,
+      aboutText: this.data.bossMode
+        ? '聚火拜访，管理好帮手：任务进度、员工动态实时掌握，谁在拜访一看便知；注册审核、任务派发，一手把控。'
+        : '聚火拜访，跑店好帮手：任务路线一目了然，导航到店、打卡拜访、拍照记录，每天跑了多少家清清楚楚，回访不遗漏。'
+    });
+  },
+  closeAbout() { this.setData({ aboutShow: false }); },
+  noop() {}, // 弹层卡片点击不冒泡到遮罩关闭（2026-09-09）
   tabHome() { wx.redirectTo({ url: '/pages/home/home' }); },
   tabMap() { wx.redirectTo({ url: '/pages/map/map' }); },
   tabWar() { wx.redirectTo({ url: '/pages/bossWar/bossWar' }); } // 老板四栏（2026-09-09 §7.13）

@@ -24,3 +24,10 @@
 .tabbar .tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: var(--sub); font-weight: 700; }
 .tabbar .tb .tic { font-size: 20px; line-height: 1; }
 .tabbar .tb.on { color: var(--primary-deep); }
+
+/* 关于聚火拜访弹层（2026-09-09 老板定：业务员/老板各自简介） */
+.about-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(17,22,31,.55); display: flex; align-items: center; justify-content: center; z-index: 99; }
+.about-card { width: 300px; background: #fff; border-radius: 18px; padding: 24px 22px; box-shadow: 0 16px 48px rgba(31,36,48,.3); }
+.ac-t { font-size: 17px; font-weight: 800; text-align: center; }
+.ac-d { margin-top: 14px; font-size: 14px; line-height: 1.7; color: #333A44; text-align: center; }
+.ac-btn { margin-top: 20px; height: 42px; line-height: 42px; border-radius: 12px; background: var(--primary); color: #fff; font-size: 14px; font-weight: 700; text-align: center; }

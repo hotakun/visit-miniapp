@@ -41,6 +41,15 @@
   <!-- 版本号（2026-09-08 老板定：内容界面左下角小灰字；双方统一口径改动才 bump） -->
   <view class="ver">v{{version}}</view>
 
+  <!-- 关于聚火拜访弹层（2026-09-09 老板定：业务员/老板各看各的简介，47 字 toast 放不下用页内弹层） -->
+  <view class="about-mask" wx:if="{{aboutShow}}" bindtap="closeAbout">
+    <view class="about-card" catchtap="noop">
+      <view class="ac-t">ℹ️ 关于聚火拜访</view>
+      <view class="ac-d">{{aboutText}}</view>
+      <view class="ac-btn" bindtap="closeAbout">知道了</view>
+    </view>
+  </view>
+
   <!-- 老板四栏导航 -->
   <view class="tabbar" wx:if="{{bossMode}}">
     <view class="tb" bindtap="tabHome"><view class="tic">🏠</view>首页</view>
