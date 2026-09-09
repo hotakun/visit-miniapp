@@ -189,6 +189,17 @@ input,textarea{-webkit-user-select:text;user-select:text}
 #newCustView{flex:1;min-height:0;overflow-y:auto}
 .batch-tools{display:flex;align-items:center;gap:8px;padding:12px 18px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 8px rgba(31,36,48,.05);margin-bottom:14px;flex-wrap:wrap}
 .batch-tools .btn{height:34px;font-size:13px}
+/* 导入新批次按钮：方案D 放大回弹+按压反馈（2026-09-09 老板定：hover 弹性放大 8%，按下缩回 96% 再回弹） */
+#impCustBtn{transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s}
+#impCustBtn:hover{transform:scale(1.08)}
+#impCustBtn:active{transform:scale(.96)}
+/* 任务管理页新建任务按钮：同方案D 放大回弹+按压反馈（2026-09-09 老板定） */
+#taskNewBtn{transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s}
+#taskNewBtn:hover{transform:scale(1.08)}
+#taskNewBtn:active{transform:scale(.96)}
+/* 批次卡新建任务按钮：方案B 辉光呼吸（2026-09-09 老板定：hover 边缘橙色柔光 0.6s 缓慢亮起，移开缓慢淡去） */
+#batchNewBtn{transition:box-shadow .6s ease}
+#batchNewBtn:hover{box-shadow:0 0 0 4px rgba(245,83,28,.14),0 0 20px 5px rgba(245,83,28,.3),0 8px 18px rgba(245,83,28,.3)}
 /* 工具卡左侧全部批次汇总（2026-09-09 老板定：客户级去重四数字，风格呼应批次卡） */
 .bs-stats{display:flex;align-items:center;gap:24px}
 .bs-num{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px}
@@ -369,7 +380,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .ts-tab.on{background:#fff;color:#1F2430;font-weight:700;border-color:var(--line);position:relative;z-index:2}
 /* 当前任务卡 + 历史任务卡内部行通用样式（2026-09-09 老板定：与客户管理批次卡同款白卡——白底细边框轻阴影、hover 轻上浮；行节奏=名称行→副信息→日期→进度条→实线分隔+操作按钮，参数对齐 .batch-card/.bc-*） */
 .tk-grid{display:flex;flex-direction:column;gap:12px;margin-top:14px}
-.tk-card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.tk-card{background:linear-gradient(62deg,#FFF6EE 0%,#FFF9F4 50%,#FFFFFF 100%);border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s} /* 2026-09-09 老板定：极淡冷蓝底 */
 .tk-card:hover{box-shadow:0 8px 20px rgba(31,36,48,.12);transform:translateY(-1px)}
 .tkc-top{display:flex;align-items:center;gap:10px}
 .tkc-name{font-size:16px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -377,7 +388,22 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .tkc-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--sub);font-weight:600;margin-top:4px}
 .tkc-date{font-size:11.5px;color:#9AA3AE;font-weight:600;margin-top:4px}
 .tkc-req{font-size:11px;color:#B97A0B;font-weight:700;margin-top:4px}
-.tkc-bars{margin-top:12px;display:flex;flex-direction:column;gap:6px;max-width:460px}
+.tkc-bars{margin-top:12px;display:flex;flex-direction:column;gap:6px;max-width:460px;margin-left:auto;margin-right:16%} /* 2026-09-09 老板定：拜访进度放卡片中间偏右 */
+/* 任务卡左右布局（2026-09-09 老板定方案A：左=名称/编号/截止；右=三数字+拜访进度；统计区向中间收，状态胶囊在整卡右上角） */
+.tk-main{display:flex;align-items:center;gap:24px}
+.tk-left{flex:1;min-width:0;padding-right:76px} /* 右端给右上角状态胶囊留位 */
+.tk-right{flex:0 0 460px;display:flex;flex-direction:column;align-items:center;gap:12px} /* 统计区固定宽，两侧对称留白 → 整卡居中 */
+.tk-space{flex:1}
+.tkc-stpill{position:absolute;top:14px;right:16px;z-index:2}
+.tkc-nums{display:flex;gap:22px;justify-content:center;width:100%;max-width:460px}
+.tkc-num{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:64px}
+.tkc-num b{font-size:24px;font-weight:800;line-height:1.1;color:#1F2430}
+.tkc-num b.g{color:var(--green)}
+.tkc-num b.b{color:var(--blue)}
+.tkc-num span{font-size:11.5px;color:var(--sub);font-weight:600}
+.tk-right .tkc-bars{margin:0;width:100%;max-width:460px}
+/* 历史小卡：进度条居中显示（2026-09-09 老板定） */
+.hist-card > .tkc-bars{margin:12px auto 0;max-width:100%}
 .tkc-bar{display:flex;align-items:center;gap:8px;font-size:11.5px}
 .tkc-bar .k{color:var(--sub);width:64px;flex-shrink:0;font-weight:600}
 .tkc-bar .tr{flex:1;height:6px;border-radius:99px;background:#EFF1F4;overflow:hidden}
@@ -404,6 +430,12 @@ input,textarea{-webkit-user-select:text;user-select:text}
 /* 地图内全览悬浮圆钮（2026-09-09 老板定：放在 3D 导航球下方；当前屏幕显示的客户点全部撑满一屏） */
 .map-fab{position:absolute;right:12px;top:104px;z-index:999;width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid var(--line);box-shadow:0 2px 10px rgba(31,36,48,.16);cursor:pointer;font-size:15px;color:#333A44;display:flex;align-items:center;justify-content:center;transition:color .12s,border-color .12s,transform .12s}
 .map-fab:hover{color:var(--primary-deep);border-color:var(--primary);transform:scale(1.08)}
+/* 战况监控准备期加载动画（2026-09-09 老板定：旋转雷达，地图隐藏期间显示） */
+.track-loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:600;display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none}
+.tl-ring{width:96px;height:96px;border-radius:50%;border:2px solid rgba(245,83,28,.35);border-top-color:rgba(245,83,28,0);animation:tlSpin 1.2s linear infinite}
+.tl-scan{position:absolute;top:0;width:96px;height:96px;border-radius:50%;background:conic-gradient(rgba(245,83,28,.28), rgba(245,83,28,0) 28%);animation:tlSpin 2s linear infinite}
+.tl-text{font-size:12.5px;color:var(--sub);font-weight:700;letter-spacing:1px}
+@keyframes tlSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 .tm-legend{display:flex;gap:8px;align-items:center;margin-top:-16px;font-size:12px;color:var(--sub);font-weight:600;flex-wrap:wrap;justify-content:flex-end}
 .tm-lg{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;padding:3px 8px;border-radius:999px;transition:opacity .12s,background .12s}
 .tm-lg:hover{background:#F5F6F8}
@@ -417,7 +449,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
 /* 历史任务档案卡（2026-09-09：与批次卡同款白卡样式；顶部色条去掉——状态由 pill 表达） */
 .hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-bottom:14px}
-.hist-card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.hist-card{background:linear-gradient(62deg,#FFF6EE 0%,#FFF9F4 50%,#FFFFFF 100%);border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s} /* 2026-09-09 老板定：极淡冷蓝底 */
 .hist-card:hover{box-shadow:0 8px 20px rgba(31,36,48,.12);transform:translateY(-1px)}
 /* 流程日志时间线 */
 .arch-row{display:flex;gap:9px;padding:5px 0;font-size:12.5px;line-height:1.5}
@@ -496,11 +528,11 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="grp">工作台</div>
     <div class="ni dis" title="开发中">📊 仪表盘</div>
     <div class="ni on" data-p="tasks" onclick="nav('tasks')">🧭 任务管理</div>
-    <div class="ni" data-p="track" onclick="nav('track')">🌐 战况监控</div>
     <div class="ni dis" title="开发中">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
     <div class="ni" data-p="customers" onclick="nav('customers')">🏪 客户管理</div>
     <div class="ni dis" title="开发中">📥 销售导入</div>
+    <div class="ni" data-p="track" onclick="nav('track')">🌐 战况监控</div>
     <div class="grp">系统</div>
     <div class="ni" data-p="people" onclick="nav('people')">👥 人员管理<span class="nav-badge" id="peopleNavBadge" hidden>0</span></div>
     <div class="ni dis" title="开发中">💾 数据备份</div>
@@ -525,6 +557,12 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div id="page-track" style="display:none">
       <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;border:2px solid #FFFFFF;position:relative;flex:1;min-height:0;display:flex">
         <div id="trackMap" style="flex:1;min-height:300px;position:relative"></div>
+        <!-- 战况监控准备期加载动画（2026-09-09 老板定：地图隐藏期间显示旋转雷达；数据就绪后消失） -->
+        <div class="track-loading" id="trackLoading" style="display:none">
+          <div class="tl-ring"></div>
+          <div class="tl-scan"></div>
+          <span class="tl-text">战况加载中…</span>
+        </div>
         <div id="custSearchBox" style="position:absolute;left:12px;top:12px;z-index:99998;display:flex;flex-direction:column;width:260px">
           <div style="display:flex;gap:6px;align-items:center;background:#FFFFFF;border:1px solid var(--line);border-radius:999px;padding:5px 10px;box-shadow:0 1px 4px rgba(0,0,0,.12)">
             <span style="font-size:13px">🔍</span>
@@ -583,7 +621,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
             <span class="ts-tab" data-tab="history" onclick="switchTaskTab('history')">历史任务</span>
             <span class="ts-tab" data-tab="map" onclick="switchTaskTab('map')">🗺 任务地图</span>
           </div>
-          <button class="btn primary" style="height:34px;padding:0 16px;font-size:14px;flex-shrink:0;margin-bottom:11px" onclick="playTkClick();showNewTask()">＋ 新建任务</button>
+          <button class="btn primary" id="taskNewBtn" style="height:34px;padding:0 16px;font-size:14px;flex-shrink:0;margin-bottom:11px" onclick="playTkClick();showNewTask()">＋ 新建任务</button>
         </div>
         <div class="task-shell-body">
           <div id="taskStats" style="padding:14px 18px 0;font-size:12.5px;font-weight:700"></div>
@@ -1069,16 +1107,15 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
     <!-- 人员管理 -->
     <div id="page-people" style="display:none">
-      <div class="title-bar">
-        <span class="t">人员管理</span>
-        <span class="r"><button class="btn primary" style="height:38px;padding:0 18px" onclick="openUserModal()">＋ 新增</button></span>
-      </div>
-      <div class="card">
-        <div style="display:flex;gap:8px;padding:12px 14px 0">
-          <div class="ctab on" id="ptab0" onclick="peopleTab(0)">🏃 业务员</div>
-          <div class="ctab" id="ptab1" onclick="peopleTab(1)">👤 管理员</div>
-          <div class="ctab" id="ptab2" onclick="peopleTab(2)">⏳ 待审核<span class="reg-badge" id="regPendPill" hidden>0</span></div>
+      <div class="task-shell" style="min-height:0">
+        <div class="task-shell-head">
+          <div class="ts-tabs">
+            <span class="ts-tab on" id="ptab0" onclick="peopleTab(0)">🏃 业务员</span>
+            <span class="ts-tab" id="ptab1" onclick="peopleTab(1)">👤 管理员</span>
+            <span class="ts-tab" id="ptab2" onclick="peopleTab(2)">⏳ 待审核<span class="reg-badge" id="regPendPill" hidden>0</span></span>
+          </div>
         </div>
+        <div class="task-shell-body" style="overflow-y:auto">
         <table class="tbl" id="ptable0">
           <thead><tr><th>姓名</th><th>手机号</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
           <tbody id="smTbody"></tbody>
@@ -1101,6 +1138,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
           </table>
         </div>
         <div style="padding:12px 14px;font-size:12px;color:var(--sub);font-weight:600;border-top:1px solid var(--line)">💡 业务员在小程序自助注册（姓名+手机号）→ 此处审核通过后其微信自动绑定、免登录进入；管理员在浏览器登录后台。超级管理员「卿燕」唯一，不可停用/删除。</div>
+        </div>
       </div>
     </div>
 
@@ -1875,16 +1913,29 @@ function taskCardHtml(t) {
   const expired = t.status === 'published' && t.deadline && String(t.deadline) <= todayStr();
   const barCls = t.status === 'done' ? 'g' : (expired ? 'exp' : (t.status === 'reviewing' ? 'rev' : ''));
   const per = Math.min(t.percent || 0, 100);
+  const leave = Math.max(0, t.total - t.visited);
   const ops = taskOpsHtml(t, expired);
   return `<div class="tk-card" data-id="${t._id}" onclick="showDetail('${t._id}')">
-    <div class="tkc-top">
-      <b class="tkc-name">${esc(t.name)}</b>
-      <span class="pill ${expired ? 'r-resist' : st[1]}">${expired ? '已过期' : st[0]}</span>
+    <span class="pill ${expired ? 'r-resist' : st[1]} tkc-stpill">${expired ? '已过期' : st[0]}</span>
+    <div class="tk-main">
+      <div class="tk-left">
+        <div class="tkc-top">
+          <b class="tkc-name">${esc(t.name)}</b>
+        </div>
+        <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')}</span></div>
+        <div class="tkc-date">截止 ${esc(t.deadline || '—')}</div>
+        ${t.status === 'reviewing' && t.finishReq ? `<div class="tkc-req">提前结束申请 · 剩 ${t.finishReq.left} 家</div>` : ''}
+      </div>
+      <div class="tk-right">
+        <div class="tkc-nums">
+          <div class="tkc-num"><b>${t.total}</b><span>客户总数</span></div>
+          <div class="tkc-num"><b class="g">${t.visited}</b><span>已拜访</span></div>
+          <div class="tkc-num"><b class="b">${leave}</b><span>剩余</span></div>
+        </div>
+        <div class="tkc-bars"><div class="tkc-bar"><span class="k">拜访进度</span><span class="tr"><i class="${barCls}"></i></span><span class="p">${t.visited}/${t.total} 家 · ${per}%</span></div></div>
+      </div>
+      <div class="tk-space"></div>
     </div>
-    <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')}</span></div>
-    <div class="tkc-date">截止 ${esc(t.deadline || '—')}</div>
-    ${t.status === 'reviewing' && t.finishReq ? `<div class="tkc-req">提前结束申请 · 剩 ${t.finishReq.left} 家</div>` : ''}
-    <div class="tkc-bars"><div class="tkc-bar"><span class="k">拜访进度</span><span class="tr"><i class="${barCls}"></i></span><span class="p">${t.visited}/${t.total} 家 · ${per}%</span></div></div>
     <div class="tkc-ops" onclick="event.stopPropagation()">${ops}</div>
   </div>`;
 }
@@ -2328,6 +2379,13 @@ function loadTrackMapLib() {
 
 function buildTrackMap(keep) {
   if (trackMap || !$('trackMap')) return;
+  // 2026-09-09 老板定：首次进入时地图先隐藏（数据准备+起始态就绪前不显示），入场动画开始时才亮相
+  if (!trackIntroPlayed) {
+    const el = $('trackMap');
+    if (el) el.style.opacity = '0';
+    const tl = $('trackLoading');
+    if (tl) tl.style.display = 'flex'; // 准备期显示旋转雷达加载动画
+  }
   const baseMap = [{ type: 'vector', features: ['base', 'building3d', 'label'] }];
   if (trafficOn) baseMap.push({ type: 'traffic', opacity: trafficOpacity }); // 实时路况（2026-09-08 老板定）
   trackMap = new TMap.Map($('trackMap'), {
@@ -2778,6 +2836,46 @@ async function refreshTrackPage() {
   else if (trackPolyline) { try { trackPolyline.setGeometries([]); } catch (e) { /* 静默 */ } } // 未选中：确保旧轨迹清除
   drawCustLayer().catch(() => {});
   try { positionTrackWhStar(); } catch (e) { /* 静默 */ } // 仓库星随刷新同步（2026-09-08 老板定）
+  // 战况监控入场动画：会话内首次数据渲染完成后播放一次（2026-09-09 老板定：仓库为中心 18 级 45° 斜视 → 平滑旋转回正北并缩小到全部客户点撑满）
+  if (!trackIntroPlayed) { trackIntroPlayed = true; playTrackIntro(); }
+}
+
+let trackIntroPlayed = false;
+async function playTrackIntro() {
+  try {
+    if (!trackMap) { trackIntroPlayed = false; return; } // 地图尚未初始化：重置标志，等首次渲染完成再播
+    const list = await loadCustData(false);
+    if (!list.length) {
+      trackIntroPlayed = false; // 暂无客户点：重置标志，有数据后再播
+      const el0 = $('trackMap');
+      if (el0) el0.style.opacity = '1'; // 无点不播动画，但地图必须可见
+      const tl0 = $('trackLoading');
+      if (tl0) tl0.style.display = 'none';
+      return;
+    }
+    // ① 先算最终视野：全部客户点撑满（与全览同口径 padding 40）——同一执行帧内立即被起始态覆盖，用户看不到跳变
+    const b = new TMap.LatLngBounds();
+    list.forEach(c => b.extend(new TMap.LatLng(c.lat, c.lng)));
+    trackMap.fitBounds(b, { padding: 40 });
+    const finZ = trackMap.getZoom();
+    const finC = trackMap.getCenter();
+    // ② 起始态：仓库中心 + 20 级最大贴地 + 270° 大斜角（此时地图仍隐藏，亮相即起始态）
+    trackMap.setZoom(20);
+    trackMap.setRotation(270);
+    trackMap.setCenter(new TMap.LatLng(28.970802, 120.154526));
+    const el = $('trackMap');
+    if (el) el.style.opacity = '1'; // 亮相：显示最大贴地起始态
+    const tl = $('trackLoading');
+    if (tl) tl.style.display = 'none'; // 加载动画退场
+    // ③ 单段平滑过渡：旋转回正北 + 缩小到全部客户点撑满（2026-09-09 老板定：一段即可）
+    trackMap.easeTo({ zoom: finZ, center: finC, rotation: 0, pitch: 0 }, { duration: 2000 });
+  } catch (e) {
+    console.error('playTrackIntro error:', e);
+    const el = $('trackMap');
+    if (el) el.style.opacity = '1'; // 异常兜底：确保地图最终可见
+    const tl = $('trackLoading');
+    if (tl) tl.style.display = 'none';
+  }
 }
 
 function drawTrackMarkers() {
@@ -3751,7 +3849,6 @@ function renderBatchCards(batches, unbatched) {
           <div class="bc-name"><span class="bc-name-t">📁 ${esc(b.name)}</span><span class="bc-ren" title="改批次名称/副标题" onclick="playTkClick();event.stopPropagation();openBatchRename('${b._id}')">✏️</span></div>
           ${b.subtitle ? `<div class="bc-sub">${esc(b.subtitle)}</div>` : ''}
           <div class="bc-date">${fmtBatchDate(b.createdAt)}${b.createdBy ? ' · ' + esc(b.createdBy) : ''}</div>
-          <button class="btn primary bc-newbtn" style="height:32px;font-size:12.5px;padding:0 14px" onclick="playTkClick();event.stopPropagation();openNewTaskForBatch('${b._id}', '${esc(b.name)}')">＋ 新建任务</button>
         </div>
         <div class="bc-vline"></div>
         <div class="bc-right">
@@ -3768,6 +3865,7 @@ function renderBatchCards(batches, unbatched) {
         </div>
       </div>
       <div class="bc-ops" onclick="event.stopPropagation()">
+        <button class="btn primary" id="batchNewBtn" style="height:32px;font-size:12.5px;padding:0 14px;margin-left:12px;margin-right:auto" onclick="playTkClick();event.stopPropagation();openNewTaskForBatch('${b._id}', '${esc(b.name)}')">＋ 新建任务</button>
         <button class="btn-clear" onclick="openMallMatchFor('${b._id}', '${esc(b.name)}')">🔎 比对认领</button>
         <button class="btn-clear" onclick="openClaimsFor('${b._id}', '${esc(b.name)}')">📋 待确认认领</button>
         <button class="btn-clear" onclick="openImport(true, '${b._id}')">📥 追加导入</button>
