@@ -3825,7 +3825,7 @@ function renderRegs(res) {
   $('regTbody').innerHTML = res.pending.length
     ? res.pending.map(r => `<tr>
         <td><b>${esc(r.name)}</b></td>
-        <td>${esc(r.phone)}</td>
+        <td>${esc(r.phone)}${r.phoneVerified ? '<span class="pill green" style="margin-left:4px">✓ 已验证</span>' : ''}</td>
         <td style="color:var(--sub)">${esc(r.openidMask)}</td>
         <td>${fmtT(r.createdAt)}</td>
         <td>

@@ -6,6 +6,7 @@ Page({
     // 注册状态机（2026-09-09 老板拍板：注册→审核→免登；拒绝可重提）
     registerMode: false, pendingMode: false, rejectedMode: false,
     name: '', phone: '', regBusy: false, trialId: '',
+    phoneVerified: false, // 2026-09-09 老板定：微信一键验证标记（getPhoneNumber 快速验证组件）
     pendingAt: '', rejectReason: ''
   },
   onShow() {
@@ -59,7 +60,27 @@ Page({
   },
   // 注册表单（2026-09-09 老板拍板）
   onName(e) { this.setData({ name: e.detail.value }); },
-  onPhone(e) { this.setData({ phone: e.detail.value }); },
+  onPhone(e) {
+    // 手输手机号覆盖验证结果 → 清除已验证标记（2026-09-09 老板定）
+    this.setData({ phone: e.detail.value, phoneVerified: false });
+  },
+  // 微信一键验证手机号（2026-09-09 老板定：getPhoneNumber 快速验证组件，微信代发验证码短信）
+  async onGetPhone(e) {
+    const code = e.detail && e.detail.code;
+    if (!code) { api.toast('未授权验证，可手动输入手机号'); return; }
+    api.toast('正在验证…');
+    try {
+      const res = await api.call('login', { action: 'verifyPhone', code });
+      if (res.ok && res.phone) {
+        this.setData({ phone: res.phone, phoneVerified: true });
+        api.toast('验证成功 ✓', 'success');
+      } else {
+        api.toast(res.msg || '验证失败，请手动输入手机号');
+      }
+    } catch (err) {
+      api.toast('验证失败，请手动输入手机号');
+    }
+  },
   async submitReg() {
     const name = (this.data.name || '').trim();
     const phone = (this.data.phone || '').trim();
@@ -67,7 +88,7 @@ Page({
     if (!/^1\d{10}$/.test(phone)) { api.toast('请填写正确的 11 位手机号'); return; }
     this.setData({ regBusy: true });
     try {
-      const res = await api.call('login', { action: 'register', name, phone });
+      const res = await api.call('login', { action: 'register', name, phone, phoneVerified: !!this.data.phoneVerified });
       if (res.ok && res.boss) {
         // 2026-09-09 老板定：老板手机号注册免审核直接通过 → 自动进老板模式
         getApp().setUser(res.user);
@@ -94,7 +115,7 @@ Page({
   },
   // 被拒绝 → 重新申请（2026-09-09 老板拍板：可重提，旧记录留痕）
   reapply() {
-    this.setData({ rejectedMode: false, registerMode: true, name: '', phone: '' });
+    this.setData({ rejectedMode: false, registerMode: true, name: '', phone: '', phoneVerified: false });
   },
   // 游客体验入口（2026-09-09 老板定保留：审核/演示用，直接绑实习账号）
   async enterTrial() {

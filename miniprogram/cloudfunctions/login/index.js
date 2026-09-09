@@ -56,6 +56,10 @@ exports.main = async (event) => {
   // 3. 注册申请（2026-09-09 老板拍板：姓名+手机号 → 后台审核）
   if (event.action === 'register') return await register(OPENID, event);
 
+  // 3.5 微信一键验证手机号（2026-09-09 老板定：getPhoneNumber 快速验证组件——
+  //     微信向用户发验证码短信，确认后返回该微信绑定的真实手机号；前端自动填入注册表单）
+  if (event.action === 'verifyPhone') return await verifyPhone(event);
+
   // 4. 未绑定：返回注册状态（审核中 / 被拒绝可重提 / 未注册）
   const reg = await db.collection('registrations').where({ openid: OPENID }).orderBy('createdAt', 'desc').limit(1).get();
   const r = reg.data[0];
@@ -114,9 +118,27 @@ async function register(OPENID, e) {
   const pend = await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).count();
   if (pend.total > 0) return { ok: false, code: 'PENDING', msg: '申请已提交，请等待管理员审核' };
   await db.collection('registrations').add({
-    data: { openid: OPENID, name, phone, status: 'pending', reason: '', createdAt: Date.now() }
+    data: {
+      openid: OPENID, name, phone, status: 'pending', reason: '', createdAt: Date.now(),
+      phoneVerified: !!e.phoneVerified // 2026-09-09 老板定：微信一键验证过的手机号打标，后台审核可见
+    }
   });
   return { ok: true, msg: '申请已提交，审核通过后重新打开小程序即可使用' };
+}
+
+// 微信一键验证手机号（2026-09-09 老板定：getPhoneNumber 快速验证组件，微信代发验证码短信）
+async function verifyPhone(e) {
+  const code = String((e && e.code) || '').trim();
+  if (!code) return { ok: false, code: 'BAD_ARG', msg: '缺少验证码凭证' };
+  try {
+    const res = await cloud.openapi.phonenumber.getPhoneNumber({ code });
+    const info = (res && res.phoneInfo) || {};
+    const phone = String(info.purePhoneNumber || info.phoneNumber || '').trim();
+    if (!phone) return { ok: false, code: 'NO_PHONE', msg: '未获取到手机号，请重试' };
+    return { ok: true, phone };
+  } catch (err) {
+    return { ok: false, code: 'VERIFY_FAIL', msg: '验证失败，请重试（或手动输入手机号）' };
+  }
 }
 
 function maskPhone(p) {

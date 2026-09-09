@@ -1663,6 +1663,7 @@ async function listRegistrations(event) {
   const fmt = r => ({
     _id: r._id, name: r.name || '', phone: r.phone || '', status: r.status,
     reason: r.reason || '', createdAt: r.createdAt || 0, reviewedAt: r.reviewedAt || 0,
+    phoneVerified: !!r.phoneVerified, // 2026-09-09 老板定：微信一键验证标记，后台审核可见
     openidMask: r.openid ? String(r.openid).slice(0, 8) + '…' + String(r.openid).slice(-4) : ''
   });
   return { ok: true, pending: pend.data.map(fmt), done: done.data.map(fmt) };

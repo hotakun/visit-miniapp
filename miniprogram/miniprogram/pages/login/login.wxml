@@ -21,6 +21,13 @@
     <view class="reg-card">
       <view class="frow"><label>姓名 *</label><input class="inp" value="{{name}}" bindinput="onName" placeholder="例：张三" /></view>
       <view class="frow"><label>手机号 *</label><input class="inp" type="number" maxlength="11" value="{{phone}}" bindinput="onPhone" placeholder="11 位手机号" /></view>
+      <view class="frow">
+        <label>验证</label>
+        <button class="btn-phone-v {{phoneVerified ? 'ok' : ''}}" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone" disabled="{{phoneVerified}}">
+          {{phoneVerified ? '✓ 已验证' : '📱 微信一键验证'}}
+        </button>
+        <text class="pv-hint">微信发送验证码短信到您的手机，确认后自动填入</text>
+      </view>
       <view class="btn-primary" style="margin-top:20px" bindtap="submitReg">{{regBusy ? '提交中…' : '提交申请'}}</view>
       <view class="reg-note">提交后由管理员审核，通过后重新打开小程序即可直接进入</view>
     </view>
