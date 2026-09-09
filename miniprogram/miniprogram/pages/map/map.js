@@ -11,9 +11,7 @@ Page({
     nextCust: null, nextDist: '',
     selCust: null, selDist: '',
     canReplan: false, replanBusy: false,
-    // 地图浮层控件（2026-09-09 老板定：三个小圆钮横排在横幅条下方靠右——🚦路况/📍我的位置/↻刷新）
-    trafficOn: false,
-    scale: 12, // 路况开启时联动放大到街道级（路况数据只在较大缩放级别渲染）
+    // 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新；路况已移除）
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
     bossMode: false, bossMen: [], curBossIdx: 0
   },
@@ -262,29 +260,19 @@ Page({
   },
   goHome() { wx.redirectTo({ url: '/pages/home/home' }); },
 
-  // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——🚦路况/📍我的位置/↻刷新）=====
-  // 路况开关：微信 map 组件原生 show-traffic；路况数据只在较大缩放级别（街道级）渲染，
-  // 老板真机反馈点了没变化 → 开启时联动放大到 16 级让路况立即可见
-  toggleTraffic() {
-    if (this.data.trafficOn) {
-      this.setData({ trafficOn: false });
-    } else {
-      this.setData({ trafficOn: true, scale: Math.max(Number(this.data.scale) || 12, 16) });
-    }
-  },
-  // 手动刷新：先用现有数据立即撑满（秒响应），再后台拉新数据更新（保持所选天，不跳回今天）
+  // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新）=====
+  // 手动刷新（老板定：静默刷新不弹窗）：先用现有数据立即撑满（秒响应），再后台拉新数据更新（保持所选天，不跳回今天）
   async refreshMap() {
     this.fitAllCustomers();
     const keepDay = this.data.curDay;
     if (this.data.bossMode) {
       const m = this.data.bossMen[this.data.curBossIdx];
-      if (!m) { api.toast('暂无任务可刷新'); return; }
+      if (!m) return; // 无任务时静默
       await this.loadTask(m.taskId, keepDay);
     } else {
       await this.loadTask(null, keepDay);
     }
-    if (this.data.empty) { api.toast(this.data.empty); return; }
-    api.toast('已刷新 ✓', 'success');
+    // 静默刷新：成功后不再弹「已刷新」提示（老板 2026-09-09 定）
   },
   // 满屏撑满：视野缩放到当天全部客户点，顶部留白避开横幅条与天页签（2026-09-09 老板定）
   fitAllCustomers() {
@@ -295,7 +283,7 @@ Page({
     const pts = ids.map(id => (this.customers || []).find(c => c._id === id))
       .filter(c => c && c.lat && c.lng)
       .map(c => ({ latitude: c.lat, longitude: c.lng }));
-    if (!pts.length) { api.toast('当天暂无客户点'); return; }
+    if (!pts.length) return; // 静默：当天无客户点不打扰（2026-09-09 老板定）
     wx.createMapContext('mp', this).includePoints({
       points: pts,
       padding: [110, 16, 24, 16] // 上留 110px 避开天页签+横幅条；右/下/左贴边
