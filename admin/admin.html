@@ -319,17 +319,18 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .ptab-i.on{background:#fff;color:var(--primary-deep);box-shadow:0 1px 4px rgba(31,36,48,.14)}
 
 /* ===== 任务管理大卡（2026-09-09 老板定：Edge 式标签页——页签相连，激活页签白底与内容区融合）===== */
-.task-shell{background:#F1F3F6;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden}
+.task-shell{background:#F1F3F6;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden;min-height:580px} /* 2026-09-09 老板定：最小高度按任务地图标签（地图56vh+标签条+图例）固定，切标签页面不跳动 */
 .task-shell-head{background:#F1F3F6;padding:14px 18px 0}
 .task-shell-body{background:#fff;border-radius:14px 14px 0 0;margin-top:-1px;border-top:1px solid var(--line)}
 .ts-tabs{display:flex;gap:4px;align-items:flex-end}
 .ts-tab{padding:9px 22px 10px;border-radius:10px 10px 0 0;background:#EDEFF3;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid transparent;border-bottom:0;transition:background .15s,color .15s}
 .ts-tab:hover{background:#E3E6EB;color:#333A44}
 .ts-tab.on{background:#fff;color:#1F2430;font-weight:700;border-color:var(--line);position:relative;z-index:2}
-/* 当前任务精致卡（2026-09-09） */
-.tk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:12px}
-.tk-card{background:#fff;border:1px solid var(--line);border-left:4px solid #2F80ED;border-radius:14px;padding:14px 16px;cursor:pointer;transition:transform .15s,box-shadow .15s}
-.tk-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(31,36,48,.10)}
+/* 当前任务精致卡（2026-09-09：整行大卡 + hover/点击动效 + 点击音效） */
+.tk-grid{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.tk-card{background:#fff;border:1px solid var(--line);border-left:4px solid #2F80ED;border-radius:14px;padding:14px 18px;cursor:pointer;transition:transform .18s,box-shadow .18s,border-left-width .18s}
+.tk-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(31,36,48,.12);border-left-width:7px}
+.tk-card:active{transform:translateY(0) scale(.992);box-shadow:0 3px 10px rgba(31,36,48,.10)}
 .tkc-top{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .tkc-name{font-size:14.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tkc-no{font-size:11px;color:var(--sub);font-weight:700;margin-top:4px}
@@ -342,7 +343,13 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .tkc-bar.exp i{background:linear-gradient(90deg,#E5484D,#F0A3A6)}
 .tkc-bar.rev i{background:linear-gradient(90deg,#F5A623,#F8C471)}
 .tkc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:10px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--sub);font-weight:600}
-.tk-empty{padding:40px 0;text-align:center;color:var(--sub);font-size:13.5px}
+.tk-empty{padding:48px 0;text-align:center;color:#A8B0BA;font-size:14px;font-weight:600}
+.tk-card .pill{transition:box-shadow .18s}
+.tk-card:hover .pill{box-shadow:0 2px 6px rgba(31,36,48,.10)}
+.ts-tab{position:relative}
+.ts-tab::after{content:'';position:absolute;left:50%;bottom:-1px;width:0;height:2px;background:var(--primary);transform:translateX(-50%);transition:width .18s;border-radius:99px}
+.ts-tab:hover::after{width:30%}
+.ts-tab.on::after{width:0}
 /* 任务地图标签（2026-09-09 手机老板任务地图移植） */
 .tm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .tm-days{display:flex;gap:6px;flex-wrap:wrap}
@@ -1527,9 +1534,21 @@ function statsHtml(list) {
   return { html, fp, cnt };
 }
 
+// 任务卡点击音效（2026-09-09 老板定：同复制经纬度的 DJ.mp3 音效；容器事件委托，卡片与操作按钮点击都响）
+let tkAudio = null;
+function playTkClick() {
+  try {
+    if (!tkAudio) tkAudio = new Audio('voice/DJ.mp3');
+    tkAudio.currentTime = 0;
+    tkAudio.play().catch(() => {});
+  } catch (e) { /* 静默 */ }
+}
+
 // 全量渲染任务卡（首次进入/手动操作后）；同时记录行指纹供轮询增量对比（2026-09-09 表格改卡片）
 function renderTaskRows(list) {
-  $('taskCards').innerHTML = list.map(taskCardHtml).join('') || '<div class="tk-empty">暂无任务，点右上角「＋ 新建任务」派发</div>';
+  const c = $('taskCards');
+  if (c && !c._tkBound) { c._tkBound = 1; c.addEventListener('click', playTkClick); } // 点击音效委托（同引用重复绑定不叠加）
+  c.innerHTML = list.map(taskCardHtml).join('') || '<div class="tk-empty">📋 暂无任务，点右上角「＋ 新建任务」派发</div>';
   rowsFp = {};
   list.forEach(t => { rowsFp[t._id] = taskRowFp(t); });
   rowsOrder = list.map(t => t._id).join(',');
