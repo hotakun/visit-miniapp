@@ -47,6 +47,10 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .toggle-mini.on{background:var(--green)}
 .toggle-mini.on::after{left:16px}
 .badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--primary);color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;margin-left:5px}
+/* 注册审核角标（2026-09-09 老板定：左侧栏菜单+待审核 Tab 右上角计数） */
+.nav-badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;margin-left:auto}
+.reg-badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(229,72,77,.4)}
+#ptab2{position:relative}
 .inp:focus{border-color:var(--primary)}
 .card{background:var(--card);border-radius:14px;box-shadow:0 2px 10px rgba(31,36,48,.06)}
 .loading{text-align:center;color:var(--sub);font-size:14px;padding:40px 0}
@@ -410,7 +414,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="ni" data-p="customers" onclick="nav('customers')">🏪 客户管理</div>
     <div class="ni dis" title="开发中">📥 销售导入</div>
     <div class="grp">系统</div>
-    <div class="ni" data-p="people" onclick="nav('people')">👥 人员管理</div>
+    <div class="ni" data-p="people" onclick="nav('people')">👥 人员管理<span class="nav-badge" id="peopleNavBadge" hidden>0</span></div>
     <div class="ni dis" title="开发中">💾 数据备份</div>
     <div class="ni" data-p="settings" onclick="nav('settings')">⚙️ 系统设置</div>
     <div class="foot"><span>👤</span><span id="sideName">—</span></div>
@@ -953,7 +957,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
         <div style="display:flex;gap:8px;padding:12px 14px 0">
           <div class="ctab on" id="ptab0" onclick="peopleTab(0)">🏃 业务员</div>
           <div class="ctab" id="ptab1" onclick="peopleTab(1)">👤 管理员</div>
-          <div class="ctab" id="ptab2" onclick="peopleTab(2)">⏳ 待审核<span class="pill" style="margin-left:6px;background:#E5484D;color:#fff" id="regPendPill" hidden>0</span></div>
+          <div class="ctab" id="ptab2" onclick="peopleTab(2)">⏳ 待审核<span class="reg-badge" id="regPendPill" hidden>0</span></div>
         </div>
         <table class="tbl" id="ptable0">
           <thead><tr><th>姓名</th><th>手机号</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
@@ -2081,6 +2085,7 @@ async function startAuto() {
     }
   } catch (e) { /* 拉取失败用默认 15 秒 */ }
   autoTimer = setInterval(autoTick, refreshIntervalSec * 1000);
+  checkRegAlerts(); // 2026-09-09 老板定：登录后立即同步一次待审核角标（不用等首轮 15 秒）
 }
 
 // 重启定时器（设置页保存新间隔后立即生效）
@@ -2605,8 +2610,10 @@ function playDing(file) {
 }
 
 // 微软云希男声播报：每人一份 mp3 缓存（后台 /tts 接口首次合成后直接播本地文件；type=coordfix 为坐标报错文案）
-async function playTts(name, type) {
+// 2026-09-09 老板定：times>1 连播（播完自动再播；人员注册提醒播两遍）
+async function playTts(name, type, times) {
   if (!name) return;
+  const n = Math.max(1, Number(times) || 1);
   try {
     const r = await fetch('/tts', {
       method: 'POST',
@@ -2615,8 +2622,14 @@ async function playTts(name, type) {
     });
     const j = await r.json();
     if (j.ok && j.url) {
+      let cnt = 0;
       const a = new Audio(j.url);
       a.volume = 0.9;
+      const again = () => {
+        cnt++;
+        if (cnt < n) { a.currentTime = 0; a.play().catch(() => {}); }
+      };
+      a.onended = again;
       a.play().catch(() => {});
     }
   } catch (e) { /* 铃声已提醒，语音失败静默 */ }
@@ -2644,10 +2657,10 @@ function pushNotify(item, important) {
   nfUnread++;
   renderNotifies();
   if (important) {
-    // 坐标报错：bengbao.wav（蹦蹦报错）响铃；任务审核：notify.wav
-    playDing(item.ttsType === 'coordfix' ? 'bengbao.wav' : 'notify.wav');
-    // 先响铃，1.6 秒后（铃声播完）云希男声播报
-    if (item.tts) setTimeout(() => playTts(item.tts, item.ttsType || 'review'), 1600);
+    // noDing（2026-09-09 老板定：人员注册提醒只播男声两遍，不响铃）
+    if (!item.noDing) playDing(item.ttsType === 'coordfix' ? 'bengbao.wav' : 'notify.wav');
+    // 先响铃，1.6 秒后（铃声播完）云希男声播报（ttsTimes：连播次数，2026-09-09 老板定）
+    if (item.tts) setTimeout(() => playTts(item.tts, item.ttsType || 'review', item.ttsTimes || 1), item.noDing ? 100 : 1600);
     // B：页面不可见时补一条 Windows 系统通知
     if (document.hidden) sysNotify(item.text.replace(/<[^>]+>/g, ''), item);
   }
@@ -2740,6 +2753,8 @@ async function autoTick() {
     } catch (e) { /* 归档失败，下一轮再试 */ }
     // A：全局事件检测（不挑页面）：15 秒一次拉数据做 diff，新审核/新过期 → 响铃/语音/浮窗
     const list = await pollEvents();
+    // A2：注册审核增量（2026-09-09 老板定：有新人员注册 → 两角标 + 男声「有新的人员需要您审核」两遍）
+    await checkRegAlerts();
     // 页面内容刷新（指纹对比，无变化不碰 DOM）
     if ($('page-taskDetail').style.display === 'block') {
       if (curDetailTaskId) await refreshDetail();
@@ -3787,14 +3802,22 @@ async function setUserBoss(userId, on) {
 }
 
 // ===== 注册审核（2026-09-09 老板拍板：注册→后台审核→通过后免登） =====
+// 两处计数角标（左侧栏菜单 + 待审核 Tab 右上角，2026-09-09 老板定）
+function updateRegBadges(n) {
+  const pill = $('regPendPill');
+  if (pill) { pill.textContent = n; pill.hidden = n === 0; }
+  const navB = $('peopleNavBadge');
+  if (navB) { navB.textContent = n; navB.hidden = n === 0; }
+}
+
 async function refreshRegs() {
   const res = await api('listRegistrations');
   if (!res.ok) return;
-  const pill = $('regPendPill');
-  if (pill) {
-    pill.textContent = res.pending.length;
-    pill.hidden = res.pending.length === 0;
-  }
+  renderRegs(res);
+}
+
+function renderRegs(res) {
+  updateRegBadges((res.pending || []).length);
   const fmtT = ts => ts ? (() => { const d = new Date(Number(ts)); const p = n => String(n).padStart(2, '0'); return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; })() : '—';
   $('regTbody').innerHTML = res.pending.length
     ? res.pending.map(r => `<tr>
@@ -3817,6 +3840,38 @@ async function refreshRegs() {
         <td style="color:var(--sub)">${esc(r.reason || '—')}</td>
       </tr>`).join('')
     : '<tr><td colspan="5" class="empty">暂无记录</td></tr>';
+}
+
+// 注册审核增量检测（2026-09-09 老板定：挂在全局 15 秒轮询；有新注册 → 两角标 + 男声「有新的人员需要您审核」两遍，不响铃）
+let regKnownIds = null;   // null=首次（只建立基线不播报）
+let regKnownCount = 0;
+
+async function checkRegAlerts() {
+  try {
+    const res = await api('listRegistrations');
+    if (!res.ok) return;
+    const pend = res.pending || [];
+    const ids = pend.map(r => r._id);
+    updateRegBadges(ids.length);
+    if (regKnownIds === null) {
+      regKnownIds = new Set(ids);
+      regKnownCount = ids.length;
+      return;
+    }
+    const fresh = pend.filter(r => !regKnownIds.has(r._id));
+    if (fresh.length > 0 && ids.length > regKnownCount) {
+      pushNotify({
+        text: `👥 新注册待审核：${fresh.map(r => r.name).join('、')}`,
+        act: "nav('people');peopleTab(2)", actLabel: '去审核', imp: true,
+        ttsType: 'regReview', tts: '系统', ttsTimes: 2, noDing: true // 老板定：只男声两遍，不响铃
+      }, true);
+    }
+    regKnownIds = new Set(ids);
+    regKnownCount = ids.length;
+    // 正开着「待审核」页：顺手把表格也刷出来（其它页面只动角标）
+    const t2 = $('ptable2');
+    if (t2 && t2.style.display !== 'none') renderRegs(res);
+  } catch (e) { /* 静默，下一轮再试 */ }
 }
 
 async function reviewReg(regId, act, name) {

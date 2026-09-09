@@ -208,7 +208,9 @@ const ttsPending = {};
 async function ttsGetOrSynth(name, type) {
   const text = type === 'coordfix'
     ? `${name}提交了坐标报错，请及时审核。`
-    : `${name}提交了任务审核，请及时处理。`;
+    : type === 'regReview'
+      ? '有新的人员需要您审核。' // 2026-09-09 老板定：人员注册待审核男声提醒
+      : `${name}提交了任务审核，请及时处理。`;
   const file = crypto.createHash('md5').update(name + '_' + type).digest('hex') + '.mp3';
   const full = path.join(VOICE_DIR, file);
   // 缓存有效判定：文件存在且非 0 字节（合成失败可能留下空文件，必须重试）
