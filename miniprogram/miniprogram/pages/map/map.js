@@ -344,12 +344,10 @@ Page({
   tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); },
 
   // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新）=====
-  // 仓库开关（2026-09-09 老板定：横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关）
+  // 仓库开关（2026-09-09 老板定：横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关；不要任何弹窗）
   toggleWhStar() {
     this.setData({ whStarOn: !this.data.whStarOn });
     this.renderDay();
-    if (this.data.whStarOn) api.toast('仓库星已开启：重排将从仓库出发');
-    else api.toast('仓库星已关闭');
   },
   // 手动刷新（老板定：静默刷新不弹窗）：先用现有数据立即撑满（秒响应），再后台拉新数据更新（保持所选天，不跳回今天）
   async refreshMap() {
