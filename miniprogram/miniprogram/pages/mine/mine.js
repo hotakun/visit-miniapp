@@ -2,7 +2,7 @@ const api = require('../../utils/api');
 const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
 
 Page({
-  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.07', bossMode: false, isDev: false, aboutShow: false, aboutText: '' },
+  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.08', bossMode: false, isDev: false, aboutShow: false, aboutText: '' },
   onShow() {
     const app = getApp();
     this.setData({ version: app.globalData.APP_VERSION || '0.9.00', isDev: !!app.globalData.isDev || (app.globalData.user && app.globalData.user.phone === '13067737286') }); // 版本号（2026-09-08 老板定）；isDev=开发者切换入口（2026-09-09 范宇琨，手机号兜底防冷启动未激活标志）
