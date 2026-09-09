@@ -105,13 +105,13 @@ Page({
     }
   },
 
-  // 自动检测仓库开关（2026-09-09 老板定）：进入地图/切换天数时执行——当天线路起点是仓库（300 米内）→ 自动开；其他起点 → 自动关；
+  // 自动检测仓库开关（2026-09-09 老板定）：进入地图/切换天数时执行——当天线路起点是仓库（50 米内，仓库周围有店不能用 300）→ 自动开；其他起点 → 自动关；
   // 手动点击开关后以手动为准，直到下次进入/切天再次自动检测
   autoWhStarFrom(map, day) {
     const plan = (map && map.task && map.task.dayPlan || []).find(p => p.day === day);
     const route = plan && plan.route;
     const on = !!(route && Array.isArray(route.pts) && route.pts.length >= 2
-      && haversine(Number(route.pts[0][0]), Number(route.pts[0][1]), WH.lat, WH.lng) < 300);
+      && haversine(Number(route.pts[0][0]), Number(route.pts[0][1]), WH.lat, WH.lng) < 50);
     this.setData({ whStarOn: on });
   },
 
@@ -192,14 +192,14 @@ Page({
         color: '#16A34A', width: 4
       }];
     }
-    // 2026-09-09 老板定：仓库星显示两条件——①仓库开关打开（星在仓库坐标）②线路起点是仓库（星在起点，距仓库 300 米内）；
+    // 2026-09-09 老板定：仓库星显示两条件——①仓库开关打开（星在仓库坐标）②线路起点是仓库（星在起点，距仓库 50 米内）；
     // z 序不变：已拜访（底）→ 仓库星 → 未拜访 → 拜访中（顶）
     let starPt = null;
     if (this.data.whStarOn) {
       starPt = { lat: WH.lat, lng: WH.lng };
     } else if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
       const sp = route.pts[0];
-      if (sp && sp.length >= 2 && haversine(Number(sp[0]), Number(sp[1]), WH.lat, WH.lng) < 300) {
+      if (sp && sp.length >= 2 && haversine(Number(sp[0]), Number(sp[1]), WH.lat, WH.lng) < 50) {
         starPt = { lat: Number(sp[0]), lng: Number(sp[1]) };
       }
     }
