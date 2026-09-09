@@ -96,15 +96,19 @@ Page({
     const plan = (task.dayPlan || []).find(p => p.day === curDay);
     const ids = plan ? (plan.customerIds || []) : [];
     const list = ids.map(id => customers.find(c => c._id === id)).filter(c => c && c.lat && c.lng);
+    // 先定下一家：当前天顺序中第一家未完成（未拜访且非拜访中）——它的圆标用黄描边高亮（2026-09-09 老板定）
+    const next = list.find(c => !c.visitedToday && !c.visitOngoing) || null;
     const markers = list.map((c, i) => {
       const visited = !!c.visitedToday;
       const n = Math.min(i + 1, 20); // 一天 ≤15 家；越界兜底 20 号
       // 2026-09-09 老板定：圆标全部重写——弃用微信 label（真机圆角不圆、锚点相对图标渲染框导致偏移，已两次退货）。
-      // 大师级方案：预生成 36×36 抗锯齿正圆 PNG（pins/ 目录，数字 5×7 点阵字体超采样绘制），
-      // marker 默认锚点=图标中心(0.5,0.5) → 圆标圆心天然精确落在客户经纬度，零运行时不确定。
+      // 大师级方案：预生成 24×24 抗锯齿正圆 PNG（pins/ 目录），marker 中心锚点 → 圆标圆心精确落在客户经纬度。
+      const isNext = next && c._id === next._id;
       const icon = visited
         ? '/pages/map/pins/pin_done.png' // 已拜访：灰底白勾
-        : `/pages/map/pins/pin_${n}_${c.visitOngoing ? 'blue' : 'red'}.png`; // 拜访中蓝/待拜访橙红
+        : isNext
+          ? `/pages/map/pins/pin_${n}_red_hl.png` // 下一家：红底白数字 + 黄色描边（比别家白描边粗 1px）
+          : `/pages/map/pins/pin_${n}_${c.visitOngoing ? 'blue' : 'red'}.png`; // 拜访中蓝/待拜访橙红
       return {
         id: i + 1, // 当天顺序序号即 id
         custId: c._id,
@@ -138,8 +142,6 @@ Page({
         color: '#16A34A', width: 4
       }];
     }
-    // 下一家：当前天顺序中第一家未完成
-    const next = list.find(c => !c.visitedToday && !c.visitOngoing) || null;
     // 重排按钮：当天未完成（非拜访中）客户 ≥2 家才显示（1 家无需排）；老板模式去重排（2026-09-09 §7.13）
     const todoCount = list.filter(c => !c.visitedToday && !c.visitOngoing).length;
     const canReplan = !this.data.bossMode && todoCount >= 2 && task.status === 'published';
@@ -206,10 +208,10 @@ Page({
     this.setData({ selCust: c, selDist: this.fmtDist(c) });
   },
   openNext() {
-    // 2026-09-09 老板定：点「下一家」→ 该店滑动到屏幕中心（map 经纬度属性变化自带平滑动画）
+    // 2026-09-09 老板定：点「下一家」→ 该店滑动到屏幕中心 + 弹出底部店家卡片
     const c = this.data.nextCust;
     if (!c) return;
-    this.setData({ centerLat: c.lat, centerLng: c.lng, selCust: null, selDist: '' });
+    this.setData({ centerLat: c.lat, centerLng: c.lng, selCust: c, selDist: this.fmtDist(c) });
   },
   closeCard() { this.setData({ selCust: null, selDist: '' }); },
   navSel() { this.nav(this.data.selCust); },
