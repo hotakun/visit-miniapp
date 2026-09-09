@@ -25,9 +25,9 @@
 .tabbar .tb .tic { font-size: 20px; line-height: 1; }
 .tabbar .tb.on { color: var(--primary-deep); }
 
-/* 关于聚火拜访弹层（2026-09-09 老板定：业务员/老板各自简介） */
+/* 关于聚火拜访弹层（2026-09-09 老板定：业务员/老板各自简介；右上角✕+点遮罩关闭） */
 .about-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(17,22,31,.55); display: flex; align-items: center; justify-content: center; z-index: 99; }
-.about-card { width: 300px; background: #fff; border-radius: 18px; padding: 24px 22px; box-shadow: 0 16px 48px rgba(31,36,48,.3); }
+.about-card { position: relative; width: 300px; background: #fff; border-radius: 18px; padding: 22px 24px 26px; box-shadow: 0 16px 48px rgba(31,36,48,.3); }
+.ac-x { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; line-height: 26px; text-align: center; color: #B6BEC7; font-size: 13px; border-radius: 50%; background: #F3F5F7; }
 .ac-t { font-size: 17px; font-weight: 800; text-align: center; }
-.ac-d { margin-top: 14px; font-size: 14px; line-height: 1.7; color: #333A44; text-align: center; }
-.ac-btn { margin-top: 20px; height: 42px; line-height: 42px; border-radius: 12px; background: var(--primary); color: #fff; font-size: 14px; font-weight: 700; text-align: center; }
+.ac-d { display: block; margin-top: 16px; font-size: 14px; line-height: 1.9; color: #333A44; text-align: center; }
