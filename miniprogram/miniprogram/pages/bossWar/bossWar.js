@@ -84,10 +84,11 @@ Page({
   // 三色点：蓝=拜访中 / 橙=在移动 / 灰=静止；静止>40 分钟=红圈预警（红底感叹号）
   renderMarkers() {
     const src = (this._points || []).filter(p => p && !p.noData);
-    const markers = src.map(p => {
+    this._markerList = src; // 与 markers 顺序一一对应，点按事件按数字 id 取回
+    const markers = src.map((p, idx) => {
       const warn = p.state === 'still' && p.ageMin > 40;
       return {
-        id: p.salesmanId,
+        id: idx + 1, // 微信要求 marker id 必须是数字（2026-09-09 报障修复）；salesmanId 是字符串不可用
         latitude: p.lat, longitude: p.lng,
         width: 1, height: 1,
         label: {
@@ -111,10 +112,11 @@ Page({
     return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
   },
 
-  // 点业务员点 → 底部抽屉卡（2026-09-09 老板定：状态+最后上报+今日提交数+只看他）
+  // 点业务员点 → 底部抽屉卡（2026-09-09 老板定：状态+最后上报+今日提交数+拨打电话/今日轨迹）
   onMarkerTap(e) {
     const id = e.detail && e.detail.markerId;
-    const p = (this._points || []).find(x => x.salesmanId === id);
+    // marker id 是数字序号（微信要求）；按顺序映射回业务员点（2026-09-09 报障修复）
+    const p = (this._markerList || [])[Number(id) - 1];
     if (!p) return;
     const evs = this.data.events || [];
     const todayN = evs.filter(v => v.type === 'submit').length; // 全团队今日提交数（抽屉全局口径）
