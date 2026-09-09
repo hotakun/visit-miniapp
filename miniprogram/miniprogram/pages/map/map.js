@@ -137,7 +137,9 @@ Page({
     if (next) { centerLat = next.lat; centerLng = next.lng; }
     else if (list.length) { centerLat = list[0].lat; centerLng = list[0].lng; }
     const nextDist = next ? this.fmtDist(next) : '';
-    this.setData({ markers, polyline, centerLat, centerLng, nextCust: next, nextDist, selCust: null, selDist: '', canReplan });
+    // 自绘"我的位置"点随 renderDay 重建保留（2026-09-09 老板定：弃用系统蓝点）
+    const allMarkers = this._meMarker ? markers.concat([this._meMarker]) : markers;
+    this.setData({ markers: allMarkers, polyline, centerLat, centerLng, nextCust: next, nextDist, selCust: null, selDist: '', canReplan });
   },
 
   switchDay(e) {
@@ -289,13 +291,22 @@ Page({
       padding: [110, 16, 24, 16] // 上留 110px 避开天页签+横幅条；右/下/左贴边
     });
   },
-  // 回到我的位置：取一次定位并把视野移过去（老板模式同样可用，本地定位不落库）
+  // 回到我的位置：取一次定位 → 视野移过去 + 显示自绘定位点（2026-09-09 老板定：
+  // 微信自带 show-location 蓝点在模拟器/部分真机上与实际差很远，弃用，改自绘 me.png 定位点，中心锚点精确压在定位坐标上）
   backToMe() {
     if (this._locBusy) return;
     this._locBusy = true;
     loc.getOne(8000).then(p => {
       if (p && p.lat) {
-        this.setData({ centerLat: p.lat, centerLng: p.lng });
+        const me = {
+          id: 9999, // 特殊 id：无 custId，点按不弹客户卡
+          latitude: p.lat, longitude: p.lng,
+          iconPath: '/pages/map/pins/me.png',
+          width: 36, height: 36
+        };
+        this._meMarker = me;
+        const others = (this.data.markers || []).filter(m => m.id !== 9999); // 防重复叠加
+        this.setData({ centerLat: p.lat, centerLng: p.lng, markers: others.concat([me]) });
         api.toast('已回到我的位置', 'success');
       } else {
         api.toast('定位失败，请到开阔处重试');
