@@ -12,6 +12,7 @@ Page({
     points: [], events: [], stats: null,
     markers: [], centerLat: 28.970802, centerLng: 120.154526,
     selMan: null, warnCount: 0, updateText: '',
+    refreshing: false, // ↻ 旋转动效（2026-09-09 修复：静默刷新也要视觉反馈）
     trackPolyline: [], trackOn: false, // 2026-09-09 老板定：今日轨迹（绿色折线，点地图空白清除）
     tabIdx: 2 // 战况 tab 高亮
   },
@@ -64,10 +65,18 @@ Page({
     if (!pts.length) return;
     wx.createMapContext('wmp', this).includePoints({ points: pts, padding: [16, 16, 16, 16] });
   },
-  // ↻ 刷新：静默重拉数据 + 撑满（2026-09-09 老板定）
+  // ↻ 刷新：静默重拉数据 + 撑满（2026-09-09 老板定；防连点+旋转动效 2026-09-09 修复）
   async refreshMap() {
-    await this.load(true);
-    this.fitAll();
+    if (this._refreshing) return;
+    this._refreshing = true;
+    this.setData({ refreshing: true });
+    setTimeout(() => this.setData({ refreshing: false }), 800);
+    try {
+      await this.load(true);
+      this.fitAll();
+    } finally {
+      this._refreshing = false;
+    }
   },
   // 📍 我的位置：定位并移动视野到老板自己位置（2026-09-09 老板定；本地定位不落库）
   backToMe() {

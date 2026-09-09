@@ -23,7 +23,7 @@
     <!-- 小圆钮（同任务地图）：📍我的位置 / ↻刷新 -->
     <view class="wctrl">
       <view class="wfab" bindtap="backToMe">📍</view>
-      <view class="wfab" bindtap="refreshMap">↻</view>
+      <view class="wfab {{refreshing ? 'spin' : ''}}" bindtap="refreshMap">↻</view>
     </view>
     <view class="wlegend">
       <view class="lg"><view class="dot" style="background:#2F80ED"></view>拜访中</view>
