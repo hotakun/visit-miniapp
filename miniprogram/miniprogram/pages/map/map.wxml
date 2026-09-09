@@ -5,14 +5,11 @@
          show-traffic="{{trafficOn}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
          bindmarkertap="onMarkerTap"></map>
-    <!-- 地图悬浮球（2026-09-09 老板定：方案 C——右下角主钮，点开向上弹出路况/刷新/我的位置） -->
-    <view class="m-fab-wrap">
-      <view class="m-fab-menu" wx:if="{{fabOpen}}">
-        <view class="mfab {{trafficOn ? 'on' : ''}}" bindtap="toggleTraffic">🚦</view>
-        <view class="mfab" bindtap="refreshMap">↻</view>
-        <view class="mfab" bindtap="backToMe">📍</view>
-      </view>
-      <view class="m-fab {{fabOpen ? 'on' : ''}}" bindtap="toggleFab">{{fabOpen ? '✕' : '🧭'}}</view>
+    <!-- 地图小圆钮（2026-09-09 老板定：横幅条下方靠右横排——路况/我的位置/刷新） -->
+    <view class="m-ctrl">
+      <view class="mfab {{trafficOn ? 'on' : ''}}" bindtap="toggleTraffic">🚦</view>
+      <view class="mfab" bindtap="backToMe">📍</view>
+      <view class="mfab" bindtap="refreshMap">↻</view>
     </view>
   </view>
 

@@ -11,9 +11,8 @@ Page({
     nextCust: null, nextDist: '',
     selCust: null, selDist: '',
     canReplan: false, replanBusy: false,
-    // 地图浮层控件（2026-09-09 老板定：方案 C 悬浮球——右下角主钮点开弹出三个小圆钮；去掉气泡针）
+    // 地图浮层控件（2026-09-09 老板定：三个小圆钮横排在横幅条下方靠右——🚦路况/📍我的位置/↻刷新）
     trafficOn: false,
-    fabOpen: false,
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
     bossMode: false, bossMen: [], curBossIdx: 0
   },
@@ -99,21 +98,23 @@ Page({
     const markers = list.map((c, i) => {
       const visited = !!c.visitedToday;
       const color = visited ? COLOR.visited : (c.visitOngoing ? COLOR.ongoing : COLOR.pending);
-      // 2026-09-09 老板定：取消默认红气球针——全部 marker 用 1×1 透明图标，地图上只显示数字圆标/灰勾
+      // 2026-09-09 老板定：取消默认红气球针——全部 marker 用透明图标，地图上只显示数字圆标/灰勾。
+      // 位置铁律（老板两次退货后核查定稿）：label 的 anchor 是相对 marker 图标渲染框的锚点，
+      // 图标必须与圆标同尺寸（数字圆标约 18~24×25），anchor(50,50) 圆标中心才正好压在客户经纬度上；
+      // 之前用 1×1 透明图导致 label 左上角贴坐标点、圆标整体向右下偏移半个圆标。
       const m = {
         id: i + 1, // 当天顺序序号即 id（一天 ≤15 家，唯一）
         custId: c._id,
         latitude: c.lat,
         longitude: c.lng,
-        iconPath: '/pages/map/transparent.png',
-        // 基础库 3.4.10 强制所有 marker 必须提供 width/height（2026-09-09 老板报障 15 个同类错误）
-        width: 1,
-        height: 1,
+        iconPath: '/pages/map/transparent21.png',
+        width: 21,
+        height: 25,
         label: {
           content: visited ? '✓' : String(i + 1),
           color: '#FFFFFF', bgColor: color, borderRadius: 20, padding: 6, fontSize: 11,
           textAlign: 'center',
-          anchorX: 50, anchorY: 50 // 2026-09-09 老板定：圆标数字点圆心对准客户经纬度（默认锚点会偏上）
+          anchorX: 50, anchorY: 50
         }
       };
       return m;
@@ -261,13 +262,11 @@ Page({
   },
   goHome() { wx.redirectTo({ url: '/pages/home/home' }); },
 
-  // ===== 地图悬浮球控件（2026-09-09 老板定：方案 C——右下角主钮点开弹出工具）=====
-  toggleFab() { this.setData({ fabOpen: !this.data.fabOpen }); },
-  // 路况开关：微信 map 组件原生 show-traffic（默认关省流量）；点完收起悬浮球
-  toggleTraffic() { this.setData({ trafficOn: !this.data.trafficOn, fabOpen: false }); },
-  // 手动刷新：按当前身份/选中的业务员重新拉数据（不打断天页签选中）
+  // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——🚦路况/📍我的位置/↻刷新）=====
+  // 路况开关：微信 map 组件原生 show-traffic（默认关省流量）
+  toggleTraffic() { this.setData({ trafficOn: !this.data.trafficOn }); },
+  // 手动刷新：重拉当前任务数据 + 所有客户点满屏撑满显示（不含我的位置；顶部避开横幅与天页签）
   async refreshMap() {
-    this.setData({ fabOpen: false });
     if (this.data.bossMode) {
       const m = this.data.bossMen[this.data.curBossIdx];
       if (!m) { api.toast('暂无任务可刷新'); return; }
@@ -277,11 +276,27 @@ Page({
       this._loaded = false;
       await this.loadTask();
     }
-    if (!this.data.empty) api.toast('已刷新 ✓', 'success');
+    if (this.data.empty) { api.toast(this.data.empty); return; }
+    this.fitAllCustomers();
+    api.toast('已刷新 ✓', 'success');
+  },
+  // 满屏撑满：视野缩放到当天全部客户点，顶部留白避开横幅条与天页签（2026-09-09 老板定）
+  fitAllCustomers() {
+    const task = this.task;
+    const curDay = this.data.curDay;
+    const plan = (task && task.dayPlan || []).find(p => p.day === curDay);
+    const ids = plan ? (plan.customerIds || []) : [];
+    const pts = ids.map(id => (this.customers || []).find(c => c._id === id))
+      .filter(c => c && c.lat && c.lng)
+      .map(c => ({ latitude: c.lat, longitude: c.lng }));
+    if (!pts.length) { api.toast('当天暂无客户点'); return; }
+    wx.createMapContext('mp', this).includePoints({
+      points: pts,
+      padding: [110, 16, 24, 16] // 上留 110px 避开天页签+横幅条；右/下/左贴边
+    });
   },
   // 回到我的位置：取一次定位并把视野移过去（老板模式同样可用，本地定位不落库）
   backToMe() {
-    this.setData({ fabOpen: false });
     if (this._locBusy) return;
     this._locBusy = true;
     loc.getOne(8000).then(p => {
