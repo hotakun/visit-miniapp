@@ -17,16 +17,16 @@
 
   <!-- 地图（约 55vh；include-points 自动缩放到全部业务员） -->
   <view class="wmap-wrap">
-    <map class="wmap" id="wmp" markers="{{markers}}" include-points="{{includePoints}}"
+    <map class="wmap" id="wmp" markers="{{markers}}" polyline="{{trackPolyline}}" include-points="{{includePoints}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
-         bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap"></map>
+         bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap" bindtap="clearTrack"></map>
     <view class="wlegend">
       <view class="lg"><view class="dot" style="background:#2F80ED"></view>拜访中</view>
       <view class="lg"><view class="dot" style="background:#F5531C"></view>在移动</view>
       <view class="lg"><view class="dot" style="background:#9CA3AF"></view>静止</view>
       <view class="lg"><view class="dot" style="background:#E5484D"></view>异常</view>
     </view>
-    <view class="wonly" wx:if="{{onlyId}}" bindtap="clearOnly">✕ 只看他</view>
+    <view class="wonly" wx:if="{{trackOn}}" bindtap="clearTrack">✕ 清除轨迹</view>
   </view>
 
   <!-- 加载/空态 -->
@@ -58,8 +58,8 @@
     <view class="dr-row">📍 {{selMan.lastText}}<text wx:if="{{selMan.visitOngoing}}"> · 拜访中</text></view>
     <view class="dr-row">📝 今日提交 {{selMan.mySubmit}} 次<text class="dr-sub">（全团队 {{selMan.allSubmit}} 次）</text></view>
     <view class="dr-btns">
-      <view class="drb" bindtap="toggleOnly">👁 只看他</view>
-      <view class="drb main" bindtap="tabMap">🗺 任务地图</view>
+      <view class="drb" bindtap="callMan">📞 拨打电话</view>
+      <view class="drb main" bindtap="showTrack">{{trackOn ? '✕ 清除轨迹' : '📜 今日轨迹'}}</view>
     </view>
   </view>
 

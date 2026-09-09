@@ -24,6 +24,7 @@ exports.main = async (event) => {
   if (action === 'replanDay') return await replanDay(salesmanId, event, isBoss);
   if (action === 'bossBoard') return await bossBoard(salesmanId, isBoss);
   if (action === 'bossWar') return await bossWar(isBoss);
+  if (action === 'bossTrack') return await bossTrack(isBoss, event); // 老板手机端：业务员今日轨迹
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
 
@@ -53,7 +54,7 @@ async function bossWar(isBoss) {
   if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
   const now = Date.now();
   const [uRes, lRes] = await Promise.all([
-    db.collection('users').where({ role: 'salesman', active: true }).field({ name: true }).get(),
+    db.collection('users').where({ role: 'salesman', active: true }).field({ name: true, phone: true }).get(),
     db.collection('salesman_locations').where({ type: 'latest' }).get()
   ]);
   const lMap = {};
@@ -61,10 +62,11 @@ async function bossWar(isBoss) {
   // 点状态口径（2026-09-09 老板定）：蓝=拜访中 / 橙=10 分钟内移动 / 灰=静止超 10 分钟；红圈预警前端算
   const points = uRes.data.map(u => {
     const l = lMap[u._id];
-    if (!l || !l.lat || !l.lng) return { salesmanId: u._id, name: u.name || '', noData: true };
+    const phone = u.phone || ''; // 老板手机端拨打电话用（注册时填的手机号，老板模式不打码）
+    if (!l || !l.lat || !l.lng) return { salesmanId: u._id, name: u.name || '', phone, noData: true };
     const ageMin = l.t ? Math.floor((now - Number(l.t)) / 60000) : 999;
     return {
-      salesmanId: u._id, name: u.name || '',
+      salesmanId: u._id, name: u.name || '', phone,
       lat: l.lat, lng: l.lng, t: l.t || 0, acc: l.accuracy || 0,
       visitOngoing: !!l.visitOngoing, ageMin,
       state: l.visitOngoing ? 'ongoing' : (ageMin <= 10 ? 'moving' : 'still')
@@ -92,6 +94,31 @@ async function bossWar(isBoss) {
   events.forEach(e => { e.customerName = cNameMap[e.customerId] || ''; delete e.customerId; });
   events.sort((a, b) => (b.t || 0) - (a.t || 0));
   return { ok: true, serverTime: now, points, events: events.slice(0, 100) };
+}
+
+// 老板手机端：业务员今日轨迹（2026-09-09 老板定：抽屉卡「📜 今日轨迹」——按天拉轨迹片段展平成点串）
+async function bossTrack(isBoss, e) {
+  if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
+  const { salesmanId, day } = e || {};
+  if (!salesmanId || !day) return { ok: false, code: 'BAD_ARG', msg: '参数不完整' };
+  // 轨迹片段文档分页拉全（一天约几百片段，单次上限 100 需循环）
+  const rows = [];
+  const PAGE = 100;
+  let skip = 0;
+  while (true) {
+    const r = await db.collection('salesman_locations')
+      .where({ type: 'track', salesmanId, day: String(day) })
+      .orderBy('createdAt', 'asc')
+      .skip(skip).limit(PAGE).get();
+    rows.push(...r.data);
+    if (r.data.length < PAGE) break;
+    skip += PAGE;
+  }
+  const pts = [];
+  rows.forEach(r => (r.pts || []).forEach(p => {
+    if (p && p.lat && p.lng) pts.push({ lat: p.lat, lng: p.lng });
+  }));
+  return { ok: true, pts };
 }
 
 // 审核观察员：返回该业务员所有审核中任务的精简信息（供手机端 15 秒轮询等待审批结果）

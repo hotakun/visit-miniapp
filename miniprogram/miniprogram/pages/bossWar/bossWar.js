@@ -10,7 +10,8 @@ Page({
     loading: true, empty: '',
     points: [], events: [], stats: null,
     markers: [], includePoints: [], centerLat: 28.970802, centerLng: 120.154526,
-    selMan: null, onlyId: '', warnCount: 0, updateText: '',
+    selMan: null, warnCount: 0, updateText: '',
+    trackPolyline: [], trackOn: false, // 2026-09-09 老板定：今日轨迹（绿色折线，点地图空白清除）
     tabIdx: 2 // 战况 tab 高亮
   },
 
@@ -55,8 +56,7 @@ Page({
 
   // 三色点：蓝=拜访中 / 橙=在移动 / 灰=静止；静止>40 分钟=红圈预警（红底感叹号）
   renderMarkers() {
-    const onlyId = this.data.onlyId;
-    const src = (this._points || []).filter(p => p && !p.noData && (!onlyId || p.salesmanId === onlyId));
+    const src = (this._points || []).filter(p => p && !p.noData);
     const markers = src.map(p => {
       const warn = p.state === 'still' && p.ageMin > 40;
       return {
@@ -104,14 +104,35 @@ Page({
   },
   closeDrawer() { this.setData({ selMan: null }); },
 
-  // 只看他：地图过滤为单个业务员（再点同一人取消）
-  toggleOnly() {
-    const id = this.data.selMan && this.data.selMan.salesmanId;
-    const onlyId = this.data.onlyId === id ? '' : id;
-    this.setData({ onlyId, selMan: null });
-    this.renderMarkers();
+  // ===== 抽屉卡两个选项（2026-09-09 老板定：拨打电话 / 今日轨迹）=====
+  // 📞 拨打业务员注册时填写的手机号（老板模式不打码）
+  callMan() {
+    const m = this.data.selMan;
+    if (!m) return;
+    const phone = String(m.phone || '').trim();
+    if (!phone) { api.toast('该业务员未登记手机号'); return; }
+    wx.makePhoneCall({ phoneNumber: phone, fail: () => api.toast('拨号未完成') });
   },
-  clearOnly() { this.setData({ onlyId: '' }); this.renderMarkers(); },
+  // 📜 今日轨迹：拉当天轨迹点串 → 绿色折线画在地图上；再点一次清除
+  async showTrack() {
+    const m = this.data.selMan;
+    if (!m) return;
+    if (this.data.trackOn) { this.clearTrack(); return; }
+    try {
+      const res = await api.call('tasks', { action: 'bossTrack', salesmanId: m.salesmanId, day: api.today() });
+      if (!res.ok) { api.toast(res.msg || '轨迹加载失败'); return; }
+      const pts = res.pts || [];
+      if (pts.length < 2) { api.toast('今天还没有轨迹数据'); return; }
+      this.setData({
+        trackOn: true,
+        trackPolyline: [{ points: pts, color: '#16A34A', width: 4 }]
+      });
+      api.toast(`已显示今日轨迹（${pts.length} 点）`);
+    } catch (e) {
+      api.toast('轨迹加载失败，请重试');
+    }
+  },
+  clearTrack() { this.setData({ trackOn: false, trackPolyline: [] }); },
 
   // 底部四栏导航（老板模式）
   tabHome() { wx.redirectTo({ url: '/pages/home/home' }); },
