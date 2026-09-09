@@ -11,8 +11,9 @@ Page({
     nextCust: null, nextDist: '',
     selCust: null, selDist: '',
     canReplan: false, replanBusy: false,
-    // 地图浮层控件（2026-09-09 老板定：第二梯队=路况开关/手动刷新/回到我的位置；去掉气泡针）
+    // 地图浮层控件（2026-09-09 老板定：方案 C 悬浮球——右下角主钮点开弹出三个小圆钮；去掉气泡针）
     trafficOn: false,
+    fabOpen: false,
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
     bossMode: false, bossMen: [], curBossIdx: 0
   },
@@ -260,11 +261,13 @@ Page({
   },
   goHome() { wx.redirectTo({ url: '/pages/home/home' }); },
 
-  // ===== 地图浮层控件（2026-09-09 老板定：第二梯队）=====
-  // 路况开关：微信 map 组件原生 show-traffic（默认关省流量）
-  toggleTraffic() { this.setData({ trafficOn: !this.data.trafficOn }); },
+  // ===== 地图悬浮球控件（2026-09-09 老板定：方案 C——右下角主钮点开弹出工具）=====
+  toggleFab() { this.setData({ fabOpen: !this.data.fabOpen }); },
+  // 路况开关：微信 map 组件原生 show-traffic（默认关省流量）；点完收起悬浮球
+  toggleTraffic() { this.setData({ trafficOn: !this.data.trafficOn, fabOpen: false }); },
   // 手动刷新：按当前身份/选中的业务员重新拉数据（不打断天页签选中）
   async refreshMap() {
+    this.setData({ fabOpen: false });
     if (this.data.bossMode) {
       const m = this.data.bossMen[this.data.curBossIdx];
       if (!m) { api.toast('暂无任务可刷新'); return; }
@@ -278,6 +281,7 @@ Page({
   },
   // 回到我的位置：取一次定位并把视野移过去（老板模式同样可用，本地定位不落库）
   backToMe() {
+    this.setData({ fabOpen: false });
     if (this._locBusy) return;
     this._locBusy = true;
     loc.getOne(8000).then(p => {

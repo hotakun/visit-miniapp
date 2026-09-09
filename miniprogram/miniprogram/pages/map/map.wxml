@@ -5,13 +5,14 @@
          show-traffic="{{trafficOn}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
          bindmarkertap="onMarkerTap"></map>
-    <!-- 地图浮层控件（2026-09-09 老板定：路况开关/手动刷新/回到我的位置） -->
-    <view class="m-ctrl">
-      <view class="mc {{trafficOn ? 'on' : ''}}" bindtap="toggleTraffic">
-        <view class="mc-ic">🚦</view><view class="mc-tx">{{trafficOn ? '路况开' : '路况'}}</view>
+    <!-- 地图悬浮球（2026-09-09 老板定：方案 C——右下角主钮，点开向上弹出路况/刷新/我的位置） -->
+    <view class="m-fab-wrap">
+      <view class="m-fab-menu" wx:if="{{fabOpen}}">
+        <view class="mfab {{trafficOn ? 'on' : ''}}" bindtap="toggleTraffic">🚦</view>
+        <view class="mfab" bindtap="refreshMap">↻</view>
+        <view class="mfab" bindtap="backToMe">📍</view>
       </view>
-      <view class="mc" bindtap="refreshMap"><view class="mc-ic">↻</view><view class="mc-tx">刷新</view></view>
-      <view class="mc" bindtap="backToMe"><view class="mc-ic">📍</view><view class="mc-tx">我的位置</view></view>
+      <view class="m-fab {{fabOpen ? 'on' : ''}}" bindtap="toggleFab">{{fabOpen ? '✕' : '🧭'}}</view>
     </view>
   </view>
 
