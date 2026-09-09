@@ -411,7 +411,8 @@ async function cleanExpiredTracks() {
 // ===================== 后台文件分发（2026-09-08 老板定：文员点刷新自动对齐版本号） =====================
 // 云端存 {version, adminHtml, ntMapJs}（settings 单文档）；云函数出入参 100KB 限制 → 90KB 分片。
 // 上传需鉴权（老板手动触发）；读取免鉴权（代码文件非敏感，文员 server 转发）。
-const DIST_CHUNK = 90000;
+// 2026-09-09 实测：微信 HTTP API 对较大请求体（约 2.5KB+）偶发 INVALID_ENV，分片降为 2000 字符（与 tools/upload_dist.py 一致）
+const DIST_CHUNK = 2000;
 const DIST_DOC = 'admin_dist';
 
 async function readDist() {

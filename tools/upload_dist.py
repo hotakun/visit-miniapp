@@ -11,7 +11,9 @@
 import json, re, sys, urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else 'http://localhost:8581'
-CHUNK = 90000  # 与云端 DIST_CHUNK 一致
+# 2026-09-09 实测：微信 HTTP API 对较大请求体（约 2.5KB+）偶发 INVALID_ENV，
+# 分片降为 2000 字符（实测 2574 bytes 安全）——片数变多但每片必过
+CHUNK = 2000  # 与云端 DIST_CHUNK 一致
 
 
 def api(body):
