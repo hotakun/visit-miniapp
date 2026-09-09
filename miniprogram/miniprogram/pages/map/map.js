@@ -207,8 +207,7 @@ Page({
       const star = {
         id: 999, // 特殊 id：无 custId，点按不弹客户卡
         latitude: starPt.lat, longitude: starPt.lng,
-        // 2026-09-09 老板定：开关开=亮金星星；开关关（仅路线起点本就是仓库的星）=淡色星星，一眼区分
-        iconPath: this.data.whStarOn ? '/pages/map/pins/star.png' : '/pages/map/pins/star_dim.png',
+        iconPath: '/pages/map/pins/star.png',
         width: 20, height: 20, // 比客户圆标（24）小一号
         anchor: { x: 0.5, y: 0.5 } // 中心锚点精确压仓库点
       };
