@@ -10,9 +10,9 @@
 .mfab.spin { animation: mspin 0.8s linear; } /* 刷新旋转动效（2026-09-09） */
 @keyframes mspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* 仓库小开关（2026-09-09 老板定：与右侧小圆钮同一行对齐；很小；开=金色高亮） */
-.wh-switch { position: absolute; left: 14px; top: 108px; height: 24px; line-height: 24px; background: rgba(255,255,255,.95); border-radius: 999px; padding: 0 10px; font-size: 11px; font-weight: 400; color: var(--sub); box-shadow: 0 2px 8px rgba(31,36,48,.12); z-index: 12; }
-.wh-switch.on { background: #FFF7E6; color: #B97A0B; font-weight: 700; }
+/* 仓库小开关（2026-09-09 老板定：与右侧小圆钮同一行对齐；很小；开=金色高亮，关=整体变淡更直观） */
+.wh-switch { position: absolute; left: 14px; top: 108px; height: 24px; line-height: 24px; background: rgba(255,255,255,.7); border-radius: 999px; padding: 0 10px; font-size: 11px; font-weight: 400; color: #A8B0BA; box-shadow: 0 2px 8px rgba(31,36,48,.10); z-index: 12; opacity: 0.55; }
+.wh-switch.on { background: #FFF7E6; color: #B97A0B; font-weight: 700; opacity: 1; }
 
 /* 天页签 */
 .daybar { position: absolute; top: 14px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; z-index: 10; }
