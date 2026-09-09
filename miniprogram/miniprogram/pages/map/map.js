@@ -98,22 +98,21 @@ Page({
     const markers = list.map((c, i) => {
       const visited = !!c.visitedToday;
       const color = visited ? COLOR.visited : (c.visitOngoing ? COLOR.ongoing : COLOR.pending);
-      // 2026-09-09 老板定：去掉 callout 气泡针（点按弹店名白气泡显乱）；点 marker 直接出底部客户卡
+      // 2026-09-09 老板定：取消默认红气球针——全部 marker 用 1×1 透明图标，地图上只显示数字圆标/灰勾
       const m = {
         id: i + 1, // 当天顺序序号即 id（一天 ≤15 家，唯一）
         custId: c._id,
         latitude: c.lat,
         longitude: c.lng,
+        iconPath: '/pages/map/transparent.png',
         // 基础库 3.4.10 强制所有 marker 必须提供 width/height（2026-09-09 老板报障 15 个同类错误）
-        width: visited ? 1 : 30,
-        height: visited ? 1 : 30,
+        width: 1,
+        height: 1,
         label: {
           content: visited ? '✓' : String(i + 1),
           color: '#FFFFFF', bgColor: color, borderRadius: 10, padding: 5, fontSize: 11
         }
       };
-      // 已拜访：灰勾圆标 + 隐藏默认定位针（2026-09-08 老板定：绿勾与路线绿混杂、定位针多余）
-      if (visited) { m.iconPath = '/pages/map/transparent.png'; }
       return m;
     });
     // 路线：真实道路轨迹（后台规划存任务）；无轨迹 → 按顺序直线兜底
