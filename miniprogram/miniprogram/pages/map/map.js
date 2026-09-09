@@ -83,6 +83,7 @@ Page({
       const cd = (keepDay && days.includes(keepDay)) ? keepDay : td;
       this.setData({ loading: false, task: this.task, days, todayDay: td, curDay: cd });
       this.renderDay();
+      this.fitAllCustomers(); // 数据就位后撑满当天客户点（刷新=满屏；首次进入=看到全部点；不把单店居中）
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
     }
@@ -142,12 +143,10 @@ Page({
     // 重排按钮：当天未完成（非拜访中）客户 ≥2 家才显示（1 家无需排）；老板模式去重排（2026-09-09 §7.13）
     const todoCount = list.filter(c => !c.visitedToday && !c.visitOngoing).length;
     const canReplan = !this.data.bossMode && todoCount >= 2 && task.status === 'published';
-    // 视野中心：下一家 → 当前天第一个点 → 我的位置（show-location 自带）→ 仓库
-    let centerLat = this.data.centerLat, centerLng = this.data.centerLng;
-    if (next) { centerLat = next.lat; centerLng = next.lng; }
-    else if (list.length) { centerLat = list[0].lat; centerLng = list[0].lng; }
     const nextDist = next ? this.fmtDist(next) : '';
-    this.setData({ markers, polyline, centerLat, centerLng, nextCust: next, nextDist, selCust: null, selDist: '', canReplan });
+    // 2026-09-09 老板定：renderDay 永不自动移动视野——刷新/切换天数不再把第一家拉到屏幕中心；
+    // 视野只由用户操作驱动（点↻=撑满 / 点「下一家」=该店居中 / 点📍=我的位置居中）
+    this.setData({ markers, polyline, nextCust: next, nextDist, selCust: null, selDist: '', canReplan });
   },
 
   switchDay(e) {
