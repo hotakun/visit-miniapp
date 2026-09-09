@@ -2614,8 +2614,9 @@ function playDing(file) {
 
 // 微软云希男声播报：每人一份 mp3 缓存（后台 /tts 接口首次合成后直接播本地文件；type=coordfix 为坐标报错文案）
 // 2026-09-09 老板定：times>1 连播（播完自动再播；人员注册提醒播两遍）
+// 2026-09-09 兜底：返回是否成功——文员机没装 edge-tts/server.js 旧版时男声失败，由调用方降级响铃
 async function playTts(name, type, times) {
-  if (!name) return;
+  if (!name) return false;
   const n = Math.max(1, Number(times) || 1);
   try {
     const r = await fetch('/tts', {
@@ -2633,9 +2634,11 @@ async function playTts(name, type, times) {
         if (cnt < n) { a.currentTime = 0; a.play().catch(() => {}); }
       };
       a.onended = again;
-      a.play().catch(() => {});
+      await a.play().catch(() => {});
+      return true;
     }
   } catch (e) { /* 铃声已提醒，语音失败静默 */ }
+  return false;
 }
 
 // 预热：登录后把全部业务员的语音悄悄合成缓存好（审核到达时零等待）
@@ -2663,7 +2666,14 @@ function pushNotify(item, important) {
     // noDing（2026-09-09 老板定：人员注册提醒只播男声两遍，不响铃）
     if (!item.noDing) playDing(item.ttsType === 'coordfix' ? 'bengbao.wav' : 'notify.wav');
     // 先响铃，1.6 秒后（铃声播完）云希男声播报（ttsTimes：连播次数，2026-09-09 老板定）
-    if (item.tts) setTimeout(() => playTts(item.tts, item.ttsType || 'review', item.ttsTimes || 1), item.noDing ? 100 : 1600);
+    // 2026-09-09 兜底：noDing 提醒（注册审核）男声失败时降级响铃——文员机 server.js 旧版/合成失败也有声音
+    if (item.tts) {
+      const delay = item.noDing ? 100 : 1600;
+      setTimeout(async () => {
+        const ok = await playTts(item.tts, item.ttsType || 'review', item.ttsTimes || 1);
+        if (!ok && item.noDing) playDing('notify.wav');
+      }, delay);
+    }
     // B：页面不可见时补一条 Windows 系统通知
     if (document.hidden) sysNotify(item.text.replace(/<[^>]+>/g, ''), item);
   }
