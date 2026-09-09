@@ -99,11 +99,15 @@ Page({
       return {
         id: idx + 1, // 微信要求 marker id 必须是数字（2026-09-09 报障修复）；salesmanId 是字符串不可用
         latitude: p.lat, longitude: p.lng,
-        width: 1, height: 1,
+        // 2026-09-09 报障修复：label 不可点击，点击热区=图标本体；之前 1×1 无图标导致点不中 →
+        // 用 26×26 透明图标撑热区；anchor(50,50) 相对图标渲染框=label 圆标中心精确压坐标
+        iconPath: '/pages/bossWar/transparent26.png',
+        width: 26, height: 26,
         label: {
           content: warn ? '⚠' : String(p.name || '员').slice(0, 1),
           color: '#FFFFFF', bgColor: warn ? '#E5484D' : P_COLOR[p.state],
-          borderRadius: 14, padding: 7, fontSize: 12
+          borderRadius: 14, padding: 7, fontSize: 12,
+          anchorX: 50, anchorY: 50
         },
         callout: {
           content: `${p.name} · ${warn ? '静止超40分钟' : P_LABEL[p.state]}`,
