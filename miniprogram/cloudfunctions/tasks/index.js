@@ -20,6 +20,7 @@ exports.main = async (event) => {
 
   if (action === 'list') return await list(salesmanId, isBoss);
   if (action === 'detail') return await detail(salesmanId, taskId, isBoss);
+  if (action === 'mapData') return await mapData(salesmanId, taskId, isBoss); // 2026-09-09 提速 B：地图轻量接口
   if (action === 'finish') return await finish(salesmanId, taskId, meDoc, isBoss);
   if (action === 'subStatus') return await subStatus(salesmanId, isBoss);
   if (action === 'reviewStatus') return await reviewStatus(salesmanId, isBoss);
@@ -323,6 +324,50 @@ async function countVisitedCustomers(taskId) {
   return set.size;
 }
 
+// 2026-09-09 提速（C 方案）：每客户最新一条已完成拜访记录（分页取全，先到先占）
+async function lastVisitMap(taskId, ids) {
+  const lastMap = {};
+  if (!ids || !ids.length) return lastMap;
+  let skip = 0;
+  const PAGE = 100;
+  while (true) {
+    const r = await db.collection('visits')
+      .where({ taskId, customerId: _.in(ids), status: _.in(['normal', 'pending_review']) })
+      .orderBy('createdAt', 'desc')
+      .skip(skip).limit(PAGE).get();
+    r.data.forEach(v => { if (!lastMap[v.customerId]) lastMap[v.customerId] = v; });
+    if (r.data.length < PAGE) break;
+    skip += PAGE;
+  }
+  return lastMap;
+}
+
+// 2026-09-09 提速（C 方案）：8 项系统配置一次并行取齐（原 detail 串行 8 次查询）
+async function loadSettings() {
+  const one = async key => {
+    const r = await db.collection('settings').where({ key }).limit(1).get();
+    return r.data[0] ? r.data[0].value : undefined;
+  };
+  const [lc, lr, lkr, rec, vd, ws, we, od] = await Promise.all([
+    one('locationCheck'), one('locRefreshInterval'), one('locKeyRefreshInterval'),
+    one('recordingDurationLimit'), one('visitDurationLimit'), one('workStartHour'),
+    one('workEndHour'), one('offDutyTier')
+  ]);
+  const locCfg = lc || { enabled: true, threshold: 100 };
+  const lrVal = Number(lr) || 30;
+  const locRefresh = [30, 45, 60].includes(lrVal) ? lrVal : 30;
+  const lkrVal = Number(lkr) || 15;
+  const locKeyRefresh = [8, 12, 15, 20].includes(lkrVal) ? lkrVal : 15;
+  const recVal = Number(rec) || 300;
+  const recordingDurationLimit = [180, 300, 600].includes(recVal) ? recVal : 300;
+  const vdVal = Number(vd) || 3600;
+  const visitDurationLimit = [1800, 3600, 7200].includes(vdVal) ? vdVal : 3600;
+  const workStartHour = Number.isInteger(Number(ws)) ? Number(ws) : 7;
+  const workEndHour = Number.isInteger(Number(we)) ? Number(we) : 20;
+  const offDutyTier = ['5_30', '10_60', '20_120', '30_180'].includes(String(od)) ? String(od) : '10_60';
+  return { locCfg, locRefresh, locKeyRefresh, recordingDurationLimit, visitDurationLimit, workStartHour, workEndHour, offDutyTier };
+}
+
 async function detail(salesmanId, taskId, isBoss) {
   const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const t = tRes && tRes.data;
@@ -330,74 +375,26 @@ async function detail(salesmanId, taskId, isBoss) {
 
   // 任务内客户（保持任务内排列顺序：有 dayPlan 按计划顺序，否则按 customerIds 原序）
   const ids = t.customerIds || [];
-  let customers = [];
-  if (ids.length) {
-    const cRes = await db.collection('customers').where({ _id: _.in(ids) }).get();
-    const map = {};
-    cRes.data.forEach(c => { map[c._id] = c; });
-    customers = ids.filter(id => map[id]).map(id => map[id]);
-  }
-
-  // 每个客户的拜访状态（该任务内最新一次已完成记录；有记录即"已拜访"，跨天保持不变；ongoing 拜访中不算）
-  // 分页取全：避免客户多时 limit 100 漏掉后段记录
-  const lastMap = {};
-  {
-    let skip = 0;
-    const PAGE = 100;
-    while (true) {
-      const r = await db.collection('visits')
-        .where({ taskId, customerId: _.in(ids), status: _.in(['normal', 'pending_review']) })
-        .orderBy('createdAt', 'desc')
-        .skip(skip).limit(PAGE).get();
-      r.data.forEach(v => { if (!lastMap[v.customerId]) lastMap[v.customerId] = v; });
-      if (r.data.length < PAGE) break;
-      skip += PAGE;
-    }
-  }
-  // 今日拜访中（ongoing）的客户：显示"拜访中"蓝状态（仅当天有效）
-  const ongSet = new Set();
-  {
-    const ongRes = await db.collection('visits')
+  // 2026-09-09 提速（C 方案）：客户/拜访状态/拜访中/坐标审核/系统配置 五路并行（原 10+ 次串行 await）
+  const [cRes, lastMap, ongP, fixP, cfgP] = await Promise.all([
+    ids.length ? db.collection('customers').where({ _id: _.in(ids) }).get() : Promise.resolve({ data: [] }),
+    lastVisitMap(taskId, ids),
+    ids.length ? db.collection('visits')
       .where({ taskId, customerId: _.in(ids), status: 'ongoing', visitedAt: todayStr() })
-      .field({ customerId: true })
-      .limit(100)
-      .get();
-    ongRes.data.forEach(v => ongSet.add(v.customerId));
-  }
-  // 坐标审核中标记（报错待审）
-  const fixSet = {};
-  if (ids.length) {
-    const fx = await db.collection('coord_fix_requests')
+      .field({ customerId: true }).limit(100).get() : Promise.resolve({ data: [] }),
+    ids.length ? db.collection('coord_fix_requests')
       .where({ customerId: _.in(ids), status: 'pending' })
-      .field({ customerId: true })
-      .get();
-    fx.data.forEach(f => { fixSet[f.customerId] = true; });
-  }
-  // 定位校验设置（阈值以后台设置页保存的为准，前端弹窗展示用；真实拦截在 visits submit）
-  const locRes = await db.collection('settings').where({ key: 'locationCheck' }).limit(1).get();
-  const locCfg = locRes.data[0] ? locRes.data[0].value : { enabled: true, threshold: 100 };
-  // 距离自动刷新双档位（2026-09-06 老板定）：正常页 30/45/60 默认 30；重要定位页 8/12/15/20 默认 15
-  const lrRes = await db.collection('settings').where({ key: 'locRefreshInterval' }).limit(1).get();
-  const lrVal = Number(lrRes.data[0] && lrRes.data[0].value) || 30;
-  const locRefresh = [30, 45, 60].includes(lrVal) ? lrVal : 30;
-  const lkrRes = await db.collection('settings').where({ key: 'locKeyRefreshInterval' }).limit(1).get();
-  const lkrVal = Number(lkrRes.data[0] && lkrRes.data[0].value) || 15;
-  const locKeyRefresh = [8, 12, 15, 20].includes(lkrVal) ? lkrVal : 15;
-  // 拜访录音时长上限（秒；2026-09-07 启用预留设置项 recordingDurationLimit：档位 3/5/10 分钟，默认 5 分钟=300 秒）
-  const recRes = await db.collection('settings').where({ key: 'recordingDurationLimit' }).limit(1).get();
-  const recVal = Number(recRes.data[0] && recRes.data[0].value) || 300;
-  const recordingDurationLimit = [180, 300, 600].includes(recVal) ? recVal : 300;
-  // 拜访时长上限（秒；2026-09-08 M1：档位 30 分钟/1 小时/2 小时，默认 1 小时=3600 秒）
-  const vdRes = await db.collection('settings').where({ key: 'visitDurationLimit' }).limit(1).get();
-  const vdVal = Number(vdRes.data[0] && vdRes.data[0].value) || 3600;
-  const visitDurationLimit = [1800, 3600, 7200].includes(vdVal) ? vdVal : 3600;
-  // 定位轨迹时间分层（2026-09-08 M2）：工作时段 + 非工作档位，供端上采集器使用
-  const wsRes = await db.collection('settings').where({ key: 'workStartHour' }).limit(1).get();
-  const workStartHour = Number.isInteger(Number(wsRes.data[0] && wsRes.data[0].value)) ? Number(wsRes.data[0].value) : 7;
-  const weRes = await db.collection('settings').where({ key: 'workEndHour' }).limit(1).get();
-  const workEndHour = Number.isInteger(Number(weRes.data[0] && weRes.data[0].value)) ? Number(weRes.data[0].value) : 20;
-  const odRes = await db.collection('settings').where({ key: 'offDutyTier' }).limit(1).get();
-  const offDutyTier = ['5_30', '10_60', '20_120', '30_180'].includes(String(odRes.data[0] && odRes.data[0].value)) ? String(odRes.data[0].value) : '10_60';
+      .field({ customerId: true }).get() : Promise.resolve({ data: [] }),
+    loadSettings()
+  ]);
+  const map = {};
+  cRes.data.forEach(c => { map[c._id] = c; });
+  const customers = ids.filter(id => map[id]).map(id => map[id]);
+  const ongSet = new Set();
+  ongP.data.forEach(v => ongSet.add(v.customerId));
+  const fixSet = {};
+  fixP.data.forEach(f => { fixSet[f.customerId] = true; });
+  const { locCfg, locRefresh, locKeyRefresh, recordingDurationLimit, visitDurationLimit, workStartHour, workEndHour, offDutyTier } = cfgP;
   const enriched = [];
   for (const c of customers) {
     const last = lastMap[c._id] || null;
@@ -459,6 +456,62 @@ async function detail(salesmanId, taskId, isBoss) {
 function todayStr() {
   const d = new Date(Date.now() + 8 * 3600 * 1000);
   return d.toISOString().slice(0, 10);
+}
+
+// 2026-09-09 提速（B 方案）：地图专用轻量接口——一次请求返回地图渲染所需全部精简数据
+// 业务员（无 taskId）=自己第一个进行中任务；老板（无 taskId）=全量任务摘要（下拉用）+第一个任务地图
+// 裁剪：只带地图/拜访跳转字段，砍掉 enriched 全字段/坐标审核/6 次串行 settings（改并行辅助）
+async function mapData(salesmanId, taskId, isBoss) {
+  const today = todayStr();
+  let tasksOut;
+  let t = null;
+  if (taskId) {
+    const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+    t = tRes && tRes.data;
+    if (!t || (t.salesmanId !== salesmanId && !isBoss)) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  } else if (isBoss) {
+    const lRes = await db.collection('tasks').where({ status: _.in(['published', 'reviewing']) }).orderBy('createdAt', 'desc').limit(50).get();
+    tasksOut = lRes.data.map(x => ({
+      _id: x._id, name: x.name, salesmanName: x.salesmanName || '', salesmanId: x.salesmanId || '', status: x.status
+    }));
+    t = lRes.data[0] || null;
+    if (!t) return { ok: true, tasks: tasksOut, map: null };
+  } else {
+    const lRes = await db.collection('tasks').where({ salesmanId, status: _.in(['published', 'reviewing']) }).orderBy('createdAt', 'desc').limit(10).get();
+    t = lRes.data[0] || null;
+    if (!t) return { ok: true, map: null };
+  }
+  const tid = t._id;
+  const ids = t.customerIds || [];
+  // 三路并行：客户 / 拜访状态 / 系统配置
+  const [cRes, lastMap, ongP, cfgP] = await Promise.all([
+    ids.length ? db.collection('customers').where({ _id: _.in(ids) }).get() : Promise.resolve({ data: [] }),
+    lastVisitMap(tid, ids),
+    ids.length ? db.collection('visits')
+      .where({ taskId: tid, customerId: _.in(ids), status: 'ongoing', visitedAt: today })
+      .field({ customerId: true }).limit(100).get() : Promise.resolve({ data: [] }),
+    loadSettings()
+  ]);
+  const cMap = {};
+  cRes.data.forEach(c => { cMap[c._id] = c; });
+  const ongSet = new Set();
+  ongP.data.forEach(v => ongSet.add(v.customerId));
+  const customers = ids.filter(id => cMap[id]).map(id => {
+    const c = cMap[id];
+    return {
+      _id: c._id, name: c.name, address: c.address, lat: c.lat, lng: c.lng, phone: c.phone,
+      visitedToday: !!lastMap[c._id], visitOngoing: ongSet.has(c._id)
+    };
+  });
+  const task = {
+    _id: t._id, name: t.name, status: t.status, todayDay: dayIndexOf(t.startDate, t.createdAt),
+    dayPlan: t.dayPlan || [],
+    locCheck: { enabled: !!(cfgP.locCfg && cfgP.locCfg.enabled), threshold: Number((cfgP.locCfg && cfgP.locCfg.threshold) || 0) },
+    locRefresh: cfgP.locRefresh, locKeyRefresh: cfgP.locKeyRefresh,
+    recordingDurationLimit: cfgP.recordingDurationLimit, visitDurationLimit: cfgP.visitDurationLimit,
+    workStartHour: cfgP.workStartHour, workEndHour: cfgP.workEndHour, offDutyTier: cfgP.offDutyTier
+  };
+  return { ok: true, tasks: tasksOut, map: { task, customers } };
 }
 
 // ================= 手机端：以我的位置重排当天未完成客户（2026-09-08 老板拍板） =================

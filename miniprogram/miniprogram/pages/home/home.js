@@ -176,6 +176,29 @@ function bossPhrase(uid) {
   return phraseOf(BOSS_PHRASES, uid);
 }
 
+// ===== 地图秒开预取（2026-09-09 提速 A 方案：首页停留时静默把地图摘要拉好存本地缓存）=====
+const MAP_CACHE_KEY = 'map_cache';
+const MAP_CACHE_TTL = 10 * 60 * 1000; // 缓存 10 分钟内有效（地图打开先渲染缓存，云端数据到达后静默更新）
+
+function getMapCache() {
+  try {
+    const c = wx.getStorageSync(MAP_CACHE_KEY);
+    if (c && c.at && Date.now() - Number(c.at) < MAP_CACHE_TTL && c.map) return c;
+  } catch (e) { /* 静默 */ }
+  return null;
+}
+
+function setMapCache(res) {
+  try {
+    wx.setStorageSync(MAP_CACHE_KEY, { at: Date.now(), map: res.map || null, tasks: res.tasks || null });
+  } catch (e) { /* 静默 */ }
+}
+
+// 首页后台预取地图摘要（静默，失败不影响首页）
+function prefetchMapData() {
+  api.call('tasks', { action: 'mapData' }).then(setMapCache).catch(() => {});
+}
+
 // 通用取句：uid + 日期做确定性种子
 function phraseOf(list, uid) {
   const d = new Date(Date.now() + 8 * 3600 * 1000);
@@ -279,6 +302,7 @@ Page({
           };
           const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
           this.setData({ tasks, showTasks: tasks, bossStats: res.stats || null });
+          prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）
         } else {
           api.toast(res.msg || '加载失败');
         }
@@ -312,6 +336,7 @@ Page({
         else if (tasks.length) cardMode = 'allDone';
         this.setData({ todayTotal: total, todayDone: done, todayLeft: left, todayPct: pct, cardMode });
         if (cardMode === 'today') this.drawRing();
+        prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）
       } else {
         api.toast(res.msg || '加载失败');
       }

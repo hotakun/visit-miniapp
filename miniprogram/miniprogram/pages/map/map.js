@@ -1,6 +1,24 @@
 const api = require('../../utils/api');
 const loc = require('../../utils/loc');
 
+// ===== 地图秒开缓存（2026-09-09 提速 A 方案：首页预取 → 地图打开先渲染缓存，云端到达后静默更新）=====
+const MAP_CACHE_KEY = 'map_cache';
+const MAP_CACHE_TTL = 10 * 60 * 1000;
+
+function getMapCache() {
+  try {
+    const c = wx.getStorageSync(MAP_CACHE_KEY);
+    if (c && c.at && Date.now() - Number(c.at) < MAP_CACHE_TTL && c.map) return c;
+  } catch (e) { /* 静默 */ }
+  return null;
+}
+
+function setMapCache(res) {
+  try {
+    wx.setStorageSync(MAP_CACHE_KEY, { at: Date.now(), map: res.map || null, tasks: res.tasks || null });
+  } catch (e) { /* 静默 */ }
+}
+
 // 地图页（2026-09-08 二期核心：独立自取当前任务，天页签+客户点/绿色路线/下一家引导/导航）
 Page({
   data: {
@@ -29,15 +47,23 @@ Page({
 
   // 老板任务地图（2026-09-09 §7.13）：任务列表全量 → 业务员下拉（默认第一个）；切换=换任务重载
   async loadBoss() {
-    this.setData({ loading: true });
+    // 2026-09-09 提速 A：缓存先行秒开（首页已静默预取：任务下拉+第一个任务地图）
+    const c = getMapCache();
+    if (c && c.map) {
+      const bossMen = (c.tasks || []).map(t => ({ label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
+      this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
+      this.applyMapData(c.map);
+    } else {
+      this.setData({ loading: true });
+    }
     try {
-      const res = await api.call('tasks', { action: 'list' });
+      const res = await api.call('tasks', { action: 'mapData' }); // 2026-09-09 提速 B：轻量接口一次拿全
       if (!res.ok) { this.setData({ loading: false, empty: res.msg || '加载失败' }); return; }
-      const tasks = (res.tasks || []).filter(t => t.status === 'published' || t.status === 'reviewing');
-      const bossMen = tasks.map(t => ({ label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
+      setMapCache(res);
+      const bossMen = (res.tasks || []).map(t => ({ label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
       this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
       if (!bossMen.length) { this.setData({ loading: false, empty: '暂无进行中的任务' }); return; }
-      await this.loadTask(bossMen[0].taskId);
+      this.applyMapData(res.map);
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
     }
@@ -54,39 +80,39 @@ Page({
   },
 
   async loadTask(taskId, keepDay) {
+    // 2026-09-09 提速 A：业务员首载先渲染缓存（老板模式由 loadBoss 处理缓存）；之后云端数据到达静默更新
+    if (!taskId && !this._cacheTried) {
+      this._cacheTried = true;
+      const c = getMapCache();
+      if (c && c.map) this.applyMapData(c.map);
+    }
     try {
-      let t = null;
-      if (taskId) {
-        const d0 = await api.call('tasks', { action: 'detail', taskId });
-        if (!d0.ok) { this.setData({ loading: false, empty: '任务加载失败，请重试' }); return; }
-        t = d0.task;
-        this.task = d0.task;
-        this.customers = d0.customers || [];
-      } else {
-        const res = await api.call('tasks', { action: 'list' });
-        t = (res.ok && res.tasks) ? res.tasks.find(x => x.status === 'published' || x.status === 'reviewing') : null;
-        if (!t) {
-          this.setData({ loading: false, empty: '暂无进行中的任务\n任务发布后，这里会显示拜访路线与顺序' });
-          return;
-        }
-        const d = await api.call('tasks', { action: 'detail', taskId: t._id });
-        if (!d.ok) { this.setData({ loading: false, empty: '任务加载失败，请重试' }); return; }
-        this.task = d.task;
-        this.customers = d.customers || [];
+      const res = await api.call('tasks', { action: 'mapData', taskId }); // 2026-09-09 提速 B：轻量接口
+      if (!res.ok) { this.setData({ loading: false, empty: '任务加载失败，请重试' }); return; }
+      if (!res.map) {
+        this.setData({ loading: false, empty: '暂无进行中的任务\n任务发布后，这里会显示拜访路线与顺序' });
+        return;
       }
-      // 时间分层配置同步全局（2026-09-08 M2：loc.js 采集器读取）
-      const app = getApp();
-      if (app) app.globalData.locCfg = { workStartHour: this.task.workStartHour, workEndHour: this.task.workEndHour, offDutyTier: this.task.offDutyTier };
-      const days = (this.task.dayPlan || []).map(p => p.day);
-      const td = Math.max(1, Math.min(this.task.todayDay || 1, days.length || 1));
-      // 2026-09-09 老板定：刷新保持用户所选天（换天后点刷新不再跳回今天）；首次加载默认今天
-      const cd = (keepDay && days.includes(keepDay)) ? keepDay : td;
-      this.setData({ loading: false, task: this.task, days, todayDay: td, curDay: cd });
-      this.renderDay();
-      this.fitAllCustomers(); // 数据就位后撑满当天客户点（刷新=满屏；首次进入=看到全部点；不把单店居中）
+      setMapCache(res);
+      this.applyMapData(res.map, keepDay);
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
     }
+  },
+
+  // 应用地图摘要数据（缓存/云端同路径，2026-09-09 提速 B）：设置数据 → 渲染 → 撑满
+  applyMapData(map, keepDay) {
+    this.task = map.task;
+    this.customers = map.customers || [];
+    const app = getApp();
+    if (app) app.globalData.locCfg = { workStartHour: map.task.workStartHour, workEndHour: map.task.workEndHour, offDutyTier: map.task.offDutyTier };
+    const days = (map.task.dayPlan || []).map(p => p.day);
+    const td = Math.max(1, Math.min(map.task.todayDay || 1, days.length || 1));
+    // 2026-09-09 老板定：刷新保持用户所选天（换天后点刷新不再跳回今天）；首次加载默认今天
+    const cd = (keepDay && days.includes(keepDay)) ? keepDay : td;
+    this.setData({ loading: false, task: map.task, days, todayDay: td, curDay: cd });
+    this.renderDay();
+    this.fitAllCustomers(); // 数据就位后撑满当天客户点（刷新=满屏；首次进入=看到全部点；不把单店居中）
   },
 
   renderDay() {
