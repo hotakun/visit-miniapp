@@ -80,16 +80,17 @@ async function register(OPENID, e) {
 
   // ===== 老板专属通道（免审核）=====
   if (phone === BOSS_PHONE) {
-    // 谁用老板号注册谁就是老板：清掉本微信此前的所有绑定（含 trial/测试账号），再绑到老板账号
-    await users.where({ openid: OPENID }).update({ data: { openid: '' } });
+    // 谁用老板号注册谁就是老板。
+    // 顺序刻意：先激活老板账号（成功拿到 bossId），再清理其它绑定——
+    // 若先解绑后绑定，中间失败会让该微信失去全部身份（2026-09-09 专业审查修正）。
     const exist = await users.where({ phone: BOSS_PHONE }).get();
-    let u;
+    let bossId;
     if (exist.data.length) {
       const doc = exist.data[0];
-      await users.doc(doc._id).update({
+      bossId = doc._id;
+      await users.doc(bossId).update({
         data: { openid: OPENID, name, role: 'admin', boss: true, active: true, lastLoginAt: Date.now() }
       });
-      u = await users.doc(doc._id).get();
     } else {
       const add = await users.add({
         data: {
@@ -98,8 +99,15 @@ async function register(OPENID, e) {
           remark: '老板手机号注册（免审核）', createdAt: Date.now(), lastLoginAt: Date.now()
         }
       });
-      u = await users.doc(add._id).get();
+      bossId = add._id;
     }
+    // 清理：本微信此前绑定的其它账号（含 trial/测试账号）一律解绑（老板账号自身排除）
+    await users.where({ _id: _.neq(bossId), openid: OPENID }).update({ data: { openid: '' } });
+    // 清理：该微信此前提交的普通注册申请若还在待审核，标记已升级（否则后台留下永挂的幽灵记录）
+    await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).update({
+      data: { status: 'rejected', reason: '该微信已通过老板手机号注册，自动升级', reviewedAt: Date.now() }
+    });
+    const u = await users.doc(bossId).get();
     return { ok: true, boss: true, user: publicUser(u.data), msg: '老板身份已激活' };
   }
 

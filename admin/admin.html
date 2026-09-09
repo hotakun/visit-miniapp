@@ -20,6 +20,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
 html,body{-webkit-user-select:none;user-select:none}
 body *{-webkit-user-drag:none;user-drag:none}
 input,textarea{-webkit-user-select:text;user-select:text}
+[hidden]{display:none!important} /* 全局兜底：任何 display 规则不得覆盖 hidden 属性（2026-09-09 角标踩坑修正） */
 .btn{height:42px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 20px;font-size:14px;font-weight:400;cursor:pointer;border:none;font-family:var(--font)}
 .btn.primary{background:linear-gradient(135deg,#FF7A3D,var(--primary));color:#fff;box-shadow:0 8px 18px rgba(245,83,28,.3)}
 .btn.ghost{background:#fff;border:1.5px solid var(--line);color:var(--sub)}
@@ -2086,6 +2087,8 @@ async function startAuto() {
   } catch (e) { /* 拉取失败用默认 15 秒 */ }
   autoTimer = setInterval(autoTick, refreshIntervalSec * 1000);
   checkRegAlerts(); // 2026-09-09 老板定：登录后立即同步一次待审核角标（不用等首轮 15 秒）
+  // 预热注册提醒语音：edge-tts 首次合成要 2~3 秒，先合好缓存，收到提醒时零等待
+  fetch('/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '系统', type: 'regReview' }) }).catch(() => {});
 }
 
 // 重启定时器（设置页保存新间隔后立即生效）
@@ -3845,8 +3848,11 @@ function renderRegs(res) {
 // 注册审核增量检测（2026-09-09 老板定：挂在全局 15 秒轮询；有新注册 → 两角标 + 男声「有新的人员需要您审核」两遍，不响铃）
 let regKnownIds = null;   // null=首次（只建立基线不播报）
 let regKnownCount = 0;
+let regBusy = false;      // 防并发：startAuto 立即调用与 5 秒轮询可能重叠，重叠时基线竞态会漏报
 
 async function checkRegAlerts() {
+  if (regBusy) return;
+  regBusy = true;
   try {
     const res = await api('listRegistrations');
     if (!res.ok) return;
@@ -3871,7 +3877,9 @@ async function checkRegAlerts() {
     // 正开着「待审核」页：顺手把表格也刷出来（其它页面只动角标）
     const t2 = $('ptable2');
     if (t2 && t2.style.display !== 'none') renderRegs(res);
-  } catch (e) { /* 静默，下一轮再试 */ }
+  } catch (e) { /* 静默，下一轮再试 */ } finally {
+    regBusy = false;
+  }
 }
 
 async function reviewReg(regId, act, name) {

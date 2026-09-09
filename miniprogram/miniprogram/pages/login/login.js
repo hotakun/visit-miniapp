@@ -20,7 +20,7 @@ Page({
   async check() {
     try {
       const res = await api.call('login');
-      if (res.ok && res.boss) {
+      if (res.ok && res.boss && res.user) {
         // 2026-09-09 老板定：老板账号（手机号白名单）直接进老板模式，跳过登录页
         getApp().setUser(res.user);
         getApp().setBossMode(true);
@@ -30,7 +30,7 @@ Page({
         wx.redirectTo({ url: '/pages/home/home' });
       } else if (res.ok) {
         // 管理员微信打开了业务员小程序：仅提示使用 Web 后台；boss 白名单账号才显示老板模式入口（2026-09-09 老板定）
-        this.setData({ adminMode: true, adminName: res.user.name || '管理员', canBoss: !!res.canBoss });
+        this.setData({ adminMode: true, adminName: (res.user || {}).name || '管理员', canBoss: !!res.canBoss });
       } else if (res.code === 'PENDING') {
         const d = new Date(Number(res.createdAt || Date.now()) + 8 * 3600 * 1000);
         const p = n => String(n).padStart(2, '0');
