@@ -1,5 +1,12 @@
 // 公共工具：云函数调用 / 提示 / 日期
 function call(name, data = {}) {
+  // 2026-09-09 开发者（范宇琨）双身份：本地老板演示态时所有请求自动附加 boss 标志，
+  // 云端对 dev 白名单（13067737286）凭此标志按老板处理（全量只读+虚拟写）；
+  // 业务员身份不带标志，云端按普通业务员处理。真实老板（15055492888）云端直接认号，不受此影响。
+  const app = getApp();
+  if (app && app.globalData.bossMode && !data.boss) {
+    data = Object.assign({}, data, { boss: true });
+  }
   return new Promise((resolve, reject) => {
     wx.cloud.callFunction({
       name,

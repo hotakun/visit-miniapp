@@ -28,6 +28,12 @@
 .btn-phone-v.ok { background: #E8F8EF; color: #16A34A; }
 .btn-phone-v[disabled] { opacity: 1; }
 .pv-hint { display: block; font-size: 11px; color: var(--sub); margin-top: 8px; line-height: 1.5; }
+
+/* 开发者双身份选择页（2026-09-09 开发者范宇琨定） */
+.dev-card { margin-top: 24px; background: #fff; border-radius: 16px; padding: 24px 20px; box-shadow: 0 2px 12px rgba(31,36,48,.06); }
+.dc-t { font-size: 18px; font-weight: 800; text-align: center; }
+.dc-d { margin-top: 8px; font-size: 12px; color: var(--sub); text-align: center; line-height: 1.6; }
+.btn-boss { margin-top: 12px; height: 46px; line-height: 46px; border-radius: 12px; font-size: 15px; font-weight: 700; color: #fff; background: #1F2430; text-align: center; }
 .reg-note { margin-top: 14px; font-size: 12px; color: var(--sub); text-align: center; line-height: 1.7; }
 .trial-link { margin-top: 22px; text-align: center; font-size: 12.5px; color: #1E5FA8; font-weight: 600; padding: 10px; }
 .state-card { margin-top: 40px; background: #fff; border-radius: 16px; padding: 34px 24px; text-align: center; box-shadow: 0 2px 12px rgba(31,36,48,.06); }

@@ -2,10 +2,10 @@ const api = require('../../utils/api');
 const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
 
 Page({
-  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.04', bossMode: false },
+  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.04', bossMode: false, isDev: false },
   onShow() {
     const app = getApp();
-    this.setData({ version: app.globalData.APP_VERSION || '0.9.00' }); // 版本号（2026-09-08 老板定）
+    this.setData({ version: app.globalData.APP_VERSION || '0.9.00', isDev: !!app.globalData.isDev }); // 版本号（2026-09-08 老板定）；isDev=开发者切换入口（2026-09-09 范宇琨）
     // 老板模式（2026-09-09 §7.13）：无业务员数据要求，显示老板卡+退出入口
     if (app.globalData.bossMode) {
       this.setData({ bossMode: true, user: { name: '老板' } });
@@ -22,6 +22,11 @@ Page({
   // 退出老板模式（2026-09-09 §7.13）：清 bossMode → 回管理员提示页
   exitBoss() {
     getApp().setBossMode(false);
+    getApp().clearUser();
+    wx.redirectTo({ url: '/pages/login/login' });
+  },
+  // 开发者切换身份（2026-09-09 开发者范宇琨定：业务员身份下回到两按钮选择页）
+  exitDev() {
     getApp().clearUser();
     wx.redirectTo({ url: '/pages/login/login' });
   },

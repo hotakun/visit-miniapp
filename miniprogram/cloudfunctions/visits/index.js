@@ -16,7 +16,9 @@ exports.main = async (event) => {
   const meUser = me.data[0];
   // 老板模式（2026-09-09 §7.13 修订：仅 boss===true 的指定管理员账号启用老板页面，其余管理员不启用）
   // 2026-09-09 老板定：手机号=15055492888 即老板本人（注册时已打 boss 标，phone 兜底防字段缺失）
-  const isBoss = ['super_admin', 'admin'].includes(meUser.role) && (meUser.boss === true || meUser.phone === '15055492888');
+  // 2026-09-09 开发者范宇琨双身份：dev 白名单（13067737286）且请求带 boss 标志 → 按老板处理（写操作全虚拟）
+  const isBoss = (['super_admin', 'admin'].includes(meUser.role) && (meUser.boss === true || meUser.phone === '15055492888'))
+    || (meUser.phone === '13067737286' && event && event.boss === true);
 
   if (action === 'submit') return await submit(meUser, event, isBoss);
   if (action === 'start') return await start(meUser, event, isBoss);

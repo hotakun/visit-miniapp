@@ -23,6 +23,8 @@ App({
     if (u) this.globalData.user = u;
     // 老板模式持久恢复（2026-09-09 §7.13：管理员微信点「进入老板模式」后保持）
     this.globalData.bossMode = !!wx.getStorageSync('boss_mode');
+    // 开发者双身份标记恢复（2026-09-09 开发者范宇琨：登录云函数确认后持久，登录页据此显示两按钮选择页）
+    this.globalData.isDev = !!wx.getStorageSync('is_dev');
   },
 
   setUser(u) {

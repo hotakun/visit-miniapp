@@ -28,6 +28,7 @@
       <view class="mi" bindtap="tapAbout"><view class="ic" style="background:#EFF1F4">ℹ️</view>关于聚火拜访<view class="arrow">›</view></view>
     </block>
     <block wx:else>
+      <view class="mi" wx:if="{{isDev}}" bindtap="exitDev"><view class="ic" style="background:#E8F1FD">🧪</view>开发者切换身份<view class="arrow">›</view></view>
       <view class="mi" bindtap="subscribe">
         <view class="ic" style="background:var(--primary-tint)">🔔</view>新任务提醒<text wx:if="{{mpBound}}" style="font-size:11px;color:#18A058;font-weight:700;margin-left:6px">服务号已开通</text>
         <view class="sw {{subOn ? 'on' : ''}}" id="subSwitch"></view>

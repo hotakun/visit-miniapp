@@ -6,7 +6,15 @@
     <view class="sub">客户回访 · 新客开发</view>
   </view>
 
-  <view class="adminTip" wx:if="{{adminMode}}">
+  <!-- 开发者双身份选择页（2026-09-09 开发者范宇琨定：只有他的微信可见） -->
+  <view class="dev-card" wx:if="{{devMode}}">
+    <view class="dc-t">🧪 开发者双身份</view>
+    <view class="dc-d"><text>范宇琨 · 测试专用入口\n真实用户不会看到此页</text></view>
+    <view class="btn-primary" style="margin-top:20px" bindtap="enterAsSalesman">🏃 以业务员身份进入</view>
+    <view class="btn-boss" bindtap="enterAsBoss">👑 以老板身份进入</view>
+  </view>
+
+  <view class="adminTip" wx:elif="{{adminMode}}">
     <view class="at">👑 管理员模式</view>
     <view class="atd">您已识别为超级管理员「{{adminName}}」</view>
     <view class="atd">管理功能请使用 Web 管理后台（浏览器登录 qingyan）</view>

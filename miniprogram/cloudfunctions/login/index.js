@@ -7,6 +7,8 @@ const db = cloud.database();
 
 // 老板手机号（2026-09-09 老板定：谁用这个号码注册，谁就是老板——免审核直接通过、自动进老板模式）
 const BOSS_PHONE = '15055492888';
+// 开发者手机号（2026-09-09 开发者范宇琨定：只给他自己双身份测试入口——业务员/老板两按钮选择页，其他人零感知）
+const DEV_PHONE = '13067737286';
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
@@ -35,7 +37,10 @@ exports.main = async (event) => {
     await users.doc(u._id).update({ data: { lastLoginAt: Date.now() } });
     // 老板手机号兜底（口径与 tasks/visits 云函数一致：仅管理员角色认 boss）
     const boss = ['super_admin', 'admin'].includes(u.role) && (u.boss === true || u.phone === BOSS_PHONE);
-    return { ok: true, boss, user: publicUser(u) };
+    // 2026-09-09 开发者范宇琨双身份：dev 白名单返回 dev 标志 → 前端显示「业务员/老板」两按钮选择页；
+    // 其他人（业务员/老板/管理员）完全不受影响
+    const dev = u.phone === DEV_PHONE;
+    return { ok: true, boss, dev, user: publicUser(u) };
   }
 
   // 2. 绑定指定人（2026-09-09 老板定：正式账号一律走注册审核，此入口仅保留给游客「实习」体验）

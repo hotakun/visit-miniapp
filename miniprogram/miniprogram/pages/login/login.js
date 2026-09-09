@@ -7,11 +7,15 @@ Page({
     registerMode: false, pendingMode: false, rejectedMode: false,
     name: '', phone: '', regBusy: false, trialId: '',
     phoneVerified: false, // 2026-09-09 老板定：微信一键验证标记（getPhoneNumber 快速验证组件）
-    pendingAt: '', rejectReason: ''
+    pendingAt: '', rejectReason: '',
+    // 开发者双身份选择页（2026-09-09 开发者范宇琨定：只他自己可见）
+    devMode: false, devUser: null
   },
   onShow() {
     const app = getApp();
     this.setData({ logoUrl: app.globalData.logoUrl });
+    // 2026-09-09 开发者范宇琨双身份：dev 永远走选择页（不自动进业务员首页）
+    if (app.globalData.isDev) { this.check(); return; }
     if (app.globalData.user && app.globalData.user.role === 'salesman') {
       wx.redirectTo({ url: '/pages/home/home' });
       return;
@@ -21,7 +25,12 @@ Page({
   async check() {
     try {
       const res = await api.call('login');
-      if (res.ok && res.boss && res.user) {
+      if (res.ok && res.dev) {
+        // 2026-09-09 开发者范宇琨双身份：显示「业务员/老板」两按钮选择页；持久化 dev 标记
+        try { wx.setStorageSync('is_dev', 1); } catch (e) { /* 静默 */ }
+        getApp().globalData.isDev = true;
+        this.setData({ devMode: true, devUser: res.user || null });
+      } else if (res.ok && res.boss && res.user) {
         // 2026-09-09 老板定：老板账号（手机号白名单）直接进老板模式，跳过登录页
         getApp().setUser(res.user);
         getApp().setBossMode(true);
@@ -136,6 +145,21 @@ Page({
   },
   // 老板模式（2026-09-09 §7.13）：boss 白名单管理员入口——全量只读+虚拟写，storage 持久
   enterBoss() {
+    getApp().setBossMode(true);
+    wx.redirectTo({ url: '/pages/home/home' });
+  },
+  // 开发者双身份入口（2026-09-09 开发者范宇琨定：只有他的微信可见此页）
+  enterAsSalesman() {
+    const u = this.data.devUser;
+    if (!u) { this.check(); return; }
+    getApp().setBossMode(false);
+    getApp().setUser(u);
+    wx.redirectTo({ url: '/pages/home/home' });
+  },
+  enterAsBoss() {
+    const u = this.data.devUser;
+    if (!u) { this.check(); return; }
+    getApp().setUser(u);
     getApp().setBossMode(true);
     wx.redirectTo({ url: '/pages/home/home' });
   },
