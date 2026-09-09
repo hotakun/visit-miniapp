@@ -332,8 +332,9 @@ Page({
       if (!res.ok) { wx.showToast({ title: res.msg || '重排失败', icon: 'none' }); return; }
       const km = (res.distanceMeters || 0) / 1000;
       wx.showToast({ title: (res.msg || '已重排') + (km ? ' · ' + km.toFixed(1) + ' 公里' : ''), icon: 'none', duration: 2200 });
-      this._loaded = false; // 重新拉任务（dayPlan/route/顺序刷新，页签自然切回今天）
-      this.loadTask();
+      this._loaded = false; // 重新拉任务（dayPlan/route/顺序刷新）
+      // 2026-09-09 老板定：重排后停留在所选天数，不切回当天（否则容易误判）
+      this.loadTask(null, this.data.curDay);
     } catch (e) {
       wx.showToast({ title: '网络异常，重排失败', icon: 'none' });
     } finally {
