@@ -110,7 +110,9 @@ Page({
         height: 1,
         label: {
           content: visited ? '✓' : String(i + 1),
-          color: '#FFFFFF', bgColor: color, borderRadius: 10, padding: 5, fontSize: 11
+          color: '#FFFFFF', bgColor: color, borderRadius: 20, padding: 6, fontSize: 11,
+          textAlign: 'center',
+          anchorX: 50, anchorY: 50 // 2026-09-09 老板定：圆标数字点圆心对准客户经纬度（默认锚点会偏上）
         }
       };
       return m;
