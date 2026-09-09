@@ -18,6 +18,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink)}
 /* 防 HTML5 拖拽光标（2026-09-08 老板报障）：拖动地图时鼠标变禁止⊘/加号＋并跟随移动
    = 拖拽进入 drag 模式。全局禁拖禁选；输入类控件保留文本选择 */
 html,body{-webkit-user-select:none;user-select:none}
+/* 2026-09-09 老板定（方案A）：全局隐藏滚动条——任何页面不出现滑块条，滚轮/触控滑动照常可用 */
+*::-webkit-scrollbar{width:0;height:0;background:transparent}
+*{scrollbar-width:none;scrollbar-color:transparent transparent}
 body *{-webkit-user-drag:none;user-drag:none}
 input,textarea{-webkit-user-select:text;user-select:text}
 [hidden]{display:none!important} /* 全局兜底：任何 display 规则不得覆盖 hidden 属性（2026-09-09 角标踩坑修正） */
@@ -92,7 +95,10 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .side .ni.on{background:linear-gradient(135deg,#F5531C,#E0440C);color:#fff}
 .side .foot{margin-top:20px;padding:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;color:#fff;font-size:13px;font-weight:700}
 .side .side-ver{padding:0 12px 12px;font-size:10.5px;color:#6B7280;font-weight:400}
-.main{flex:1;height:100vh;overflow-y:auto;padding:22px 28px 40px;max-width:1200px}
+.main{flex:1;height:100vh;overflow:hidden;padding:18px 28px 22px;max-width:1200px;display:flex;flex-direction:column;min-width:0}
+/* 2026-09-09 老板定：所有内容页面不出上下滚动条——页面高度跟随窗口自适应 */
+#page-tasks,#page-customers,#page-track{display:flex;flex-direction:column;flex:1;min-height:0}
+#page-taskDetail,#page-newTask,#page-people,#page-settings,#page-batchDetail{flex:1;min-height:0;overflow-y:auto}
 .topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;position:relative}
 .topbar .pt{font-size:20px;font-weight:800}
 .topbar .pt small{display:block;font-size:12px;color:var(--sub);font-weight:500;margin-top:3px}
@@ -178,23 +184,56 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .plan-ic.flip{display:inline-block;transform:scaleX(-1)}
 .btn-clear{height:26px;border-radius:8px;padding:0 12px;font-size:12.5px;font-weight:400;background:#F1F3F5;color:var(--sub);border:none;cursor:pointer;white-space:nowrap}
 .btn-clear:hover{background:#FCEBEC;color:var(--danger)}
-.batch-wrap{background:#F3F4F6;border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:inset 0 2px 10px rgba(31,36,48,.05);min-height:calc(100vh - 250px);display:flex;flex-direction:column}
+.batch-wrap{background:#F3F4F6;border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:inset 0 2px 10px rgba(31,36,48,.05);flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+#batchListView{flex:1;min-height:0;overflow-y:auto}
+#newCustView{flex:1;min-height:0;overflow-y:auto}
 .batch-tools{display:flex;align-items:center;gap:8px;padding:12px 18px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 8px rgba(31,36,48,.05);margin-bottom:14px;flex-wrap:wrap}
 .batch-tools .btn{height:34px;font-size:13px}
+/* 工具卡左侧全部批次汇总（2026-09-09 老板定：客户级去重四数字，风格呼应批次卡） */
+.bs-stats{display:flex;align-items:center;gap:24px}
+.bs-num{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px}
+.bs-num b{font-size:19px;font-weight:800;line-height:1.1;color:#1F2430}
+.bs-num b.blue{color:var(--blue)}
+.bs-num b.green{color:var(--green)}
+.bs-num span{font-size:11px;color:var(--sub);font-weight:600;white-space:nowrap}
 .batch-head{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 8px rgba(31,36,48,.05);padding:6px 18px}
+/* 批次详情标题栏中央搜索（2026-09-09 老板定） */
+.bc-search-box{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 12px;width:280px;max-width:38vw}
+.bc-search-ic{font-size:12px;color:var(--sub)}
+.bc-search-box input{border:0;outline:0;flex:1;font-size:12.5px;font-weight:400;color:#333A44;background:transparent;min-width:0}
+.bc-search-x{cursor:pointer;font-size:11px;color:#9AA3AE;padding:0 2px;border-radius:50%}
+.bc-search-x:hover{color:#333A44;background:#F0F2F5}
+/* 批次详情表格行收矮（2026-09-09 老板定：一屏固定 20 行）+ 底部翻页条 */
+#page-batchDetail .tbl th{padding:7px 14px}
+#page-batchDetail .tbl td{padding:6px 14px}
+.batch-pagebar{display:flex;align-items:center;justify-content:center;gap:14px;padding:8px 18px;border-top:1px solid var(--line);background:#fff;font-size:12.5px;color:var(--sub);font-weight:600}
+.batch-pagebar button{height:26px;font-size:12px;padding:0 14px}
+.batch-pagebar .pg-info{min-width:96px;text-align:center}
+.batch-pagebar .pg-num{color:#1F2430;font-weight:800}
 .batch-cards{display:flex;flex-direction:column;gap:12px}
 .batch-card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s}
 .batch-card:hover{box-shadow:0 8px 20px rgba(31,36,48,.12);transform:translateY(-1px)}
-.batch-card .bc-top{display:flex;align-items:center;gap:10px}
-.batch-card .bc-name{font-size:16px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 卡片 hover 底部中央内辉光（2026-09-09 老板定：光斑只在底部中间边缘浮现、向内晕开，不整行发光） */
+.batch-card,.tk-card,.hist-card{position:relative}
+.batch-card::after,.tk-card::after,.hist-card::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:62%;height:64px;background:radial-gradient(ellipse at 50% 100%,rgba(255,102,51,.09) 0%,rgba(255,102,51,.04) 45%,rgba(255,102,51,0) 78%);opacity:0;transition:opacity .6s ease;pointer-events:none;border-radius:0 0 14px 14px}
+.batch-card:hover::after,.tk-card:hover::after,.hist-card:hover::after{opacity:1}
+.batch-card .bc-main{display:flex;align-items:stretch}
+.batch-card .bc-left{display:flex;flex-direction:column;justify-content:center;min-width:0;max-width:36%;padding-right:20px}
+.batch-card .bc-name{display:flex;align-items:center;gap:4px;font-size:16px;font-weight:700;min-width:0}
+.batch-card .bc-name-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.batch-card .bc-ren{cursor:pointer;font-size:12px;color:#8A93A0;flex-shrink:0;padding:0 3px;border-radius:6px;transition:color .12s,background .12s}
+.batch-card .bc-ren:hover{color:#333A44;background:#F0F2F5}
 .batch-card .bc-sub{font-size:12px;color:var(--sub);margin-top:4px}
 .batch-card .bc-date{font-size:11.5px;color:#9AA3AE;margin-top:4px}
-.batch-card .bc-nums{display:flex;gap:26px;margin-top:14px;flex-wrap:wrap}
+.batch-card .bc-newbtn{align-self:flex-start;margin-top:12px;box-shadow:0 3px 8px rgba(245,83,28,.16)} /* 2026-09-09 老板定：新建任务卡辉光弱化（原全局 0 8px 18px .3） */
+.batch-card .bc-vline{width:1px;flex-shrink:0;background:#E8EBF0;margin:2px 0}
+.batch-card .bc-right{flex:1;min-width:0;padding-left:24px;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.batch-card .bc-nums{display:flex;gap:26px;flex-wrap:wrap;justify-content:center}
 .batch-card .bc-num .v{font-size:24px;font-weight:800;line-height:1.1}
 .batch-card .bc-num .v.blue{color:var(--blue)}
 .batch-card .bc-num .v.green{color:var(--green)}
-.batch-card .bc-num .k{font-size:11.5px;color:var(--sub);margin-top:2px}
-.batch-card .bc-bars{margin-top:12px;display:flex;flex-direction:column;gap:6px;max-width:420px}
+.batch-card .bc-num .k{font-size:11.5px;color:var(--sub);margin-top:2px;text-align:center}
+.batch-card .bc-bars{margin-top:14px;display:flex;flex-direction:column;gap:6px;max-width:420px;width:100%}
 .batch-card .bc-bar{display:flex;align-items:center;gap:8px;font-size:11.5px}
 .batch-card .bc-bar .k{color:var(--sub);width:76px;flex-shrink:0}
 .batch-card .bc-bar .tr{flex:1;height:6px;border-radius:99px;background:#EFF1F4;overflow:hidden}
@@ -318,31 +357,37 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .ptab-i{padding:6px 15px;border-radius:8px;font-weight:800;color:var(--sub);cursor:pointer;white-space:nowrap}
 .ptab-i.on{background:#fff;color:var(--primary-deep);box-shadow:0 1px 4px rgba(31,36,48,.14)}
 
-/* ===== 任务管理大卡（2026-09-09 老板定：整体纯白 + Edge 式页签；任务卡浅灰底悬浮其上）===== */
-.task-shell{background:#fff;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden;min-height:580px} /* 2026-09-09 老板定：最小高度按任务地图标签固定，切标签页面不跳动 */
-.task-shell-head{background:#fff;padding:14px 18px 0}
-.task-shell-body{background:#fff;border-top:1px solid var(--line);margin-top:-1px}
-.ts-tabs{display:flex;gap:4px;align-items:flex-end}
+/* ===== 任务管理大卡（2026-09-09 老板定：整体纯白 + Edge 式页签；任务卡与批次卡同款白卡悬浮其上）===== */
+.task-shell{background:#fff;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden;flex:1;min-height:0;display:flex;flex-direction:column} /* 2026-09-09 老板定：高度跟随窗口自适应，页面不出滚动条 */
+.task-shell-head{background:#fff;padding:14px 18px 0;display:flex;align-items:flex-end;gap:12px}
+.task-shell-body{background:#fff;border-top:1px solid var(--line);margin-top:-1px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+#activeWrap,#histWrap{flex:1 0 auto;min-height:0;overflow-y:auto}
+#mapWrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.ts-tabs{display:flex;gap:4px;align-items:flex-end;flex:1}
 .ts-tab{padding:9px 22px 10px;border-radius:10px 10px 0 0;background:#F1F3F6;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid transparent;border-bottom:0;transition:background .15s,color .15s}
 .ts-tab:hover{background:#E9ECF0;color:#333A44}
 .ts-tab.on{background:#fff;color:#1F2430;font-weight:700;border-color:var(--line);position:relative;z-index:2}
-/* 当前任务精致卡（2026-09-09：整行悬浮卡——浅灰底浮在纯白大卡上，hover 转白上浮，点击音效） */
+/* 当前任务卡 + 历史任务卡内部行通用样式（2026-09-09 老板定：与客户管理批次卡同款白卡——白底细边框轻阴影、hover 轻上浮；行节奏=名称行→副信息→日期→进度条→实线分隔+操作按钮，参数对齐 .batch-card/.bc-*） */
 .tk-grid{display:flex;flex-direction:column;gap:12px;margin-top:14px}
-.tk-card{background:#FAFBFC;border:1px solid #EDEFF3;border-left:4px solid #2F80ED;border-radius:14px;padding:14px 18px;cursor:pointer;box-shadow:0 2px 8px rgba(31,36,48,.05);transition:transform .18s,box-shadow .18s,border-left-width .18s,background .18s}
-.tk-card:hover{background:#fff;transform:translateY(-3px);box-shadow:0 12px 28px rgba(31,36,48,.13);border-left-width:7px}
-.tk-card:active{transform:translateY(0) scale(.992);box-shadow:0 3px 10px rgba(31,36,48,.10)}
-.tkc-top{display:flex;align-items:center;gap:8px;justify-content:space-between}
-.tkc-name{font-size:14.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tkc-no{font-size:11px;color:var(--sub);font-weight:700;margin-top:4px}
+.tk-card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.tk-card:hover{box-shadow:0 8px 20px rgba(31,36,48,.12);transform:translateY(-1px)}
+.tkc-top{display:flex;align-items:center;gap:10px}
+.tkc-name{font-size:16px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkc-no{font-size:11px;color:var(--sub);font-weight:700}
+.tkc-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--sub);font-weight:600;margin-top:4px}
+.tkc-date{font-size:11.5px;color:#9AA3AE;font-weight:600;margin-top:4px}
 .tkc-req{font-size:11px;color:#B97A0B;font-weight:700;margin-top:4px}
-.tkc-meta{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--sub);font-weight:600}
-.tkc-prog{display:flex;align-items:center;gap:9px;margin-top:11px;font-size:12px;font-weight:700;color:#4A5360}
-.tkc-bar{flex:1;height:7px;background:#EEF0F3;border-radius:99px;overflow:hidden}
-.tkc-bar i{display:block;height:100%;background:linear-gradient(90deg,#2F80ED,#6BA6F2);border-radius:99px;transition:width .3s}
-.tkc-bar.done i{background:linear-gradient(90deg,#16A34A,#7BC47F)}
-.tkc-bar.exp i{background:linear-gradient(90deg,#E5484D,#F0A3A6)}
-.tkc-bar.rev i{background:linear-gradient(90deg,#F5A623,#F8C471)}
-.tkc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:10px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--sub);font-weight:600}
+.tkc-bars{margin-top:12px;display:flex;flex-direction:column;gap:6px;max-width:460px}
+.tkc-bar{display:flex;align-items:center;gap:8px;font-size:11.5px}
+.tkc-bar .k{color:var(--sub);width:64px;flex-shrink:0;font-weight:600}
+.tkc-bar .tr{flex:1;height:6px;border-radius:99px;background:#EFF1F4;overflow:hidden}
+.tkc-bar .tr i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#F5531C,#F0A23E)}
+.tkc-bar .tr i.g{background:linear-gradient(90deg,#16A34A,#4ADE80)}
+.tkc-bar .tr i.exp{background:linear-gradient(90deg,#E5484D,#F0A3A6)}
+.tkc-bar .tr i.rev{background:linear-gradient(90deg,#F5A623,#F8C471)}
+.tkc-bar .p{color:var(--sub);min-width:64px;text-align:right;flex-shrink:0;font-weight:700;white-space:nowrap}
+.tkc-ops{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);justify-content:flex-end}
+.tkc-ops .btn-clear:hover{background:#E9ECF1;color:var(--sub)} /* 卡片操作钮 hover 不转红（保留同意/拒绝等文字色语义） */
 .tk-empty{padding:48px 0;text-align:center;color:#A8B0BA;font-size:14px;font-weight:600}
 .tk-card .pill{transition:box-shadow .18s}
 .tk-card:hover .pill{box-shadow:0 2px 6px rgba(31,36,48,.10)}
@@ -351,33 +396,29 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .ts-tab:hover::after{width:30%}
 .ts-tab.on::after{width:0}
 /* 任务地图标签（2026-09-09 手机老板任务地图移植） */
-.tm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.tm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:2px}
 .tm-days{display:flex;gap:6px;flex-wrap:wrap}
 .tm-day{padding:6px 14px;border-radius:999px;background:#F0F2F5;font-size:12.5px;font-weight:700;color:var(--sub);cursor:pointer;transition:all .15s}
 .tm-day.on{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(245,83,28,.25)}
 .tm-sel{height:32px;border:1px solid var(--line);border-radius:9px;padding:0 10px;font-size:12.5px;font-weight:600;color:#333A44;background:#fff;outline:0}
-.tm-legend{display:flex;gap:14px;align-items:center;margin-top:10px;font-size:12px;color:var(--sub);font-weight:600;flex-wrap:wrap}
+/* 地图内全览悬浮圆钮（2026-09-09 老板定：放在 3D 导航球下方；当前屏幕显示的客户点全部撑满一屏） */
+.map-fab{position:absolute;right:12px;top:104px;z-index:20;width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid var(--line);box-shadow:0 2px 10px rgba(31,36,48,.16);cursor:pointer;font-size:15px;color:#333A44;display:flex;align-items:center;justify-content:center;transition:color .12s,border-color .12s,transform .12s}
+.map-fab:hover{color:var(--primary-deep);border-color:var(--primary);transform:scale(1.08)}
+.tm-legend{display:flex;gap:8px;align-items:center;margin-top:-16px;font-size:12px;color:var(--sub);font-weight:600;flex-wrap:wrap;justify-content:flex-end}
+.tm-lg{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;padding:3px 8px;border-radius:999px;transition:opacity .12s,background .12s}
+.tm-lg:hover{background:#F5F6F8}
+.tm-lg.off{opacity:.35}
+.tm-lg.off .lg-dot{background:#C6CBD2!important}
 .tm-legend .lg-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 /* 任务地图店名气泡（2026-09-09） */
 .tm-iw{background:#fff;border-radius:10px;padding:9px 13px;font-size:12px;color:#333A44;box-shadow:0 3px 14px rgba(31,36,48,.18);min-width:120px}
 .tm-iw b{font-size:13px}
 .tm-iw div{margin-top:3px}
 
-/* 历史任务卡片（点整卡查看档案） */
-.hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;margin-bottom:14px}
-.hist-card{background:#fff;border-radius:16px;padding:15px 17px 13px;box-shadow:0 2px 10px rgba(31,36,48,.07);cursor:pointer;border-top:3px solid #E4E7EC;transition:box-shadow .15s,transform .15s}
-.hist-card:hover{box-shadow:0 6px 18px rgba(31,36,48,.14);transform:translateY(-1px)}
-.hist-card.done{border-top-color:var(--green)}
-.hist-card.arch{border-top-color:var(--danger)}
-.hc-name{font-size:14.5px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.hc-no{font-size:11px;color:var(--sub);font-weight:700}
-.hc-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:12px;color:var(--sub);font-weight:600}
-.hc-prog{display:flex;align-items:center;gap:9px;margin-top:11px;font-size:12px;font-weight:700;color:#4A5360}
-.hc-bar{flex:1;height:7px;background:#EEF0F3;border-radius:99px;overflow:hidden}
-.hc-bar i{display:block;height:100%;background:linear-gradient(90deg,#34A853,#7BC47F);border-radius:99px}
-.hc-bar.arch i{background:linear-gradient(90deg,#E5484D,#F0A3A6)}
-.hc-end{margin-top:9px;font-size:11.5px;color:var(--sub);font-weight:600;border-top:1px dashed #EDEFF2;padding-top:8px;display:flex;justify-content:space-between;align-items:center}
-.hc-end .open{font-size:12px;font-weight:800;color:var(--primary)}
+/* 历史任务档案卡（2026-09-09：与批次卡同款白卡样式；顶部色条去掉——状态由 pill 表达） */
+.hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-bottom:14px}
+.hist-card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.hist-card:hover{box-shadow:0 8px 20px rgba(31,36,48,.12);transform:translateY(-1px)}
 /* 流程日志时间线 */
 .arch-row{display:flex;gap:9px;padding:5px 0;font-size:12.5px;line-height:1.5}
 .arch-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
@@ -455,7 +496,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="grp">工作台</div>
     <div class="ni dis" title="开发中">📊 仪表盘</div>
     <div class="ni on" data-p="tasks" onclick="nav('tasks')">🧭 任务管理</div>
-    <div class="ni" data-p="track" onclick="goTaskMap()">🗺 任务地图</div>
+    <div class="ni" data-p="track" onclick="nav('track')">🗺 位置监控</div>
     <div class="ni dis" title="开发中">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
     <div class="ni" data-p="customers" onclick="nav('customers')">🏪 客户管理</div>
@@ -482,8 +523,9 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
     <!-- 位置监控（2026-09-08 M2：全业务员实时位置 + 当天轨迹 + 客户点位图层） -->
     <div id="page-track" style="display:none">
-      <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;border:2px solid #FFFFFF;position:relative">
-        <div id="trackMap" style="height:70vh;min-height:420px;position:relative"></div>
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;border:2px solid #FFFFFF;position:relative;flex:1;min-height:0;display:flex">
+        <div id="trackMap" style="flex:1;min-height:300px;position:relative"></div>
+        <button class="map-fab" title="全览：当前显示的客户点全部撑满一屏" onclick="fitCustBounds()">⊡</button>
         <div id="custSearchBox" style="position:absolute;left:12px;top:12px;z-index:99998;display:flex;flex-direction:column;width:260px">
           <div style="display:flex;gap:6px;align-items:center;background:#FFFFFF;border:1px solid var(--line);border-radius:999px;padding:5px 10px;box-shadow:0 1px 4px rgba(0,0,0,.12)">
             <span style="font-size:13px">🔍</span>
@@ -509,7 +551,6 @@ input,textarea{-webkit-user-select:text;user-select:text}
             <span class="lg" id="lg_visited" style="color:#34A853" onclick="toggleCustKind('visited')">● 已回访</span>
             <span class="lg" id="lg_gray" style="color:#9CA3AF" onclick="toggleCustKind('gray')">● 无任务</span>
           </span>
-          <button class="btn ghost" style="height:28px;font-size:12px;padding:0 12px;margin-left:auto" title="当前所有客户点装进一屏（不含业务员点）" onclick="fitCustBounds()">⊡ 全览</button>
         </div>
       </div>
       <div class="card" style="padding:12px 16px">
@@ -534,10 +575,6 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
     <!-- 任务管理（2026-09-09 老板定：当前任务/历史任务/任务地图 整合进一张大卡，三段标签切换） -->
     <div id="page-tasks">
-      <div class="title-bar">
-        <span class="t">任务管理</span>
-        <span class="r"><button class="btn primary" onclick="showNewTask()">＋ 新建任务</button></span>
-      </div>
       <div class="task-shell">
         <div class="task-shell-head">
           <div class="ts-tabs">
@@ -545,6 +582,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
             <span class="ts-tab" data-tab="history" onclick="switchTaskTab('history')">历史任务</span>
             <span class="ts-tab" data-tab="map" onclick="switchTaskTab('map')">🗺 任务地图</span>
           </div>
+          <button class="btn primary" style="height:34px;padding:0 16px;font-size:14px;flex-shrink:0;margin-bottom:11px" onclick="playTkClick();showNewTask()">＋ 新建任务</button>
         </div>
         <div class="task-shell-body">
           <div id="taskStats" style="padding:14px 18px 0;font-size:12.5px;font-weight:700"></div>
@@ -553,13 +591,14 @@ input,textarea{-webkit-user-select:text;user-select:text}
           </div>
           <div id="histWrap" style="display:none;padding:4px 18px 18px"></div>
           <!-- 任务地图标签（2026-09-09 老板定：手机老板任务地图移植——天页签+业务员下拉+数字圆标+绿线+仓库星+店名气泡） -->
-          <div id="mapWrap" style="display:none;padding:12px 18px 18px">
+          <div id="mapWrap" style="display:none;padding:0 18px 8px">
             <div class="tm-bar">
+              <span style="margin-left:auto"></span>
               <div class="tm-days" id="tmDays"></div>
+              <span style="margin-left:auto"></span>
               <select id="tmMen" class="tm-sel" onchange="onTmMen()"></select>
-              <button class="btn ghost" style="height:30px;font-size:12px;padding:0 12px;margin-left:auto" onclick="refreshTaskMap()">↻ 刷新</button>
             </div>
-            <div id="tmMap" style="height:56vh;min-height:380px;border-radius:14px;position:relative;border:1px solid var(--line)"></div>
+            <div id="tmMap" style="flex:1 1 auto;min-height:260px;margin-bottom:30px;border-radius:14px;position:relative;border:1px solid var(--line)"></div>
             <div class="tm-legend" id="tmLegend"></div>
           </div>
         </div>
@@ -714,15 +753,21 @@ input,textarea{-webkit-user-select:text;user-select:text}
       <!-- 批次列表大卡：顶部按钮工具条 + 批次卡 + 未分批；点批次卡 → 单独进入批次详情页 -->
         <div class="batch-wrap">
           <div class="batch-tools">
+            <div class="bs-stats" id="bsStats">
+              <div class="bs-num"><b id="bsTotal">0</b><span>客户总数</span></div>
+              <div class="bs-num"><b id="bsInTask" class="blue">0</b><span>任务中</span></div>
+              <div class="bs-num"><b id="bsFree">0</b><span>无任务</span></div>
+              <div class="bs-num"><b id="bsVisited" class="green">0</b><span>已拜访过</span></div>
+            </div>
+            <span style="margin-left:auto"></span>
             <button class="btn ghost" id="matchBtn" style="display:none" onclick="openMallMatch()">🔎 比对认领</button>
             <button class="btn ghost" id="claimBtn" style="display:none" onclick="openClaims()">📋 待确认认领<span class="badge" id="claimBadge" style="display:none"></span></button>
-            <span style="margin-left:auto"></span>
             <button class="btn ghost" id="manualBatchBtn" onclick="openManualBatch()">＋ 手工建批</button>
-            <button class="btn primary" id="impCustBtn" onclick="openImport()">📥 导入新批次</button>
+            <button class="btn primary" id="impCustBtn" onclick="playTkClick();openImport()">📥 导入新批次</button>
           </div>
           <div id="batchListView">
             <div class="batch-cards" id="batchCards"><div class="loading">加载中…</div></div>
-            <div id="unbatchedCard" style="display:none;cursor:pointer;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);margin-top:12px" onclick="openBatchCusts('', '未分批')">
+            <div id="unbatchedCard" style="display:none;cursor:pointer;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);margin-top:12px" onclick="playTkClick();openBatchCusts('', '未分批')">
               <div style="display:flex;align-items:center;gap:10px;padding:14px 18px">
                 <span style="font-size:14.5px;font-weight:600">📦 未分批</span>
                 <span style="font-size:12px;color:var(--sub)">未归入任何批次的客户档案</span>
@@ -762,13 +807,26 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="font-size:16px;font-weight:700" id="batchCustTitle">批次</span>
             <span style="font-size:12.5px;color:var(--sub)" id="batchCustSub"></span>
-            <span style="margin-left:auto;font-size:13px;color:var(--primary-deep);font-weight:700" id="batchCustStat"></span>
+            <span style="margin-left:auto"></span>
+            <span class="bc-search-box" id="batchSearchBox" style="transform:translateX(50px)">
+              <span class="bc-search-ic">🔍</span>
+              <input id="batchSearchInput" placeholder="搜索店名 / 手机号…" oninput="onBatchSearch()">
+              <span class="bc-search-x" id="batchSearchClear" style="display:none" onclick="clearBatchSearch()" title="清空搜索">✕</span>
+            </span>
+            <span id="batchSearchCount" style="display:none;font-size:12.5px;color:#9AA3AE;font-weight:600"></span>
+            <span style="margin-left:auto"></span>
+            <span style="font-size:13px;color:var(--primary-deep);font-weight:700" id="batchCustStat"></span>
           </div>
         </div>
         <table class="tbl" style="table-layout:fixed">
           <thead id="batchThead"></thead>
           <tbody id="batchTbody"><tr><td colspan="7" class="loading">加载中…</td></tr></tbody>
         </table>
+        <div class="batch-pagebar" id="batchPagebar" style="display:none">
+          <button class="btn ghost" id="batchPrevBtn" onclick="batchGotoPage(batchPage - 1)">‹ 上一页</button>
+          <span class="pg-info">第 <span class="pg-num" id="batchPageNum">1</span> / <span class="pg-num" id="batchPageTotal">1</span> 页</span>
+          <button class="btn ghost" id="batchNextBtn" onclick="batchGotoPage(batchPage + 1)">下一页 ›</button>
+        </div>
       </div>
     </div>
 
@@ -1417,12 +1475,14 @@ function nav(p) {
     $('claimBtn').style.display = 'none';
     $('manualBatchBtn').style.display = isNew ? 'none' : ''; // 2026-09-08 恢复：手工建批仅在回访工作台显示
     $('batchListView').style.display = isNew ? 'none' : '';
+    $('bsStats').style.display = isNew ? 'none' : ''; // 汇总统计区仅回访（批次）工作台显示（2026-09-09）
     $('newCustView').style.display = isNew ? '' : 'none';
     if (!isNew) { loadLastMallImport(); loadClaims(); }
   }
-  $('page-' + p).style.display = 'block';
+  $('page-' + p).style.display = (p === 'tasks' || p === 'customers' || p === 'track') ? 'flex' : 'block';
   if (p === 'tasks') {
-    $('taskListTitle').textContent = curMode === 'mall' ? '回访任务' : '新客开发任务';
+    // 2026-09-09 修复：taskListTitle 元素已随任务大卡重构删除，此前这里对 null 赋值抛错导致 loadTasks() 永不执行
+    //（首屏任务卡片只能等第一轮轮询填充——老板报障 10 多秒才出的代码级根因）
     loadTasks();
   }
   if (p === 'customers') { if (curMode === 'new') loadCustomers(); else loadBatches(); }
@@ -1462,15 +1522,15 @@ function switchTaskTab(tab) {
   $('activeWrap').style.display = tab === 'active' ? '' : 'none';
   $('histWrap').style.display = tab === 'history' ? '' : 'none';
   $('mapWrap').style.display = tab === 'map' ? '' : 'none';
-  if (tab === 'map') { loadTaskMap(); return; }
+  if (tab === 'map') { loadTaskMap(); loadActiveTaskStats(); return; }
   loadTasks();
 }
 
-// 左侧栏「🗺 任务地图」入口（2026-09-09 老板定：跳任务管理大卡的第三标签；菜单高亮由自己接管）
-function goTaskMap() {
-  nav('tasks');
-  document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === 'track'));
-  switchTaskTab('map');
+// 任务地图标签的状态行与「当前任务」标签同款（地图=当前任务的地图表达，2026-09-09 老板定；防止残留历史统计）
+async function loadActiveTaskStats() {
+  const res = await api('listTasks', { mode: 'active' });
+  if (!res.ok || taskTab !== 'map') return;
+  $('taskStats').innerHTML = statsHtml(filterByMode(res.tasks || [])).html;
 }
 
 function histStatsHtml(list) {
@@ -1487,7 +1547,7 @@ function fmtD8(ts) {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 }
 
-// 历史任务卡片（一张卡收全：状态/时间/业务员/进度/结束说明；点整卡打开档案详情）
+// 历史任务卡片（2026-09-09：与批次卡同款白卡——状态 pill 右上、副信息行、进度条、实线分隔+按钮；点整卡打开档案详情）
 function histCardHtml(t) {
   const done = t.status === 'done';
   const badge = done ? '<span class="pill green">已完成</span>' : '<span class="pill r-resist">已归档 · 过期</span>';
@@ -1496,12 +1556,15 @@ function histCardHtml(t) {
   const endDesc = done
     ? (leave > 0 ? '提前结束 · 剩 ' + leave + ' 家未拜访' : '全部客户完成')
     : '超期自动归档 · 未完成';
-  return `<div class="hist-card ${done ? 'done' : 'arch'}" onclick="showDetail('${t._id}')" title="点击查看任务档案">
-    <div class="hc-name">${badge}<b>${esc(t.name)}</b></div>
-    <div class="hc-no">${esc(t.taskNo || '')}</div>
-    <div class="hc-meta"><span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span>${esc(t.salesmanName || '')} · ${t.plannedDays || 1} 天排期</div>
-    <div class="hc-prog"><span class="hc-bar ${done ? '' : 'arch'}"><i style="width:${per}%"></i></span>${t.visited}/${t.total} 家 · ${per}%</div>
-    <div class="hc-end"><span>${done ? '✅' : '⏰'} ${endDesc} · 结束于 ${t.endedAt ? fmtD8(t.endedAt) : '—'}</span><span class="open">查看档案 →</span></div>
+  return `<div class="hist-card" onclick="showDetail('${t._id}')" title="点击查看任务档案">
+    <div class="tkc-top">
+      <b class="tkc-name">${esc(t.name)}</b>
+      ${badge}
+    </div>
+    <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')} · ${t.plannedDays || 1} 天排期</span></div>
+    <div class="tkc-date">${done ? '✅' : '⏰'} ${endDesc} · 结束于 ${t.endedAt ? fmtD8(t.endedAt) : '—'}</div>
+    <div class="tkc-bars"><div class="tkc-bar"><span class="k">完成进度</span><span class="tr"><i class="${done ? 'g' : 'exp'}"></i></span><span class="p">${t.visited}/${t.total} 家 · ${per}%</span></div></div>
+    <div class="tkc-ops" onclick="event.stopPropagation()"><button class="btn-clear" onclick="showDetail('${t._id}')">查看档案 →</button></div>
   </div>`;
 }
 
@@ -1543,6 +1606,14 @@ function playTkClick() {
     tkAudio.play().catch(() => {});
   } catch (e) { /* 静默 */ }
 }
+// 音效预热（2026-09-09 老板定：页面一加载就把 DJ.mp3 缓存进浏览器，避免首次使用时延迟/无声）
+(function warmDj() {
+  try {
+    tkAudio = new Audio('voice/DJ.mp3');
+    tkAudio.preload = 'auto';
+    tkAudio.load();
+  } catch (e) { /* 静默——预热失败则首次点击时惰性创建兜底 */ }
+})();
 
 // 全量渲染任务卡（首次进入/手动操作后）；同时记录行指纹供轮询增量对比（2026-09-09 表格改卡片）
 function renderTaskRows(list) {
@@ -1770,7 +1841,7 @@ async function reviewFinish(id, approve) {
   if (!res.ok) { alert(res.msg); return; }
   loadTasks();
   // 若在任务详情页审批，同步刷新详情
-  if ($('page-taskDetail').style.display === 'block' && curDetailTaskId === id) showDetail(id);
+  if ($('page-taskDetail').style.display !== 'none' && curDetailTaskId === id) showDetail(id);
 }
 
 // 今天日期 YYYY-MM-DD（东八区，与云端一致）
@@ -1796,25 +1867,24 @@ function taskRowHtml(t) {
     </tr>`;
 }
 
-// 精致任务卡（2026-09-09 老板定：任务管理大卡内「当前任务」标签用卡片网格，整卡可点进详情）
+// 任务卡（2026-09-09 老板定：与批次卡同款白卡；行节奏同批次卡——名称+右上状态/副信息/日期/进度条/实线分隔+按钮）
 function taskCardHtml(t) {
   const stMap = { done: ['已完成', 'green'], reviewing: ['审核中', 'warn'], published: ['进行中', 'orange'], draft: ['草稿', 'gray'] };
   const st = stMap[t.status] || stMap.published;
   const expired = t.status === 'published' && t.deadline && String(t.deadline) <= todayStr();
-  const border = expired ? '#E5484D' : (t.status === 'done' ? '#16A34A' : (t.status === 'reviewing' ? '#F5A623' : '#2F80ED'));
-  const barCls = t.status === 'done' ? 'done' : (expired ? 'exp' : (t.status === 'reviewing' ? 'rev' : ''));
+  const barCls = t.status === 'done' ? 'g' : (expired ? 'exp' : (t.status === 'reviewing' ? 'rev' : ''));
   const per = Math.min(t.percent || 0, 100);
   const ops = taskOpsHtml(t, expired);
-  return `<div class="tk-card" data-id="${t._id}" style="border-left-color:${border}" onclick="showDetail('${t._id}')">
+  return `<div class="tk-card" data-id="${t._id}" onclick="showDetail('${t._id}')">
     <div class="tkc-top">
       <b class="tkc-name">${esc(t.name)}</b>
       <span class="pill ${expired ? 'r-resist' : st[1]}">${expired ? '已过期' : st[0]}</span>
     </div>
-    ${t.taskNo ? `<div class="tkc-no">${esc(t.taskNo)}</div>` : ''}
+    <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')}</span></div>
+    <div class="tkc-date">截止 ${esc(t.deadline || '—')}</div>
     ${t.status === 'reviewing' && t.finishReq ? `<div class="tkc-req">提前结束申请 · 剩 ${t.finishReq.left} 家</div>` : ''}
-    <div class="tkc-meta"><span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')}</span></div>
-    <div class="tkc-prog"><span class="tkc-bar ${barCls}"><i style="width:${per}%"></i></span><span>${t.visited}/${t.total} 家 · ${per}%</span></div>
-    <div class="tkc-foot"><span>截止 ${esc(t.deadline || '—')}</span><span class="tkc-ops" onclick="event.stopPropagation()">${ops}</span></div>
+    <div class="tkc-bars"><div class="tkc-bar"><span class="k">拜访进度</span><span class="tr"><i class="${barCls}"></i></span><span class="p">${t.visited}/${t.total} 家 · ${per}%</span></div></div>
+    <div class="tkc-ops" onclick="event.stopPropagation()">${ops}</div>
   </div>`;
 }
 
@@ -1825,18 +1895,18 @@ function taskRowFp(t) {
   return [t.taskNo, t.status, t.deadline, t.visited, t.total, t.percent, expired, fr.at || '', fr.left || ''].join('|');
 }
 
-// ===== 任务行操作按钮（按状态与过期展示） =====
+// ===== 任务行操作按钮（2026-09-09 与批次卡同款 .btn-clear 灰底钮；颜色语义保留） =====
 function taskOpsHtml(t, expired) {
-  const v = '<button class="btn ghost btn-zoom-sm" style="height:28px;font-size:12px" onclick="showDetail(\'' + t._id + '\')">查看</button>';
-  const e = '<button class="btn ghost" style="height:28px;font-size:12px" onclick="openEditTask(\'' + t._id + '\')">编辑</button>';
+  const v = '<button class="btn-clear" onclick="showDetail(\'' + t._id + '\')">查看</button>';
+  const e = '<button class="btn-clear" onclick="openEditTask(\'' + t._id + '\')">编辑</button>';
   if (t.status === 'reviewing') {
-    return '<button class="btn ghost btn-zoom" style="height:28px;font-size:12px;color:var(--green)" onclick="reviewFinish(\'' + t._id + '\',true)">同意</button> <button class="btn ghost btn-zoom" style="height:28px;font-size:12px;color:var(--danger)" onclick="reviewFinish(\'' + t._id + '\',false)">拒绝</button>';
+    return '<button class="btn-clear" style="color:var(--green)" onclick="reviewFinish(\'' + t._id + '\',true)">同意</button> <button class="btn-clear" style="color:var(--danger)" onclick="reviewFinish(\'' + t._id + '\',false)">拒绝</button>';
   }
   if (t.status === 'done') {
     return v;
   }
   if (t.status === 'draft') {
-    return e + ' <button class="btn ghost" style="height:28px;font-size:12px;color:var(--primary-deep)" onclick="sendTaskAct(\'' + t._id + '\')">发送</button> <button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteTaskAct(\'' + t._id + '\')">删除</button>';
+    return e + ' <button class="btn-clear" style="color:var(--primary-deep)" onclick="sendTaskAct(\'' + t._id + '\')">发送</button> <button class="btn-clear" style="color:var(--danger)" onclick="deleteTaskAct(\'' + t._id + '\')">删除</button>';
   }
   // published（含过期）
   return v + ' ' + e;
@@ -2186,6 +2256,8 @@ async function startAuto() {
     }
   } catch (e) { /* 拉取失败用默认 15 秒 */ }
   autoTimer = setInterval(autoTick, refreshIntervalSec * 1000);
+  autoTick(); // 2026-09-09 老板定【首屏立即全域拉取】：进系统不等首轮刷新间隔——先立刻完整跑一轮（归档+任务+坐标报错+注册审核+按当前页渲染），
+              // 此前首屏任务卡片要等第一轮轮询（15 秒/30 秒）才显现；首帧 applyTaskDiff 会全量渲染，之后照常增量
   checkRegAlerts(); // 2026-09-09 老板定：登录后立即同步一次待审核角标（不用等首轮 15 秒）
   // 预热注册提醒语音：edge-tts 首次合成要 2~3 秒，先合好缓存，收到提醒时零等待
   fetch('/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '系统', type: 'regReview' }) }).catch(() => {});
@@ -2207,20 +2279,20 @@ async function manualRefresh() {
     // 0) 与自动轮询一致：先跑过期归档 + 响铃检测（新审核/新过期/新报错 → 响铃+语音+浮窗）
     try {
       const ar = await api('autoArchiveExpired');
-      if (ar.ok && ar.archived > 0 && $('page-tasks').style.display === 'block') await loadTasks();
+      if (ar.ok && ar.archived > 0 && $('page-tasks').style.display !== 'none') await loadTasks();
     } catch (e) { /* 静默 */ }
     try { await pollEvents(); } catch (e) { /* 静默 */ }
-    if ($('page-taskDetail').style.display === 'block') {
+    if ($('page-taskDetail').style.display !== 'none') {
       if (curDetailTaskId) await refreshDetail();
-    } else if ($('page-tasks').style.display === 'block') {
+    } else if ($('page-tasks').style.display !== 'none') {
       await loadTasks();
-    } else if ($('page-customers').style.display === 'block' || $('page-batchDetail').style.display === 'block') {
-      if ($('page-batchDetail').style.display === 'block') await loadCustomers(curBatchId, curBatchName);
+    } else if ($('page-customers').style.display !== 'none' || $('page-batchDetail').style.display !== 'none') {
+      if ($('page-batchDetail').style.display !== 'none') await loadCustomers(curBatchId, curBatchName);
       else await loadCustomers();
       if (typeof loadClaims === 'function' && curMode === 'mall') await loadClaims();
-    } else if ($('page-people').style.display === 'block') {
+    } else if ($('page-people').style.display !== 'none') {
       await loadPeople();
-    } else if ($('page-settings').style.display === 'block') {
+    } else if ($('page-settings').style.display !== 'none') {
       await loadSettings();
     }
   } catch (e) { /* 静默 */ }
@@ -2278,6 +2350,37 @@ function buildTrackMap(keep) {
 let tmMapObj = null, tmLibLoaded = false, tmTaskList = [], tmCurTask = null, tmCustomers = [];
 let tmDays = [], tmDay = null, tmMenIdx = 0;
 let tmMarkers = null, tmStarMarker = null, tmPolyline = null, tmInfoWin = null;
+// 状态显隐开关与仓库开关（2026-09-09 老板定：与手机端同口径——默认全开；仓库默认关，进入/切天自动检测起点是仓库则开，手动以手动为准）
+let tmKindOn = { pending: true, ongoing: true, visited: true };
+let tmWhOn = false;
+
+function renderTmLegend() {
+  const lg = (k, dotColor, txt, on) =>
+    `<span class="tm-lg ${on ? '' : 'off'}" onclick="toggleTmKind('${k}')"><span class="lg-dot" style="background:${on ? dotColor : '#C6CBD2'}"></span>${txt}</span>`;
+  const wh = `<span class="tm-lg ${tmWhOn ? '' : 'off'}" onclick="toggleTmWhStar()"><span class="lg-dot" style="background:${tmWhOn ? '#F0A23E' : '#C6CBD2'}"></span>⭐ 仓库</span>`;
+  $('tmLegend').innerHTML =
+    lg('pending', '#F5531C', '未拜访', tmKindOn.pending) +
+    lg('ongoing', '#2F80ED', '拜访中', tmKindOn.ongoing) +
+    lg('visited', '#9AA3AD', '已拜访 ✓', tmKindOn.visited) + wh;
+}
+function toggleTmKind(k) {
+  tmKindOn[k] = !tmKindOn[k];
+  renderTmLegend();
+  renderTmDay(false);
+}
+// 仓库开关（手机端同款语义：开=星显示在仓库坐标+直线路线以仓库为起点；关=恢复原逻辑，起点是仓库才显示星）
+function toggleTmWhStar() {
+  tmWhOn = !tmWhOn;
+  renderTmLegend();
+  renderTmDay(false);
+}
+// 自动检测（手机端同款：进入/切天时按当天线路起点距仓库 50 米内自动开/关）
+function autoTmWhStar(firstPt) {
+  try {
+    tmWhOn = !!(firstPt && tmHaversine(firstPt.lat, firstPt.lng, 28.970802, 120.154526) < 50);
+    renderTmLegend();
+  } catch (e) { console.error('autoTmWhStar error:', e); }
+}
 
 function loadTaskMapLib() {
   if (tmMapObj || tmLibLoaded) return;
@@ -2303,7 +2406,7 @@ function buildTaskMap() {
     content: '<div class="tm-iw"></div>'
   });
   tmInfoWin.close();
-  $('tmLegend').innerHTML = '<span><span class="lg-dot" style="background:#F5531C"></span>未拜访</span><span><span class="lg-dot" style="background:#2F80ED"></span>拜访中</span><span><span class="lg-dot" style="background:#9AA3AD"></span>已拜访 ✓</span><span>⭐ 仓库（起点）</span>';
+  renderTmLegend();
   refreshTaskMap();
 }
 
@@ -2343,6 +2446,14 @@ async function renderTmTask(idx) {
   const todayD = d.task.todayDay;
   tmDay = (todayD && tmDays.includes(todayD)) ? todayD : (tmDays[0] || null);
   $('tmDays').innerHTML = tmDays.map(day => `<span class="tm-day ${day === tmDay ? 'on' : ''}" data-day="${day}" onclick="switchTmDay(${day})">第 ${day} 天</span>`).join('');
+  // 进入/切业务员自动检测仓库开关（2026-09-09 老板定：与手机端同口径）
+  {
+    const plan0 = (d.task.dayPlan || []).find(p => p.day === tmDay);
+    const r0 = plan0 && plan0.route;
+    const firstC = tmDayList()[0];
+    if (r0 && Array.isArray(r0.pts) && r0.pts.length) autoTmWhStar({ lat: r0.pts[0][0], lng: r0.pts[0][1] });
+    else if (firstC) autoTmWhStar({ lat: firstC.lat, lng: firstC.lng });
+  }
   renderTmDay(true); // 切业务员=撑满全部
 }
 
@@ -2350,6 +2461,14 @@ function switchTmDay(day) {
   if (tmDay === day) return;
   tmDay = day;
   document.querySelectorAll('#tmDays .tm-day').forEach(el => el.classList.toggle('on', Number(el.dataset.day) === day));
+  // 切天自动检测仓库开关（2026-09-09 老板定：与手机端同口径）
+  {
+    const plan0 = (tmCurTask && tmCurTask.dayPlan || []).find(p => p.day === tmDay);
+    const r0 = plan0 && plan0.route;
+    const firstC = tmDayList()[0];
+    if (r0 && Array.isArray(r0.pts) && r0.pts.length) autoTmWhStar({ lat: r0.pts[0][0], lng: r0.pts[0][1] });
+    else if (firstC) autoTmWhStar({ lat: firstC.lat, lng: firstC.lng });
+  }
   renderTmDay(false); // 切天=撑满未完成（全部已拜访则全部）
 }
 
@@ -2360,27 +2479,36 @@ function tmDayList() {
 }
 
 function renderTmDay(fitAll) {
+  try {
   if (!tmMapObj || !tmCurTask) return;
-  const list = tmDayList();
-  // 客户点：复用手机 pins 数字圆标（24×24）
-  const styles = {};
-  const geos = list.map((c, i) => {
-    const n = Math.min(i + 1, 20);
-    const visited = !!c.visitedToday;
-    const src = visited ? 'pins/pin_done.png' : `pins/pin_${n}_${c.visitOngoing ? 'blue' : 'red'}.png`;
-    const sid = visited ? 'v' : (c.visitOngoing ? 'b' : 'r') + n;
-    if (!styles[sid]) styles[sid] = new TMap.MarkerStyle({ width: 24, height: 24, anchor: { x: 12, y: 12 }, src });
-    return {
-      id: String(i),
-      styleId: sid,
-      position: new TMap.LatLng(c.lat, c.lng),
-      properties: { name: c.name, address: c.address || '', phone: c.phone || '', visited, ongoing: !!c.visitOngoing }
-    };
+  const all = tmDayList();
+  // 状态开关过滤（2026-09-09 老板定：图例可点击，与手机端状态口径一致——visitStatus: visited/ongoing/pending）
+  const list = all.filter(c => {
+    if (c.visitStatus === 'visited') return tmKindOn.visited;
+    if (c.visitStatus === 'ongoing') return tmKindOn.ongoing;
+    return tmKindOn.pending;
   });
-  if (tmMarkers) { tmMarkers.setMap(null); tmMarkers = null; }
-  if (geos.length) {
-    tmMarkers = new TMap.MultiMarker({ map: tmMapObj, styles, geometries: geos, zIndex: 10 });
-    tmMarkers.on('click', evt => {
+  // 客户点：复用手机 pins 数字圆标（24×24）；序号按当天全序（不受开关过滤影响）
+  const idxOf = c => all.indexOf(c) + 1;
+  const mk = (arr, z) => {
+    if (!arr.length) return null;
+    const styles = {};
+    const geos = arr.map((c, i) => {
+      const n = Math.min(idxOf(c), 20);
+      const visited = c.visitStatus === 'visited';
+      const ongoing = c.visitStatus === 'ongoing';
+      const src = visited ? 'pins/pin_done.png' : `pins/pin_${n}_${ongoing ? 'blue' : 'red'}.png`;
+      const sid = visited ? 'v' : (ongoing ? 'b' : 'r') + n;
+      if (!styles[sid]) styles[sid] = new TMap.MarkerStyle({ width: 24, height: 24, anchor: { x: 12, y: 12 }, src });
+      return {
+        id: String(i),
+        styleId: sid,
+        position: new TMap.LatLng(c.lat, c.lng),
+        properties: { name: c.name, address: c.address || '', phone: c.phone || '', visited, ongoing }
+      };
+    });
+    const m = new TMap.MultiMarker({ map: tmMapObj, styles, geometries: geos, zIndex: z });
+    m.on('click', evt => {
       const g = evt.geometry;
       if (!g) return;
       const p = g.properties || {};
@@ -2388,7 +2516,15 @@ function renderTmDay(fitAll) {
       tmInfoWin.setContent(`<div class="tm-iw"><b>${esc(p.name)}</b><div>${esc(p.address || '暂无地址')}</div><div style="color:var(--primary-deep);font-weight:700">📞 ${esc(p.phone || '暂无电话')}</div><div style="font-size:11px;color:var(--sub)">${p.visited ? '✓ 已拜访' : (p.ongoing ? '拜访中' : '待拜访')}</div></div>`);
       tmInfoWin.open();
     });
-  }
+    return m;
+  };
+  (tmMarkers || []).forEach(m => { if (m) m.setMap(null); });
+  tmMarkers = null;
+  // z 序与手机端一致（自底到顶）：已拜访 → 仓库星 → 未拜访 → 拜访中
+  const mkVisited = mk(list.filter(c => c.visitStatus === 'visited'), 5);
+  const mkPending = mk(list.filter(c => c.visitStatus === 'pending'), 7);
+  const mkOngoing = mk(list.filter(c => c.visitStatus === 'ongoing'), 8);
+  tmMarkers = [mkVisited, mkPending, mkOngoing];
   // 路线（绿色实线；无真实轨迹按顺序直线兜底——与手机一致）
   const plan = (tmCurTask.dayPlan || []).find(p => p.day === tmDay);
   const route = plan && plan.route;
@@ -2398,43 +2534,58 @@ function renderTmDay(fitAll) {
   } else if (list.length >= 2) {
     linePts = list.map(c => new TMap.LatLng(c.lat, c.lng));
   }
+  const WH = { lat: 28.970802, lng: 120.154526 };
+  // 仓库开关开：直线兜底路线以仓库为起点重连（手机端同款"重排以仓库为起点，不取定位"）；
+  // 云端真实轨迹(route)保留不动，仅仓库星显示在仓库坐标
+  if (tmWhOn && !(route && Array.isArray(route.pts) && route.pts.length >= 2) && list.length) {
+    linePts = [new TMap.LatLng(WH.lat, WH.lng)].concat(linePts);
+  }
   if (tmPolyline) { tmPolyline.setMap(null); tmPolyline = null; }
   if (linePts.length >= 2) {
     tmPolyline = new TMap.MultiPolyline({
       map: tmMapObj,
       styles: { line: new TMap.PolylineStyle({ color: '#16A34A', width: 4, borderWidth: 0 }) },
       geometries: [{ id: 'route', styleId: 'line', paths: linePts }],
-      zIndex: 6
+      zIndex: 4
     });
   }
-  // 仓库星（起点距仓库 50 米内 → 起点位置显示 ⭐；zIndex 5 垫在客户点下）
-  const WH = { lat: 28.970802, lng: 120.154526 };
-  let starPt = null;
-  if (linePts.length) {
-    const sp = linePts[0];
-    if (tmHaversine(sp.getLat(), sp.getLng(), WH.lat, WH.lng) < 50) starPt = sp;
-  }
+  // 仓库星（手机端同口径）：开关开 → 星在仓库坐标；关 → 线路起点距仓库 50 米内才在起点显示星
   if (tmStarMarker) { tmStarMarker.setMap(null); tmStarMarker = null; }
+  let starPt = null;
+  if (tmWhOn && list.length) {
+    starPt = { lat: WH.lat, lng: WH.lng };
+  } else if (linePts.length) {
+    const sp = linePts[0];
+    if (tmHaversine(sp.getLat(), sp.getLng(), WH.lat, WH.lng) < 50) starPt = { lat: sp.getLat(), lng: sp.getLng() };
+  }
   if (starPt) {
     tmStarMarker = new TMap.MultiMarker({
       map: tmMapObj,
       styles: { star: new TMap.MarkerStyle({ width: 20, height: 20, anchor: { x: 10, y: 10 }, src: 'pins/star.png' }) },
-      geometries: [{ id: 'wh', styleId: 'star', position: starPt }],
-      zIndex: 5
+      geometries: [{ id: 'wh', styleId: 'star', position: new TMap.LatLng(starPt.lat, starPt.lng) }],
+      zIndex: 6
     });
   }
   // 视野：切业务员/刷新=全部客户点；切天=未完成（全部已拜访则全部）
-  const fitPts = fitAll ? list : (list.filter(c => !c.visitedToday).length ? list.filter(c => !c.visitedToday) : list);
+  const fitPts = fitAll ? list : (list.filter(c => c.visitStatus !== 'visited').length ? list.filter(c => c.visitStatus !== 'visited') : list);
   if (fitPts.length) {
     const bounds = new TMap.LatLngBounds();
     fitPts.forEach(c => bounds.extend(new TMap.LatLng(c.lat, c.lng)));
     tmMapObj.fitBounds(bounds, { padding: { top: 40, right: 30, bottom: 40, left: 30 } });
   }
+  } catch (e) {
+    // 渲染错误直接显示到统计行，便于定位（2026-09-09 老板报障切天数无反应）
+    const st = $('taskStats');
+    if (st) st.textContent = '⚠️ 任务地图渲染错误：' + (e && e.message ? e.message : e);
+    console.error('renderTmDay error:', e);
+  }
 }
 
 function clearTmLayers() {
-  [tmMarkers, tmStarMarker, tmPolyline].forEach(m => { if (m) { m.setMap(null); } });
-  tmMarkers = tmStarMarker = tmPolyline = null;
+  (tmMarkers || []).forEach(m => { if (m) { m.setMap(null); } });
+  tmMarkers = null;
+  if (tmStarMarker) { tmStarMarker.setMap(null); tmStarMarker = null; }
+  if (tmPolyline) { tmPolyline.setMap(null); tmPolyline = null; }
   if (tmInfoWin) tmInfoWin.close();
 }
 
@@ -3032,20 +3183,20 @@ async function autoTick() {
     // 0：过期任务自动归档（2026-09-08 老板定：幂等；归档发生则刷新任务页）
     try {
       const ar = await api('autoArchiveExpired');
-      if (ar.ok && ar.archived > 0 && $('page-tasks').style.display === 'block') { loadTasks(); return; }
+      if (ar.ok && ar.archived > 0 && $('page-tasks').style.display !== 'none') { loadTasks(); return; }
     } catch (e) { /* 归档失败，下一轮再试 */ }
     // A：全局事件检测（不挑页面）：15 秒一次拉数据做 diff，新审核/新过期 → 响铃/语音/浮窗
     const list = await pollEvents();
     // A2：注册审核增量（2026-09-09 老板定：有新人员注册 → 两角标 + 男声「有新的人员需要您审核」两遍）
     await checkRegAlerts();
     // 页面内容刷新（指纹对比，无变化不碰 DOM）
-    if ($('page-taskDetail').style.display === 'block') {
+    if ($('page-taskDetail').style.display !== 'none') {
       if (curDetailTaskId) await refreshDetail();
-    } else if ($('page-tasks').style.display === 'block' && taskTab === 'active') {
+    } else if ($('page-tasks').style.display !== 'none' && taskTab === 'active') {
       if (list) applyTaskDiff(list); // 复用 pollEvents 的数据，行级增量更新（历史 Tab 不轮询）
-    } else if ($('page-customers').style.display === 'block' && curMode === 'mall') {
+    } else if ($('page-customers').style.display !== 'none' && curMode === 'mall') {
       await loadClaims();
-    } else if ($('page-track').style.display === 'block') {
+    } else if ($('page-track').style.display !== 'none') {
       await refreshTrackPage(); // 2026-09-08 M2：位置监控 15 秒轮询
     }
   } catch (e) { /* 静默，下一轮再试 */ }
@@ -3125,7 +3276,7 @@ function backToList() {
   curDetailTaskId = null;
   detailFp = '';
   ['taskDetail', 'newTask'].forEach(id => { $('page-' + id).style.display = 'none'; });
-  $('page-tasks').style.display = 'block';
+  $('page-tasks').style.display = 'flex';
   $('pageTitle').textContent = '任务管理';
   $('pageSub').textContent = curMode === 'mall' ? '回访工作台' : '新客开发工作台';
   loadTasks();
@@ -3475,6 +3626,7 @@ async function loadCustomers(batchId, batchName) {
   loadLastMallImport();
   const isNew = curMode === 'new';
   const batchMode = batchId !== undefined; // 批次详情页（含未分批 ''）
+  unbatchMode = batchId === '';
   const theadEl = batchMode ? $('batchThead') : $('custThead');
   const tbodyEl = batchMode ? $('batchTbody') : $('custTbody');
   const cols = 8;
@@ -3482,7 +3634,6 @@ async function loadCustomers(batchId, batchName) {
   const res = await api('listCustomers', batchId ? { batchId } : {});
   if (!res.ok) { tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="empty">${res.msg || '加载失败'}</td></tr>`; return; }
   let list = res.customers.filter(c => c.customerType === curMode);
-  const unbatchMode = batchId === '';
   if (unbatchMode) list = list.filter(c => !(c.batchIds || []).length);
   custListCache = list;
   // 两工作台各自一套列，互不混淆（两工作台均带最左序号列）：
@@ -3503,40 +3654,7 @@ async function loadCustomers(batchId, batchName) {
       <th style="width:58px;text-align:center">详情</th>
       <th style="width:42px;text-align:center">删除</th>
     </tr>`;
-    const rows = sortBatchList(list).map((c, i) => {
-      const globalSt = c.visitState === 'in_task' ? '<span class="pill blue">任务中</span>' : '<span class="pill gray">无任务</span>';
-      let taskSt = '—';
-      if (c.visitState === 'in_task' && c.visitStatus) {
-        const st = ST_MAP[c.visitStatus];
-        if (st) taskSt = `<span class="pill ${st[1]}">${st[0]}</span>`;
-      }
-      const phTitle = c.phone2 ? ` title="${esc(c.phone)} / ${esc(c.phone2)}"` : '';
-      const rowSel = batchChecked.has(c._id) ? ' class="row-sel"' : '';
-      // 坐标列：地址排序激活时「正常」替换为距仓库距离；审核/待定/补标状态文字保持不变（2026-09-08 老板定）
-      const distActive = !!(batchSort && batchSort.key === 'dist');
-      let coordCell = '补标';
-      if (c.coordFixPending) coordCell = '<span class="pill warn pill-big" style="cursor:pointer" onclick="openCoordFix(\'' + c._id + '\')">审核</span>';
-      else if (c.coord_status === 'pending_confirm') coordCell = '<span class="pill dred" style="cursor:pointer" onclick="openCoordFix(\'' + c._id + '\')">待定</span>';
-      else if (c.coord_status === 'ok') {
-        const dm = distToWareM(c);
-        coordCell = (distActive && dm >= 0) ? `<span style="font-size:11px" title="距仓库直线距离">${fmtDistText(dm)}</span>` : '正常';
-      }
-      return `<tr data-id="${c._id}"${rowSel}>
-      <td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}" ${batchChecked.has(c._id) ? 'checked' : ''}></td>
-      <td class="no">${i + 1}</td>
-      <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name)}"><b style="cursor:pointer" onclick="openCustProfile('${c._id}')">${esc(c.name)}</b></td>
-      <td style="white-space:nowrap;text-align:center">${globalSt}</td>
-      <td style="white-space:nowrap;text-align:center">${taskSt}</td>
-      <td class="light" style="white-space:nowrap"${phTitle}>${esc(c.phone || '—')}</td>
-      <td style="white-space:nowrap">${coordCell}</td>
-      <td class="light" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address || '—')}">${esc(shortAddr(c.address) || '—')}</td>
-      <td style="white-space:nowrap">${c.lastOrderAt ? esc(c.lastOrderAt) : '<span class="pill warn">未下单</span>'}</td>
-      <td style="text-align:center;white-space:nowrap">${c.lastVisitAt ? esc(String(c.lastVisitAt).slice(5)) : '—'}</td>
-      <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:30px;font-size:12px;padding:0 9px" onclick="showCustDetail('${c._id}')">详情</button></td>
-      <td style="text-align:center;white-space:nowrap">${unbatchMode ? '' : (c.lastVisitAt ? '<span style="color:#C3C9D2" title="有拜访记录，不能删除">—</span>' : `<span class="del-x" title="从本批次移除" onclick="event.stopPropagation();removeCustFromBatch('${c._id}', '${esc(c.name)}')">✕</span>`)}</td>
-    </tr>`;
-    }).join('');
-    tbodyEl.innerHTML = rows || `<tr><td colspan="12" class="empty">暂无客户，需要导入客户表</td></tr>`;
+    renderBatchTbody(); // 分页渲染（2026-09-09 老板定：固定每页 20 条）
   } else {
     // 新客/旧列表：保留类型列
     theadEl.innerHTML = `<tr><th class="no">#</th><th>店名</th><th>类型</th><th>地址</th><th>手机号</th><th>坐标</th><th>${isNew ? '开发状态' : '最近下单'}</th><th>详情</th></tr>`;
@@ -3586,6 +3704,19 @@ async function loadBatches() {
   if (!res.ok) { $('batchCards').innerHTML = `<div class="empty">${esc(res.msg || '加载失败')}</div>`; return; }
   batchCache = res.batches || [];
   renderBatchCards(res.batches, res.unbatched);
+  renderBatchSum(res.summary);
+}
+
+// 顶部工具卡汇总统计（2026-09-09 老板定：客户级去重四数字；云端旧版无 summary 时隐藏，避免假 0）
+function renderBatchSum(s) {
+  const box = $('bsStats');
+  if (!box) return;
+  if (!s || typeof s.total !== 'number') { box.style.display = 'none'; return; }
+  box.style.display = '';
+  $('bsTotal').textContent = s.total || 0;
+  $('bsInTask').textContent = s.in_task || 0;
+  $('bsFree').textContent = s.free || 0;
+  $('bsVisited').textContent = s.visited || 0;
 }
 
 function fmtBatchDate(ts) {
@@ -3601,27 +3732,31 @@ function renderBatchCards(batches, unbatched) {
     const total = s.total || 0;
     const dispatched = (s.in_task || 0) + (s.visited || 0);
     const pct = n => total ? Math.round(n / total * 100) : 0;
-    return `<div class="batch-card" onclick="openBatchCusts('${b._id}', '${esc(b.name)}')">
-      <div class="bc-top">
-        <div class="bc-name">📁 ${esc(b.name)}</div>
-        <button class="btn primary" style="height:32px;font-size:12.5px;padding:0 14px" onclick="event.stopPropagation();openNewTaskForBatch('${b._id}', '${esc(b.name)}')">＋ 新建任务</button>
-      </div>
-      ${b.subtitle ? `<div class="bc-sub">${esc(b.subtitle)}</div>` : ''}
-      <div class="bc-date">${fmtBatchDate(b.createdAt)}${b.createdBy ? ' · ' + esc(b.createdBy) : ''}</div>
-      <div class="bc-nums">
-        <div class="bc-num"><div class="v">${total}</div><div class="k">客户总数</div></div>
-        <div class="bc-num"><div class="v blue">${s.in_task || 0}</div><div class="k">任务中</div></div>
-        <div class="bc-num"><div class="v">${s.free || 0}</div><div class="k">无任务</div></div>
-        <div class="bc-num"><div class="v green">${s.visited || 0}</div><div class="k">已拜访过</div></div>
-      </div>
-      <div class="bc-bars">
-        <div class="bc-bar"><span class="k">已派过任务</span><span class="tr"><i style="width:${pct(dispatched)}%"></i></span><span class="p">${pct(dispatched)}%</span></div>
-        <div class="bc-bar"><span class="k">历史拜访率</span><span class="tr"><i class="g" style="width:${pct(s.visited || 0)}%"></i></span><span class="p">${pct(s.visited || 0)}%</span></div>
+    return `<div class="batch-card" onclick="playTkClick();openBatchCusts('${b._id}', '${esc(b.name)}')">
+      <div class="bc-main">
+        <div class="bc-left">
+          <div class="bc-name"><span class="bc-name-t">📁 ${esc(b.name)}</span><span class="bc-ren" title="改批次名称/副标题" onclick="playTkClick();event.stopPropagation();openBatchRename('${b._id}')">✏️</span></div>
+          ${b.subtitle ? `<div class="bc-sub">${esc(b.subtitle)}</div>` : ''}
+          <div class="bc-date">${fmtBatchDate(b.createdAt)}${b.createdBy ? ' · ' + esc(b.createdBy) : ''}</div>
+          <button class="btn primary bc-newbtn" style="height:32px;font-size:12.5px;padding:0 14px" onclick="playTkClick();event.stopPropagation();openNewTaskForBatch('${b._id}', '${esc(b.name)}')">＋ 新建任务</button>
+        </div>
+        <div class="bc-vline"></div>
+        <div class="bc-right">
+          <div class="bc-nums">
+            <div class="bc-num"><div class="v">${total}</div><div class="k">客户总数</div></div>
+            <div class="bc-num"><div class="v blue">${s.in_task || 0}</div><div class="k">任务中</div></div>
+            <div class="bc-num"><div class="v">${s.free || 0}</div><div class="k">无任务</div></div>
+            <div class="bc-num"><div class="v green">${s.visited || 0}</div><div class="k">已拜访过</div></div>
+          </div>
+          <div class="bc-bars">
+            <div class="bc-bar"><span class="k">已派过任务</span><span class="tr"><i style="width:${pct(dispatched)}%"></i></span><span class="p">${pct(dispatched)}%</span></div>
+            <div class="bc-bar"><span class="k">历史拜访率</span><span class="tr"><i class="g" style="width:${pct(s.visited || 0)}%"></i></span><span class="p">${pct(s.visited || 0)}%</span></div>
+          </div>
+        </div>
       </div>
       <div class="bc-ops" onclick="event.stopPropagation()">
         <button class="btn-clear" onclick="openMallMatchFor('${b._id}', '${esc(b.name)}')">🔎 比对认领</button>
         <button class="btn-clear" onclick="openClaimsFor('${b._id}', '${esc(b.name)}')">📋 待确认认领</button>
-        <button class="btn-clear" onclick="openBatchRename('${b._id}')">✏️ 改名</button>
         <button class="btn-clear" onclick="openImport(true, '${b._id}')">📥 追加导入</button>
         <button class="btn-clear" onclick="deleteBatch('${b._id}', '${esc(b.name)}', ${total})">🗑 删除</button>
       </div>
@@ -3706,7 +3841,7 @@ async function confirmCopyBatch() {
     alert(res.msg || '已复制到新批次 ✓');
     batchChecked = new Set(); // 清勾选
     loadBatches(); // 批次列表出现新批次
-    if ($('page-batchDetail').style.display === 'block') loadCustomers(curBatchId, curBatchName); // 刷新当前表（勾选清空）
+    if ($('page-batchDetail').style.display !== 'none') loadCustomers(curBatchId, curBatchName); // 刷新当前表（勾选清空）
   } finally {
     copyBatchBusy = false;
     if (btn) { btn.disabled = false; btn.textContent = '创建并复制'; }
@@ -3738,12 +3873,112 @@ function fmtDistText(m) {
   return m < 1000 ? Math.round(m) + ' 米' : (m / 1000).toFixed(1) + ' 公里';
 }
 
+// ===== 批次详情分页（2026-09-09 老板定：固定每页 20 条 + 上一页/下一页；勾选跨页保留；搜索对全部客户过滤后再分页） =====
+let batchPage = 1;
+const batchPageSize = 20;
+let batchSearchQ = '';
+let unbatchMode = false; // 未分批模式（行模板用）
+
+function renderBatchTbody() {
+  const box = $('batchTbody');
+  if (!box || !custListCache) return;
+  let list = custListCache;
+  const q = batchSearchQ;
+  if (q) {
+    const hay = c => ((c.name || '') + ' ' + (c.phone || '') + ' ' + (c.phone2 || '') + ' ' + shortAddr(c.address || '')).toLowerCase();
+    list = list.filter(c => hay(c).includes(q));
+  }
+  const sorted = sortBatchList(list);
+  const total = sorted.length;
+  const pages = Math.max(1, Math.ceil(total / batchPageSize));
+  if (batchPage > pages) batchPage = pages;
+  if (batchPage < 1) batchPage = 1;
+  const pageList = sorted.slice((batchPage - 1) * batchPageSize, batchPage * batchPageSize);
+  const rows = pageList.map((c, idx) => {
+    const i = (batchPage - 1) * batchPageSize + idx; // 全局序号：跨页连续
+    const globalSt = c.visitState === 'in_task' ? '<span class="pill blue">任务中</span>' : '<span class="pill gray">无任务</span>';
+    let taskSt = '—';
+    if (c.visitState === 'in_task' && c.visitStatus) {
+      const st = ST_MAP[c.visitStatus];
+      if (st) taskSt = `<span class="pill ${st[1]}">${st[0]}</span>`;
+    }
+    const phTitle = c.phone2 ? ` title="${esc(c.phone)} / ${esc(c.phone2)}"` : '';
+    const rowSel = batchChecked.has(c._id) ? ' class="row-sel"' : '';
+    const distActive = !!(batchSort && batchSort.key === 'dist');
+    let coordCell = '补标';
+    if (c.coordFixPending) coordCell = '<span class="pill warn pill-big" style="cursor:pointer" onclick="openCoordFix(\'' + c._id + '\')">审核</span>';
+    else if (c.coord_status === 'pending_confirm') coordCell = '<span class="pill dred" style="cursor:pointer" onclick="openCoordFix(\'' + c._id + '\')">待定</span>';
+    else if (c.coord_status === 'ok') {
+      const dm = distToWareM(c);
+      coordCell = (distActive && dm >= 0) ? `<span style="font-size:11px" title="距仓库直线距离">${fmtDistText(dm)}</span>` : '正常';
+    }
+    return `<tr data-id="${c._id}" data-search="${esc(((c.name || '') + ' ' + (c.phone || '') + ' ' + (c.phone2 || '') + ' ' + shortAddr(c.address || '')).toLowerCase())}"${rowSel}>
+      <td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}" ${batchChecked.has(c._id) ? 'checked' : ''}></td>
+      <td class="no">${i + 1}</td>
+      <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name)}"><b style="cursor:pointer" onclick="openCustProfile('${c._id}')">${esc(c.name)}</b></td>
+      <td style="white-space:nowrap;text-align:center">${globalSt}</td>
+      <td style="white-space:nowrap;text-align:center">${taskSt}</td>
+      <td class="light" style="white-space:nowrap"${phTitle}>${esc(c.phone || '—')}</td>
+      <td style="white-space:nowrap">${coordCell}</td>
+      <td class="light" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address || '—')}">${esc(shortAddr(c.address) || '—')}</td>
+      <td style="white-space:nowrap">${c.lastOrderAt ? esc(c.lastOrderAt) : '<span class="pill warn">未下单</span>'}</td>
+      <td style="text-align:center;white-space:nowrap">${c.lastVisitAt ? esc(String(c.lastVisitAt).slice(5)) : '—'}</td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:24px;font-size:12px;padding:0 9px" onclick="showCustDetail('${c._id}')">详情</button></td>
+      <td style="text-align:center;white-space:nowrap">${unbatchMode ? '' : (c.lastVisitAt ? '<span style="color:#C3C9D2" title="有拜访记录，不能删除">—</span>' : `<span class="del-x" title="从本批次移除" onclick="event.stopPropagation();removeCustFromBatch('${c._id}', '${esc(c.name)}')">✕</span>`)}</td>
+    </tr>`;
+  }).join('');
+  // 2026-09-09 老板定：最后一页不足 20 条补空行，表格保持与前几页相同的固定高度（翻页不跳动）
+  let rowsHtml = rows;
+  if (pageList.length < batchPageSize && total > 0) {
+    for (let k = pageList.length; k < batchPageSize; k++) {
+      rowsHtml += '<tr class="row-fill"><td colspan="12" style="height:36px">&nbsp;</td></tr>';
+    }
+  }
+  box.innerHTML = rowsHtml || `<tr><td colspan="12" class="empty">${q ? '没有匹配的客户' : '暂无客户，需要导入客户表'}</td></tr>`;
+  renderBatchPageBar(total, pages, q);
+}
+
+function renderBatchPageBar(total, pages, q) {
+  const bar = $('batchPagebar');
+  if (!bar) return;
+  const need = total > batchPageSize;
+  bar.style.display = need ? 'flex' : 'none';
+  if (need) {
+    $('batchPageNum').textContent = batchPage;
+    $('batchPageTotal').textContent = pages;
+    $('batchPrevBtn').disabled = batchPage <= 1;
+    $('batchNextBtn').disabled = batchPage >= pages;
+  }
+  const cnt = $('batchSearchCount');
+  if (cnt) { cnt.style.display = q ? '' : 'none'; cnt.textContent = '筛出 ' + total + ' 家'; }
+}
+
+function batchGotoPage(p) {
+  batchPage = Math.max(1, Math.round(Number(p) || 1));
+  renderBatchTbody();
+}
+
+// ===== 批次详情标题栏中央搜索（2026-09-09 老板定：对全部客户过滤后再分页） =====
+function onBatchSearch() {
+  batchSearchQ = ($('batchSearchInput').value || '').trim().toLowerCase();
+  batchPage = 1;
+  const clr = $('batchSearchClear');
+  if (clr) clr.style.display = batchSearchQ ? '' : 'none';
+  renderBatchTbody();
+}
+function clearBatchSearch() {
+  const inp = $('batchSearchInput');
+  if (inp) inp.value = '';
+  onBatchSearch();
+}
+
 function toggleBatchSort(key) {
   if (batchSort && batchSort.key === key) {
     batchSort.dir = batchSort.dir === 'desc' ? 'asc' : 'desc'; // 两态循环
   } else {
     batchSort = { key, dir: 'desc' }; // 首次点该列：最近在上
   }
+  batchPage = 1; // 排序后回到第 1 页（2026-09-09 老板定）
   loadCustomers(curBatchId, curBatchName);
 }
 
@@ -3818,7 +4053,16 @@ function openBatchCusts(batchId, batchName) {
   curBatchId = batchId;
   curBatchName = batchName || '';
   batchChecked = new Set(); // 换批次清空勾选（2026-09-08：批次详情勾选/划选）
+  batchPage = 1;           // 2026-09-09：换批次回第 1 页
+  batchSearchQ = '';       // 2026-09-09：换批次清空搜索
+  const si = $('batchSearchInput');
+  if (si) si.value = '';
+  const sx = $('batchSearchClear');
+  if (sx) sx.style.display = 'none';
   nav('batchDetail');
+  // 2026-09-09 老板定：先进详情先隐藏右上角「共 X 家」（否则残留上一个批次的旧数字误导），数据刷新完成才显示
+  const st = $('batchCustStat');
+  if (st) st.textContent = '';
   loadCustomers(batchId, batchName);
 }
 
@@ -3844,7 +4088,7 @@ async function saveBatchRename() {
   $('batchRenameOvl').style.display = 'none';
   loadBatches();
   // 正在批次详情页 → 同步刷新标题与名称（2026-09-08：改名铅笔在卡片标题上）
-  if ($('page-batchDetail').style.display === 'block' && renameBatchId === curBatchId) {
+  if ($('page-batchDetail').style.display !== 'none' && renameBatchId === curBatchId) {
     loadCustomers(curBatchId, name);
   }
 }
@@ -5130,7 +5374,7 @@ async function applyLocalMatch() {
   btn.disabled = false;
 }
 </script>
-<script src="nt-map.js?v=0922"></script>
+<script src="nt-map.js?v=0924"></script>
     <!-- 照片弹窗预览（2026-09-08 老板定：点图片浮层显示，不走浏览器下载） -->
     <div class="ovl" id="photoOvl" style="display:none;z-index:95;background:rgba(10,14,20,.82)" onclick="hidePhoto()">
       <img id="photoImg" src="" style="max-width:92vw;max-height:88vh;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5);cursor:zoom-out" title="点击关闭" onclick="event.stopPropagation()">

@@ -46,6 +46,8 @@ async function getToken() {
 }
 
 async function callApi(body) {
+  const t0 = Date.now();
+  const action = (body && body.action) || '?';
   const token = await getToken();
   // 官方格式：POST body 整体直接作为云函数入参（不要包裹 {data:...}）
   const url = `https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=${token}&env=${encodeURIComponent(cfg.envId)}&name=adminapi`;
@@ -62,6 +64,8 @@ async function callApi(body) {
   if (typeof out === 'string') {
     try { out = JSON.parse(out); } catch (e) { /* 非 JSON 则原样透传 */ }
   }
+  // 每次云函数调用打耗时日志（2026-09-09：老板报障重启后首屏 10 多秒，用日志定位慢的 action）
+  console.log(`[api] ${action} ${Date.now() - t0}ms`);
   return JSON.stringify(out);
 }
 
@@ -458,6 +462,11 @@ function startServer(port, attempts) {
     console.log(`   环境：${cfg.envId} · AppID：${cfg.appid}`);
     // 把实际端口写文件：无边框壳程序（JuHuoVisitAdmin.exe）读它加载页面
     try { fs.writeFileSync(path.join(__dirname, 'current-port.txt'), String(port)); } catch (e) { /* 写入失败不影响服务 */ }
+    // 启动预热（2026-09-09 老板报障：重启后首次进任务页卡片 10 多秒才出 = 云函数冷启动；
+    // 启动即取 access_token + 先调一次云函数，让容器热起来，登录后首屏不再等冷启动）
+    getToken()
+      .then(() => callApi({ action: 'getSettings' }).catch(() => {}))
+      .catch(() => {});
     if (!NO_BROWSER) openBrowser(port);
   });
 }

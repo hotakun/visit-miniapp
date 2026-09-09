@@ -4,8 +4,12 @@
 // ---------- window.toggleNameDot 挂载 ----------
 window.toggleNameDot = toggleNameDot;
 
-// ---------- 电梯滚动监听（全局） ----------
+// ---------- 电梯滚动监听（全局；2026-09-09 页面不出滚动条后滚动容器改为 #page-newTask，双监听） ----------
 window.addEventListener('scroll', elevatorOnScroll, { passive: true });
+(function bindNtScroll() {
+  const p = document.getElementById('page-newTask');
+  if (p) p.addEventListener('scroll', elevatorOnScroll, { passive: true });
+})();
 window.addEventListener('resize', () => { positionElevator(); renderRouteSvg(); });
 
 
@@ -20,15 +24,23 @@ function setElevator(dir) {
 }
 function elevatorClick() {
   if (nwStep !== 2) return;
+  // 2026-09-09：页面级滚动已禁止，实际滚动容器是 #page-newTask（滚动条隐藏，滚轮可用）
+  const sc = $('page-newTask');
+  const scrollTo = (top) => {
+    if (sc) sc.scrollTo({ top, behavior: 'smooth' });
+    else window.scrollTo({ top, behavior: 'smooth' });
+  };
   if (elevatorDir === 'down') {
-    // 到页面文档最底端（覆盖列表下方的向导按钮条）
-    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+    // 到第 2 步内容最底端（覆盖列表下方的向导按钮条）
+    scrollTo(sc ? sc.scrollHeight : document.documentElement.scrollHeight);
   } else {
-    // 回到第 2 步整卡顶端再上移 100px：天页签条+地图全露出，顶部留余量
+    // 回到第 2 步整卡顶端再上移 70px：天页签条+地图全露出，顶部留余量
     const w2 = $('wiz2');
     if (w2) {
-      const y = w2.getBoundingClientRect().top + window.scrollY - 70;
-      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      const y = sc
+        ? (w2.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 70)
+        : (w2.getBoundingClientRect().top + window.scrollY - 70);
+      scrollTo(Math.max(0, y));
     }
   }
 }
@@ -415,6 +427,16 @@ function updateRouteStar() {
   const show = !!(route && route.pts && route.pts.length);
   ntRouteStarLabel.style.display = show ? '' : 'none';
   positionDomLabels();
+}
+
+// ===== 全览控件（2026-09-09 老板定：地图内导航球下方圆钮——屏幕上显示的客户点全部撑满一屏，留余量避免溢出） =====
+function ntFitBounds() {
+  if (!ntMap) return;
+  const pts = (custCache || []).filter(c => c.lat && c.lng);
+  if (!pts.length) return;
+  const b = new TMap.LatLngBounds();
+  pts.forEach(c => b.extend(new TMap.LatLng(c.lat, c.lng)));
+  ntMap.fitBounds(b, { padding: { top: 70, right: 70, bottom: 50, left: 50 } });
 }
 
 // ---------- renderMarkers ----------

@@ -13,7 +13,7 @@ const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 const BOSS_PHONE = '15055492888';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'ping'];
 
 exports.main = async (event) => {
   const action = (event && event.action) || 'login';
@@ -2243,12 +2243,22 @@ async function listCustomerBatches(event) {
     stat[m.batchId].total++;
   });
   const all = await fetchAll('customers', {}, { _id: true, batchIds: true });
-  const unbatched = all.filter(c => !Array.isArray(c.batchIds) || !c.batchIds.length).length;
+  const batched = all.filter(c => Array.isArray(c.batchIds) && c.batchIds.length);
+  const unbatched = all.length - batched.length;
+  // 全部批次汇总（2026-09-09 老板定：顶部工具卡统计区；客户级去重——客户可属多个批次，Σ 各批 stats 会重复计数）
+  // 口径与批次卡一致：in_task=当前有 published/reviewing 任务的客户；free=非任务中；visited=有正常拜访记录的客户
+  const summary = {
+    total: batched.length,
+    in_task: batched.filter(c => inTaskSet.has(c._id)).length,
+    free: batched.filter(c => !inTaskSet.has(c._id)).length,
+    visited: batched.filter(c => visitedSet.has(c._id)).length
+  };
   batches.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return {
     ok: true,
     batches: batches.map(b => ({ _id: b._id, name: b.name || '', subtitle: b.subtitle || '', createdAt: b.createdAt || 0, createdBy: b.createdBy || '', autoNamePrefix: b.autoNamePrefix || '', stats: stat[b._id] || { in_task: 0, free: 0, visited: 0, total: 0 } })),
-    unbatched
+    unbatched,
+    summary
   };
 }
 
