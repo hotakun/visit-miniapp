@@ -353,7 +353,7 @@ Page({
     }
     // 静默刷新：成功后不再弹「已刷新」提示（老板 2026-09-09 定）
   },
-  // 满屏撑满：视野缩放到当天全部客户点，顶部留白避开横幅条与天页签（2026-09-09 老板定）
+  // 满屏撑满：视野缩放到当天全部客户点，四边留白避开横幅条/天页签/矮TAB/安全区/店名气泡（2026-09-09 老板定）
   fitAllCustomers() {
     const task = this.task;
     const curDay = this.data.curDay;
@@ -363,10 +363,18 @@ Page({
       .filter(c => c && c.lat && c.lng)
       .map(c => ({ latitude: c.lat, longitude: c.lng }));
     if (!pts.length) return; // 静默：当天无客户点不打扰（2026-09-09 老板定）
+    // 2026-09-09 冲突修复：底部必须动态算（矮TAB 40px + 手机安全区 + 14 空隙）——
+    // 之前写死 36 是在加 TAB 栏之前定的，TAB 加高后底部客户点被压住，撑满限制形同失效
+    let safeBottom = 0;
+    try {
+      const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      safeBottom = Math.max(0, (info.screenHeight - info.safeArea.bottom) || 0);
+    } catch (e) { /* 静默 */ }
+    const bottomPad = 40 + safeBottom + 14;
     wx.createMapContext('mp', this).includePoints({
       points: pts,
-      // 2026-09-09 老板定（紧凑档）：上 120 避开天页签+横幅条；右/左 32、下 36 留出圆标呼吸空间防溢出
-      padding: [120, 32, 36, 32]
+      // 上 132 避开天页签+横幅（含老板模式下拉）；左右 44 给店名气泡留空间；底=动态避开 TAB+安全区
+      padding: [132, 44, bottomPad, 44]
     });
   },
   // 回到我的位置：切回当天 + 视野居中到定位坐标（2026-09-09 老板定：蓝点用微信自带 show-location，

@@ -57,13 +57,19 @@ Page({
     }
   },
 
-  // 撑满：全部业务员点入屏（手动刷新/首次进入才调用）
+  // 撑满：全部业务员点入屏（手动刷新/首次进入才调用）；2026-09-09 冲突修复：底部动态避开四栏 TAB+安全区
   fitAll() {
     const pts = (this._points || [])
       .filter(p => p && !p.noData && p.lat && p.lng)
       .map(p => ({ latitude: p.lat, longitude: p.lng }));
     if (!pts.length) return;
-    wx.createMapContext('wmp', this).includePoints({ points: pts, padding: [16, 16, 16, 16] });
+    let safeBottom = 0;
+    try {
+      const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      safeBottom = Math.max(0, (info.screenHeight - info.safeArea.bottom) || 0);
+    } catch (e) { /* 静默 */ }
+    const bottomPad = 55 + safeBottom + 12; // 四栏 TAB（110rpx≈55px）+ 安全区 + 空隙
+    wx.createMapContext('wmp', this).includePoints({ points: pts, padding: [16, 16, bottomPad, 16] });
   },
   // ↻ 刷新：静默重拉数据 + 撑满（2026-09-09 老板定；防连点+旋转动效 2026-09-09 修复）
   async refreshMap() {
