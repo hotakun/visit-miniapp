@@ -109,8 +109,8 @@ Page({
         latitude: c.lat,
         longitude: c.lng,
         iconPath: icon,
-        width: 36,
-        height: 36
+        width: 28,   // 2026-09-09 老板定：28×28 圆标 + 资源内置 80% 透明度
+        height: 28
       };
     });
     // 路线：真实道路轨迹（后台规划存任务）；无轨迹 → 按顺序直线兜底
