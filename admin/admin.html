@@ -4399,9 +4399,17 @@ async function applyDist() {
   try {
     const ap = await fetch('/admin-dist/apply', { method: 'POST' }).then(r => r.json());
     if (ap && ap.ok) {
-      st.textContent = '更新完成，正在重载…';
-      st.style.color = '#16A34A'; // 绿：成功
-      location.reload();
+      if (ap.needRestart) {
+        // 2026-09-09：server.js 也更新了 → 必须重启壳程序才生效
+        st.innerHTML = '更新完成 <b>v' + esc(ap.version || '') + '</b>：页面与后台程序已更新，<b style="color:#EA8A00">请重启后台程序</b>（关闭窗口后重新打开 JuHuoVisitAdmin.exe）';
+        st.style.color = '#EA8A00'; // 橙：需重启
+        btn.textContent = '🔍 检查更新';
+        btn.onclick = checkDist;
+      } else {
+        st.textContent = '更新完成，正在重载…';
+        st.style.color = '#16A34A'; // 绿：成功
+        location.reload();
+      }
       return;
     }
     st.textContent = (ap && ap.msg) || '更新失败';

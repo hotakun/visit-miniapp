@@ -421,11 +421,11 @@ async function readDist() {
 
 async function uploadAdminDist(event) {
   const { kind, part, total, content, version } = event;
-  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  if (!['adminHtml', 'ntMapJs', 'serverJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
   const p = parseInt(part, 10), t = parseInt(total, 10);
   if (!(p >= 0 && t >= 1 && p < t)) return { ok: false, code: 'BAD_ARG', msg: '分片参数不合法' };
   if (typeof content !== 'string' || !content) return { ok: false, code: 'BAD_ARG', msg: '分片内容为空' };
-  const prev = (await readDist()) || { version: '', adminHtml: '', ntMapJs: '' };
+  const prev = (await readDist()) || { version: '', adminHtml: '', ntMapJs: '', serverJs: '' };
   if (p === 0) prev[kind] = '';
   prev[kind] += content;
   if (p === t - 1) {
@@ -443,13 +443,14 @@ async function getAdminDistMeta() {
     ok: true,
     version: d.version,
     adminHtmlParts: Math.ceil(d.adminHtml.length / DIST_CHUNK),
-    ntMapJsParts: Math.ceil(d.ntMapJs.length / DIST_CHUNK)
+    ntMapJsParts: Math.ceil(d.ntMapJs.length / DIST_CHUNK),
+    serverJsParts: d.serverJs ? Math.ceil(d.serverJs.length / DIST_CHUNK) : 0 // 2026-09-09：server.js 纳入分发（旧数据无此片=0）
   };
 }
 
 async function getAdminDistPart(event) {
   const { kind, part } = event;
-  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  if (!['adminHtml', 'ntMapJs', 'serverJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
   const d = await readDist();
   if (!d || !d[kind]) return { ok: false, code: 'NO_DIST', msg: '分片不存在' };
   const p = parseInt(part, 10);

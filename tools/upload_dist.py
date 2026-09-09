@@ -37,12 +37,14 @@ def upload_file(kind, text, version):
 def main():
     html = open(r'admin\admin.html', encoding='utf-8').read()
     ntmap = open(r'admin\nt-map.js', encoding='utf-8').read()
+    serverjs = open(r'admin\server.js', encoding='utf-8').read()  # 2026-09-09：server.js 纳入分发
     m = re.search(r"const APP_VERSION = '([^']+)'", html)
     version = m.group(1) if m else '0.9.00'
-    print('目标版本：v%s | admin.html %d 字符 | nt-map.js %d 字符' % (version, len(html), len(ntmap)))
+    print('目标版本：v%s | admin.html %d 字符 | nt-map.js %d 字符 | server.js %d 字符' % (version, len(html), len(ntmap), len(serverjs)))
     print('正在上传到 %s ...' % BASE)
     upload_file('adminHtml', html, version)
     upload_file('ntMapJs', ntmap, version)
+    upload_file('serverJs', serverjs, version)
     print('[完成] 上传完成：云端分发版本 = v%s（文员点 检查更新 即可对齐）' % version)
 
 

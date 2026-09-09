@@ -399,8 +399,19 @@ const server = http.createServer(async (req, res) => {
       const ntmap = await grab('ntMapJs', meta.ntMapJsParts);
       require('fs').writeFileSync(require('path').join(__dirname, 'admin.html'), html, 'utf8');
       require('fs').writeFileSync(require('path').join(__dirname, 'nt-map.js'), ntmap, 'utf8');
+      // 2026-09-09 老板定：server.js 纳入云端热更新——先备份旧版再覆盖，避免写坏后无法启动；
+      // 覆盖正在运行的 server.js 安全（Node 启动时已读入内存），生效需重启壳程序
+      let needRestart = false;
+      if (meta.serverJsParts > 0) {
+        const sjs = await grab('serverJs', meta.serverJsParts);
+        const fs = require('fs');
+        const sp = require('path').join(__dirname, 'server.js');
+        if (fs.existsSync(sp)) fs.copyFileSync(sp, sp + '.bak');
+        fs.writeFileSync(sp, sjs, 'utf8');
+        needRestart = true;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, version: meta.version }));
+      res.end(JSON.stringify({ ok: true, version: meta.version, needRestart }));
     } catch (e) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, msg: e.message }));
