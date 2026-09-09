@@ -317,6 +317,44 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .ptab{display:inline-flex;background:#F0F2F5;border-radius:10px;padding:3px;gap:2px;font-size:13.5px}
 .ptab-i{padding:6px 15px;border-radius:8px;font-weight:800;color:var(--sub);cursor:pointer;white-space:nowrap}
 .ptab-i.on{background:#fff;color:var(--primary-deep);box-shadow:0 1px 4px rgba(31,36,48,.14)}
+
+/* ===== 任务管理大卡（2026-09-09 老板定：当前任务/历史任务/任务地图 三段标签一张卡）===== */
+.task-shell{background:#fff;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden}
+.task-shell-head{padding:16px 18px 0}
+.ts-tabs{display:inline-flex;gap:4px;background:#F3F5F8;padding:4px;border-radius:12px}
+.ts-tab{padding:8px 18px;border-radius:9px;font-size:13px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap;transition:all .15s}
+.ts-tab:hover{color:#333A44}
+.ts-tab.on{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(245,83,28,.3)}
+/* 当前任务精致卡（2026-09-09） */
+.tk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:12px}
+.tk-card{background:#fff;border:1px solid var(--line);border-left:4px solid #2F80ED;border-radius:14px;padding:14px 16px;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.tk-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(31,36,48,.10)}
+.tkc-top{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.tkc-name{font-size:14.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkc-no{font-size:11px;color:var(--sub);font-weight:700;margin-top:4px}
+.tkc-req{font-size:11px;color:#B97A0B;font-weight:700;margin-top:4px}
+.tkc-meta{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--sub);font-weight:600}
+.tkc-prog{display:flex;align-items:center;gap:9px;margin-top:11px;font-size:12px;font-weight:700;color:#4A5360}
+.tkc-bar{flex:1;height:7px;background:#EEF0F3;border-radius:99px;overflow:hidden}
+.tkc-bar i{display:block;height:100%;background:linear-gradient(90deg,#2F80ED,#6BA6F2);border-radius:99px;transition:width .3s}
+.tkc-bar.done i{background:linear-gradient(90deg,#16A34A,#7BC47F)}
+.tkc-bar.exp i{background:linear-gradient(90deg,#E5484D,#F0A3A6)}
+.tkc-bar.rev i{background:linear-gradient(90deg,#F5A623,#F8C471)}
+.tkc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:10px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--sub);font-weight:600}
+.tk-empty{padding:40px 0;text-align:center;color:var(--sub);font-size:13.5px}
+/* 任务地图标签（2026-09-09 手机老板任务地图移植） */
+.tm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.tm-days{display:flex;gap:6px;flex-wrap:wrap}
+.tm-day{padding:6px 14px;border-radius:999px;background:#F0F2F5;font-size:12.5px;font-weight:700;color:var(--sub);cursor:pointer;transition:all .15s}
+.tm-day.on{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(245,83,28,.25)}
+.tm-sel{height:32px;border:1px solid var(--line);border-radius:9px;padding:0 10px;font-size:12.5px;font-weight:600;color:#333A44;background:#fff;outline:0}
+.tm-legend{display:flex;gap:14px;align-items:center;margin-top:10px;font-size:12px;color:var(--sub);font-weight:600;flex-wrap:wrap}
+.tm-legend .lg-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+/* 任务地图店名气泡（2026-09-09） */
+.tm-iw{background:#fff;border-radius:10px;padding:9px 13px;font-size:12px;color:#333A44;box-shadow:0 3px 14px rgba(31,36,48,.18);min-width:120px}
+.tm-iw b{font-size:13px}
+.tm-iw div{margin-top:3px}
+
 /* 历史任务卡片（点整卡查看档案） */
 .hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;margin-bottom:14px}
 .hist-card{background:#fff;border-radius:16px;padding:15px 17px 13px;box-shadow:0 2px 10px rgba(31,36,48,.07);cursor:pointer;border-top:3px solid #E4E7EC;transition:box-shadow .15s,transform .15s}
@@ -409,7 +447,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="grp">工作台</div>
     <div class="ni dis" title="开发中">📊 仪表盘</div>
     <div class="ni on" data-p="tasks" onclick="nav('tasks')">🧭 任务管理</div>
-    <div class="ni" data-p="track" onclick="nav('track')">🗺 位置监控</div>
+    <div class="ni" data-p="track" onclick="goTaskMap()">🗺 任务地图</div>
     <div class="ni dis" title="开发中">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
     <div class="ni" data-p="customers" onclick="nav('customers')">🏪 客户管理</div>
@@ -486,24 +524,38 @@ input,textarea{-webkit-user-select:text;user-select:text}
       </div>
     </div>
 
-    <!-- 任务管理 -->
+    <!-- 任务管理（2026-09-09 老板定：当前任务/历史任务/任务地图 整合进一张大卡，三段标签切换） -->
     <div id="page-tasks">
       <div class="title-bar">
-        <span class="t" style="display:inline-flex;align-items:center;gap:14px">
-          <span id="taskListTitle">全部任务</span>
-          <span class="ptab" id="taskTabs">
-            <span class="ptab-i on" data-tab="active" onclick="switchTaskTab('active')">当前任务</span>
-            <span class="ptab-i" data-tab="history" onclick="switchTaskTab('history')">历史任务</span>
-          </span>
-        </span>
+        <span class="t">任务管理</span>
         <span class="r"><button class="btn primary" onclick="showNewTask()">＋ 新建任务</button></span>
       </div>
-      <div class="task-stats" id="taskStats"></div>
-      <div id="histWrap" style="display:none"></div>
-      <div id="taskTableWrap"><div class="card"><table class="tbl">
-        <thead><tr><th>任务</th><th>业务员</th><th>目的</th><th>进度</th><th>截止</th><th>状态</th><th>操作</th></tr></thead>
-        <tbody id="taskTbody"><tr><td colspan="7" class="loading">加载中…</td></tr></tbody>
-      </table></div></div>
+      <div class="task-shell">
+        <div class="task-shell-head">
+          <div class="ts-tabs">
+            <span class="ts-tab on" data-tab="active" onclick="switchTaskTab('active')">当前任务</span>
+            <span class="ts-tab" data-tab="history" onclick="switchTaskTab('history')">历史任务</span>
+            <span class="ts-tab" data-tab="map" onclick="switchTaskTab('map')">🗺 任务地图</span>
+          </div>
+        </div>
+        <div class="task-shell-body">
+          <div id="taskStats" style="padding:14px 18px 0;font-size:12.5px;font-weight:700"></div>
+          <div id="activeWrap" style="padding:4px 18px 18px">
+            <div id="taskCards" class="tk-grid"></div>
+          </div>
+          <div id="histWrap" style="display:none;padding:4px 18px 18px"></div>
+          <!-- 任务地图标签（2026-09-09 老板定：手机老板任务地图移植——天页签+业务员下拉+数字圆标+绿线+仓库星+店名气泡） -->
+          <div id="mapWrap" style="display:none;padding:12px 18px 18px">
+            <div class="tm-bar">
+              <div class="tm-days" id="tmDays"></div>
+              <select id="tmMen" class="tm-sel" onchange="onTmMen()"></select>
+              <button class="btn ghost" style="height:30px;font-size:12px;padding:0 12px;margin-left:auto" onclick="refreshTaskMap()">↻ 刷新</button>
+            </div>
+            <div id="tmMap" style="height:56vh;min-height:380px;border-radius:14px;position:relative;border:1px solid var(--line)"></div>
+            <div class="tm-legend" id="tmLegend"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 任务详情（demo 五层结构：信息卡/KPI/每天计划/明细表/操作条） -->
@@ -1380,15 +1432,15 @@ let rowsFp = {};     // 各任务行当前显示内容的指纹（增量更新�
 let rowsOrder = '';  // 当前 DOM 行的 id 顺序
 let statsFp = '';    // 统计栏当前显示内容的指纹
 
-// ===== 任务页 Tab：当前任务 / 历史任务（2026-09-08 老板定） =====
+// ===== 任务页 Tab：当前任务 / 历史任务 / 任务地图（2026-09-09 老板定：一张大卡三段标签） =====
 let taskTab = 'active';
 
 async function loadTasks() {
-  // 按 Tab 拉取（历史不参与 15 秒轮询与响铃）
+  // 按 Tab 拉取（历史/地图不参与 15 秒轮询与响铃）
   const mode = taskTab === 'history' ? 'history' : 'active';
-  $('taskTbody').innerHTML = '<tr><td colspan="7" class="loading">加载中…</td></tr>';
+  $('taskCards').innerHTML = '<div class="tk-empty">加载中…</div>';
   const res = await api('listTasks', { mode });
-  if (!res.ok) { $('taskTbody').innerHTML = `<tr><td colspan="7" class="empty">${esc(res.msg || '加载失败')}</td></tr>`; return; }
+  if (!res.ok) { $('taskCards').innerHTML = `<div class="tk-empty">${esc(res.msg || '加载失败')}</div>`; return; }
   taskCache = res.tasks;
   const list = filterByMode(taskCache);
   if (taskTab === 'history') renderHistoryCards(list);
@@ -1398,10 +1450,19 @@ async function loadTasks() {
 function switchTaskTab(tab) {
   if (taskTab === tab) return;
   taskTab = tab;
-  document.querySelectorAll('#taskTabs .ptab-i').forEach(el => el.classList.toggle('on', el.dataset.tab === tab));
-  $('histWrap').style.display = tab === 'history' ? 'block' : 'none';
-  $('taskTableWrap').style.display = tab === 'history' ? 'none' : 'block';
+  document.querySelectorAll('.ts-tab').forEach(el => el.classList.toggle('on', el.dataset.tab === tab));
+  $('activeWrap').style.display = tab === 'active' ? '' : 'none';
+  $('histWrap').style.display = tab === 'history' ? '' : 'none';
+  $('mapWrap').style.display = tab === 'map' ? '' : 'none';
+  if (tab === 'map') { loadTaskMap(); return; }
   loadTasks();
+}
+
+// 左侧栏「🗺 任务地图」入口（2026-09-09 老板定：跳任务管理大卡的第三标签；菜单高亮由自己接管）
+function goTaskMap() {
+  nav('tasks');
+  document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === 'track'));
+  switchTaskTab('map');
 }
 
 function histStatsHtml(list) {
@@ -1465,10 +1526,9 @@ function statsHtml(list) {
   return { html, fp, cnt };
 }
 
-// 全量渲染任务表（首次进入/手动操作后）；同时记录行指纹供轮询增量对比
+// 全量渲染任务卡（首次进入/手动操作后）；同时记录行指纹供轮询增量对比（2026-09-09 表格改卡片）
 function renderTaskRows(list) {
-  const rows = list.map(t => taskRowHtml(t)).join('');
-  $('taskTbody').innerHTML = rows || '<tr><td colspan="7" class="empty">暂无任务，点右上角「新建任务」派发</td></tr>';
+  $('taskCards').innerHTML = list.map(taskCardHtml).join('') || '<div class="tk-empty">暂无任务，点右上角「＋ 新建任务」派发</div>';
   rowsFp = {};
   list.forEach(t => { rowsFp[t._id] = taskRowFp(t); });
   rowsOrder = list.map(t => t._id).join(',');
@@ -1478,31 +1538,29 @@ function renderTaskRows(list) {
   syncTaskAlerts(list);
 }
 
-// 行级增量更新（任务页）：复用 pollEvents 已拉取的数据，指纹对比，只动变化的行
+// 行级增量更新（任务页）：复用 pollEvents 已拉取的数据，指纹对比，只动变化的卡
 function applyTaskDiff(list) {
   if (!list) return;
-  // ① 统计栏：数字变化才更新（不牵连表格）
+  // ① 统计栏：数字变化才更新（不牵连卡片）
   const st = statsHtml(list);
   const statsChanged = st.fp !== statsFp;
   if (statsChanged) {
     statsFp = st.fp;
     $('taskStats').innerHTML = st.html;
   }
-  // ② 顺序未变：逐行指纹对比，只替换变化行；顺序变化（增删/重排）才整体重绘
+  // ② 顺序未变：逐卡指纹对比，只替换变化卡；顺序变化（增删/重排）才整体重绘
   const newOrder = list.map(t => t._id).join(',');
   if (newOrder !== rowsOrder) {
     renderTaskRows(list);
     return;
   }
-  const rows = document.querySelectorAll('#taskTbody tr[data-id]');
+  const cards = document.querySelectorAll('#taskCards .tk-card[data-id]');
   list.forEach((t, i) => {
     const fp = taskRowFp(t);
     if (rowsFp[t._id] !== fp) {
       rowsFp[t._id] = fp;
-      const tr = rows[i];
-      if (tr) {
-        tr.innerHTML = taskRowHtml(t).replace(/^<tr[^>]*>|<\/tr>$/g, '');
-      }
+      const el = cards[i];
+      if (el) el.outerHTML = taskCardHtml(t); // 整卡替换（状态边框色同步更新）
     }
   });
 }
@@ -1716,6 +1774,28 @@ function taskRowHtml(t) {
       <td><span class="pill ${expired ? 'r-resist' : st[1]}${t.status === 'reviewing' ? ' pill-big' : ''}">${expired ? '已过期' : st[0]}</span></td>
       <td>${ops}</td>
     </tr>`;
+}
+
+// 精致任务卡（2026-09-09 老板定：任务管理大卡内「当前任务」标签用卡片网格，整卡可点进详情）
+function taskCardHtml(t) {
+  const stMap = { done: ['已完成', 'green'], reviewing: ['审核中', 'warn'], published: ['进行中', 'orange'], draft: ['草稿', 'gray'] };
+  const st = stMap[t.status] || stMap.published;
+  const expired = t.status === 'published' && t.deadline && String(t.deadline) <= todayStr();
+  const border = expired ? '#E5484D' : (t.status === 'done' ? '#16A34A' : (t.status === 'reviewing' ? '#F5A623' : '#2F80ED'));
+  const barCls = t.status === 'done' ? 'done' : (expired ? 'exp' : (t.status === 'reviewing' ? 'rev' : ''));
+  const per = Math.min(t.percent || 0, 100);
+  const ops = taskOpsHtml(t, expired);
+  return `<div class="tk-card" data-id="${t._id}" style="border-left-color:${border}" onclick="showDetail('${t._id}')">
+    <div class="tkc-top">
+      <b class="tkc-name">${esc(t.name)}</b>
+      <span class="pill ${expired ? 'r-resist' : st[1]}">${expired ? '已过期' : st[0]}</span>
+    </div>
+    ${t.taskNo ? `<div class="tkc-no">${esc(t.taskNo)}</div>` : ''}
+    ${t.status === 'reviewing' && t.finishReq ? `<div class="tkc-req">提前结束申请 · 剩 ${t.finishReq.left} 家</div>` : ''}
+    <div class="tkc-meta"><span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')}</span></div>
+    <div class="tkc-prog"><span class="tkc-bar ${barCls}"><i style="width:${per}%"></i></span><span>${t.visited}/${t.total} 家 · ${per}%</span></div>
+    <div class="tkc-foot"><span>截止 ${esc(t.deadline || '—')}</span><span class="tkc-ops" onclick="event.stopPropagation()">${ops}</span></div>
+  </div>`;
 }
 
 // 行指纹：该行所有可显示内容的关键参数（不变则绝不触碰该行 DOM）
@@ -2172,6 +2252,176 @@ function buildTrackMap(keep) {
     showPickCoord(evt.latLng.getLat().toFixed(6), evt.latLng.getLng().toFixed(6));
   });
   refreshTrackPage();
+}
+
+// ===== 任务地图标签（2026-09-09 老板定：手机老板任务地图移植——天页签+业务员下拉+数字圆标+绿线+仓库星+店名气泡）=====
+let tmMapObj = null, tmLibLoaded = false, tmTaskList = [], tmCurTask = null, tmCustomers = [];
+let tmDays = [], tmDay = null, tmMenIdx = 0;
+let tmMarkers = null, tmStarMarker = null, tmPolyline = null, tmInfoWin = null;
+
+function loadTaskMapLib() {
+  if (tmMapObj || tmLibLoaded) return;
+  tmLibLoaded = true;
+  const s = document.createElement('script');
+  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.onload = () => buildTaskMap();
+  document.head.appendChild(s);
+}
+
+function buildTaskMap() {
+  if (tmMapObj || !$('tmMap')) return;
+  tmMapObj = new TMap.Map($('tmMap'), {
+    center: new TMap.LatLng(28.970802, 120.154526),
+    zoom: 12, pitch: 0, rotation: 0,
+    baseMap: [{ type: 'vector', features: ['base', 'building3d', 'label'] }]
+  });
+  try { tmMapObj.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 静默 */ }
+  try { tmMapObj.removeControl(TMap.constants.DEFAULT_CONTROL_ID.SCALE); } catch (e) { /* 静默 */ }
+  tmInfoWin = new TMap.InfoWindow({
+    map: tmMapObj, position: new TMap.LatLng(28.970802, 120.154526),
+    offset: { x: 0, y: -30 }, enableCustom: true,
+    content: '<div class="tm-iw"></div>'
+  });
+  tmInfoWin.close();
+  $('tmLegend').innerHTML = '<span><span class="lg-dot" style="background:#F5531C"></span>未拜访</span><span><span class="lg-dot" style="background:#2F80ED"></span>拜访中</span><span><span class="lg-dot" style="background:#9AA3AD"></span>已拜访 ✓</span><span>⭐ 仓库（起点）</span>';
+  refreshTaskMap();
+}
+
+async function loadTaskMap() {
+  loadTaskMapLib();
+}
+
+async function refreshTaskMap() {
+  if (!tmMapObj) { loadTaskMapLib(); return; }
+  const res = await api('listTasks', { mode: 'active' });
+  if (!res.ok) return;
+  tmTaskList = (res.tasks || []).filter(t => t.status === 'published' || t.status === 'reviewing');
+  const sel = $('tmMen');
+  sel.innerHTML = tmTaskList.length
+    ? tmTaskList.map((t, i) => `<option value="${i}">${esc(t.salesmanName || '—')} · ${esc(t.name)}</option>`).join('')
+    : '<option value="-1">暂无进行中任务</option>';
+  if (!tmTaskList.length) { $('tmDays').innerHTML = ''; clearTmLayers(); return; }
+  tmMenIdx = Math.min(tmMenIdx, tmTaskList.length - 1);
+  sel.value = String(tmMenIdx);
+  await renderTmTask(tmMenIdx);
+}
+
+function onTmMen() {
+  const idx = Number($('tmMen').value) || 0;
+  tmMenIdx = idx;
+  renderTmTask(idx);
+}
+
+async function renderTmTask(idx) {
+  const t = tmTaskList[idx];
+  if (!t) return;
+  const d = await api('getTask', { taskId: t._id });
+  if (!d.ok) return;
+  tmCurTask = d.task;
+  tmCustomers = d.customers || [];
+  tmDays = (d.task.dayPlan || []).map(p => p.day);
+  const todayD = d.task.todayDay;
+  tmDay = (todayD && tmDays.includes(todayD)) ? todayD : (tmDays[0] || null);
+  $('tmDays').innerHTML = tmDays.map(day => `<span class="tm-day ${day === tmDay ? 'on' : ''}" data-day="${day}" onclick="switchTmDay(${day})">第 ${day} 天</span>`).join('');
+  renderTmDay(true); // 切业务员=撑满全部
+}
+
+function switchTmDay(day) {
+  if (tmDay === day) return;
+  tmDay = day;
+  document.querySelectorAll('#tmDays .tm-day').forEach(el => el.classList.toggle('on', Number(el.dataset.day) === day));
+  renderTmDay(false); // 切天=撑满未完成（全部已拜访则全部）
+}
+
+function tmDayList() {
+  const plan = (tmCurTask && tmCurTask.dayPlan || []).find(p => p.day === tmDay);
+  const ids = plan ? (plan.customerIds || []) : [];
+  return ids.map(id => tmCustomers.find(c => c._id === id)).filter(c => c && c.lat && c.lng);
+}
+
+function renderTmDay(fitAll) {
+  if (!tmMapObj || !tmCurTask) return;
+  const list = tmDayList();
+  // 客户点：复用手机 pins 数字圆标（24×24）
+  const styles = {};
+  const geos = list.map((c, i) => {
+    const n = Math.min(i + 1, 20);
+    const visited = !!c.visitedToday;
+    const src = visited ? 'pins/pin_done.png' : `pins/pin_${n}_${c.visitOngoing ? 'blue' : 'red'}.png`;
+    const sid = visited ? 'v' : (c.visitOngoing ? 'b' : 'r') + n;
+    if (!styles[sid]) styles[sid] = new TMap.MarkerStyle({ width: 24, height: 24, anchor: { x: 12, y: 12 }, src });
+    return {
+      id: String(i),
+      styleId: sid,
+      position: new TMap.LatLng(c.lat, c.lng),
+      properties: { name: c.name, address: c.address || '', phone: c.phone || '', visited, ongoing: !!c.visitOngoing }
+    };
+  });
+  if (tmMarkers) { tmMarkers.setMap(null); tmMarkers = null; }
+  if (geos.length) {
+    tmMarkers = new TMap.MultiMarker({ map: tmMapObj, styles, geometries: geos, zIndex: 10 });
+    tmMarkers.on('click', evt => {
+      const g = evt.geometry;
+      if (!g) return;
+      const p = g.properties || {};
+      tmInfoWin.setPosition(g.position);
+      tmInfoWin.setContent(`<div class="tm-iw"><b>${esc(p.name)}</b><div>${esc(p.address || '暂无地址')}</div><div style="color:var(--primary-deep);font-weight:700">📞 ${esc(p.phone || '暂无电话')}</div><div style="font-size:11px;color:var(--sub)">${p.visited ? '✓ 已拜访' : (p.ongoing ? '拜访中' : '待拜访')}</div></div>`);
+      tmInfoWin.open();
+    });
+  }
+  // 路线（绿色实线；无真实轨迹按顺序直线兜底——与手机一致）
+  const plan = (tmCurTask.dayPlan || []).find(p => p.day === tmDay);
+  const route = plan && plan.route;
+  let linePts = [];
+  if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
+    linePts = route.pts.map(p => new TMap.LatLng(p[0], p[1]));
+  } else if (list.length >= 2) {
+    linePts = list.map(c => new TMap.LatLng(c.lat, c.lng));
+  }
+  if (tmPolyline) { tmPolyline.setMap(null); tmPolyline = null; }
+  if (linePts.length >= 2) {
+    tmPolyline = new TMap.MultiPolyline({
+      map: tmMapObj,
+      styles: { line: new TMap.PolylineStyle({ color: '#16A34A', width: 4, borderWidth: 0 }) },
+      geometries: [{ id: 'route', styleId: 'line', paths: linePts }],
+      zIndex: 6
+    });
+  }
+  // 仓库星（起点距仓库 50 米内 → 起点位置显示 ⭐；zIndex 5 垫在客户点下）
+  const WH = { lat: 28.970802, lng: 120.154526 };
+  let starPt = null;
+  if (linePts.length) {
+    const sp = linePts[0];
+    if (tmHaversine(sp.getLat(), sp.getLng(), WH.lat, WH.lng) < 50) starPt = sp;
+  }
+  if (tmStarMarker) { tmStarMarker.setMap(null); tmStarMarker = null; }
+  if (starPt) {
+    tmStarMarker = new TMap.MultiMarker({
+      map: tmMapObj,
+      styles: { star: new TMap.MarkerStyle({ width: 20, height: 20, anchor: { x: 10, y: 10 }, src: 'pins/star.png' }) },
+      geometries: [{ id: 'wh', styleId: 'star', position: starPt }],
+      zIndex: 5
+    });
+  }
+  // 视野：切业务员/刷新=全部客户点；切天=未完成（全部已拜访则全部）
+  const fitPts = fitAll ? list : (list.filter(c => !c.visitedToday).length ? list.filter(c => !c.visitedToday) : list);
+  if (fitPts.length) {
+    const bounds = new TMap.LatLngBounds();
+    fitPts.forEach(c => bounds.extend(new TMap.LatLng(c.lat, c.lng)));
+    tmMapObj.fitBounds(bounds, { padding: { top: 40, right: 30, bottom: 40, left: 30 } });
+  }
+}
+
+function clearTmLayers() {
+  [tmMarkers, tmStarMarker, tmPolyline].forEach(m => { if (m) { m.setMap(null); } });
+  tmMarkers = tmStarMarker = tmPolyline = null;
+  if (tmInfoWin) tmInfoWin.close();
+}
+
+function tmHaversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000, rad = Math.PI / 180;
+  const a = Math.sin((lat2 - lat1) * rad / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lng2 - lng1) * rad / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
 
 // 地图拾取器（2026-09-08 老板定）：拾取开关开启时点击地图，胶囊显示坐标于地图左上角（点胶囊=复制）
