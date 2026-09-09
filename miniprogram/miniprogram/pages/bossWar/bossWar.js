@@ -96,25 +96,23 @@ Page({
     }).catch(() => api.toast('定位失败，请到开阔处重试'));
   },
 
-  // 三色点：蓝=拜访中 / 橙=在移动 / 灰=静止；静止>40 分钟=红圈预警（红底感叹号）
+  // 三色点：蓝=拜访中 / 橙=在移动 / 灰=静止；静止>40 分钟=红圆白感叹号预警
   renderMarkers() {
     const src = (this._points || []).filter(p => p && !p.noData);
     this._markerList = src; // 与 markers 顺序一一对应，点按事件按数字 id 取回
     const markers = src.map((p, idx) => {
       const warn = p.state === 'still' && p.ageMin > 40;
+      // 2026-09-09 老板报障修复：label 在低缩放级别锚定漂移（缩小错位、放大渐准）——微信 label 渲染管线不可控；
+      // 与任务地图客户圆标同方案：真实图片 marker（24×24 抗锯齿圆点），位置恒定精确不随缩放漂移
+      const icon = warn
+        ? '/pages/bossWar/dot_warn.png'
+        : `/pages/bossWar/dot_${p.state === 'ongoing' ? 'blue' : (p.state === 'moving' ? 'orange' : 'gray')}.png`;
       return {
-        id: idx + 1, // 微信要求 marker id 必须是数字（2026-09-09 报障修复）；salesmanId 是字符串不可用
+        id: idx + 1, // 微信要求 marker id 必须是数字；salesmanId 是字符串不可用
         latitude: p.lat, longitude: p.lng,
-        // 2026-09-09 报障修复：label 不可点击，点击热区=图标本体；之前 1×1 无图标导致点不中 →
-        // 用 26×26 透明图标撑热区；anchor(50,50) 相对图标渲染框=label 圆标中心精确压坐标
-        iconPath: '/pages/bossWar/transparent26.png',
-        width: 26, height: 26,
-        label: {
-          content: warn ? '⚠' : String(p.name || '员').slice(0, 1),
-          color: '#FFFFFF', bgColor: warn ? '#E5484D' : P_COLOR[p.state],
-          borderRadius: 14, padding: 7, fontSize: 12,
-          anchorX: 50, anchorY: 50
-        },
+        iconPath: icon,
+        width: 24, height: 24,
+        anchor: { x: 0.5, y: 0.5 }, // 中心锚点精确压业务员坐标
         callout: {
           content: `${p.name} · ${warn ? '静止超40分钟' : P_LABEL[p.state]}`,
           color: '#333A44', fontSize: 12, borderRadius: 8, bgColor: '#FFFFFF', padding: 7, display: 'BYCLICK'
