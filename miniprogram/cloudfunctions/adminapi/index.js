@@ -63,10 +63,13 @@ exports.main = async (event) => {
     if (action === 'getLastMallImport') return await getLastMallImport(event);
     if (action === 'listSalesmen') return await listSalesmen(event);
     if (action === 'listAdmins') return await listAdmins(event);
+    if (action === 'setUserBoss') return await setUserBoss(event);
     if (action === 'addSalesman') return await addSalesman(event);
     if (action === 'addAdmin') return await addAdmin(event);
     if (action === 'setUserActive') return await setUserActive(event);
     if (action === 'deleteUser') return await deleteUser(event);
+    if (action === 'listRegistrations') return await listRegistrations(event);
+    if (action === 'reviewRegistration') return await reviewRegistration(event);
     if (action === 'getSettings') return await getSettings(event);
     if (action === 'setSetting') return await setSetting(event);
     if (action === 'setMpOpenid') return await setMpOpenid(event);
@@ -1615,7 +1618,68 @@ async function listSalesmen(event) {
 
 async function listAdmins(event) {
   const res = await db.collection('users').where({ role: _.in(['super_admin', 'admin']) }).get();
-  return { ok: true, admins: res.data.map(a => ({ _id: a._id, name: a.name, username: a.username, role: a.role, active: a.active !== false })) };
+  return { ok: true, admins: res.data.map(a => ({ _id: a._id, name: a.name, username: a.username, role: a.role, active: a.active !== false, boss: a.boss === true })) };
+}
+
+// 老板白名单开关（2026-09-09 老板定：仅指定账号启用老板页面/战况地图）
+async function setUserBoss(event) {
+  const { userId, boss } = event || {};
+  if (!userId) return { ok: false, code: 'BAD_ARG', msg: '缺少用户' };
+  const uRes = await db.collection('users').doc(userId).get().catch(() => null);
+  const u = uRes && uRes.data;
+  if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
+  if (!['super_admin', 'admin'].includes(u.role)) return { ok: false, code: 'FORBIDDEN', msg: '仅管理员账号可设为老板' };
+  await db.collection('users').doc(userId).update({ data: { boss: !!boss } });
+  return { ok: true, msg: boss ? '已启用老板模式' : '已停用老板模式' };
+}
+
+// ===== 注册审核（2026-09-09 老板拍板：登录改「注册→后台审核→通过后免登进入」） =====
+// 待审核申请 + 最近 20 条已处理（通过/拒绝）留痕
+async function listRegistrations(event) {
+  const pend = await db.collection('registrations').where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(100).get();
+  const done = await db.collection('registrations').where({ status: _.in(['approved', 'rejected']) }).orderBy('reviewedAt', 'desc').limit(20).get();
+  const fmt = r => ({
+    _id: r._id, name: r.name || '', phone: r.phone || '', status: r.status,
+    reason: r.reason || '', createdAt: r.createdAt || 0, reviewedAt: r.reviewedAt || 0,
+    openidMask: r.openid ? String(r.openid).slice(0, 8) + '…' + String(r.openid).slice(-4) : ''
+  });
+  return { ok: true, pending: pend.data.map(fmt), done: done.data.map(fmt) };
+}
+
+// 审核动作：approve=手机号匹配已有业务员则绑 openid、不匹配则新建业务员；reject=状态置拒绝（可填原因）
+async function reviewRegistration(event) {
+  const { regId, action: act, reason } = event || {};
+  if (!regId || !['approve', 'reject'].includes(act)) return { ok: false, code: 'BAD_ARG', msg: '参数错误' };
+  const rRef = db.collection('registrations').doc(regId);
+  const rr = await rRef.get().catch(() => null);
+  const r = rr && rr.data;
+  if (!r) return { ok: false, code: 'NOT_FOUND', msg: '申请不存在' };
+  if (r.status !== 'pending') return { ok: false, code: 'STATE', msg: '该申请已处理' };
+  if (act === 'reject') {
+    await rRef.update({ data: { status: 'rejected', reason: String(reason || '').slice(0, 100), reviewedAt: Date.now() } });
+    return { ok: true, msg: '已拒绝该申请' };
+  }
+  // approve：匹配已有业务员（同手机号）→ 绑定；否则新建
+  const phone = String(r.phone || '');
+  const uRes = await db.collection('users').where({ phone, role: 'salesman' }).get();
+  let boundId = '';
+  if (uRes.data.length) {
+    const u = uRes.data[0];
+    if (u.openid && u.openid !== r.openid) return { ok: false, code: 'BOUND_OTHER', msg: '该手机号的业务员已绑定其他微信，请先核对' };
+    await db.collection('users').doc(u._id).update({ data: { openid: r.openid, lastLoginAt: Date.now() } });
+    boundId = u._id;
+  } else {
+    const add = await db.collection('users').add({
+      data: {
+        openid: r.openid, name: String(r.name || '').trim(), phone,
+        role: 'salesman', active: true, trial: false,
+        remark: '注册申请审核通过', createdAt: Date.now()
+      }
+    });
+    boundId = add._id;
+  }
+  await rRef.update({ data: { status: 'approved', reviewedAt: Date.now(), userId: boundId } });
+  return { ok: true, msg: '已通过并绑定微信（免登录进入）' };
 }
 
 // ===== 人员管理（新增/启停/删除） =====

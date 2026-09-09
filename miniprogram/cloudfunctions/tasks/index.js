@@ -10,19 +10,92 @@ exports.main = async (event) => {
 
   const me = await db.collection('users').where({ openid: OPENID }).get();
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
-  const salesmanId = me.data[0]._id;
+  const meDoc = me.data[0];
+  // 老板模式（2026-09-09 §7.13 修订：仅 boss===true 的指定管理员账号启用老板页面，其余管理员不启用）
+  const isBoss = ['super_admin', 'admin'].includes(meDoc.role) && meDoc.boss === true;
+  const salesmanId = meDoc._id;
 
-  if (action === 'list') return await list(salesmanId);
-  if (action === 'detail') return await detail(salesmanId, taskId);
-  if (action === 'finish') return await finish(salesmanId, taskId, me.data[0]);
-  if (action === 'subStatus') return await subStatus(salesmanId);
-  if (action === 'reviewStatus') return await reviewStatus(salesmanId);
-  if (action === 'replanDay') return await replanDay(salesmanId, event);
+  if (action === 'list') return await list(salesmanId, isBoss);
+  if (action === 'detail') return await detail(salesmanId, taskId, isBoss);
+  if (action === 'finish') return await finish(salesmanId, taskId, meDoc, isBoss);
+  if (action === 'subStatus') return await subStatus(salesmanId, isBoss);
+  if (action === 'reviewStatus') return await reviewStatus(salesmanId, isBoss);
+  if (action === 'replanDay') return await replanDay(salesmanId, event, isBoss);
+  if (action === 'bossBoard') return await bossBoard(salesmanId, isBoss);
+  if (action === 'bossWar') return await bossWar(isBoss);
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
 
+// ================= 老板手机端（2026-09-09 §7.13）只读接口 =================
+// 首页数据：今日统计 + 全量任务总览（任务带 salesmanId/salesmanName）
+async function bossBoard(salesmanId, isBoss) {
+  if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
+  const lt = await list(salesmanId, true);
+  const tasks = (lt && lt.tasks) || [];
+  let todayTotal = 0, todayDone = 0, visitedSum = 0, totalSum = 0;
+  tasks.forEach(t => { todayTotal += (t.todayTotal || 0); todayDone += (t.todayDone || 0); visitedSum += (t.visited || 0); totalSum += (t.total || 0); });
+  // 在线/拜访中：latest 位置 ≤10 分钟算在线；visitOngoing 位算拜访中
+  const now = Date.now();
+  const lRes = await db.collection('salesman_locations').where({ type: 'latest' }).get();
+  let online = 0, ongoing = 0;
+  lRes.data.forEach(l => {
+    if (l.visitOngoing) ongoing++;
+    if (l.t && now - Number(l.t) <= 10 * 60 * 1000) online++;
+  });
+  // 待审核任务数
+  const revN = await db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }).count();
+  return { ok: true, stats: { todayDone, todayTotal, visited: visitedSum, total: totalSum, online, ongoing, review: revN.total }, tasks };
+}
+
+// 战况地图数据：业务员位置点（三态口径）+ 今日动态流（开始/提交拜访）
+async function bossWar(isBoss) {
+  if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
+  const now = Date.now();
+  const [uRes, lRes] = await Promise.all([
+    db.collection('users').where({ role: 'salesman', active: true }).field({ name: true }).get(),
+    db.collection('salesman_locations').where({ type: 'latest' }).get()
+  ]);
+  const lMap = {};
+  lRes.data.forEach(l => { if (l.salesmanId) lMap[l.salesmanId] = l; });
+  // 点状态口径（2026-09-09 老板定）：蓝=拜访中 / 橙=10 分钟内移动 / 灰=静止超 10 分钟；红圈预警前端算
+  const points = uRes.data.map(u => {
+    const l = lMap[u._id];
+    if (!l || !l.lat || !l.lng) return { salesmanId: u._id, name: u.name || '', noData: true };
+    const ageMin = l.t ? Math.floor((now - Number(l.t)) / 60000) : 999;
+    return {
+      salesmanId: u._id, name: u.name || '',
+      lat: l.lat, lng: l.lng, t: l.t || 0, acc: l.accuracy || 0,
+      visitOngoing: !!l.visitOngoing, ageMin,
+      state: l.visitOngoing ? 'ongoing' : (ageMin <= 10 ? 'moving' : 'still')
+    };
+  });
+  // 今日动态：今天全部拜访记录（开始/提交）+ 客户名映射
+  const day = todayStr();
+  const vRes = await db.collection('visits')
+    .where({ visitedAt: day, status: _.in(['ongoing', 'normal', 'pending_review']) })
+    .limit(200)
+    .get();
+  const events = vRes.data.map(v => ({
+    t: (v.status === 'ongoing' ? (v.startedAt || v.createdAt) : (v.finishedAt || v.createdAt)) || 0,
+    type: v.status === 'ongoing' ? 'start' : 'submit',
+    salesmanName: v.salesmanName || '',
+    customerId: v.customerId || '',
+    result: v.result || ''
+  }));
+  const cids = [...new Set(events.map(e => e.customerId).filter(Boolean))];
+  const cNameMap = {};
+  if (cids.length) {
+    const cRes = await db.collection('customers').where({ _id: _.in(cids) }).field({ name: true }).get();
+    cRes.data.forEach(c => { cNameMap[c._id] = c.name || ''; });
+  }
+  events.forEach(e => { e.customerName = cNameMap[e.customerId] || ''; delete e.customerId; });
+  events.sort((a, b) => (b.t || 0) - (a.t || 0));
+  return { ok: true, serverTime: now, points, events: events.slice(0, 100) };
+}
+
 // 审核观察员：返回该业务员所有审核中任务的精简信息（供手机端 15 秒轮询等待审批结果）
-async function reviewStatus(salesmanId) {
+async function reviewStatus(salesmanId, isBoss) {
+  if (isBoss) return { ok: true, list: [] }; // 老板演示：待审数走 adminapi bossBoard
   const res = await db.collection('tasks').where({ salesmanId, status: 'reviewing' })
     .field({ _id: true, name: true, status: true })
     .limit(20).get();
@@ -31,7 +104,8 @@ async function reviewStatus(salesmanId) {
 
 // 订阅状态：是否还有可用的订阅凭证（一次性订阅，发送后失效）
 // mpBound：业务员已绑定服务号 OpenID 且后台启用服务号通知 → 手机端无需再引导一次性订阅
-async function subStatus(salesmanId) {
+async function subStatus(salesmanId, isBoss) {
+  if (isBoss) return { ok: true, hasSub: false, mpBound: false }; // 老板演示：无订阅
   const res = await db.collection('settings').where({ key: `subToken_${salesmanId}` }).limit(1).get();
   const info = res.data[0];
   const me = await db.collection('users').doc(salesmanId).get().catch(() => null);
@@ -43,13 +117,13 @@ async function subStatus(salesmanId) {
 
 // 业务员交任务：全部完成且未开启"需管理员确认"→直接 done；
 // 提前交（有未完成）或开启确认开关 → reviewing（审核中）+ finishReq 留痕，等管理员审批
-async function finish(salesmanId, taskId, user) {
+async function finish(salesmanId, taskId, user, isBoss) {
   // 游客（实习账号）硬拦（2026-09-08 老板定：游客不能提交数据）
   if (user && user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
   if (!taskId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务' };
   const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const t = tRes && tRes.data;
-  if (!t || t.salesmanId !== salesmanId) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  if (!t || (t.salesmanId !== salesmanId && !isBoss)) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
   if (t.status === 'reviewing') return { ok: false, code: 'REVIEWING', msg: '已在审核中，等待管理员确认' };
   if (t.status !== 'published') return { ok: false, code: 'STATE', msg: t.status === 'done' ? '任务已结束' : '任务状态异常' };
   if (t.deadline && String(t.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
@@ -72,6 +146,11 @@ async function finish(salesmanId, taskId, user) {
   const autoPass = !!(setRes.data[0] && setRes.data[0].value);
 
   const now = Date.now();
+  // 老板模式（2026-09-09 §7.13）：走完校验后假返回，不写任务状态、不留痕
+  if (isBoss) {
+    if (left <= 0 && autoPass) return { ok: true, boss: true, status: 'done', msg: '任务已结束 ✓（演示：未保存）' };
+    return { ok: true, boss: true, status: 'reviewing', msg: left > 0 ? '已向管理员提交提前结束申请，等待确认（演示：未保存）' : '已提交结束申请，等待管理员审核（演示：未保存）' };
+  }
   if (left <= 0 && autoPass) {
     // 全部完成且开启自动通过：直接结束（留 autoDone 流水，2026-09-08 历史任务板块）
     const logs = [...(Array.isArray(t.logs) ? t.logs : []), { at: now, by: t.salesmanName || '业务员', role: 'salesman', type: 'autoDone', detail: { auto: true } }];
@@ -93,13 +172,27 @@ async function finish(salesmanId, taskId, user) {
   return { ok: true, status: 'reviewing', msg: left > 0 ? '已向管理员提交提前结束申请，等待确认' : '已提交结束申请，等待管理员审核' };
 }
 
-async function list(salesmanId) {
+async function list(salesmanId, isBoss) {
   // 已归档任务业务员端不再显示（2026-09-08 老板定：过期归档=终态封存）
+  // 老板模式（2026-09-09 §7.13）：全量进行中/待审任务（跨业务员），附 salesmanId/salesmanName
+  const cond = isBoss
+    ? { status: _.in(['published', 'reviewing']), archivedAt: _.exists(false) }
+    : { salesmanId, status: _.in(['published', 'reviewing', 'done']), archivedAt: _.exists(false) };
   const res = await db.collection('tasks')
-    .where({ salesmanId, status: _.in(['published', 'reviewing', 'done']), archivedAt: _.exists(false) })
+    .where(cond)
     .orderBy('createdAt', 'desc')
     .limit(100)
     .get();
+
+  // 老板模式：业务员名映射（任务卡显示谁的任务）
+  const nameMap = {};
+  if (isBoss) {
+    const sidSet = [...new Set(res.data.map(t => t.salesmanId).filter(Boolean))];
+    if (sidSet.length) {
+      const uRes = await db.collection('users').where({ _id: _.in(sidSet) }).field({ name: true }).get();
+      uRes.data.forEach(u => { nameMap[u._id] = u.name || ''; });
+    }
+  }
 
   // 统计各任务拜访进度（按客户家数去重：同一客户多次拜访只算 1 家；ongoing 拜访中不算）
   // 今日计划：任务创建日=第 1 天推算今天该拜访的客户名单，统计名单内已完成家数
@@ -159,7 +252,10 @@ async function list(salesmanId) {
       percent: total ? Math.round(visited / total * 100) : 0,
       todayTotal: todayIds.length,
       todayDone,
-      hasOngoing: ongSet.has(t._id)
+      hasOngoing: ongSet.has(t._id),
+      // 老板模式（2026-09-09 §7.13）：任务归属信息供首页/任务地图显示
+      salesmanId: isBoss ? (t.salesmanId || '') : undefined,
+      salesmanName: isBoss ? (nameMap[t.salesmanId] || t.salesmanName || '') : undefined
     });
   }
   return { ok: true, tasks };
@@ -197,10 +293,10 @@ async function countVisitedCustomers(taskId) {
   return set.size;
 }
 
-async function detail(salesmanId, taskId) {
+async function detail(salesmanId, taskId, isBoss) {
   const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const t = tRes && tRes.data;
-  if (!t || t.salesmanId !== salesmanId) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  if (!t || (t.salesmanId !== salesmanId && !isBoss)) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
 
   // 任务内客户（保持任务内排列顺序：有 dayPlan 按计划顺序，否则按 customerIds 原序）
   const ids = t.customerIds || [];
@@ -314,6 +410,9 @@ async function detail(salesmanId, taskId) {
       startDate: t.startDate || '',
       createdAt: t.createdAt || null,
       todayDay: dayIndexOf(t.startDate, t.createdAt),
+      // 老板模式（2026-09-09 §7.13）：任务归属显示
+      salesmanId: isBoss ? (t.salesmanId || '') : undefined,
+      salesmanName: isBoss ? (t.salesmanName || '') : undefined,
       locCheck: { enabled: !!(locCfg && locCfg.enabled), threshold: Number((locCfg && locCfg.threshold) || 0) },
       locRefresh,
       locKeyRefresh,
@@ -335,7 +434,7 @@ function todayStr() {
 // ================= 手机端：以我的位置重排当天未完成客户（2026-09-08 老板拍板） =================
 // 口径：只重排当天「未完成且非拜访中」的客户；已完成/拜访中保持原相对位置；
 // 结果写回任务 dayPlan（顺序+真实路线），老板后台同步可见；logs 留痕。
-async function replanDay(salesmanId, event) {
+async function replanDay(salesmanId, event, isBoss) {
   const { taskId, day, origin, customerIds } = event || {};
   if (!taskId || !day || !origin || !origin.lat || !origin.lng) {
     return { ok: false, code: 'BAD_ARG', msg: '缺少任务/天/定位参数' };
@@ -345,7 +444,7 @@ async function replanDay(salesmanId, event) {
   }
   const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const t = tRes && tRes.data;
-  if (!t || t.salesmanId !== salesmanId) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  if (!t || (t.salesmanId !== salesmanId && !isBoss)) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
   if (t.status !== 'published') return { ok: false, code: 'STATE', msg: '仅进行中任务可重排' };
   if (t.deadline && String(t.deadline) <= todayStr()) {
     return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
@@ -429,6 +528,13 @@ async function replanDay(salesmanId, event) {
   }
   newOrder = newOrder.concat(noCoord.map(c => c._id)); // 无坐标垫后
   if (!newOrder.length) return { ok: false, code: 'BAD_ARG', msg: '没有可重排的客户' };
+  // 老板模式（2026-09-09 §7.13）：只算不存——返回重排结果供页面演示，不写 dayPlan/不留痕
+  if (isBoss) {
+    return {
+      ok: true, boss: true, distanceMeters: dm, durationMin, fallback,
+      msg: fallback ? '已按你的位置重排（路线接口不可用，直线估算）（演示：未保存）' : '已按你的位置重排（演示：未保存）'
+    };
+  }
 
   // 写回 dayPlan：已完成/拜访中保持原相对位置在前，未完成按新序
   const pl = (t.dayPlan || []).find(p => p.day === Number(day));

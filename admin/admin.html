@@ -76,8 +76,8 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .wb-card.mall{border-top:5px solid var(--primary)} .wb-card.mall .go{color:var(--primary-deep)}
 .wb-card.new{border-top:5px solid var(--blue)} .wb-card.new .go{color:var(--blue)}
 /* 主框架 */
-.layout{display:flex;min-height:100vh}
-.side{width:210px;background:var(--side);color:#B9C0CA;padding:18px 12px;flex-shrink:0}
+.layout{display:flex;height:100vh;overflow:hidden}
+.side{width:210px;background:var(--side);color:#B9C0CA;padding:18px 12px;flex-shrink:0;height:100vh;overflow-y:auto}
 .side .logo{display:flex;align-items:center;gap:9px;padding:4px 10px 18px}
 .side .logo-img{width:36px;height:36px;border-radius:50%;box-shadow:0 4px 14px rgba(0,0,0,.35)}
 .side .logo .nm{color:#fff;font-size:16px;font-weight:800}
@@ -87,7 +87,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .side .ni.on{background:linear-gradient(135deg,#F5531C,#E0440C);color:#fff}
 .side .foot{margin-top:20px;padding:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;color:#fff;font-size:13px;font-weight:700}
 .side .side-ver{padding:0 12px 12px;font-size:10.5px;color:#6B7280;font-weight:400}
-.main{flex:1;padding:22px 28px 40px;max-width:1200px}
+.main{flex:1;height:100vh;overflow-y:auto;padding:22px 28px 40px;max-width:1200px}
 .topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;position:relative}
 .topbar .pt{font-size:20px;font-weight:800}
 .topbar .pt small{display:block;font-size:12px;color:var(--sub);font-weight:500;margin-top:3px}
@@ -953,16 +953,30 @@ input,textarea{-webkit-user-select:text;user-select:text}
         <div style="display:flex;gap:8px;padding:12px 14px 0">
           <div class="ctab on" id="ptab0" onclick="peopleTab(0)">🏃 业务员</div>
           <div class="ctab" id="ptab1" onclick="peopleTab(1)">👤 管理员</div>
+          <div class="ctab" id="ptab2" onclick="peopleTab(2)">⏳ 待审核<span class="pill" style="margin-left:6px;background:#E5484D;color:#fff" id="regPendPill" hidden>0</span></div>
         </div>
         <table class="tbl" id="ptable0">
           <thead><tr><th>姓名</th><th>手机号</th><th>微信绑定</th><th>服务号绑定</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
           <tbody id="smTbody"></tbody>
         </table>
         <table class="tbl" id="ptable1" style="display:none">
-          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
+          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>状态</th><th style="width:130px">👑 老板</th><th style="width:110px">操作</th></tr></thead>
           <tbody id="adTbody"></tbody>
         </table>
-        <div style="padding:12px 14px;font-size:12px;color:var(--sub);font-weight:600;border-top:1px solid var(--line)">💡 新增业务员后，其首次登录小程序时选择姓名即自动绑定微信；管理员在浏览器登录后台。超级管理员「卿燕」唯一，不可停用/删除。</div>
+        <!-- 注册审核（2026-09-09 老板拍板：登录改「注册→后台审核→通过后免登进入」） -->
+        <div id="ptable2" style="display:none">
+          <div style="padding:10px 14px;font-size:12.5px;color:var(--sub);font-weight:600">待审核注册申请（手机号匹配已有业务员=直接绑定；不匹配=通过后自动新建业务员）</div>
+          <table class="tbl">
+            <thead><tr><th>姓名</th><th>手机号</th><th>微信</th><th>申请时间</th><th style="width:180px">操作</th></tr></thead>
+            <tbody id="regTbody"></tbody>
+          </table>
+          <div style="padding:12px 14px;font-size:13px;font-weight:800;border-top:1px solid var(--line)">已处理（最近 20 条）</div>
+          <table class="tbl">
+            <thead><tr><th>姓名</th><th>手机号</th><th>结果</th><th>处理时间</th><th>原因</th></tr></thead>
+            <tbody id="regDoneTbody"></tbody>
+          </table>
+        </div>
+        <div style="padding:12px 14px;font-size:12px;color:var(--sub);font-weight:600;border-top:1px solid var(--line)">💡 业务员在小程序自助注册（姓名+手机号）→ 此处审核通过后其微信自动绑定、免登录进入；管理员在浏览器登录后台。超级管理员「卿燕」唯一，不可停用/删除。</div>
       </div>
     </div>
 
@@ -3669,9 +3683,11 @@ let userModalKind = 0;
 
 function peopleTab(k) {
   peopleKind = k;
-  ['ptab0', 'ptab1'].forEach((id, i) => $(id).classList.toggle('on', i === k));
+  ['ptab0', 'ptab1', 'ptab2'].forEach((id, i) => $(id).classList.toggle('on', i === k));
   $('ptable0').style.display = k === 0 ? '' : 'none';
   $('ptable1').style.display = k === 0 ? 'none' : '';
+  $('ptable2').style.display = k === 2 ? '' : 'none';
+  if (k === 2) refreshRegs();
 }
 
 function toggleHtml(id, active) {
@@ -3679,6 +3695,7 @@ function toggleHtml(id, active) {
 }
 
 async function loadPeople() {
+  refreshRegs(); // 注册审核角标+列表（2026-09-09 老板拍板）
   const sm = await api('listSalesmen');
   $('smTbody').innerHTML = sm.ok
     ? sm.salesmen.map(s => `<tr>
@@ -3699,9 +3716,60 @@ async function loadPeople() {
         <td>${esc(a.name)}</td>
         <td><span class="pill ${a.role === 'super_admin' ? 'orange' : 'gray'}">${a.role === 'super_admin' ? '超级管理员' : '管理员'}</span></td>
         <td>${a.role === 'super_admin' ? '<span class="pill green">启用</span>' : toggleHtml(a._id, a.active)}</td>
+        <td>${a.boss ? `<span class="pill" style="background:#1F2430;color:#fff">👑 老板</span> <button class="btn ghost" style="height:24px;font-size:11px" onclick="setUserBoss('${a._id}',false)">停用</button>` : `<button class="btn ghost" style="height:24px;font-size:11px" onclick="setUserBoss('${a._id}',true)">👑 启用老板</button>`}</td>
         <td>${a.role === 'super_admin' ? '<span style="color:#C4CAD1;font-size:12px">—</span>' : `<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${a._id}','${esc(a.name)}')">删除</button>`}</td>
       </tr>`).join('')
-    : '<tr><td colspan="5" class="empty">加载失败</td></tr>';
+    : '<tr><td colspan="6" class="empty">加载失败</td></tr>';
+}
+
+// 老板白名单开关（2026-09-09 老板定：仅指定管理员账号可进老板页面/战况地图）
+async function setUserBoss(userId, on) {
+  if (on && !window.confirm('启用老板模式？该管理员微信打开小程序将可进入老板页面（全量查看+演示操作）。')) return;
+  const res = await api('setUserBoss', { userId, boss: on });
+  alert(res.msg || '操作失败');
+  refreshPeople();
+}
+
+// ===== 注册审核（2026-09-09 老板拍板：注册→后台审核→通过后免登） =====
+async function refreshRegs() {
+  const res = await api('listRegistrations');
+  if (!res.ok) return;
+  const pill = $('regPendPill');
+  if (pill) {
+    pill.textContent = res.pending.length;
+    pill.hidden = res.pending.length === 0;
+  }
+  const fmtT = ts => ts ? (() => { const d = new Date(Number(ts)); const p = n => String(n).padStart(2, '0'); return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; })() : '—';
+  $('regTbody').innerHTML = res.pending.length
+    ? res.pending.map(r => `<tr>
+        <td><b>${esc(r.name)}</b></td>
+        <td>${esc(r.phone)}</td>
+        <td style="color:var(--sub)">${esc(r.openidMask)}</td>
+        <td>${fmtT(r.createdAt)}</td>
+        <td>
+          <button class="btn primary" style="height:26px;font-size:12px;padding:0 14px" onclick="reviewReg('${r._id}','approve','${esc(r.name)}')">✓ 通过</button>
+          <button class="btn ghost" style="height:26px;font-size:12px;color:var(--danger)" onclick="reviewReg('${r._id}','reject','${esc(r.name)}')">✗ 拒绝</button>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty">暂无待审核申请</td></tr>';
+  $('regDoneTbody').innerHTML = res.done.length
+    ? res.done.map(r => `<tr>
+        <td>${esc(r.name)}</td>
+        <td>${esc(r.phone)}</td>
+        <td>${r.status === 'approved' ? '<span class="pill green">已通过</span>' : '<span class="pill" style="background:#FDEBEC;color:#E5484D">已拒绝</span>'}</td>
+        <td>${fmtT(r.reviewedAt)}</td>
+        <td style="color:var(--sub)">${esc(r.reason || '—')}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty">暂无记录</td></tr>';
+}
+
+async function reviewReg(regId, act, name) {
+  if (act === 'approve' && !window.confirm(`通过「${name}」的注册申请？\n手机号匹配已有业务员将直接绑定；不匹配将新建业务员。`)) return;
+  if (act === 'reject' && !window.confirm(`拒绝「${name}」的注册申请？`)) return;
+  const res = await api('reviewRegistration', { regId, action: act });
+  alert(res.msg || '操作失败');
+  refreshRegs();
+  refreshPeople();
 }
 
 function openUserModal() {

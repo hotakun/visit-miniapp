@@ -15,10 +15,14 @@
             bindtap="switchDay" data-d="{{item}}">{{days.length > 5 ? item : '第' + item + '天'}}</view>
     </view>
 
-    <!-- 下一家引导条（顺序引导：当天顺序中第一家未完成；右侧重排按钮=以我的位置重排） -->
-    <view class="nextbar" wx:if="{{nextCust}}" bindtap="openNext">
-      <view class="ntxt"><text class="nlab">👉 下一家</text><text class="nname">{{nextCust.name}}</text><text class="ndist" wx:if="{{nextDist}}">{{nextDist}}</text></view>
-      <view class="nbtn" wx:if="{{canReplan}}" catchtap="replanDay">{{replanBusy ? '重排中…' : '重排'}}</view>
+    <!-- 下一家引导条（顺序引导：当天顺序中第一家未完成；右侧重排按钮=以我的位置重排）
+         老板模式（2026-09-09 §7.13）：重排按钮位置变业务员下拉选择器，去掉重排功能 -->
+    <view class="nextbar" wx:if="{{nextCust || bossMode}}">
+      <view class="ntxt" wx:if="{{nextCust}}" bindtap="openNext"><text class="nlab">👉 下一家</text><text class="nname">{{nextCust.name}}</text><text class="ndist" wx:if="{{nextDist}}">{{nextDist}}</text></view>
+      <view class="nbtn" wx:if="{{canReplan && !bossMode}}" catchtap="replanDay">{{replanBusy ? '重排中…' : '重排'}}</view>
+      <picker wx:if="{{bossMode}}" mode="selector" range="{{bossMen}}" range-key="label" bindchange="onBossMen">
+        <view class="nbtn nbtn-boss" style="margin-left:auto">👤 {{bossMen[curBossIdx].label || '选择业务员'}} ▾</view>
+      </picker>
     </view>
 
     <!-- 底部客户卡 -->

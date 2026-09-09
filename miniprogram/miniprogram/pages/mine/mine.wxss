@@ -1,6 +1,7 @@
 .page { padding: 20px 18px 110px; }
 .profile { display: flex; align-items: center; gap: 14px; padding: 18px; }
 .avatar { width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg,#FF8A50,#F5531C); color: #fff; font-size: 24px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.avatar.boss { background: linear-gradient(135deg,#3B4252,#1F2430); font-size: 26px; }
 .profile .nm { font-size: 18px; font-weight: 800; }
 .profile .rl { margin-top: 4px; font-size: 12.5px; color: var(--sub); font-weight: 600; }
 .stats { display: flex; margin-top: 14px; padding: 16px 10px; }

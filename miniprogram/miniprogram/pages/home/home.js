@@ -125,7 +125,7 @@ function dailyPhrase(uid) {
 }
 
 Page({
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty' },
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null },
   onShow() {
     const app = getApp();
     if (!this._revFn) {
@@ -134,7 +134,16 @@ Page({
       app.registerReviewListener(this._revFn);
     }
     this._shown = true;
+    const boss = app.globalData.bossMode; // 老板模式（2026-09-09 §7.13）
     const u = app.globalData.user;
+    if (boss) {
+      const now = new Date(Date.now() + 8 * 3600 * 1000);
+      const week = ['日', '一', '二', '三', '四', '五', '六'];
+      const dateText = `${now.getUTCMonth() + 1}月${now.getUTCDate()}日 周${week[now.getUTCDay()]}`;
+      this.setData({ bossMode: true, user: { name: '老板' }, dateText, logoUrl: app.globalData.logoUrl });
+      this.load();
+      return;
+    }
     if (!u || u.role !== 'salesman') {
       wx.redirectTo({ url: '/pages/login/login' });
       return;
@@ -144,7 +153,7 @@ Page({
     const dateText = `今日计划 · ${now.getUTCMonth() + 1}月${now.getUTCDate()}日 周${week[now.getUTCDay()]}`;
     const pepText = dailyPhrase(u._id || 'guest');
     const pep = splitEmoji(pepText);
-    this.setData({ user: u, dateText, pepText: pep.text, pepEmoji: pep.emoji, logoUrl: getApp().globalData.logoUrl });
+    this.setData({ user: u, bossMode: false, dateText, pepText: pep.text, pepEmoji: pep.emoji, logoUrl: getApp().globalData.logoUrl });
     this.load();
     this.checkSubStatus();
   },
@@ -186,6 +195,22 @@ Page({
   async load() {
     this.setData({ loading: true });
     try {
+      // 老板模式（2026-09-09 §7.13）：bossBoard 一次返回统计+全量任务
+      if (getApp().globalData.bossMode) {
+        const res = await api.call('tasks', { action: 'bossBoard' });
+        if (res.ok) {
+          const fmtDeadline = s => {
+            const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+            return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : (s || '—');
+          };
+          const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
+          this.setData({ tasks, showTasks: tasks, bossStats: res.stats || null });
+        } else {
+          api.toast(res.msg || '加载失败');
+        }
+        this.setData({ loading: false });
+        return;
+      }
       const res = await api.call('tasks', { action: 'list' });
       if (res.ok) {
         // 截止日期显示格式：YYYY-MM-DD → X月X日
@@ -229,6 +254,7 @@ Page({
   },
   // 点任务：获取一次定位并上报一次（不阻塞跳转；失败静默）
   reportLocOnce() {
+    if (getApp().globalData.bossMode) return; // 老板演示：不上报定位（云端也丢弃）
     const loc = require('../../utils/loc');
     loc.startForeground();
     loc.getOne(8000).then(p => {
@@ -274,5 +300,6 @@ Page({
     }
   },
   tabMap() { wx.redirectTo({ url: '/pages/map/map' }); },
+  tabWar() { wx.redirectTo({ url: '/pages/bossWar/bossWar' }); }, // 战况地图（2026-09-09 §7.13）
   tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); }
 });

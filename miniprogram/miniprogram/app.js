@@ -6,7 +6,8 @@ App({
   globalData: {
     user: null,
     APP_VERSION: '0.9.04', // 版本号（2026-09-08 老板定：双方必须统一口径的改动才 bump；界面级改动不动）
-    logoUrl: LOGO_FILE_ID || '/images/logo.png' // LOGO 优先云存储 fileID，未配置回退本地
+    logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
+    bossMode: false // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
   },
   reviewTimer: null,      // 审核观察员定时器（仅存在审核中任务时运行）
   reviewSnapshot: null,   // 上次快照 { taskId: status }
@@ -20,6 +21,8 @@ App({
     wx.cloud.init({ env: CLOUD_ENV, traceUser: true });
     const u = wx.getStorageSync('user');
     if (u) this.globalData.user = u;
+    // 老板模式持久恢复（2026-09-09 §7.13：管理员微信点「进入老板模式」后保持）
+    this.globalData.bossMode = !!wx.getStorageSync('boss_mode');
   },
 
   setUser(u) {
@@ -29,6 +32,13 @@ App({
   clearUser() {
     this.globalData.user = null;
     wx.removeStorageSync('user');
+    wx.removeStorageSync('boss_mode');
+    this.globalData.bossMode = false;
+  },
+  setBossMode(v) {
+    this.globalData.bossMode = !!v;
+    if (v) wx.setStorageSync('boss_mode', 1);
+    else wx.removeStorageSync('boss_mode');
   },
 
   // ===== 审核观察员：有审核中任务才 15 秒轮询等待审批结果；无则停止（维持现状） =====

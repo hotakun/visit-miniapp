@@ -52,3 +52,13 @@
 .pfill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#FF8A50,#F5531C); }
 .empty { text-align: center; color: var(--sub); font-size: 14px; margin-top: 60px; }
 .loading { text-align: center; color: var(--sub); font-size: 13px; margin-top: 40px; }
+
+/* 老板模式（2026-09-09 §7.13）：数字胶囊带 + 任务卡业务员名 */
+.boss-stats{display:flex;gap:10rpx;margin:18rpx 0 6rpx}
+.bs{flex:1;background:#FFFFFF;border-radius:18rpx;padding:20rpx 0;text-align:center;box-shadow:0 2rpx 10rpx rgba(31,36,48,.05)}
+.bs-n{font-size:40rpx;font-weight:800;color:#1F2430;line-height:1.1}
+.bs-l{font-size:22rpx;color:#66707A;margin-top:6rpx}
+.c-blue{color:#2F80ED}
+.c-orange{color:#F5531C}
+.c-red{color:#E5484D}
+.towner{font-size:24rpx;color:#66707A;font-weight:400}

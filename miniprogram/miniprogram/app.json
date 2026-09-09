@@ -7,7 +7,8 @@
     "pages/visit/visit",
     "pages/map/map",
     "pages/mine/mine",
-    "pages/tasks-all/tasks-all"
+    "pages/tasks-all/tasks-all",
+    "pages/bossWar/bossWar"
   ],
   "window": {
     "navigationBarBackgroundColor": "#F5531C",

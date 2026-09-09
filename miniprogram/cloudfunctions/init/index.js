@@ -9,7 +9,7 @@ const db = cloud.database();
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-const COLLECTIONS = ['users', 'customers', 'tasks', 'visits', 'orders', 'import_batches', 'settings', 'coord_fix_requests', 'salesman_locations', 'mall_claims', 'mall_customers', 'customer_batches', 'batch_members'];
+const COLLECTIONS = ['users', 'customers', 'tasks', 'visits', 'orders', 'import_batches', 'settings', 'coord_fix_requests', 'salesman_locations', 'mall_claims', 'mall_customers', 'customer_batches', 'batch_members', 'registrations'];
 
 const SUPER_ADMIN = {
   username: 'qingyan',

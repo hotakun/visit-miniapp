@@ -10,33 +10,75 @@ Page({
     centerLat: 28.970802, centerLng: 120.154526,
     nextCust: null, nextDist: '',
     selCust: null, selDist: '',
-    canReplan: false, replanBusy: false
+    canReplan: false, replanBusy: false,
+    // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
+    bossMode: false, bossMen: [], curBossIdx: 0
   },
   onShow() {
+    if (getApp().globalData.bossMode) {
+      this.setData({ bossMode: true });
+      if (!this._loaded) this.loadBoss();
+      return;
+    }
     if (!this._loaded) this.loadTask();
     this.startLoc();
   },
   onHide() { this.stopLoc(); },
   onUnload() { this.stopLoc(); },
 
-  async loadTask() {
+  // 老板任务地图（2026-09-09 §7.13）：任务列表全量 → 业务员下拉（默认第一个）；切换=换任务重载
+  async loadBoss() {
+    this.setData({ loading: true });
     try {
       const res = await api.call('tasks', { action: 'list' });
-      const t = (res.ok && res.tasks) ? res.tasks.find(x => x.status === 'published' || x.status === 'reviewing') : null;
-      if (!t) {
-        this.setData({ loading: false, empty: '暂无进行中的任务\n任务发布后，这里会显示拜访路线与顺序' });
-        return;
+      if (!res.ok) { this.setData({ loading: false, empty: res.msg || '加载失败' }); return; }
+      const tasks = (res.tasks || []).filter(t => t.status === 'published' || t.status === 'reviewing');
+      const bossMen = tasks.map(t => ({ label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
+      this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
+      if (!bossMen.length) { this.setData({ loading: false, empty: '暂无进行中的任务' }); return; }
+      await this.loadTask(bossMen[0].taskId);
+    } catch (e) {
+      this.setData({ loading: false, empty: '网络异常，请重试' });
+    }
+  },
+
+  // 切换业务员（老板模式）：重新加载该业务员的任务地图
+  async onBossMen(e) {
+    const idx = Number(e.detail.value) || 0;
+    const m = this.data.bossMen[idx];
+    if (!m || m.taskId === this.data.taskId) return;
+    this.setData({ curBossIdx: idx });
+    this._loaded = false;
+    await this.loadTask(m.taskId);
+  },
+
+  async loadTask(taskId) {
+    try {
+      let t = null;
+      if (taskId) {
+        const d0 = await api.call('tasks', { action: 'detail', taskId });
+        if (!d0.ok) { this.setData({ loading: false, empty: '任务加载失败，请重试' }); return; }
+        t = d0.task;
+        this.task = d0.task;
+        this.customers = d0.customers || [];
+      } else {
+        const res = await api.call('tasks', { action: 'list' });
+        t = (res.ok && res.tasks) ? res.tasks.find(x => x.status === 'published' || x.status === 'reviewing') : null;
+        if (!t) {
+          this.setData({ loading: false, empty: '暂无进行中的任务\n任务发布后，这里会显示拜访路线与顺序' });
+          return;
+        }
+        const d = await api.call('tasks', { action: 'detail', taskId: t._id });
+        if (!d.ok) { this.setData({ loading: false, empty: '任务加载失败，请重试' }); return; }
+        this.task = d.task;
+        this.customers = d.customers || [];
       }
-      const d = await api.call('tasks', { action: 'detail', taskId: t._id });
-      if (!d.ok) { this.setData({ loading: false, empty: '任务加载失败，请重试' }); return; }
-      this.task = d.task;
-      this.customers = d.customers || [];
       // 时间分层配置同步全局（2026-09-08 M2：loc.js 采集器读取）
       const app = getApp();
-      if (app) app.globalData.locCfg = { workStartHour: d.task.workStartHour, workEndHour: d.task.workEndHour, offDutyTier: d.task.offDutyTier };
-      const days = (d.task.dayPlan || []).map(p => p.day);
-      const td = Math.max(1, Math.min(d.task.todayDay || 1, days.length || 1));
-      this.setData({ loading: false, task: d.task, days, todayDay: td, curDay: td });
+      if (app) app.globalData.locCfg = { workStartHour: this.task.workStartHour, workEndHour: this.task.workEndHour, offDutyTier: this.task.offDutyTier };
+      const days = (this.task.dayPlan || []).map(p => p.day);
+      const td = Math.max(1, Math.min(this.task.todayDay || 1, days.length || 1));
+      this.setData({ loading: false, task: this.task, days, todayDay: td, curDay: td });
       this.renderDay();
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
@@ -88,9 +130,9 @@ Page({
     }
     // 下一家：当前天顺序中第一家未完成
     const next = list.find(c => !c.visitedToday && !c.visitOngoing) || null;
-    // 重排按钮：当天未完成（非拜访中）客户 ≥2 家才显示（1 家无需排）
+    // 重排按钮：当天未完成（非拜访中）客户 ≥2 家才显示（1 家无需排）；老板模式去重排（2026-09-09 §7.13）
     const todoCount = list.filter(c => !c.visitedToday && !c.visitOngoing).length;
-    const canReplan = todoCount >= 2 && task.status === 'published';
+    const canReplan = !this.data.bossMode && todoCount >= 2 && task.status === 'published';
     // 视野中心：下一家 → 当前天第一个点 → 我的位置（show-location 自带）→ 仓库
     let centerLat = this.data.centerLat, centerLng = this.data.centerLng;
     if (next) { centerLat = next.lat; centerLng = next.lng; }

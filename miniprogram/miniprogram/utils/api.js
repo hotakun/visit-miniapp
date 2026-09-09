@@ -28,10 +28,15 @@ function isTrialUser() {
   return !!(u && u.trial);
 }
 
+// 老板模式（2026-09-09 §7.13：管理员微信专用演示态——全量只读+虚拟写，电话不打码）
+function isBossMode() {
+  return !!getApp().globalData.bossMode;
+}
+
 // 游客电话打码：后四位显示 ****（如 1389408****）
 function maskTrialPhone(p) {
   const s = String(p || '').trim();
   return s.length >= 4 ? s.slice(0, s.length - 4) + '****' : (s || '****');
 }
 
-module.exports = { call, toast, today, isTrialUser, maskTrialPhone };
+module.exports = { call, toast, today, isTrialUser, isBossMode, maskTrialPhone };

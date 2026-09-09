@@ -14,29 +14,33 @@ exports.main = async (event) => {
   const me = await db.collection('users').where({ openid: OPENID }).get();
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
   const meUser = me.data[0];
+  // 老板模式（2026-09-09 §7.13 修订：仅 boss===true 的指定管理员账号启用老板页面，其余管理员不启用）
+  const isBoss = ['super_admin', 'admin'].includes(meUser.role) && meUser.boss === true;
 
-  if (action === 'submit') return await submit(meUser, event);
-  if (action === 'start') return await start(meUser, event);
-  if (action === 'saveDraft') return await saveDraft(meUser, event);
-  if (action === 'reportLocation') return await reportLocation(meUser, event);
-  if (action === 'reportTrack') return await reportTrack(meUser, event);
-  if (action === 'cancel') return await cancelVisit(meUser, event);
-  if (action === 'history') return await history(meUser, event.customerId);
-  if (action === 'mystats') return await mystats(meUser);
+  if (action === 'submit') return await submit(meUser, event, isBoss);
+  if (action === 'start') return await start(meUser, event, isBoss);
+  if (action === 'saveDraft') return await saveDraft(meUser, event, isBoss);
+  if (action === 'reportLocation') return await reportLocation(meUser, event, isBoss);
+  if (action === 'reportTrack') return await reportTrack(meUser, event, isBoss);
+  if (action === 'cancel') return await cancelVisit(meUser, event, isBoss);
+  if (action === 'history') return await history(meUser, event.customerId, isBoss);
+  if (action === 'mystats') return await mystats(meUser, isBoss);
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
 
 // 拜访中：业务员进入拜访页（开始计时）即上报，后台可见"拜访中"状态
-async function start(user, e) {
+async function start(user, e, isBoss) {
   const { taskId, customerId } = e;
   if (!taskId || !customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务或客户' };
   // 任务归属校验
   const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const task = taskRes && taskRes.data;
-  if (!task || task.salesmanId !== user._id) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+  if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
   if (!['published', 'reviewing'].includes(task.status)) return { ok: false, code: 'TASK_DONE', msg: '任务已结束，无法再拜访' };
   if (task.status === 'published' && task.deadline && String(task.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
   if (!(task.customerIds || []).includes(customerId)) return { ok: false, code: 'CUST_NOT_IN_TASK', msg: '客户不在该任务中' };
+  // 老板模式（2026-09-09 §7.13）：不建拜访中记录、不发闹钟、不占单开名额——返回假 visitId 走本地演示流程
+  if (isBoss) return { ok: true, already: 'new', visitId: 'boss_' + Date.now(), boss: true };
 
   const date = todayStr();
   // 任务内单开检查（2026-09-04 老板定）：放最前——任何客户（含已拜访的二次拜访）在他人拜访中时一律拦截
@@ -77,12 +81,13 @@ async function start(user, e) {
 
 // 草稿上报（2026-09-08 M1 老板定）：点选拜访结果/填备注时立即上报，
 // 超时到点时云端据此双态处理：有草稿→自动提交；无草稿→自动取消
-async function saveDraft(user, e) {
+async function saveDraft(user, e, isBoss) {
   const { taskId, customerId, result, text, samples } = e;
   if (!taskId || !customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务或客户' };
   // 结果枚举校验（2026-09-08 审查修复：防非法值经草稿→超时自动提交写库）
   const rr = String(result || '');
   if (rr && !RESULT_ENUM_NEW.includes(rr)) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
+  if (isBoss) return { ok: true, msg: '草稿已保存' }; // 老板演示：不落库
   const date = todayStr();
   const ong = await db.collection('visits')
     .where({ customerId, taskId, visitedAt: date, status: 'ongoing', salesmanId: user._id })
@@ -97,9 +102,10 @@ async function saveDraft(user, e) {
 // 最新位置上报（2026-09-08 M1 老板定）：60 秒节流由端上控制；
 // 移动阈值在云端判定（挑毛病 2 定稿）：工作时段（7:00~20:00，暂写死默认）正常写；
 // 非工作时段移动 < 10 米不写（静止不写省写量）；force=true（点任务等主动行为）跳过阈值强制写
-async function reportLocation(user, e) {
+async function reportLocation(user, e, isBoss) {
   const la = Number(e.lat), ln = Number(e.lng);
   if (!isFinite(la) || !isFinite(ln) || !la || !ln) return { ok: false, code: 'BAD_ARG', msg: '坐标不合法' };
+  if (isBoss) return { ok: true, dropped: true, boss: true }; // 老板演示：丢弃，防污染位置监控数据（2026-09-09 §7.13）
   const now = Date.now();
   const hour = new Date(now + 8 * 3600 * 1000).getUTCHours(); // 东八区小时
   const isWork = hour >= 7 && hour < 20;
@@ -121,7 +127,8 @@ async function reportLocation(user, e) {
 }
 
 // 轨迹片段写入（2026-09-08 M2）：端上按时间分层采样后打包上传，一条=一个片段文档
-async function reportTrack(user, e) {
+async function reportTrack(user, e, isBoss) {
+  if (isBoss) return { ok: true, n: 0, dropped: true, boss: true }; // 老板演示：轨迹丢弃（2026-09-09 §7.13）
   const raw = Array.isArray(e.pts) ? e.pts : [];
   const base = raw
     .filter(p => p && isFinite(Number(p.lat)) && isFinite(Number(p.lng)))
@@ -147,12 +154,13 @@ async function reportTrack(user, e) {
 }
 
 // 取消拜访（2026-09-04 老板定稿）：直接删除本次拜访记录，不留任何痕迹（像没来过一样）；客户仍为待回访；无需定位，任何地方可取消
-async function cancelVisit(user, e) {
+async function cancelVisit(user, e, isBoss) {
   const { taskId, customerId } = e;
   if (!taskId || !customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务或客户' };
   const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const task = taskRes && taskRes.data;
-  if (!task || task.salesmanId !== user._id) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+  if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+  if (isBoss) return { ok: true, boss: true, msg: '已取消本次拜访，该客户仍为待回访' }; // 老板演示：无记录可删，直接假成功
   const date = todayStr();
   const ong = await db.collection('visits')
     .where({ customerId, taskId, visitedAt: date, status: 'ongoing', salesmanId: user._id })
@@ -163,7 +171,7 @@ async function cancelVisit(user, e) {
   return { ok: true, visitId: doc._id, msg: '已取消本次拜访，该客户仍为待回访' };
 }
 
-async function submit(user, e) {
+async function submit(user, e, isBoss) {
   // 游客（实习账号）硬拦（2026-09-08 老板定：游客不能提交数据；前端提示+云端兜底双层）
   if (user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
   const { taskId, customerId, result, text = '', samples = '', durationSeconds = 0, lat, lng, photos, audio } = e;
@@ -171,7 +179,7 @@ async function submit(user, e) {
   // 1. 任务归属校验
   const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const task = taskRes && taskRes.data;
-  if (!task || task.salesmanId !== user._id) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+  if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
   if (!['published', 'reviewing'].includes(task.status)) return { ok: false, code: 'TASK_DONE', msg: '任务已结束，无法再拜访' };
   if (task.status === 'published' && task.deadline && String(task.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
   if (!(task.customerIds || []).includes(customerId)) return { ok: false, code: 'CUST_NOT_IN_TASK', msg: '客户不在该任务中' };
@@ -195,6 +203,9 @@ async function submit(user, e) {
     if (!audio || typeof audio.fileID !== 'string' || !audio.fileID) return { ok: false, code: 'BAD_AUDIO', msg: '录音数据不完整，请重新录制' };
     au = { fileID: audio.fileID, duration: Math.max(1, Math.min(600, Math.round(Number(audio.duration) || 0))) };
   }
+
+  // 老板模式（2026-09-09 §7.13）：校验全走、只算不写——假成功返回，不落任何库
+  if (isBoss) return { ok: true, boss: true, visitId: 'boss_' + Date.now(), msg: '已提交 ✓（演示：未保存）' };
 
   // 4. 当日可多次拜访（2026-09-03 老板拍板）：允许二次回访并再次提交结果，
   //    每次提交独立成一条拜访记录（历史完整留痕）；任务进度按客户家数去重，多次拜访不重复计数
@@ -270,7 +281,7 @@ async function submit(user, e) {
   return { ok: true, visitId: doc._id, msg: '已提交 ✓' };
 }
 
-async function history(user, customerId) {
+async function history(user, customerId, isBoss) {
   const res = await db.collection('visits')
     .where({ customerId })
     .limit(100)
@@ -303,7 +314,8 @@ function fmtHM(ts) {
 }
 
 // 「我的」页统计：本月拜访次数 / 本月拜访客户家数（去重）/ 累计次数 / 任务完成率
-async function mystats(user) {
+async function mystats(user, isBoss) {
+  if (isBoss) return { ok: true, monthCount: 0, monthCust: 0, totalCount: 0, taskRate: 0 }; // 老板演示：无个人统计
   const list = [];
   let skip = 0;
   const PAGE = 100;

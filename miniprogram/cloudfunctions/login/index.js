@@ -1,5 +1,6 @@
 // 云函数 login：业务员微信登录 / 首次绑定
-// 流程：未绑定 openid 的业务员首次登录选择自己的姓名完成绑定，之后微信自动识别
+// 2026-09-09 老板拍板改版：正式业务员一律「注册申请 → 后台审核 → 通过后绑定 openid → 免登录进入首页」
+// 流程：已绑定直接进；有申请=审核中/被拒绝状态；无申请=注册表单（附游客入口 trialId）
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -12,43 +13,69 @@ exports.main = async (event) => {
   const _ = db.command;
 
   // 0. 管理员识别（super_admin / admin）：管理员微信打开小程序 → 仅提示使用 Web 后台
+  //    2026-09-09 老板定：只有 boss===true 的指定账号才显示「进入老板模式」入口
   const adminRes = await users.where({ openid: OPENID, active: true, role: _.in(['super_admin', 'admin']) }).get();
   if (adminRes.data.length > 0) {
     const a = adminRes.data[0];
     await users.doc(a._id).update({ data: { lastLoginAt: Date.now() } });
-    return { ok: true, isAdmin: true, user: publicUser(a) };
+    return { ok: true, isAdmin: true, canBoss: a.boss === true, user: publicUser(a) };
   }
 
-  // 1. 业务员已绑定：直接返回
+  // 1. 业务员已绑定：直接返回（审核通过后 openid 已写入，免登录）
   const bound = await users.where({ openid: OPENID, active: true }).get();
   if (bound.data.length > 0) {
-    const u = bound.data[0];
+    // 2026-09-09 老板报障修复：同一 openid 可能同时命中「实习」与正式账号（实习可任意绑定）；
+    // 正式业务员优先——多命中时非 trial 的排在前面
+    const u = bound.data.slice().sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0))[0];
     await users.doc(u._id).update({ data: { lastLoginAt: Date.now() } });
     return { ok: true, user: publicUser(u) };
   }
 
-  // 2. 未绑定 + 指定绑定人：校验并绑定
+  // 2. 绑定指定人（2026-09-09 老板定：正式账号一律走注册审核，此入口仅保留给游客「实习」体验）
   if (bindUserId) {
     const target = await users.doc(bindUserId).get().catch(() => null);
     const t = target && target.data;
     if (!t) return { ok: false, code: 'USER_NOT_FOUND', msg: '人员不存在' };
     if (t.role !== 'salesman') return { ok: false, code: 'NOT_SALESMAN', msg: '该人员不是业务员' };
-    if (t.openid && t.openid !== OPENID && !t.trial) return { ok: false, code: 'ALREADY_BOUND', msg: '该账号已被其他微信绑定' };
+    if (!t.trial) return { ok: false, code: 'NEED_REVIEW', msg: '请先提交注册申请，审核通过后自动进入' };
     // 游客体验账号（trial，2026-09-08 老板定）：允许任意微信绑定/覆盖——小程序审核/演示用
+    // 2026-09-09 老板报障修复：先解除其它 trial 账号对本 openid 的占用，再绑定目标
+    await users.where({ _id: _.neq(bindUserId), openid: OPENID, trial: true }).update({ data: { openid: '' } });
     await users.doc(bindUserId).update({ data: { openid: OPENID, lastLoginAt: Date.now() } });
     const u = await users.doc(bindUserId).get();
     return { ok: true, user: publicUser(u.data) };
   }
 
-  // 3. 未绑定：返回可绑定业务员列表（仅未绑定且启用的；手机号打码保护隐私）；
-  //    游客体验账号（trial）恒可绑并置顶（供审核/演示人员直接点击登录）
-  const cand = await users.where({ role: 'salesman', active: true }).get();
-  const list = cand.data
-    .filter(x => !x.openid || x.trial)
-    .map(x => ({ _id: x._id, name: x.name, phone: maskPhone(x.phone), trial: !!x.trial }))
-    .sort((a, b) => (b.trial ? 1 : 0) - (a.trial ? 1 : 0));
-  return { ok: false, code: 'NEED_BIND', salesmen: list, msg: '请选择你的姓名完成绑定' };
+  // 3. 注册申请（2026-09-09 老板拍板：姓名+手机号 → 后台审核）
+  if (event.action === 'register') return await register(OPENID, event);
+
+  // 4. 未绑定：返回注册状态（审核中 / 被拒绝可重提 / 未注册）
+  const reg = await db.collection('registrations').where({ openid: OPENID }).orderBy('createdAt', 'desc').limit(1).get();
+  const r = reg.data[0];
+  if (r && r.status === 'pending') {
+    return { ok: false, code: 'PENDING', msg: '申请已提交，等待管理员审核', createdAt: r.createdAt || 0 };
+  }
+  if (r && r.status === 'rejected') {
+    return { ok: false, code: 'REJECTED', msg: '申请未通过，可重新申请', reason: r.reason || '', reviewedAt: r.reviewedAt || 0, canReapply: true };
+  }
+  // 游客入口信息（2026-09-09 老板定：保留小字入口，供审核/演示）
+  const trialRes = await users.where({ role: 'salesman', trial: true, active: true }).limit(1).get();
+  return { ok: false, code: 'NEED_REGISTER', msg: '请注册后等待审核', trialId: trialRes.data[0] ? trialRes.data[0]._id : '' };
 };
+
+// 注册申请（2026-09-09 老板拍板）：姓名+手机号；同一 openid 有 pending 不重复提交；拒绝后可重提
+async function register(OPENID, e) {
+  const name = String((e && e.name) || '').trim();
+  const phone = String((e && e.phone) || '').trim();
+  if (!name) return { ok: false, code: 'BAD_NAME', msg: '请填写姓名' };
+  if (!/^1\d{10}$/.test(phone)) return { ok: false, code: 'BAD_PHONE', msg: '请填写正确的 11 位手机号' };
+  const pend = await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).count();
+  if (pend.total > 0) return { ok: false, code: 'PENDING', msg: '申请已提交，请等待管理员审核' };
+  await db.collection('registrations').add({
+    data: { openid: OPENID, name, phone, status: 'pending', reason: '', createdAt: Date.now() }
+  });
+  return { ok: true, msg: '申请已提交，审核通过后重新打开小程序即可使用' };
+}
 
 function maskPhone(p) {
   if (!p || p.length < 11) return p || '';

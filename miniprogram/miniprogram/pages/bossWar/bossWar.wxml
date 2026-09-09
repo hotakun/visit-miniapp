@@ -1,0 +1,73 @@
+<!-- 战况地图（2026-09-09 §7.13 老板拍板）：业务员实时位置+今日动态流+点人抽屉卡 -->
+<view class="page">
+  <!-- 顶栏 -->
+  <view class="whead">
+    <view class="wh-l"><view class="wh-t">📡 战况地图</view><view class="wh-s">{{updateText}}</view></view>
+    <view class="wh-bell" wx:if="{{warnCount > 0}}">🔔{{warnCount}}</view>
+    <view class="wh-bell off" wx:else>🔔</view>
+  </view>
+
+  <!-- 数字胶囊带 -->
+  <view class="boss-stats" wx:if="{{stats}}">
+    <view class="bs"><view class="bs-n">{{stats.todayDone}}/{{stats.todayTotal}}</view><view class="bs-l">今日完成</view></view>
+    <view class="bs"><view class="bs-n c-blue">{{stats.ongoing}}</view><view class="bs-l">拜访中</view></view>
+    <view class="bs"><view class="bs-n c-orange">{{stats.online}}</view><view class="bs-l">在线</view></view>
+    <view class="bs"><view class="bs-n c-red">{{stats.review}}</view><view class="bs-l">待审核</view></view>
+  </view>
+
+  <!-- 地图（约 55vh；include-points 自动缩放到全部业务员） -->
+  <view class="wmap-wrap">
+    <map class="wmap" id="wmp" markers="{{markers}}" include-points="{{includePoints}}"
+         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
+         bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap"></map>
+    <view class="wlegend">
+      <view class="lg"><view class="dot" style="background:#2F80ED"></view>拜访中</view>
+      <view class="lg"><view class="dot" style="background:#F5531C"></view>在移动</view>
+      <view class="lg"><view class="dot" style="background:#9CA3AF"></view>静止</view>
+      <view class="lg"><view class="dot" style="background:#E5484D"></view>异常</view>
+    </view>
+    <view class="wonly" wx:if="{{onlyId}}" bindtap="clearOnly">✕ 只看他</view>
+  </view>
+
+  <!-- 加载/空态 -->
+  <view class="center-box" wx:if="{{loading}}">加载中…</view>
+  <view class="center-box" wx:if="{{!loading && empty}}">{{empty}}</view>
+
+  <!-- 今日动态流 -->
+  <view class="wsec-t">▼ 今日动态<text class="wsec-n" wx:if="{{events.length}}">{{events.length}} 条</text></view>
+  <view class="wflow" wx:if="{{events.length}}">
+    <view class="wf {{item.type === 'start' ? 'going' : 'done'}}" wx:for="{{events}}" wx:key="index">
+      <view class="wf-ic">{{item.type === 'start' ? '▶' : '✓'}}</view>
+      <view class="wf-tx">
+        <view class="wf-l1">{{item.salesmanName}} · {{item.customerName}}</view>
+        <view class="wf-l2">{{item.type === 'start' ? '开始拜访' : ('提交拜访 · ' + (item.result || '—'))}}</view>
+      </view>
+      <view class="wf-t">{{item.t}}</view>
+    </view>
+  </view>
+  <view class="center-box" wx:if="{{!loading && !events.length}}">今天还没有拜访动态</view>
+
+  <!-- 业务员抽屉卡 -->
+  <view class="drawer" wx:if="{{selMan}}">
+    <view class="dr-head">
+      <view class="dr-dot" style="background:{{selMan.stateColor}}"></view>
+      <view class="dr-name">{{selMan.name}}</view>
+      <view class="dr-state" style="color:{{selMan.stateColor}}">{{selMan.stateLabel}}</view>
+      <view class="dr-x" bindtap="closeDrawer">✕</view>
+    </view>
+    <view class="dr-row">📍 {{selMan.lastText}}<text wx:if="{{selMan.visitOngoing}}"> · 拜访中</text></view>
+    <view class="dr-row">📝 今日提交 {{selMan.mySubmit}} 次<text class="dr-sub">（全团队 {{selMan.allSubmit}} 次）</text></view>
+    <view class="dr-btns">
+      <view class="drb" bindtap="toggleOnly">👁 只看他</view>
+      <view class="drb main" bindtap="tabMap">🗺 任务地图</view>
+    </view>
+  </view>
+
+  <!-- 四栏底部导航 -->
+  <view class="tabbar">
+    <view class="tb" bindtap="tabHome"><view class="tic">🏠</view>首页</view>
+    <view class="tb" bindtap="tabMap"><view class="tic">🗺</view>任务地图</view>
+    <view class="tb on"><view class="tic">📡</view>战况</view>
+    <view class="tb" bindtap="tabMine"><view class="tic">👤</view>我的</view>
+  </view>
+</view>

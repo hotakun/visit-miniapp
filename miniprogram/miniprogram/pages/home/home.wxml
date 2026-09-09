@@ -8,12 +8,20 @@
     </view>
   </view>
 
-  <view class="sub-banner" wx:if="{{showSubBanner}}" bindtap="subscribe">
+  <view class="sub-banner" wx:if="{{!bossMode && showSubBanner}}" bindtap="subscribe">
     <text>📣 订阅"新任务提醒"，来单不耽误</text>
     <view class="x" catchtap="hideSubBanner">✕</view>
   </view>
 
-  <view class="hero">
+  <!-- 老板模式（2026-09-09 §7.13）：数字胶囊带 -->
+  <view class="boss-stats" wx:if="{{bossMode}}">
+    <view class="bs"><view class="bs-n">{{bossStats.todayDone}}/{{bossStats.todayTotal}}</view><view class="bs-l">今日完成</view></view>
+    <view class="bs"><view class="bs-n c-blue">{{bossStats.ongoing}}</view><view class="bs-l">拜访中</view></view>
+    <view class="bs"><view class="bs-n c-orange">{{bossStats.online}}</view><view class="bs-l">在线</view></view>
+    <view class="bs"><view class="bs-n c-red">{{bossStats.review}}</view><view class="bs-l">待审核</view></view>
+  </view>
+
+  <view class="hero" wx:if="{{!bossMode}}">
     <view class="h1">{{dateText}}</view>
     <view class="hring" wx:if="{{cardMode === 'today'}}">
       <canvas canvas-id="ringCanvas" class="ring-canvas"></canvas>
@@ -44,13 +52,13 @@
   </view>
 
   <view class="sec-t">
-    <view class="st-t">我的任务</view>
-    <view class="st-more" bindtap="goAllTasks">全部 ›</view>
+    <view class="st-t">{{bossMode ? '全部任务' : '我的任务'}}</view>
+    <view class="st-more" bindtap="goAllTasks" wx:if="{{!bossMode}}">全部 ›</view>
   </view>
 
   <view class="task-card {{item.status === 'done' ? 'done' : ''}} {{item.hasOngoing ? 'ongoing' : ''}}" wx:for="{{showTasks}}" wx:key="_id" bindtap="goTask" data-id="{{item._id}}">
     <view class="row1">
-      <view class="tname">{{item.name}}</view>
+      <view class="tname">{{item.name}}<text class="towner" wx:if="{{bossMode}}"> · {{item.salesmanName}}</text></view>
       <view class="state {{item.status === 'done' ? 'done' : (item.status === 'reviewing' ? 'review' : (item.expired ? 'expired' : 'going'))}}"
             style="{{item.purpose === 'develop' ? 'background:#E8F1FD;color:#2F80ED' : ''}}">{{item.purpose === 'develop' ? '🌱 新客开发' : (item.status === 'done' ? '已完成' : (item.status === 'reviewing' ? '审核中' : (item.expired ? '已过期' : '进行中')))}}</view>
     </view>
@@ -65,8 +73,9 @@
   <view class="loading" wx:if="{{loading}}">加载中…</view>
 
   <view class="tabbar">
-    <view class="tb on"><view class="tic">🏠</view>任务</view>
-    <view class="tb" bindtap="tabMap"><view class="tic">🗺</view>地图</view>
+    <view class="tb on"><view class="tic">🏠</view>{{bossMode ? '首页' : '任务'}}</view>
+    <view class="tb" bindtap="tabMap"><view class="tic">🗺</view>任务地图</view>
+    <view class="tb" bindtap="tabWar" wx:if="{{bossMode}}"><view class="tic">📡</view>战况</view>
     <view class="tb" bindtap="tabMine"><view class="tic">👤</view>我的</view>
   </view>
 </view>

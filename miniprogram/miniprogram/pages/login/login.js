@@ -1,7 +1,13 @@
 const api = require('../../utils/api');
 
 Page({
-  data: { user: null, binding: false, salesmen: [], hasTrial: false, adminMode: false, adminName: '', logoUrl: '' },
+  data: {
+    user: null, adminMode: false, canBoss: false, adminName: '', logoUrl: '',
+    // 注册状态机（2026-09-09 老板拍板：注册→审核→免登；拒绝可重提）
+    registerMode: false, pendingMode: false, rejectedMode: false,
+    name: '', phone: '', regBusy: false, trialId: '',
+    pendingAt: '', rejectReason: ''
+  },
   onShow() {
     const app = getApp();
     this.setData({ logoUrl: app.globalData.logoUrl });
@@ -14,14 +20,26 @@ Page({
   async check() {
     try {
       const res = await api.call('login');
-      if (res.ok && res.user.role === 'salesman') {
+      if (res.ok && res.user && res.user.role === 'salesman') {
         getApp().setUser(res.user);
         wx.redirectTo({ url: '/pages/home/home' });
       } else if (res.ok) {
-        // 管理员微信打开了业务员小程序：仅提示使用 Web 后台
-        this.setData({ adminMode: true, adminName: res.user.name || '管理员' });
-      } else if (res.code === 'NEED_BIND') {
-        this.setData({ binding: true, salesmen: res.salesmen || [], hasTrial: !!(res.salesmen || []).some(s => s.trial) });
+        // 管理员微信打开了业务员小程序：仅提示使用 Web 后台；boss 白名单账号才显示老板模式入口（2026-09-09 老板定）
+        this.setData({ adminMode: true, adminName: res.user.name || '管理员', canBoss: !!res.canBoss });
+      } else if (res.code === 'PENDING') {
+        const d = new Date(Number(res.createdAt || Date.now()) + 8 * 3600 * 1000);
+        const p = n => String(n).padStart(2, '0');
+        this.setData({ pendingMode: true, pendingAt: `${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}` });
+      } else if (res.code === 'REJECTED') {
+        this.setData({ rejectedMode: true, rejectReason: res.reason || '' });
+      } else if (res.code === 'NEED_REGISTER' || res.code === 'NEED_BIND') {
+        // 兼容旧云端返回 NEED_BIND：同样进注册表单；trialId 优先新字段，旧版从 salesmen 里找 trial
+        let trialId = res.trialId || '';
+        if (!trialId && Array.isArray(res.salesmen)) {
+          const tr = res.salesmen.find(s => s.trial);
+          trialId = tr ? tr._id : '';
+        }
+        this.setData({ registerMode: true, trialId });
       } else {
         api.toast(res.msg || '登录失败');
       }
@@ -31,19 +49,47 @@ Page({
   },
   refresh() {
     getApp().clearUser();
-    this.setData({ adminMode: false });
+    this.setData({ adminMode: false, pendingMode: false, rejectedMode: false, registerMode: false });
     this.check();
   },
-  // LOGO 云端加载失败 → 回退本地图，避免白板
-  onLogoError() {
-    if (this.data.logoUrl !== '/images/logo.png') {
-      this.setData({ logoUrl: '/images/logo.png' });
+  // 注册表单（2026-09-09 老板拍板）
+  onName(e) { this.setData({ name: e.detail.value }); },
+  onPhone(e) { this.setData({ phone: e.detail.value }); },
+  async submitReg() {
+    const name = (this.data.name || '').trim();
+    const phone = (this.data.phone || '').trim();
+    if (!name) { api.toast('请填写姓名'); return; }
+    if (!/^1\d{10}$/.test(phone)) { api.toast('请填写正确的 11 位手机号'); return; }
+    this.setData({ regBusy: true });
+    try {
+      const res = await api.call('login', { action: 'register', name, phone });
+      if (res.ok) {
+        this.setData({ registerMode: false, pendingMode: true });
+        const d = new Date(Date.now() + 8 * 3600 * 1000);
+        const p = n => String(n).padStart(2, '0');
+        this.setData({ pendingAt: `${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}` });
+        api.toast('申请已提交，等待管理员审核');
+      } else if (res.code === 'PENDING') {
+        this.setData({ registerMode: false, pendingMode: true });
+        api.toast(res.msg || '申请已提交');
+      } else {
+        api.toast(res.msg || '提交失败');
+      }
+    } catch (err) {
+      api.toast('提交失败，请重试');
+    } finally {
+      this.setData({ regBusy: false });
     }
   },
-  async bind(e) {
-    const id = e.currentTarget.dataset.id;
+  // 被拒绝 → 重新申请（2026-09-09 老板拍板：可重提，旧记录留痕）
+  reapply() {
+    this.setData({ rejectedMode: false, registerMode: true, name: '', phone: '' });
+  },
+  // 游客体验入口（2026-09-09 老板定保留：审核/演示用，直接绑实习账号）
+  async enterTrial() {
+    if (!this.data.trialId) { api.toast('游客入口暂不可用'); return; }
     try {
-      const res = await api.call('login', { bindUserId: id });
+      const res = await api.call('login', { bindUserId: this.data.trialId });
       if (res.ok) {
         getApp().setUser(res.user);
         api.toast('绑定成功 ✓', 'success');
@@ -54,6 +100,17 @@ Page({
       }
     } catch (err) {
       api.toast('绑定失败，请重试');
+    }
+  },
+  // 老板模式（2026-09-09 §7.13）：boss 白名单管理员入口——全量只读+虚拟写，storage 持久
+  enterBoss() {
+    getApp().setBossMode(true);
+    wx.redirectTo({ url: '/pages/home/home' });
+  },
+  // LOGO 云端加载失败 → 回退本地图，避免白板
+  onLogoError() {
+    if (this.data.logoUrl !== '/images/logo.png') {
+      this.setData({ logoUrl: '/images/logo.png' });
     }
   }
 });
