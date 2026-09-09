@@ -1,6 +1,9 @@
 const api = require('../../utils/api');
 const loc = require('../../utils/loc');
 
+// 仓库坐标（2026-09-09 老板定：线路起点=仓库时显示小五角星标记）
+const WH = { lat: 28.970802, lng: 120.154526 };
+
 // ===== 地图秒开缓存（2026-09-09 提速 A 方案：首页预取 → 地图打开先渲染缓存，云端到达后静默更新）=====
 const MAP_CACHE_KEY = 'map_cache';
 const MAP_CACHE_TTL = 10 * 60 * 1000;
@@ -167,6 +170,20 @@ Page({
         points: list.map(c => ({ latitude: c.lat, longitude: c.lng })),
         color: '#16A34A', width: 4
       }];
+    }
+    // 2026-09-09 老板定：线路起点是仓库（起点距仓库 300 米内）→ 显示小五角星；
+    // unshift 到数组最前 = 渲染在最下层，不盖未拜访/拜访中客户圆标
+    if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
+      const sp = route.pts[0];
+      if (sp && sp.length >= 2 && haversine(Number(sp[0]), Number(sp[1]), WH.lat, WH.lng) < 300) {
+        markers.unshift({
+          id: 999, // 特殊 id：无 custId，点按不弹客户卡
+          latitude: Number(sp[0]), longitude: Number(sp[1]),
+          iconPath: '/pages/map/pins/star.png',
+          width: 20, height: 20, // 比客户圆标（24）小一号
+          anchor: { x: 0.5, y: 0.5 } // 中心锚点精确压仓库点
+        });
+      }
     }
     // 重排按钮：当天未完成（非拜访中）客户 ≥2 家才显示（1 家无需排）；老板模式去重排（2026-09-09 §7.13）
     const todoCount = list.filter(c => !c.visitedToday && !c.visitOngoing).length;
