@@ -105,6 +105,16 @@ Page({
     }
   },
 
+  // 自动检测仓库开关（2026-09-09 老板定）：进入地图/切换天数时执行——当天线路起点是仓库（300 米内）→ 自动开；其他起点 → 自动关；
+  // 手动点击开关后以手动为准，直到下次进入/切天再次自动检测
+  autoWhStarFrom(map, day) {
+    const plan = (map && map.task && map.task.dayPlan || []).find(p => p.day === day);
+    const route = plan && plan.route;
+    const on = !!(route && Array.isArray(route.pts) && route.pts.length >= 2
+      && haversine(Number(route.pts[0][0]), Number(route.pts[0][1]), WH.lat, WH.lng) < 300);
+    this.setData({ whStarOn: on });
+  },
+
   // 应用地图摘要数据（缓存/云端同路径，2026-09-09 提速 B）：设置数据 → 渲染 → 撑满
   applyMapData(map, keepDay) {
     this.task = map.task;
@@ -115,6 +125,7 @@ Page({
     const td = Math.max(1, Math.min(map.task.todayDay || 1, days.length || 1));
     // 2026-09-09 老板定：刷新保持用户所选天（换天后点刷新不再跳回今天）；首次加载默认今天
     const cd = (keepDay && days.includes(keepDay)) ? keepDay : td;
+    this.autoWhStarFrom(map, cd); // 自动检测仓库开关
     this.setData({ loading: false, task: map.task, days, todayDay: td, curDay: cd });
     this.renderDay();
     this.fitAllCustomers(); // 数据就位后撑满当天客户点（刷新=满屏；首次进入=看到全部点；不把单店居中）
@@ -215,6 +226,7 @@ Page({
     const d = Number(e.currentTarget.dataset.d);
     if (d === this.data.curDay) return;
     this.setData({ curDay: d });
+    this.autoWhStarFrom(this.task, d); // 2026-09-09 老板定：切天自动检测仓库开关
     this.renderDay();
     this.fitAllCustomers(true); // 2026-09-09 老板定：切天数只撑满未拜访+拜访中（全部已拜访则撑满全部）
   },
