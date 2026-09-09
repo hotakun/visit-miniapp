@@ -34,6 +34,7 @@ Page({
     canReplan: false, replanBusy: false,
     // 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新；路况已移除）
     refreshing: false, // ↻ 按钮旋转动效（2026-09-09：静默刷新也要有视觉反馈）
+    whStarOn: false, // 2026-09-09 老板定：仓库开关（横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关）
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
     bossMode: false, bossMen: [], curBossIdx: 0
   },
@@ -180,20 +181,26 @@ Page({
         color: '#16A34A', width: 4
       }];
     }
-    // 2026-09-09 老板定：线路起点是仓库（起点距仓库 300 米内）→ 显示小五角星；
-    // z 序：已拜访（底）→ 仓库星 → 未拜访 → 拜访中（顶）——星星压在已拜访上、垫在未拜访下
-    if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
+    // 2026-09-09 老板定：仓库星显示两条件——①仓库开关打开（星在仓库坐标）②线路起点是仓库（星在起点，距仓库 300 米内）；
+    // z 序不变：已拜访（底）→ 仓库星 → 未拜访 → 拜访中（顶）
+    let starPt = null;
+    if (this.data.whStarOn) {
+      starPt = { lat: WH.lat, lng: WH.lng };
+    } else if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
       const sp = route.pts[0];
       if (sp && sp.length >= 2 && haversine(Number(sp[0]), Number(sp[1]), WH.lat, WH.lng) < 300) {
-        const star = {
-          id: 999, // 特殊 id：无 custId，点按不弹客户卡
-          latitude: Number(sp[0]), longitude: Number(sp[1]),
-          iconPath: '/pages/map/pins/star.png',
-          width: 20, height: 20, // 比客户圆标（24）小一号
-          anchor: { x: 0.5, y: 0.5 } // 中心锚点精确压仓库点
-        };
-        markers = [...grpVisited, star, ...grpTodo, ...grpOngoing];
+        starPt = { lat: Number(sp[0]), lng: Number(sp[1]) };
       }
+    }
+    if (starPt) {
+      const star = {
+        id: 999, // 特殊 id：无 custId，点按不弹客户卡
+        latitude: starPt.lat, longitude: starPt.lng,
+        iconPath: '/pages/map/pins/star.png',
+        width: 20, height: 20, // 比客户圆标（24）小一号
+        anchor: { x: 0.5, y: 0.5 } // 中心锚点精确压仓库点
+      };
+      markers = [...grpVisited, star, ...grpTodo, ...grpOngoing];
     }
     // 重排按钮：当天未完成（非拜访中）客户 ≥2 家才显示（1 家无需排）；老板模式去重排（2026-09-09 §7.13）
     const todoCount = list.filter(c => !c.visitedToday && !c.visitOngoing).length;
@@ -273,6 +280,7 @@ Page({
     wx.openLocation({ latitude: c.lat, longitude: c.lng, name: c.name, address: c.address || '', scale: 16, fail: () => {} });
   },
   // 以我的位置重排当天未完成客户（2026-09-08 老板拍板：写回云端，老板后台同步看到）
+  // 2026-09-09 老板定：仓库开关打开 → 以仓库为起点重排（不取定位）
   async replanDay() {
     if (this.data.replanBusy) return;
     const task = this.task;
@@ -284,14 +292,19 @@ Page({
       .filter(c => c && !c.visitedToday && !c.visitOngoing).map(c => c._id);
     if (todoIds.length < 2) { wx.showToast({ title: '未完成客户不足 2 家，无需重排', icon: 'none' }); return; }
     this.setData({ replanBusy: true });
-    let p = loc.latest(); // 流内最新点（2026-09-08 M1：免 8 秒等待）
-    if (!p || !p.at || Date.now() - p.at > 60000) {
-      try {
-        p = await loc.getOne(8000);
-      } catch (e) {
-        wx.showToast({ title: '定位失败，无法重排（请到开阔处重试）', icon: 'none' });
-        this.setData({ replanBusy: false });
-        return;
+    let p;
+    if (this.data.whStarOn) {
+      p = { lat: WH.lat, lng: WH.lng }; // 仓库开关开：以仓库为起点重排
+    } else {
+      p = loc.latest(); // 流内最新点（2026-09-08 M1：免 8 秒等待）
+      if (!p || !p.at || Date.now() - p.at > 60000) {
+        try {
+          p = await loc.getOne(8000);
+        } catch (e) {
+          wx.showToast({ title: '定位失败，无法重排（请到开阔处重试）', icon: 'none' });
+          this.setData({ replanBusy: false });
+          return;
+        }
       }
     }
     if (!p) {
@@ -331,6 +344,13 @@ Page({
   tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); },
 
   // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新）=====
+  // 仓库开关（2026-09-09 老板定：横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关）
+  toggleWhStar() {
+    this.setData({ whStarOn: !this.data.whStarOn });
+    this.renderDay();
+    if (this.data.whStarOn) api.toast('仓库星已开启：重排将从仓库出发');
+    else api.toast('仓库星已关闭');
+  },
   // 手动刷新（老板定：静默刷新不弹窗）：先用现有数据立即撑满（秒响应），再后台拉新数据更新（保持所选天，不跳回今天）
   async refreshMap() {
     if (this._refreshing) return;

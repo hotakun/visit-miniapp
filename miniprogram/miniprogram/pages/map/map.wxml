@@ -4,6 +4,8 @@
     <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
          bindmarkertap="onMarkerTap" bindcallouttap="onCalloutTap"></map>
+    <!-- 仓库开关（2026-09-09 老板定：横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关） -->
+    <view class="wh-switch {{whStarOn ? 'on' : ''}}" bindtap="toggleWhStar">⭐ 仓库</view>
     <!-- 地图小圆钮（2026-09-09 老板定：横幅条下方靠右横排——我的位置/刷新；路况按钮已按老板要求移除） -->
     <view class="m-ctrl">
       <view class="mfab" bindtap="backToMe">📍</view>
