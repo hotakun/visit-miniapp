@@ -1455,8 +1455,11 @@ try {
         notifyShell(hide ? 'bell-hidden' : 'bell-visible');
       }
       if (m === 'manual-refresh') {
-        // 壳标题栏刷新符号（2026-09-08 定稿）：仅保留原功能（归档+响铃检测+真重载页面）；
-        // 版本更新不走这里——系统设置页「检查更新」按钮负责（2026-09-08 老板改）
+        // 2026-09-10 老板定：标题栏「刷新数据」= 立即现在马上拉取最新数据一次（不重载页面）
+        manualRefresh();
+      }
+      if (m === 'reload-page') {
+        // 2026-09-10 老板定：整页重载（原刷新按钮的"重启"行为）移到壳标题栏齿轮按钮
         (async () => {
           try { await api('autoArchiveExpired'); } catch (e) { /* 静默 */ }
           try { await pollEvents(); } catch (e) { /* 静默 */ }

@@ -168,8 +168,8 @@ public class ShellForm : Form
             refreshSpinTimer.Start();
         };
         ToolTip refreshTip = new ToolTip();
-        refreshTip.SetToolTip(pnlRefresh, "刷新当前页（点一下立即刷新数据）");
-        btnSet = MakeBtn("\uE713", "设置");
+        refreshTip.SetToolTip(pnlRefresh, "刷新数据"); // 2026-09-10 老板定：提示气泡"刷新数据"（立即拉最新数据一次）
+        btnSet = MakeBtn("\uE713", "重启页面（重新加载）"); // 2026-09-10 老板定：整页重载（原刷新按钮的"重启"行为）移到齿轮按钮
         btnMax = MakeBtn("\uE740", "全屏切换");
         btnMin = MakeBtn("\uE921", "最小化");
         btnClose = MakeBtn("\uE8BB", "关闭");
@@ -183,6 +183,11 @@ public class ShellForm : Form
 
         btnMin.Click += delegate { WindowState = FormWindowState.Minimized; };
         btnMax.Click += delegate { ToggleMaximize(); };
+        // 2026-09-10 老板定：齿轮按钮=整页重载（原刷新按钮的"重启"行为移到这里）
+        btnSet.Click += delegate
+        {
+            try { if (wv != null && wv.CoreWebView2 != null) wv.CoreWebView2.PostWebMessageAsString("reload-page"); } catch { }
+        };
         btnClose.Click += delegate { AskClose(); };
         btnClose.FlatAppearance.MouseOverBackColor = Color.FromArgb(232, 17, 35);
         btnClose.FlatAppearance.MouseDownBackColor = Color.FromArgb(190, 10, 25);
