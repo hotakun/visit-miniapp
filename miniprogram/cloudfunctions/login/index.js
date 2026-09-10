@@ -5,20 +5,22 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
+// 2026-09-10 修复：users/_ 必须模块级——register() 是模块级函数，原先把 users/_ 定义在 exports.main 内部，
+// 老板号注册通道引用它们时抛 ReferenceError: users is not defined → 手机端「提交失败，请重试」（老板注册必崩）
+const users = db.collection('users');
+const _ = db.command;
 
 // 老板手机号（2026-09-09 老板定：谁用这个号码注册，谁就是老板——免审核直接通过、自动进老板模式）
 const BOSS_PHONE = '15055492888';
 // 开发者手机号（2026-09-09 开发者范宇琨定：只给他自己双身份测试入口——业务员/老板两按钮选择页，其他人零感知）
 const DEV_PHONE = '13067737286';
 
-exports.main = async (event) => {
+// login 主流程（2026-09-10 容错加固：外层 exports.main 统一兜底，任何未预料异常都返回可读文案）
+const mainInner = async (event) => {
   // 集合自愈（2026-09-09 老板报障修复：registrations 未建时 69 行查询抛 -502005
   // → login 整体失败，手机端提示"云函数调用失败"看不到登录页；init 未执行过的新环境必踩）
   try { await db.createCollection('registrations'); } catch (e) { /* 已存在等错误忽略 */ }
   const { OPENID } = cloud.getWXContext();
-
-  const users = db.collection('users');
-  const _ = db.command;
 
   // 0. 管理员识别（super_admin / admin）：管理员微信打开小程序 → 仅提示使用 Web 后台
   //    2026-09-09 老板定：只有 boss===true 的指定账号才显示「进入老板模式」入口
@@ -78,6 +80,17 @@ exports.main = async (event) => {
   return { ok: false, code: 'NEED_REGISTER', msg: '请注册后等待审核' };
 };
 
+// 顶层兜底（2026-09-10 容错加固）：任何未预料异常（集合故障/未知错误）都以可读文案返回，
+// 手机端不再只看到「提交失败，请重试」，也不阻断注册表单展示
+exports.main = async (event) => {
+  try {
+    return await mainInner(event);
+  } catch (err) {
+    console.error('login 云函数未捕获异常', err);
+    return { ok: false, code: 'SERVER_ERROR', msg: '系统繁忙，请稍后重试' };
+  }
+};
+
 // 注册申请（2026-09-09 老板拍板）：姓名+手机号；同一 openid 有 pending 不重复提交；拒绝后可重提
 // 2026-09-09 老板定：手机号=15055492888 就是老板本人——免审核直接通过、账号打 boss 标、自动进老板模式
 async function register(OPENID, e) {
@@ -88,37 +101,63 @@ async function register(OPENID, e) {
 
   // ===== 老板专属通道（免审核）=====
   if (phone === BOSS_PHONE) {
-    // 谁用老板号注册谁就是老板。
-    // 顺序刻意：先激活老板账号（成功拿到 bossId），再清理其它绑定——
-    // 若先解绑后绑定，中间失败会让该微信失去全部身份（2026-09-09 专业审查修正）。
-    const exist = await users.where({ phone: BOSS_PHONE }).get();
-    let bossId;
-    if (exist.data.length) {
-      const doc = exist.data[0];
-      bossId = doc._id;
-      await users.doc(bossId).update({
-        data: { openid: OPENID, name, role: 'admin', boss: true, active: true, lastLoginAt: Date.now() }
-      });
-    } else {
-      const add = await users.add({
-        data: {
-          openid: OPENID, name, phone: BOSS_PHONE,
-          role: 'admin', boss: true, active: true, trial: false,
-          remark: '老板手机号注册（免审核）', createdAt: Date.now(), lastLoginAt: Date.now()
-        }
-      });
-      bossId = add._id;
-    }
-    // 清理：本微信此前绑定的其它账号（含 trial/测试账号）一律解绑（老板账号自身排除）
-    await users.where({ _id: _.neq(bossId), openid: OPENID }).update({ data: { openid: '' } });
-    // 清理：该微信此前提交的普通注册申请若还在待审核，标记已升级（否则后台留下永挂的幽灵记录）
     try {
-      await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).update({
-        data: { status: 'rejected', reason: '该微信已通过老板手机号注册，自动升级', reviewedAt: Date.now() }
-      });
-    } catch (e) { /* 集合异常不阻断老板激活 */ }
-    const u = await users.doc(bossId).get();
-    return { ok: true, boss: true, user: publicUser(u.data), welcome: await readWelcomeCfg(), msg: '老板身份已激活' };
+      // 谁用老板号注册谁就是老板。
+      // 顺序刻意：先激活老板账号（成功拿到 bossId），再清理其它绑定——
+      // 若先解绑后绑定，中间失败会让该微信失去全部身份（2026-09-09 专业审查修正）。
+      let exist;
+      try {
+        exist = await users.where({ phone: BOSS_PHONE }).get();
+      } catch (err) {
+        return { ok: false, code: 'SERVER_ERROR', msg: '查询账号失败，请稍后重试' };
+      }
+      let bossId;
+      if (exist.data.length) {
+        const doc = exist.data[0];
+        bossId = doc._id;
+        try {
+          await users.doc(bossId).update({
+            data: { openid: OPENID, name, role: 'admin', boss: true, active: true, lastLoginAt: Date.now() }
+          });
+        } catch (err) {
+          return { ok: false, code: 'SERVER_ERROR', msg: '激活老板身份失败，请稍后重试' };
+        }
+      } else {
+        try {
+          const add = await users.add({
+            data: {
+              openid: OPENID, name, phone: BOSS_PHONE,
+              role: 'admin', boss: true, active: true, trial: false,
+              remark: '老板手机号注册（免审核）', createdAt: Date.now(), lastLoginAt: Date.now()
+            }
+          });
+          bossId = add._id;
+        } catch (err) {
+          return { ok: false, code: 'SERVER_ERROR', msg: '创建老板账号失败，请稍后重试' };
+        }
+      }
+      // 清理：本微信此前绑定的其它账号（含 trial/测试账号）一律解绑（老板账号自身排除）
+      try {
+        await users.where({ _id: _.neq(bossId), openid: OPENID }).update({ data: { openid: '' } });
+      } catch (err) { /* 清理失败不阻断老板激活（下次注册会再清） */ }
+      // 清理：该微信此前提交的普通注册申请若还在待审核，标记已升级（否则后台留下永挂的幽灵记录）
+      try {
+        await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).update({
+          data: { status: 'rejected', reason: '该微信已通过老板手机号注册，自动升级', reviewedAt: Date.now() }
+        });
+      } catch (err) { /* 集合异常不阻断老板激活 */ }
+      let u;
+      try {
+        u = await users.doc(bossId).get();
+      } catch (err) {
+        return { ok: false, code: 'SERVER_ERROR', msg: '读取老板账号失败，请稍后重试' };
+      }
+      return { ok: true, boss: true, user: publicUser(u.data), welcome: await readWelcomeCfg(), msg: '老板身份已激活' };
+    } catch (err) {
+      // 顶层兜底：任何未预料异常都以可读文案返回，手机端不再显示冷冰冰的「提交失败，请重试」
+      console.error('register 老板通道异常', err);
+      return { ok: false, code: 'SERVER_ERROR', msg: '系统繁忙，请稍后重试' };
+    }
   }
 
   let pend = { total: 0 };
@@ -126,12 +165,17 @@ async function register(OPENID, e) {
     pend = await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).count();
   } catch (e) { /* 集合异常降级：按无待审申请处理，允许提交 */ }
   if (pend.total > 0) return { ok: false, code: 'PENDING', msg: '申请已提交，请等待管理员审核' };
-  await db.collection('registrations').add({
-    data: {
-      openid: OPENID, name, phone, status: 'pending', reason: '', createdAt: Date.now(),
-      phoneVerified: !!e.phoneVerified // 2026-09-09 老板定：微信一键验证过的手机号打标，后台审核可见
-    }
-  });
+  try {
+    await db.collection('registrations').add({
+      data: {
+        openid: OPENID, name, phone, status: 'pending', reason: '', createdAt: Date.now(),
+        phoneVerified: !!e.phoneVerified // 2026-09-09 老板定：微信一键验证过的手机号打标，后台审核可见
+      }
+    });
+  } catch (err) {
+    console.error('register 提交申请异常', err);
+    return { ok: false, code: 'SERVER_ERROR', msg: '提交失败，请稍后重试' };
+  }
   return { ok: true, msg: '申请已提交，审核通过后重新打开小程序即可使用' };
 }
 

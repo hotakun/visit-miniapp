@@ -4505,7 +4505,7 @@ async function loadPeople() {
           : `<button class="btn ghost" style="height:24px;font-size:11px;color:var(--primary-deep)" onclick="openMpBind('${s._id}','${esc(s.name)}','')">＋ 绑定</button>`}</td>
         <td>${salesmanStatusHtml(s)}</td>
         <td>${toggleHtml(s._id, s.active)}</td>
-        <td><button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${s._id}','${esc(s.name)}')">删除</button></td>
+        <td>${s.bound ? `<button class="btn ghost" style="height:28px;font-size:12px;color:#B45309;margin-right:8px" onclick="unbindUser('${s._id}','${esc(s.name)}')">解绑</button>` : ''}<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${s._id}','${esc(s.name)}')">删除</button></td>
       </tr>`).join('')
     : '<tr><td colspan="7" class="empty">加载失败</td></tr>';
   const ad = await api('listAdmins');
@@ -4665,6 +4665,15 @@ async function saveUser() {
 async function toggleUserActive(id, cur) {
   const res = await api('setUserActive', { userId: id, active: !cur });
   if (!res.ok) { alert(res.msg); return; }
+  loadPeople();
+}
+
+// 2026-09-10 老板定：人员管理「解绑」按钮——清小程序微信绑定，手机端下次打开回注册页
+async function unbindUser(id, name) {
+  if (!window.confirm('确认解绑「' + name + '」的小程序微信？解绑后该微信下次打开小程序将回到注册页（不影响账号与历史数据）。')) return;
+  const res = await api('unbindUser', { userId: id });
+  if (!res.ok) { alert(res.msg || '解绑失败'); return; }
+  alert(res.msg || '已解绑');
   loadPeople();
 }
 

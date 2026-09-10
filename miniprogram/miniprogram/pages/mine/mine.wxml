@@ -35,6 +35,7 @@
       </view>
       <view class="mi" bindtap="tapSetting"><view class="ic" style="background:#EFF1F4">⚙️</view>设置<view class="arrow">›</view></view>
       <view class="mi" bindtap="tapAbout"><view class="ic" style="background:#EFF1F4">ℹ️</view>关于聚火拜访<view class="arrow">›</view></view>
+      <view class="mi" bindtap="exitIdentity"><view class="ic" style="background:#FFF0ED">🚪</view>退出身份<view class="arrow">›</view></view>
       <view class="loc-note">📍 工作时段记录位置轨迹，仅管理员可见</view>
     </block>
   </view>

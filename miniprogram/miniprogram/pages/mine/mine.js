@@ -30,6 +30,20 @@ Page({
     getApp().clearUser();
     wx.redirectTo({ url: '/pages/login/login' });
   },
+  // 2026-09-10 老板定：业务员「退出身份」——清本地身份缓存回登录页（换人用机/离职时自己可退出）
+  exitIdentity() {
+    wx.showModal({
+      title: '退出身份',
+      content: '退出后需要重新登录，或重新提交注册申请等待审核。确定退出？',
+      confirmText: '退出',
+      confirmColor: '#E5484D',
+      success: (r) => {
+        if (!r.confirm) return;
+        getApp().clearUser();
+        wx.redirectTo({ url: '/pages/login/login' });
+      }
+    });
+  },
   async loadStats() {
     try {
       const res = await api.call('visits', { action: 'mystats' });

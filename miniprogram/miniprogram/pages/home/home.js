@@ -221,6 +221,12 @@ Page({
       app.registerReviewListener(this._revFn);
     }
     this._shown = true;
+    // 2026-09-10 老板定：启动云端身份复核——被后台「解绑/停用」的账号不再靠手机缓存直通
+    // （每次小程序运行期间只复核一次；网络异常一律放行，绝不误伤）
+    if (!this._verified) {
+      this._verified = true;
+      this._verifyIdentity();
+    }
     const boss = app.globalData.bossMode; // 老板模式（2026-09-09 §7.13）
     const u = app.globalData.user;
     // 2026-09-09 开发者范宇琨双身份：dev 冷启动（没经过选择页）→ 强制回两按钮选择页；
@@ -255,6 +261,32 @@ Page({
     this.setData({ user: u, bossMode: false, dateText, pepText: pep.text, pepEmoji: pep.emoji, logoUrl: getApp().globalData.logoUrl });
     this.load();
     this.checkSubStatus();
+  },
+  // 2026-09-10 老板定：云端身份复核——login 云函数说"无绑定/审核中/被拒绝"就清本地缓存踢回登录页；
+  // 云端说"仍是业务员"则顺手刷新本地缓存（拿到最新身份）；网络异常/系统繁忙一律放行（离线可用）
+  _verifyIdentity() {
+    const app = getApp();
+    api.call('login', {})
+      .then(res => {
+        if (res && res.ok && res.user && res.user.role === 'salesman') {
+          // 云端确认仍是业务员 → 更新本地身份（后台改名/角色调整同步生效）
+          app.setUser(res.user);
+        } else if (res && res.code === 'NEED_REGISTER') {
+          // 已被后台解绑 → 清身份回注册页
+          this._kickToLogin('你的微信已解除绑定，请重新注册');
+        } else if (res && res.code === 'PENDING') {
+          this._kickToLogin(res.msg || '申请审核中，请等待管理员审核');
+        } else if (res && res.code === 'REJECTED') {
+          this._kickToLogin(res.msg || '申请未通过，请重新申请');
+        }
+        // 其余（ok 但非 salesman / SERVER_ERROR / 网络失败）：放行，沿用本地状态
+      })
+      .catch(() => { /* 云函数调用失败：放行（离线仍可用） */ });
+  },
+  _kickToLogin(msg) {
+    getApp().clearUser(); // 清 user/boss_mode/welcome/devAuthed 及 storage
+    wx.showToast({ title: msg, icon: 'none', duration: 2000 });
+    setTimeout(() => wx.redirectTo({ url: '/pages/login/login' }), 800);
   },
   onHide() {
     this._shown = false;
