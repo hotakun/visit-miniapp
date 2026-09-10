@@ -72,7 +72,7 @@
           <view class="ri-idx">{{index + 1}}</view>
           <view class="ri-play {{recPlayId === item.id ? 'on' : ''}}" bindtap="playRec" data-id="{{item.id}}">{{recPlayId === item.id ? '⏸' : '▶'}}</view>
           <view class="ri-time">{{item.text}}</view>
-          <view class="ri-tr {{item.transcribe ? 'on' : ''}}" catchtap="toggleRecTr" data-i="{{index}}">{{item.transcribe ? '☑ 转文字' : '☐ 转文字'}}</view>
+          <view class="ri-ck {{item.transcribe ? 'on' : ''}}" catchtap="toggleRecTr" data-i="{{index}}">✓</view>
           <view class="ri-del" catchtap="askDelRec" data-i="{{index}}">✕</view>
         </view>
       </view>
