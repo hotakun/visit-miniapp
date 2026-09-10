@@ -588,7 +588,8 @@ input,textarea{-webkit-user-select:text;user-select:text}
             <span class="lg" id="lg_pending" style="color:#F5531C" onclick="toggleCustKind('pending')">● 未拜访</span>
             <span class="lg" id="lg_visited" style="color:#34A853" onclick="toggleCustKind('visited')">● 已回访</span>
             <span class="lg" id="lg_gray" style="color:#9CA3AF" onclick="toggleCustKind('gray')">● 无任务</span>
-            <button class="btn ghost" style="height:26px;font-size:12px;padding:0 10px;margin-left:6px" title="全览：当前显示的客户点全部撑满一屏" onclick="fitCustBounds()">⊡ 全览</button>
+            <button class="btn ghost" style="height:26px;font-size:12px;padding:0 10px;margin-left:6px" title="任务客户全览" onclick="fitCustBounds()">⊡ 任务客户</button>
+            <button class="btn ghost" style="height:26px;font-size:12px;padding:0 10px" title="业务员全览" onclick="fitManBounds()">⊡ 业务员</button>
           </span>
         </div>
       </div>
@@ -3091,6 +3092,29 @@ async function fitCustBounds() {
     const st = $('trackStat');
     if (st) st.textContent = '⚠️ 全览失败：' + (e && e.message ? e.message : e);
     console.error('fitCustBounds error:', e);
+  }
+}
+
+// 业务员全览（2026-09-10 老板定：把地图上显示的业务员位置点撑满一屏）
+function fitManBounds() {
+  try {
+    if (!trackMap) return;
+    const pts = (trackLocsCache || []).filter(l => l && l.lat && l.lng && l.salesmanId);
+    const src = (trackShowAll ? pts : pts.filter(l => l.salesmanId === trackSelId));
+    const use = src.length ? src : pts; // 未选中业务员/未开「全部」时无显示点 → 按全部业务员兜底
+    if (!use.length) { $('trackStat').textContent = '暂无业务员位置数据（业务员手机未上报或未开启定位）'; return; }
+    if (use.length === 1) {
+      trackMap.setCenter(new TMap.LatLng(use[0].lat, use[0].lng));
+      trackMap.setZoom(14);
+      return;
+    }
+    const b = new TMap.LatLngBounds();
+    use.forEach(l => b.extend(new TMap.LatLng(l.lat, l.lng)));
+    trackMap.fitBounds(b, { padding: 60 });
+  } catch (e) {
+    const st = $('trackStat');
+    if (st) st.textContent = '⚠️ 业务员全览失败：' + (e && e.message ? e.message : e);
+    console.error('fitManBounds error:', e);
   }
 }
 
