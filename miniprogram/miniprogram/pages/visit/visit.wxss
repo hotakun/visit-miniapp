@@ -1,6 +1,6 @@
 /* 2026-09-11 老板定：拜访页页面底色加深，让白色卡片更明显（只覆盖本页，不动全局 --bg）*/
 page { background: #EDEFF4; }
-.page { padding: 16px 18px 130px; }
+.page { padding: 16px 18px 150px; }
 .vhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .vname { font-size: 19px; font-weight: 800; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .timer { display: inline-flex; flex-shrink: 0; background: #1D4ED8; color: #FFFFFF; font-size: 14px; font-weight: 800; padding: 7px 13px; border-radius: 999px; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
@@ -40,7 +40,7 @@ page { background: #EDEFF4; }
 .foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(237,239,244,0), #EDEFF4 30%); }
 .btn-blue { background: var(--blue); }
 /* 取消拜访：窄按钮（灰字细边框），离文字框远防误触（老板 2026-09-04 定） */
-.cancel { width: 130px; margin: 28px auto 0; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--sub); background: #F7F8FA; border: 1px solid #E4E7EC; border-radius: 999px; padding: 8px 0; }
+.cancel { width: 130px; margin: 48px auto 0; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--sub); background: #F7F8FA; border: 1px solid #E4E7EC; border-radius: 999px; padding: 8px 0; }
 .csub { font-size: 13px; color: var(--sub); font-weight: 600; text-align: center; margin-bottom: 8px; }
 /* 单开拦截大弹窗（大字大卡片，不自动消失） */
 .block-box { max-width: 360px; padding: 26px 22px 20px; text-align: center; }
