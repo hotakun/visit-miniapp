@@ -1671,7 +1671,9 @@ async function listRegistrations(event) {
 
 // 审核动作：approve=手机号匹配已有业务员则绑 openid、不匹配则新建业务员；reject=状态置拒绝（可填原因）
 async function reviewRegistration(event) {
-  const { regId, action: act, reason } = event || {};
+  // 2026-09-10 修复：业务动作改读 event.act（原先读 event.action 与分发字段同名，
+  // 前端 {...extra} 展开覆盖后云端收到的 action 变成 'reject'/'approve' → 报"未知操作"）
+  const { regId, act, reason } = event || {};
   if (!regId || !['approve', 'reject'].includes(act)) return { ok: false, code: 'BAD_ARG', msg: '参数错误' };
   const rRef = db.collection('registrations').doc(regId);
   const rr = await rRef.get().catch(() => null);

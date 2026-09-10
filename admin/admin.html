@@ -4547,7 +4547,9 @@ async function checkRegAlerts() {
 async function reviewReg(regId, act, name) {
   if (act === 'approve' && !window.confirm(`通过「${name}」的注册申请？\n手机号匹配已有业务员将直接绑定；不匹配将新建业务员。`)) return;
   if (act === 'reject' && !window.confirm(`拒绝「${name}」的注册申请？`)) return;
-  const res = await api('reviewRegistration', { regId, action: act });
+  // 2026-09-10 修复：之前传 {regId, action:act} 会被 api() 的 {...extra} 展开覆盖掉接口名
+  // （云端收到的 action 变成 'reject'/'approve' → 报"未知操作"）；业务动作改名 act
+  const res = await api('reviewRegistration', { regId, act });
   alert(res.msg || '操作失败');
   refreshRegs();
   refreshPeople();
