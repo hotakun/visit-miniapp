@@ -24,9 +24,9 @@
   <!-- 今日总览条（2026-09-10 质感升级新增：数据取自已有 bossStats，无云端改动） -->
   <view class="overview" wx:if="{{bossMode}}">
     <view class="ov-ic">📡</view>
-    <view>
-      <view class="ov-t1">今日整体进度</view>
-      <view class="ov-t2">{{bossStats.online}} 人在线 · 今日完成 <text class="ov-hl">{{bossStats.todayDone}}/{{bossStats.todayTotal}}</text> 家 · 待审核 <text class="ov-hl">{{bossStats.review}}</text> 单</view>
+    <view class="ov-tx">
+      <view class="ov-t1">今日战况</view>
+      <view class="ov-t2">{{bossNews}}</view>
     </view>
   </view>
 

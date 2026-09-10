@@ -211,8 +211,30 @@ function phraseOf(list, uid) {
   return list[Math.abs(h) % list.length];
 }
 
+// 老板模式首页「今日战况」文案池（2026-09-11 老板定：B 组 + C 组组合，按日期轮换，每天给老板换一条）
+// 说明：内容为激励式「战况」文案（街道取杭州真实路名），非真实统计数字
+const BOSS_NEWS = [
+  '延安路、庆春路两条街已扫通，今天新拓 14 家',
+  '早上从中山北路扫到凤起路，新拓 7 家，越跑越顺',
+  '今天扫过延安路和庆春路，新客 +11，还有 3 家在跟',
+  '中山北路、建国北路都跑了一遍，今天新拓 12 家',
+  '延安路、中山北路、庆春路扫完，一共新拓 15 家',
+  '从古墩路一路扫到文一路，城西这块新拓 8 家',
+  '早上从湖滨扫到武林，新拓 9 家，还想再跑两条街',
+  '城西文一路一带跑通了，今天新拓 10 家，明天接着扫',
+  '4 个人分头跑延安路和庆春路，今天新拓 12 家',
+  '武林、湖滨两个商圈都跑到了，新拓 11 家，势头不错'
+];
+// 按「距 1970 的天数」取模轮换：同一天固定显示同一条，隔天自动换下一条（不存库、不请求）
+function bossNewsOfDay() {
+  const n = new Date();
+  const dayNo = Math.floor(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 86400000);
+  const i = ((dayNo % BOSS_NEWS.length) + BOSS_NEWS.length) % BOSS_NEWS.length;
+  return BOSS_NEWS[i];
+}
+
 Page({
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, welShow: false },
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false },
   onShow() {
     const app = getApp();
     // 2026-09-10：自定义 Tab 栏选中态（首页=0；tab 页常驻后切页不再重建底部栏）
@@ -246,7 +268,7 @@ Page({
       // 2026-09-09 老板定：显示老板注册时填的名字（皇冠在 wxml 里拼）+ 老板专属鸡汤
       const bname = (u && u.name) || '老板';
       const bp = splitEmoji(bossPhrase(u && u._id ? u._id : 'boss'));
-      this.setData({ bossMode: true, user: { name: bname }, dateText, pepText: bp.text, pepEmoji: bp.emoji, logoUrl: app.globalData.logoUrl });
+      this.setData({ bossMode: true, user: { name: bname }, dateText, pepText: bp.text, pepEmoji: bp.emoji, logoUrl: app.globalData.logoUrl, bossNews: bossNewsOfDay() });
       this.load();
       this.maybePlayWelcome(); // 2026-09-10 老板定：老板欢迎仪式（频率/时长/风格后台可配）
       return;

@@ -111,7 +111,9 @@
 /* 今日总览条（2026-09-10 新增：深色立体卡，数据全部来自已有 bossStats） */
 .overview{display:flex;align-items:center;gap:24rpx;margin:16rpx 0 4rpx;padding:26rpx 28rpx;border-radius:32rpx;background:linear-gradient(135deg,#2B3240 0%,#1B212C 100%);color:#fff;box-shadow:0 4rpx 6rpx rgba(15,20,30,.28),0 32rpx 60rpx -28rpx rgba(15,20,30,.6),inset 0 1rpx 0 rgba(255,255,255,.14)}
 .ov-ic{width:88rpx;height:88rpx;border-radius:26rpx;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:38rpx;background:linear-gradient(180deg,#FF9C63,#F5531C);box-shadow:0 20rpx 36rpx -16rpx rgba(245,83,28,.9),inset 0 1rpx 0 rgba(255,255,255,.4)}
+/* 2026-09-11 老板定：总览条改为「今日战况」文案（按天轮换）——文字块需 flex:1 + min-width:0 才能正常折行 */
+.ov-tx{flex:1;min-width:0}
 .ov-t1{font-size:25rpx;font-weight:700;opacity:.92}
-.ov-t2{font-size:32rpx;font-weight:800;margin-top:6rpx;letter-spacing:.5rpx}
+.ov-t2{font-size:30rpx;font-weight:800;margin-top:6rpx;letter-spacing:.5rpx;line-height:1.5}
 .ov-hl{color:#FFB08A}
 .towner{font-size:24rpx;color:#66707A;font-weight:400}
