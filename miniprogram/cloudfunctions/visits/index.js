@@ -361,6 +361,13 @@ async function history(user, customerId, isBoss) {
       else m.running++;
     });
   }
+  // 2026-09-11 老板定：多段录音的转写之间要有分隔标识（让人分得清哪段是哪段）
+  const segsText = (segs) => {
+    const list = (segs || []).slice().sort((a, b) => (a.segIndex || 0) - (b.segIndex || 0));
+    if (!list.length) return '';
+    if (list.length === 1) return list[0].text || '';
+    return list.map((x, i) => `【录音 ${i + 1}】\n${x.text || ''}`).join('\n\n');
+  };
   // 2026-09-11 老板定：转写文字可人工修订 → trEdited 优先，否则用识别的拼接文字
   const trOf = (v) => {
     const m = trMap[v._id];
@@ -372,7 +379,7 @@ async function history(user, customerId, isBoss) {
       segCount: m.total,
       edited: !!edited,
       editedAt: (v.trEdited && v.trEdited.at) || 0,
-      text: edited || m.segs.sort((a, b) => (a.segIndex || 0) - (b.segIndex || 0)).map(x => x.text || '').join('\n')
+      text: edited || segsText(m.segs)
     };
   };
   return { ok: true, visits: rows.map(v => ({
