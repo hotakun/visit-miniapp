@@ -7,61 +7,77 @@
   <!-- 超时预警条（2026-09-08 M1）：上限前 5 分钟出现 -->
   <view class="timeout-warn" wx:if="{{timeoutWarn}}">⏰ 拜访将在 {{timeoutLeftMin}} 分钟后自动{{result ? '提交' : '取消'}}，请尽快处理</view>
 
+  <!-- 2026-09-11 老板定：现场拍照 / 现场录音 改为【可折叠卡片】—— 点标题栏展开收起；独立展开；默认展开 -->
+  <!-- 收起时标题栏右侧显示状态摘要：已拍 N/15 张 / 未拍照；N 段 · 合计 mm:ss / 未录音 -->
   <!-- 区块顺序（2026-09-08 老板定）：现场拍照 → 现场录音 → 样品/物料 → 拜访记录 → 拜访结果 -->
   <!-- 2026-09-11：现场拍照改为【最多 15 张】—— 支持连拍（拍完自动再开相机）与相册多选；网格自动换行 -->
-  <!-- 2026-09-11 M2b：现场录音改为【多段】—— ≤5 段 / 单条 ≤10 分钟 / 合计 30 分钟硬封顶；按段勾选转写 -->
-  <view class="sec">
-    <view class="st">📷 现场拍照 · 最多 {{maxPics}} 张（已拍 {{pics.length}}/{{maxPics}}）</view>
-    <!-- 拍摄入口：连拍 / 相册多选（拍满后自动隐藏） -->
-    <view class="picbar" wx:if="{{pics.length < maxPics}}">
-      <view class="picbtn {{prepBusy ? 'busy' : ''}}" bindtap="shootPhoto">📷 {{prepBusy ? '处理中…' : '拍照（可连拍）'}}</view>
-      <view class="picbtn ghost {{prepBusy ? 'busy' : ''}}" bindtap="pickPhoto">🖼 从相册选</view>
+  <view class="sec fcard blk blk-pic">
+    <view class="fc-head" bindtap="toggleFold" data-k="pic">
+      <text class="fc-ic">📷</text>
+      <text class="fc-t">现场拍照</text>
+      <text class="fc-sum">{{pics.length ? ('已拍 ' + pics.length + '/' + maxPics + ' 张') : '未拍照'}}</text>
+      <text class="fc-ar">{{foldPic ? '▸' : '▾'}}</text>
     </view>
-    <!-- 已拍照片网格（每格固定像素、一行三格自动换行；左下角序号、右上角 ✕ 删除、点图看大图） -->
-    <view class="picgrid">
-      <view class="pictile" wx:for="{{pics}}" wx:key="id">
-        <image class="picimg" src="{{item.thumb}}" data-src="{{item.orig}}" bindtap="previewPhoto" mode="scaleToFill"/>
-        <view class="picno">{{index + 1}}</view>
-        <view class="picdel" data-id="{{item.id}}" catchtap="delPhoto">✕</view>
+    <view wx:if="{{!foldPic}}">
+      <!-- 拍摄入口：连拍 / 相册多选（拍满后自动隐藏） -->
+      <view class="picbar" wx:if="{{pics.length < maxPics}}">
+        <view class="picbtn {{prepBusy ? 'busy' : ''}}" bindtap="shootPhoto">📷 {{prepBusy ? '处理中…' : '拍照（可连拍）'}}</view>
+        <view class="picbtn ghost {{prepBusy ? 'busy' : ''}}" bindtap="pickPhoto">🖼 从相册选</view>
       </view>
+      <!-- 已拍照片网格（每格固定像素、一行三格自动换行；左下角序号、右上角 ✕ 删除、点图看大图） -->
+      <view class="picgrid">
+        <view class="pictile" wx:for="{{pics}}" wx:key="id">
+          <image class="picimg" src="{{item.thumb}}" data-src="{{item.orig}}" bindtap="previewPhoto" mode="scaleToFill"/>
+          <view class="picno">{{index + 1}}</view>
+          <view class="picdel" data-id="{{item.id}}" catchtap="delPhoto">✕</view>
+        </view>
+      </view>
+      <view class="pic-tip" wx:if="{{!pics.length}}">点上面按钮拍照或从相册选（最多 {{maxPics}} 张）</view>
     </view>
-    <view class="pic-tip" wx:if="{{!pics.length}}">点上面按钮拍照或从相册选（最多 {{maxPics}} 张）</view>
   </view>
 
-  <view class="sec">
-    <view class="st">🎙️ 现场录音 · 最多 {{maxSegs}} 段，单条最长 {{recLimitMin}} 分钟，合计 30 分钟</view>
+  <view class="sec fcard blk blk-rec">
+    <view class="fc-head" bindtap="toggleFold" data-k="rec">
+      <text class="fc-ic">🎙️</text>
+      <text class="fc-t">现场录音</text>
+      <text class="fc-sum">{{recs.length ? (recCountText + ' 段 · 合计 ' + recTotalText) : '未录音'}}</text>
+      <text class="fc-ar">{{foldRec ? '▸' : '▾'}}</text>
+    </view>
+    <view wx:if="{{!foldRec}}">
+      <view class="fc-sub">最多 {{maxSegs}} 段，单条最长 {{recLimitMin}} 分钟，合计 30 分钟</view>
 
-    <!-- 录音中：计时 + 剩余倒计时（剩 30 秒红字加大闪动）+ 停止 -->
-    <view class="recbox" wx:if="{{recState === 'rec'}}">
-      <view class="recinfo"><text class="rcdot blink"/>录音中 {{curText}}</view>
-      <view class="recleft {{recWarn ? 'warn' : ''}}">{{recLeftText}}</view>
-      <view class="recstop" bindtap="onRecTap">■ 停止</view>
-    </view>
-    <!-- 未录音且未录满 -->
-    <view class="recbox" wx:elif="{{recs.length < maxSegs}}">
-      <view class="recbtn" bindtap="onRecTap"><text class="rcdot"/>开始录音</view>
-      <view class="recmeta">已录 {{recCountText}} · 合计 {{recTotalText}}</view>
-    </view>
-    <!-- 已录满最大段数 -->
-    <view class="recbox" wx:else>
-      <view class="recfull">🎙️ 已录满 {{maxSegs}} 段 · 合计 {{recTotalText}}</view>
-    </view>
-
-    <!-- 已录段列表（一条条排着不覆盖：试听 / 勾选转写 / 删除） -->
-    <view class="reclist" wx:if="{{recs.length}}">
-      <view class="recitem" wx:for="{{recs}}" wx:key="id">
-        <view class="ri-idx">{{index + 1}}</view>
-        <view class="ri-play {{recPlayId === item.id ? 'on' : ''}}" bindtap="playRec" data-id="{{item.id}}">{{recPlayId === item.id ? '⏸' : '▶'}}</view>
-        <view class="ri-time">{{item.text}}</view>
-        <view class="ri-tr {{item.transcribe ? 'on' : ''}}" catchtap="toggleRecTr" data-i="{{index}}">{{item.transcribe ? '☑ 转文字' : '☐ 转文字'}}</view>
-        <view class="ri-del" catchtap="askDelRec" data-i="{{index}}">✕</view>
+      <!-- 录音中：计时 + 剩余倒计时（剩 30 秒红字加大闪动）+ 停止 -->
+      <view class="recbox" wx:if="{{recState === 'rec'}}">
+        <view class="recinfo"><text class="rcdot blink"/>录音中 {{curText}}</view>
+        <view class="recleft {{recWarn ? 'warn' : ''}}">{{recLeftText}}</view>
+        <view class="recstop" bindtap="onRecTap">■ 停止</view>
       </view>
-    </view>
+      <!-- 未录音且未录满 -->
+      <view class="recbox" wx:elif="{{recs.length < maxSegs}}">
+        <view class="recbtn" bindtap="onRecTap"><text class="rcdot"/>开始录音</view>
+        <view class="recmeta">已录 {{recCountText}} · 合计 {{recTotalText}}</view>
+      </view>
+      <!-- 已录满最大段数 -->
+      <view class="recbox" wx:else>
+        <view class="recfull">🎙️ 已录满 {{maxSegs}} 段 · 合计 {{recTotalText}}</view>
+      </view>
 
-    <!-- 开始转录（老板定：按下 = 上传 + 转写勾选的段，可提前看结果） -->
-    <view class="trbar" wx:if="{{recs.length}}">
-      <view class="trgo {{trBusy ? 'busy' : ''}}" bindtap="startTranscribe">{{trBusy ? '提交中…' : '📝 开始转录'}}</view>
-      <view class="trmsg" wx:if="{{trMsg}}">{{trMsg}}</view>
+      <!-- 已录段列表（一条条排着不覆盖：试听 / 勾选转写 / 删除） -->
+      <view class="reclist" wx:if="{{recs.length}}">
+        <view class="recitem" wx:for="{{recs}}" wx:key="id">
+          <view class="ri-idx">{{index + 1}}</view>
+          <view class="ri-play {{recPlayId === item.id ? 'on' : ''}}" bindtap="playRec" data-id="{{item.id}}">{{recPlayId === item.id ? '⏸' : '▶'}}</view>
+          <view class="ri-time">{{item.text}}</view>
+          <view class="ri-tr {{item.transcribe ? 'on' : ''}}" catchtap="toggleRecTr" data-i="{{index}}">{{item.transcribe ? '☑ 转文字' : '☐ 转文字'}}</view>
+          <view class="ri-del" catchtap="askDelRec" data-i="{{index}}">✕</view>
+        </view>
+      </view>
+
+      <!-- 开始转录（老板定：按下 = 上传 + 转写勾选的段，可提前看结果） -->
+      <view class="trbar" wx:if="{{recs.length}}">
+        <view class="trgo {{trBusy ? 'busy' : ''}}" bindtap="startTranscribe">{{trBusy ? '提交中…' : '📝 开始转录'}}</view>
+        <view class="trmsg" wx:if="{{trMsg}}">{{trMsg}}</view>
+      </view>
     </view>
   </view>
 
@@ -75,17 +91,17 @@
     </view>
   </view>
 
-  <view class="sec">
+  <view class="sec blk blk-samp">
     <view class="st">📦 样品 / 物料</view>
     <input class="inp" placeholder="例：带 24 标准白 1 件样品给客户" value="{{samples}}" bindinput="onSamples"/>
   </view>
 
-  <view class="sec">
+  <view class="sec blk blk-text">
     <view class="st">✍️ 拜访记录</view>
     <textarea class="inp area" placeholder="客户反馈、跟进事项、下次计划……" value="{{text}}" bindinput="onText" maxlength="-1" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
   </view>
 
-  <view class="sec">
+  <view class="sec blk blk-res">
     <view class="st">🎯 拜访结果</view>
     <view class="tags">
       <view class="rtag {{result === item ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="*this"
