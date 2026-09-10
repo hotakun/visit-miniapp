@@ -91,6 +91,7 @@ Page({
     }
   },
   async submitReg() {
+    if (this.data.regBusy) return; // 2026-09-09 核验加固：防连点并发提交产生重复申请
     const name = (this.data.name || '').trim();
     const phone = (this.data.phone || '').trim();
     if (!name) { api.toast('请填写姓名'); return; }

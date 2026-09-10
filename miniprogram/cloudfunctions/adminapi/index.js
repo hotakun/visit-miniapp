@@ -1689,7 +1689,9 @@ async function reviewRegistration(event) {
   if (uRes.data.length) {
     const u = uRes.data[0];
     if (u.openid && u.openid !== r.openid) return { ok: false, code: 'BOUND_OTHER', msg: '该手机号的业务员已绑定其他微信，请先核对' };
-    await db.collection('users').doc(u._id).update({ data: { openid: r.openid, lastLoginAt: Date.now() } });
+    // 2026-09-09 模拟核验修复：审核通过=老板认可该身份 → 同时恢复 active（否则曾被停用的业务员
+    // 即使绑上 openid，login 的 active:true 查询仍不命中，永远进不了小程序）
+    await db.collection('users').doc(u._id).update({ data: { openid: r.openid, lastLoginAt: Date.now(), active: true } });
     boundId = u._id;
   } else {
     const add = await db.collection('users').add({
