@@ -2319,11 +2319,13 @@ async function openVisitDetail(id) {
         : '<span class="pill blue">拜访中</span>');
     const mins = v.durationSeconds > 0 ? ' · ' + Math.ceil(v.durationSeconds / 60) + ' 分钟' : '';
     const dist = v.distanceToCustomer !== null && v.distanceToCustomer !== undefined ? ' · 距客户 ' + v.distanceToCustomer + ' 米' : '';
-    // 照片双轨：列表显示缩略图，点击新窗口看原图
-    const photos = (v.photos || []).filter(p => p && urls[p.thumbID])
+    // 照片（2026-09-11：上限 3 → 15 张 → 弹窗里只铺前 8 张，其余用「共 N 张」提示；点缩略图看原图）
+    const allPhotos = (v.photos || []).filter(p => p && urls[p.thumbID]);
+    const photos = allPhotos.slice(0, 8)
       .map(p => `<img class="vd-ph" src="${esc(urls[p.thumbID])}" title="点击查看原图" onclick="showPhoto('${esc(urls[p.fileID] || urls[p.thumbID])}')">`)
       .join('');
-    const photoHtml = photos ? `<div class="vd-photos">${photos}</div>` : '';
+    const morePhotos = allPhotos.length > 8 ? `<span style="font-size:11.5px;color:var(--sub);font-weight:700;align-self:center">共 ${allPhotos.length} 张</span>` : '';
+    const photoHtml = photos ? `<div class="vd-photos">${photos}${morePhotos}</div>` : '';
     // 录音播放条（2026-09-11 M2c：支持多段 audios，兼容旧 audio 单段）
     const auds = Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []);
     const audioHtml = auds.filter(a => a && urls[a.fileID]).map((a, k) =>

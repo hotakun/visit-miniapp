@@ -62,12 +62,13 @@
       </view>
       <view class="htxt" wx:if="{{item.text}}">{{item.text}}</view>
       <view class="hsamp" wx:if="{{item.samples}}">📦 样品：{{item.samples}}</view>
-      <!-- 现场证据（2026-09-07）：照片缩略点开大图 + 录音播放控件（▶/⏸+进度条+时间） -->
-      <view class="hev" wx:if="{{item.evPhotos.length}}">
-        <image class="hev-pic" wx:for="{{item.evPhotos}}" wx:for-item="ph" wx:key="index"
+      <!-- 照片（2026-09-11 老板定）：卡上只显示前 3 张；点任意一张 → 全屏左右滑看全部 -->
+      <view class="hev" wx:if="{{item.evShow.length}}">
+        <image class="hev-pic" wx:for="{{item.evShow}}" wx:for-item="ph" wx:key="index"
                src="{{ph.t}}" data-src="{{ph.o}}" data-list="{{item.evListJson}}"
                bindtap="previewEv" mode="scaleToFill"/>
       </view>
+      <view class="hev-more" wx:if="{{item.evMore}}" bindtap="previewEv" data-src="{{item.evShow[0].o}}" data-list="{{item.evListJson}}">📷 共 {{item.evMore}} 张 · 点击看全部</view>
       <!-- 录音（2026-09-11 M2b：多段，逐段独立试听；播放 key = visitId#段号 保证同一时刻只播一条） -->
       <view class="hev-audio {{evPlay === seg.key ? 'on' : ''}}" wx:for="{{item.audList}}" wx:for-item="seg" wx:key="key">
         <text style="font-size:11.5px;color:var(--sub);font-weight:700;flex-shrink:0">{{seg.label}}</text>

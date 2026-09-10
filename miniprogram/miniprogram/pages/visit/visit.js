@@ -28,7 +28,7 @@ Page({
     timeoutWarn: false, timeoutLeftMin: 5,
     // 现场证据（2026-09-07 二期提前做）：照片双轨瓦片 + 录音状态机
     // 2026-09-11 M2b：录音改为【多段】—— ≤5 条 / 单条 ≤10 分钟 / 合计 30 分钟硬封顶；按段勾选转写
-    pics: [], prepBusy: false,
+    pics: [], prepBusy: false, maxPics: 15, // 现场照片上限（2026-09-11 老板定：3 → 15，支持连拍 + 相册多选）
     recs: [],              // 已录段：[{id, path, ext, sec, text, transcribe, up, fileID, trStatus}]
     recState: 'idle',      // idle | rec（同一时刻只录一段）
     curText: '00:00',      // 本次录制计时
@@ -199,18 +199,37 @@ Page({
       if (this.data.recState === 'rec') this.recorder.stop();
     }
   },
-  // ===== 现场证据：照片（2026-09-08 老板定上限 3 张，一行三框） =====
-  async addPhoto() {
+  // ===== 现场证据：照片（2026-09-11 老板定：上限 15 张，支持连拍 + 相册多选） =====
+  // 相册多选：一次最多选到剩余额度
+  async pickPhoto() {
     if (this.data.prepBusy) return;
-    const left = 3 - this.data.pics.length;
-    if (left <= 0) { api.toast('最多 3 张现场照片'); return; }
+    const left = this.data.maxPics - this.data.pics.length;
+    if (left <= 0) { api.toast('最多 ' + this.data.maxPics + ' 张现场照片'); return; }
     let files;
-    try { files = await media.chooseImage(left); } catch (e) { return; }
+    try { files = await media.chooseImage(left, ['album']); } catch (e) { return; }
     if (!files || !files.length) return;
+    await this._addPics(files);
+  },
+  // 连拍：拍一张 → 自动再开相机 → 直到在相机里点返回（取消）或拍满 15 张
+  async shootPhoto() {
+    if (this.data.prepBusy) return;
+    while (this.data.pics.length < this.data.maxPics) {
+      let files;
+      try { files = await media.chooseImage(1, ['camera']); } catch (e) { return; } // 取消拍照 → 结束连拍
+      if (!files || !files.length) return;
+      await this._addPics(files);
+      if (this._dead) return;
+      if (this.data.pics.length >= this.data.maxPics) { api.toast('已拍满 ' + this.data.maxPics + ' 张'); return; }
+      // 继续循环 → 自动再次打开相机（连拍体验）
+    }
+  },
+  // 逐张处理（压缩成「原图 + 缩略图」双轨）后追加到列表
+  async _addPics(files) {
     this.setData({ prepBusy: true });
     const pics = [...this.data.pics];
     let failed = 0;
     for (const f of files) {
+      if (pics.length >= this.data.maxPics) break;
       try {
         const r = await media.prepPhoto(f.tempFilePath);
         pics.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), orig: r.orig.path, thumb: r.thumb.path, up: false });

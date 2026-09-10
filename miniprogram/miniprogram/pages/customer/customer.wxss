@@ -37,6 +37,8 @@
 /* 现场证据（2026-09-07）：照片缩略行 + 录音播放控件（2026-09-08 加进度条） */
 .hev { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .hev-pic { width: 84px; height: 63px; border-radius: 9px; background: #F0F2F5; }
+/* 2026-09-11：照片多于 3 张时的提示行（点击进全屏左右滑看全部）*/
+.hev-more { margin-top: 5px; font-size: 11.5px; color: var(--sub); font-weight: 700; }
 .hev-audio { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 5px 10px; border-radius: 12px; background: var(--blue-tint); }
 .ha-play { width: 30px; height: 30px; border-radius: 50%; background: #fff; color: var(--blue); display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(31,36,48,.14); }
 .hev-audio.on { background: #DDEBFD; }

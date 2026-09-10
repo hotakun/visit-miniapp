@@ -195,12 +195,12 @@ async function submit(user, e, isBoss) {
   if (!allowed.includes(result)) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
 
   // 3. 现场证据校验
-  //    照片：≤3 条 {fileID, thumbID}
+  //    照片（2026-09-11 老板定：上限 3 → 15，手机端支持连拍 + 相册多选）：≤15 条 {fileID, thumbID}
   //    录音（2026-09-11 M2a 多段）：audios ≤5 条，单条 ≤600 秒（10 分钟），合计 ≤1800 秒（30 分钟硬封顶）
   //      transcribe=false = 只留档不转文字；兼容旧字段 audio（单条）→ 自动并入 audios
   let ph = [];
   if (photos !== undefined && photos !== null) {
-    if (!Array.isArray(photos) || photos.length > 3) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数量不合法（最多 3 张）' };
+    if (!Array.isArray(photos) || photos.length > 15) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数量不合法（最多 15 张）' };
     ph = photos.filter(p => p && typeof p.fileID === 'string' && p.fileID && typeof p.thumbID === 'string' && p.thumbID);
     if (ph.length !== photos.length) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数据不完整，请重新拍摄' };
   }

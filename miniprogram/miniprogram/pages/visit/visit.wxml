@@ -8,22 +8,23 @@
   <view class="timeout-warn" wx:if="{{timeoutWarn}}">⏰ 拜访将在 {{timeoutLeftMin}} 分钟后自动{{result ? '提交' : '取消'}}，请尽快处理</view>
 
   <!-- 区块顺序（2026-09-08 老板定）：现场拍照 → 现场录音 → 样品/物料 → 拜访记录 → 拜访结果 -->
+  <!-- 2026-09-11：现场拍照改为【最多 15 张】—— 支持连拍（拍完自动再开相机）与相册多选；网格自动换行 -->
   <!-- 2026-09-11 M2b：现场录音改为【多段】—— ≤5 段 / 单条 ≤10 分钟 / 合计 30 分钟硬封顶；按段勾选转写 -->
   <view class="sec">
-    <view class="st">📷 现场拍照</view>
-    <!-- 固定三个框（2026-09-08 老板定）：有图显示可删，空框点击拍照；永远三等分无浮动添加块 -->
+    <view class="st">📷 现场拍照 · 最多 {{maxPics}} 张（已拍 {{pics.length}}/{{maxPics}}）</view>
+    <!-- 拍摄入口：连拍 / 相册多选（拍满后自动隐藏） -->
+    <view class="picbar" wx:if="{{pics.length < maxPics}}">
+      <view class="picbtn {{prepBusy ? 'busy' : ''}}" bindtap="shootPhoto">📷 {{prepBusy ? '处理中…' : '拍照（可连拍）'}}</view>
+      <view class="picbtn ghost {{prepBusy ? 'busy' : ''}}" bindtap="pickPhoto">🖼 从相册选</view>
+    </view>
+    <!-- 已拍照片网格（每格固定像素、一行三格自动换行；点图看大图、✕ 删除） -->
     <view class="picgrid">
-      <view class="pictile" wx:for="{{[0,1,2]}}" wx:for-item="pi" wx:key="*this">
-        <block wx:if="{{pics[pi]}}">
-          <image class="picimg" src="{{pics[pi].thumb}}" data-src="{{pics[pi].orig}}" bindtap="previewPhoto" mode="scaleToFill"/>
-          <view class="picdel" data-id="{{pics[pi].id}}" catchtap="delPhoto">✕</view>
-        </block>
-        <view wx:else class="picempty {{prepBusy ? 'busy' : ''}}" bindtap="addPhoto">
-          <text class="addic">{{prepBusy ? '⏳' : '📷'}}</text>
-          <text class="addt">{{prepBusy ? '处理中' : '拍照'}}</text>
-        </view>
+      <view class="pictile" wx:for="{{pics}}" wx:key="id">
+        <image class="picimg" src="{{item.thumb}}" data-src="{{item.orig}}" bindtap="previewPhoto" mode="scaleToFill"/>
+        <view class="picdel" data-id="{{item.id}}" catchtap="delPhoto">✕</view>
       </view>
     </view>
+    <view class="pic-tip" wx:if="{{!pics.length}}">点上面按钮拍照或从相册选（最多 {{maxPics}} 张）</view>
   </view>
 
   <view class="sec">

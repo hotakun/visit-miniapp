@@ -24,9 +24,10 @@ function getFileSize(path) {
 function getImageInfo(src) {
   return new Promise((ok, fail) => wx.getImageInfo({ src, success: ok, fail }));
 }
-function chooseImage(count) {
+// 2026-09-11 M2b：照片上限提到 15 张 —— 支持指定来源（['camera']=连拍单张 / ['album']=相册多选），默认两者都可
+function chooseImage(count, sourceType) {
   return new Promise((ok, fail) => wx.chooseMedia({
-    count, mediaType: ['image'], sourceType: ['camera', 'album'], sizeType: ['original'], camera: 'back',
+    count, mediaType: ['image'], sourceType: sourceType || ['camera', 'album'], sizeType: ['original'], camera: 'back',
     success: r => ok(r.tempFiles || []), fail
   }));
 }

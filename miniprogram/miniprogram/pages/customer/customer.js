@@ -98,6 +98,9 @@ Page({
         return {
           ...v,
           evPhotos: photos.map(p => ({ t: urls[p.thumbID], o: urls[p.fileID] || '' })),
+          // 2026-09-11 老板定：历史卡只显示前 3 张；点任意一张 → 全屏左右滑看全部
+          evShow: photos.slice(0, 3).map(p => ({ t: urls[p.thumbID], o: urls[p.fileID] || '' })),
+          evMore: photos.length > 3 ? photos.length : 0,
           evListJson: JSON.stringify(photos.map(p => urls[p.fileID]).filter(Boolean)),
           audList,
           audioUrl: v.audio && v.audio.fileID ? (urls[v.audio.fileID] || '') : '', // 兼容旧模板
