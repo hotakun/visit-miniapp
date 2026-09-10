@@ -5,7 +5,7 @@ const { LOGO_FILE_ID } = require('./utils/config');
 App({
   globalData: {
     user: null,
-    APP_VERSION: '0.9.08', // 版本号（2026-09-08 老板定：双方必须统一口径的改动才 bump；界面级改动不动）
+    APP_VERSION: '0.9.11', // 版本号（2026-09-11：改成一眼可自检是否加载到新代码——「我的」页左下角显示 v{版本}；原口径：双方统一口径的改动才 bump）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
     welcome: null, // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）

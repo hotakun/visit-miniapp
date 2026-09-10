@@ -22,15 +22,14 @@ const mainInner = async (event) => {
   try { await db.createCollection('registrations'); } catch (e) { /* 已存在等错误忽略 */ }
   const { OPENID } = cloud.getWXContext();
 
-  // 0. 管理员识别（super_admin / admin）：管理员微信打开小程序 → 仅提示使用 Web 后台
-  //    2026-09-09 老板定：只有 boss===true 的指定账号才显示「进入老板模式」入口
+  // 0. 管理员识别（super_admin / admin）：管理员微信打开小程序 → 直接进老板模式
+  //    2026-09-10 老板定：管理员模式与老板模式合并，不再单独提示使用 Web 后台
   const adminRes = await users.where({ openid: OPENID, active: true, role: _.in(['super_admin', 'admin']) }).get();
   if (adminRes.data.length > 0) {
     const a = adminRes.data[0];
     await users.doc(a._id).update({ data: { lastLoginAt: Date.now() } });
-    // 2026-09-09 老板定：boss 白名单账号登录后直接进老板模式，不用再点「进入老板模式」按钮
-    const boss = a.boss === true || a.phone === BOSS_PHONE;
-    return { ok: true, isAdmin: true, canBoss: boss, boss, user: publicUser(a) };
+    // 2026-09-10 老板定：管理员模式不再单独存在——管理员微信打开小程序直接进老板模式（与老板同一套页面与权限）
+    return { ok: true, isAdmin: true, canBoss: true, boss: true, user: publicUser(a), welcome: await readWelcomeCfg() };
   }
 
   // 1. 业务员已绑定：直接返回（审核通过后 openid 已写入，免登录）
@@ -40,8 +39,8 @@ const mainInner = async (event) => {
     // 正式业务员优先——多命中时非 trial 的排在前面
     const u = bound.data.slice().sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0))[0];
     await users.doc(u._id).update({ data: { lastLoginAt: Date.now() } });
-    // 老板手机号兜底（口径与 tasks/visits 云函数一致：仅管理员角色认 boss）
-    const boss = ['super_admin', 'admin'].includes(u.role) && (u.boss === true || u.phone === BOSS_PHONE);
+    // 2026-09-10 老板定：管理员一律按老板处理（口径与 tasks/visits/coordfix 云函数一致）
+    const boss = ['super_admin', 'admin'].includes(u.role);
     // 2026-09-09 开发者范宇琨双身份：dev 白名单返回 dev 标志 → 前端显示「业务员/老板」两按钮选择页
     const dev = u.phone === DEV_PHONE;
     // 2026-09-10 老板定：老板模式登录顺带下发「欢迎仪式」配置（每次登录一次查询，仅老板触发）

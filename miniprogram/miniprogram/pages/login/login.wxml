@@ -32,9 +32,9 @@
       <view class="frow">
         <label>验证</label>
         <button class="btn-phone-v {{phoneVerified ? 'ok' : ''}}" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone" disabled="{{phoneVerified}}">
-          {{phoneVerified ? '✓ 已验证' : '📱 微信一键验证'}}
+          {{phoneVerified ? '✓ 已验证' : '手机号快捷登录'}}
         </button>
-        <text class="pv-hint">微信发送验证码短信到您的手机，确认后自动填入</text>
+        <text class="pv-hint">确认后自动填入号码</text>
       </view>
       <view class="btn-primary" style="margin-top:20px" bindtap="submitReg">{{regBusy ? '提交中…' : '提交申请'}}</view>
       <view class="reg-note">提交后由管理员审核，通过后重新打开小程序即可直接进入</view>
@@ -61,5 +61,5 @@
     </view>
   </block>
 
-  <view class="loading" wx:else>正在识别微信身份…</view>
+  <view class="loading" wx:else>正在识别身份…</view>
 </view>

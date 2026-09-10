@@ -1,0 +1,18 @@
+/* 自定义底部 Tab 栏（2026-09-10 老板拍板：根治切页白闪）
+   位置/尺寸口径与首页原自绘栏完全一致：左右 14px、离底 14px、高 64px、圆角 22px、胶囊 16px。
+   颜色用字面色值（不依赖页面级 CSS 变量），保证组件独立渲染时也正确。 */
+.tabbar {
+  position: fixed; left: 14px; right: 14px; bottom: 14px; height: 64px; border-radius: 22px;
+  display: flex; align-items: center;
+  background: linear-gradient(180deg, rgba(255,255,255,.99), rgba(248,250,253,.95));
+  box-shadow: 0 0 0 1px rgba(23,30,44,.05), 0 14px 30px -10px rgba(23,30,44,.38), inset 0 1px 0 rgba(255,255,255,.95);
+  z-index: 50;
+}
+.tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: #88909A; font-weight: 700; }
+.tb .pill { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 15px; border-radius: 16px; }
+.tb .tic { font-size: 19px; line-height: 1; }
+.tb.on { color: #D93E0E; }
+.tb.on .pill {
+  color: #fff; background: linear-gradient(180deg, #FF8A50, #F5531C);
+  box-shadow: 0 10px 20px -7px rgba(245,83,28,.75), inset 0 1px 0 rgba(255,255,255,.5);
+}

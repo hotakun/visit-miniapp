@@ -446,6 +446,10 @@ Page({
       if (res.ok) {
         this.clearStart(); // 提交成功：计时基准清除，下次进入重新计时
         loc.beacon(); // 状态信标：拜访中→已回访（2026-09-08 老板定）
+        // 2026-09-11 M2b-小步：本次有录音则静默触发「语音转文字」（不阻断返回；结果由定时任务落库，客户详情里看得到）
+        if (!res.boss && audio && audio.fileID && res.visitId) {
+          api.call('transcribe', { action: 'start', visitId: res.visitId }).catch(() => {});
+        }
         this._evPhotos = null; this._evAudio = null;
         const pool = PRAISE[this.data.result] || ['辛苦啦！拜访已提交 ✓'];
         const line = pool[Math.floor(Math.random() * pool.length)];

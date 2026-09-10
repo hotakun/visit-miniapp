@@ -13,7 +13,7 @@ const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 const BOSS_PHONE = '15055492888';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'ping'];
 
 exports.main = async (event) => {
   const action = (event && event.action) || 'login';
@@ -61,6 +61,8 @@ exports.main = async (event) => {
     if (action === 'listMallClaims') return await listMallClaims(event);
     if (action === 'resolveMallClaim') return await resolveMallClaim(event);
     if (action === 'listCustomerVisits') return await listCustomerVisits(event);
+    if (action === 'transcribeVisit') return await transcribeVisit(event);
+    if (action === 'transcribeUsage') return await transcribeUsage(event);
     if (action === 'reviewFinishRequest') return await reviewFinishRequest(event);
     if (action === 'getLastMallImport') return await getLastMallImport(event);
     if (action === 'listSalesmen') return await listSalesmen(event);
@@ -1512,6 +1514,29 @@ async function listCustomerVisits(event) {
     .orderBy('createdAt', 'desc')
     .limit(100)
     .get();
+  // 2026-09-11 M2c：批量带上每条拜访的语音转写（状态 + 文字），供后台「拜访详情」显示
+  const withAudio = res.data.filter(v => (Array.isArray(v.audios) && v.audios.length) || (v.audio && v.audio.fileID));
+  const trMap = {};
+  withAudio.forEach(v => { trMap[v._id] = { total: 0, done: 0, failed: 0, running: 0, segs: [] }; });
+  if (withAudio.length) {
+    const tr = await db.collection('transcripts')
+      .where({ visitId: _.in(withAudio.map(v => v._id)) })
+      .orderBy('segIndex', 'asc').limit(300).get();
+    (tr.data || []).forEach(t => {
+      const m = trMap[t.visitId];
+      if (!m) return;
+      m.total++;
+      if (t.status === 'done') { m.done++; m.segs.push(t); }
+      else if (t.status === 'failed') m.failed++;
+      else m.running++;
+    });
+  }
+  const trOf = (id) => {
+    const m = trMap[id];
+    if (!m || !m.total) return null;
+    const status = m.running > 0 ? 'processing' : (m.done > 0 ? (m.failed > 0 ? 'partial' : 'done') : 'failed');
+    return { status, segCount: m.total, text: m.segs.map(x => x.text || '').join('\n') };
+  };
   return {
     ok: true,
     visits: res.data.map(v => ({
@@ -1526,8 +1551,53 @@ async function listCustomerVisits(event) {
       salesmanName: v.salesmanName || '',
       distanceToCustomer: v.distanceToCustomer !== undefined ? v.distanceToCustomer : null,
       photos: Array.isArray(v.photos) ? v.photos : [],
-      audio: v.audio || null
+      // 2026-09-11 M2c：多段录音下发（audios 优先，audio 兼容旧数据）
+      audios: Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []),
+      audio: v.audio || null,
+      transcribe: trOf(v._id)
     }))
+  };
+}
+
+// 2026-09-11 M2c：后台手动触发某次拜访的语音转写 —— 转发到 transcribe 云函数，用管理员账号密码鉴权、真实执行（不走老板演示）
+async function transcribeVisit(event) {
+  const visitId = String(event.visitId || '').trim();
+  if (!visitId) return { ok: false, code: 'BAD_ARG', msg: '缺少拜访 ID' };
+  try {
+    const r = await cloud.callFunction({
+      name: 'transcribe',
+      data: {
+        action: 'start',
+        visitId,
+        segIndexes: Array.isArray(event.segIndexes) ? event.segIndexes : null,
+        username: event.username,
+        password: event.password
+      }
+    });
+    return (r && r.result) || { ok: false, code: 'CALL_FAIL', msg: '转写服务无响应' };
+  } catch (err) {
+    return { ok: false, code: 'CALL_FAIL', msg: (err && err.message) || '转写调用失败' };
+  }
+}
+
+// 2026-09-11 M2c：本月转写用量（后台用量条）
+async function transcribeUsage() {
+  const cfgR = await db.collection('settings').where({ key: 'asrConfig' }).get();
+  const cfg = (cfgR.data[0] && cfgR.data[0].value) || {};
+  const cn = new Date(Date.now() + 8 * 3600 * 1000);
+  const startTs = Date.UTC(cn.getUTCFullYear(), cn.getUTCMonth(), 1) - 8 * 3600 * 1000;
+  const doneR = await db.collection('transcripts')
+    .where({ status: 'done', doneAt: _.gte(startTs) }).field({ duration: true }).limit(1000).get();
+  const sec = (doneR.data || []).reduce((s, x) => s + (Number(x.duration) || 0), 0);
+  const allR = await db.collection('transcripts').field({ status: true }).limit(1000).get();
+  const counts = {};
+  (allR.data || []).forEach(x => { const k = x.status || 'pending'; counts[k] = (counts[k] || 0) + 1; });
+  return {
+    ok: true,
+    enabled: cfg.enabled !== false,
+    usedMin: Math.round(sec / 60),
+    quotaMin: Number(cfg.monthlyQuotaMin || 600),
+    counts
   };
 }
 

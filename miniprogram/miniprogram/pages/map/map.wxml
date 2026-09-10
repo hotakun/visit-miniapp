@@ -2,7 +2,7 @@
 <view class="page">
   <view class="m-wrap">
     <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
-         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
+         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="{{mapScale}}"
          bindmarkertap="onMarkerTap" bindcallouttap="onCalloutTap"></map>
     <!-- 仓库开关（2026-09-09 老板定：横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关） -->
     <view class="wh-switch {{whStarOn ? 'on' : ''}}" bindtap="toggleWhStar">⭐ 仓库</view>
@@ -30,7 +30,7 @@
       <view class="ntxt" wx:if="{{nextCust}}" bindtap="openNext"><text class="nlab">👉 下一家</text><text class="nname">{{nextCust.name}}</text><text class="ndist" wx:if="{{nextDist}}">{{nextDist}}</text></view>
       <view class="nbtn" wx:if="{{canReplan && !bossMode}}" catchtap="replanDay">{{replanBusy ? '重排中…' : '重排'}}</view>
       <picker wx:if="{{bossMode}}" mode="selector" range="{{bossMen}}" range-key="label" bindchange="onBossMen">
-        <view class="nbtn nbtn-boss" style="margin-left:auto">👤 {{bossMen[curBossIdx].label || '选择业务员'}} ▾</view>
+        <view class="nbtn nbtn-boss"><text class="nb-ic">👤</text><text class="nb-name">{{bossMen[curBossIdx].name || '选择业务员'}}</text><text class="nb-arrow">▾</text></view>
       </picker>
     </view>
 
@@ -45,11 +45,6 @@
       </view>
     </view>
   </block>
-  <!-- 底部矮 TAB 栏（2026-09-09 老板定：只显示文字、很矮；业务员三栏/老板四栏） -->
-  <view class="tabbar-slim">
-    <view class="ts" bindtap="goHome">首页</view>
-    <view class="ts on">{{bossMode ? '任务地图' : '地图'}}</view>
-    <view class="ts" wx:if="{{bossMode}}" bindtap="tabWar">战况</view>
-    <view class="ts" bindtap="tabMine">我的</view>
-  </view>
+  <!-- 底部 TAB 栏已迁移到自定义组件 custom-tab-bar（2026-09-10：tab 页常驻，切换不再重绘 → 消白闪）
+       原矮栏 .tabbar-slim 与胶囊 .tabbar 样式仍保留在 wxss 以便回滚 -->
 </view>

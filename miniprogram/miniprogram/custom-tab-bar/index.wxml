@@ -1,0 +1,9 @@
+<!-- 自定义底部 Tab 栏（2026-09-10：胶囊样式，与首页/任务地图/战况统一；由框架常驻，切页不重绘） -->
+<view class="tabbar">
+  <view class="tb {{selected === index ? 'on' : ''}}" wx:for="{{tabs}}" wx:key="key" data-i="{{index}}" bindtap="onTap">
+    <view class="pill">
+      <view class="tic">{{item.ic}}</view>
+      <text>{{item.label}}</text>
+    </view>
+  </view>
+</view>

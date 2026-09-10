@@ -1,0 +1,9 @@
+{
+  "name": "transcribe",
+  "version": "1.0.0",
+  "description": "拜访录音转文字（腾讯云 ASR 录音文件识别）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

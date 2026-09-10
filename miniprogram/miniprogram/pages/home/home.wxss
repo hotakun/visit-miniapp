@@ -1,65 +1,117 @@
-.page { padding: 20px 18px 110px; }
-.head { display: flex; align-items: center; gap: 12px; padding: 6px 2px 18px; }
-.head-logo { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 4px 12px rgba(245,83,28,.25); }
+/* 首页（任务列表 / 工作台）
+   2026-09-10 质感升级（方案 A：立体卡片 + 柔光投影，老板拍板方向）
+   立体公式：外描边 0 0 0 1px + 贴地细影 0 1px 2px + 柔光长影 0 Xpx Ypx -Zpx + 顶部内高光 inset 0 1px 0
+   约束：纯 CSS（多层 box-shadow / inset / linear-gradient / radial-gradient），不用毛玻璃与 conic-gradient
+   2026-09-10 老板逐条反馈后修正：今日大卡回归原尺寸/原平面日期/原二维圆弧（去掉横向进度条与左下光斑），
+   仅保留老板认可的渐变底色与更精细的开始按钮；其余部分不动 */
+.page {
+  padding: 20px 18px 118px; min-height: 100vh; box-sizing: border-box; position: relative;
+  background:
+    radial-gradient(120% 55% at 6% -8%, #FFE6D8 0%, rgba(255,230,216,0) 58%),
+    radial-gradient(90% 40% at 100% 4%, #E8F1FD 0%, rgba(232,241,253,0) 60%),
+    linear-gradient(180deg, #FBFCFE 0%, #EFF3F8 100%);
+}
+.head { display: flex; align-items: center; gap: 12px; padding: 8px 2px 20px; }
+.head-logo { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 3px #fff, 0 10px 22px -6px rgba(245,83,28,.55); }
 .head-txt { min-width: 0; }
-.hi { font-size: 22px; font-weight: 800; line-height: 1.3; }
+.hi { font-size: 23px; font-weight: 800; line-height: 1.3; text-shadow: 0 1px 0 rgba(255,255,255,.8); }
 .boss-crown { margin-left: 4px; font-size: 20px; } /* 老板模式皇冠（2026-09-09 老板定：名字后跟皇冠） */
 .pep { margin-top: 4px; font-size: 13px; font-weight: 400; }
 .pep-t { color: var(--sub); }
 /* emoji 不设文字色：保持系统彩色渲染，不被灰色染色 */
 .pep-e { margin-left: 2px; }
 .subBtn { margin: 0 0 12px; padding: 11px 14px; border-radius: 13px; background: #FFF3EC; border: 1.5px solid #FFCBB2; font-size: 12.5px; font-weight: 700; color: #B93A08; }
-.sub-banner { margin: 0 0 12px; padding: 11px 14px; border-radius: 13px; background: #FFF3EC; border: 1.5px solid #FFCBB2; font-size: 12.5px; font-weight: 700; color: #B93A08; display: flex; align-items: center; }
+.sub-banner {
+  margin: 0 0 12px; padding: 11px 14px; border-radius: 14px; display: flex; align-items: center;
+  background: linear-gradient(180deg, #FFF4EE, #FFEBE0); border: 1.5px solid #FFCBB2;
+  font-size: 12.5px; font-weight: 700; color: #B93A08;
+  box-shadow: 0 1px 2px rgba(185,58,8,.08), 0 10px 20px -12px rgba(185,58,8,.35);
+}
 .sub-banner .x { margin-left: auto; font-weight: 800; padding: 0 6px; }
-/* 底部 Tab 栏（任务/地图/我的） */
-.tabbar { position: fixed; left: 0; right: 0; bottom: 0; height: 66px; background: rgba(255,255,255,.97); display: flex; box-shadow: 0 -2px 12px rgba(31,36,48,.06); z-index: 50; }
-.tabbar .tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: var(--sub); font-weight: 700; }
-.tabbar .tb .tic { font-size: 20px; line-height: 1; }
+
+/* 底部 Tab 栏（2026-09-10 质感升级：悬浮胶囊，离底 14px；tb 仍是纵向布局，未包 pill 的旧结构同样成立） */
+.tabbar {
+  position: fixed; left: 14px; right: 14px; bottom: 14px; height: 64px; border-radius: 22px; display: flex; align-items: center;
+  background: linear-gradient(180deg, rgba(255,255,255,.99), rgba(248,250,253,.95));
+  box-shadow: 0 0 0 1px rgba(23,30,44,.05), 0 14px 30px -10px rgba(23,30,44,.38), inset 0 1px 0 rgba(255,255,255,.95);
+  z-index: 50;
+}
+.tabbar .tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: #88909A; font-weight: 700; }
+.tabbar .tb .pill { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 15px; border-radius: 16px; }
+.tabbar .tb .tic { font-size: 19px; line-height: 1; }
 .tabbar .tb.on { color: var(--primary-deep); }
+.tabbar .tb.on .pill {
+  color: #fff; background: linear-gradient(180deg, #FF8A50, #F5531C);
+  box-shadow: 0 10px 20px -7px rgba(245,83,28,.75), inset 0 1px 0 rgba(255,255,255,.5);
+}
+
 /* 我的任务标题栏（下移远离大卡辉光，层级置顶不被投影盖住） */
 .sec-t { display: flex; align-items: center; margin: 26px 2px 16px; position: relative; z-index: 1; }
 .sec-t .st-t { font-size: 17px; font-weight: 800; }
 .sec-t .st-more { margin-left: auto; font-size: 13px; color: var(--sub); font-weight: 600; }
-/* 今日计划橙色大卡（对齐演示设计） */
-.hero { margin: 0 0 14px; padding: 24px 20px 22px; border-radius: 22px; color: #fff; position: relative; overflow: hidden; background: linear-gradient(125deg, #FF8A50 0%, #F5531C 55%, #D93E0E 100%); box-shadow: 0 12px 30px rgba(245, 83, 28, .35); }
-/* 右上角半透明圆弧装饰 */
+
+/* 今日计划橙色大卡：尺寸/日期/圆弧回归原二维口径，仅保留老板认可的渐变底色与内高光 */
+.hero {
+  margin: 0 0 14px; padding: 24px 20px 22px; border-radius: 22px; color: #fff; position: relative; overflow: hidden;
+  background: linear-gradient(135deg, #FF9C63 0%, #F5531C 52%, #C5360A 100%);
+  box-shadow: 0 2px 3px rgba(180,48,8,.25), 0 24px 46px -18px rgba(245,83,28,.62), inset 0 1px 0 rgba(255,255,255,.42);
+}
+/* 右上角半透明圆弧装饰（保持原来二维做法） */
 .hero::after { content: ""; position: absolute; right: -46px; top: -46px; width: 160px; height: 160px; border-radius: 50%; background: rgba(255, 255, 255, .14); }
 .hero .h1 { font-size: 14px; opacity: .92; font-weight: 600; transform: translateY(-10px); }
-.hbody { margin-top: 12px; }
-.hero .big { font-size: 36px; font-weight: 800; line-height: 1; margin: 8px 0 6px; letter-spacing: 1px; }
-.hero .big .u { font-size: 15px; font-weight: 600; margin-left: 4px; opacity: .92; }
+.hbody { margin-top: 12px; position: relative; z-index: 1; }
+.hero .big { font-size: 42px; font-weight: 800; line-height: 1; margin: 8px 0 6px; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(130,28,0,.30); }
+.hero .big .u { font-size: 15px; font-weight: 600; margin-left: 5px; opacity: .9; }
 .hero .emoji-big { font-size: 40px; line-height: 1.2; margin: 4px 0 2px; }
-.hero .sub { font-size: 12.5px; opacity: .85; margin-bottom: 18px; transform: translateY(10px); }
-/* 环形进度：绝对定位右上（demo 同位置） */
-.hring { position: absolute; right: 20px; top: 34px; width: 72px; height: 72px; }
-.ring-canvas { width: 72px; height: 72px; }
-.hring .pct { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; }
-/* 开始按钮：左下胶囊，宽度自适应，不越过中线 */
-.hero .go { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, .2); padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 700; }
-.task-card { background: #fff; border-radius: 16px; padding: 20px 18px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(31,36,48,.06); }
-.task-card.ongoing { border: 1.5px solid var(--blue); } /* 任务内有拜访中客户：蓝色边框（老板 2026-09-06 定） */
-/* 已完成任务：比页面背景稍深的灰底 + 整体色彩减淡，与新任务区分 */
-.task-card.done { background: #E9EBEF; border: 1px solid #E0E3E7; opacity: .85; }
-.task-card.done .pfill { filter: grayscale(.5); }
-.row1 { display: flex; align-items: center; gap: 8px; }
+.hero .sub { font-size: 12.5px; opacity: .92; margin-bottom: 18px; transform: translateY(10px); }
+/* 环形进度：绝对定位右上（尺寸与 canvas 绘制口径保持一致 72px，不缩放） */
+.hring { position: absolute; right: 20px; top: 34px; width: 72px; height: 72px; border-radius: 50%; box-shadow: 0 12px 26px -10px rgba(110,22,0,.7); }
+/* 环内芯：凹槽质感（canvas 只画环线、本身透明，内芯在环下方可见） */
+.hring::before { content: ""; position: absolute; top: 10px; right: 10px; bottom: 10px; left: 10px; border-radius: 50%; background: linear-gradient(160deg, #F86124, #CE3607); box-shadow: inset 0 3px 7px rgba(96,18,0,.45), inset 0 -2px 4px rgba(255,255,255,.18), 0 1px 0 rgba(255,255,255,.22); }
+.ring-canvas { width: 72px; height: 72px; position: relative; }
+.hring .pct { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; z-index: 2; }
+/* 开始按钮：左下胶囊（2026-09-10 调整：更小更精细） */
+.hero .go { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #fff; background: linear-gradient(180deg, rgba(255,255,255,.32), rgba(255,255,255,.16)); box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 6px 14px -8px rgba(110,22,0,.5); }
+
+/* 任务卡（2026-09-10 升级：左侧状态色条 + 双层阴影 + 立体胶囊 + 凹槽进度条） */
+.task-card { position: relative; overflow: hidden; background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFE 100%); border-radius: 18px; padding: 18px 18px 16px 24px; margin-bottom: 14px; box-shadow: 0 0 0 1px rgba(23,30,44,.05), 0 1px 2px rgba(23,30,44,.05), 0 18px 34px -16px rgba(23,30,44,.26); }
+.task-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: linear-gradient(160deg, #FFA166, #F5531C 60%, #D93E0E); }
+.task-card::after { content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.9); }
+/* 任务内有拜访中客户：蓝条（原蓝色整框改为立体色条） */
+.task-card.ongoing::before { background: linear-gradient(160deg, #7FB2FF, #2F80ED 60%, #1E63C4); }
+/* 已完成任务：比页面背景稍深的灰底 + 浅绿色条，与新任务区分 */
+.task-card.done { background: linear-gradient(180deg, #F3F5F8 0%, #EDF0F4 100%); }
+.task-card.done::before { background: linear-gradient(160deg, #B9E4C8, #7FCB9C 60%, #5CB183); }
+.row1 { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
 .tname { flex: 1; font-size: 16.5px; font-weight: 700; }
-.state { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
-.state.going { background: var(--primary-tint); color: var(--primary-deep); }
-.state.review { background: var(--warn-tint); color: #B97A0B; }
-.state.expired { background: #FCEBEC; color: var(--danger); }
-.state.done { background: var(--green-tint); color: var(--green); }
-.row2 { display: flex; justify-content: space-between; margin: 14px 0 10px; font-size: 13px; color: var(--sub); font-weight: 600; }
-.pbar { height: 8px; background: #F0F2F5; border-radius: 99px; overflow: hidden; }
-.pfill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#FF8A50,#F5531C); }
+.state { font-size: 12px; font-weight: 800; padding: 5px 11px; border-radius: 999px; background: linear-gradient(180deg, #FFEDE5, #FFDFD0); color: #C2360A; box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 1px 2px rgba(194,54,10,.18), 0 0 0 1px rgba(194,54,10,.12); }
+.state.going { background: linear-gradient(180deg, #FFEDE5, #FFDFD0); color: #C2360A; }
+.state.review { background: linear-gradient(180deg, #FDF3E2, #FBE9CE); color: #B97A0B; box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 1px 2px rgba(185,122,11,.16), 0 0 0 1px rgba(185,122,11,.14); }
+.state.expired { background: linear-gradient(180deg, #FCEBEC, #FADCDE); color: #C93A40; box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 1px 2px rgba(201,58,64,.16), 0 0 0 1px rgba(201,58,64,.14); }
+.state.done { background: linear-gradient(180deg, #E7F6EC, #D8F0E2); color: #117A38; box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 1px 2px rgba(17,122,56,.16), 0 0 0 1px rgba(17,122,56,.12); }
+.row2 { display: flex; justify-content: space-between; margin: 14px 0 10px; font-size: 13px; color: var(--sub); font-weight: 600; position: relative; z-index: 1; }
+.pbar { height: 9px; border-radius: 99px; background: #EBEFF5; box-shadow: inset 0 2px 3px rgba(23,30,44,.12); overflow: hidden; position: relative; z-index: 1; }
+.pfill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #FFA067, #F5531C); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 0 10px rgba(245,83,28,.5); }
 .empty { text-align: center; color: var(--sub); font-size: 14px; margin-top: 60px; }
 .loading { text-align: center; color: var(--sub); font-size: 13px; margin-top: 40px; }
 
-/* 老板模式（2026-09-09 §7.13）：数字胶囊带 + 任务卡业务员名 */
-.boss-stats{display:flex;gap:10rpx;margin:18rpx 0 6rpx}
-.bs{flex:1;background:#FFFFFF;border-radius:18rpx;padding:20rpx 0;text-align:center;box-shadow:0 2rpx 10rpx rgba(31,36,48,.05)}
-.bs-n{font-size:40rpx;font-weight:800;color:#1F2430;line-height:1.1}
-.bs-l{font-size:22rpx;color:#66707A;margin-top:6rpx}
+/* 老板模式（2026-09-09 §7.13）：数字卡带 + 今日总览条 + 任务卡业务员名
+   2026-09-10 升级：顶部彩色渐变条 + 数字投影 + 深色总览条（单位沿用 rpx）*/
+.boss-stats{display:flex;gap:18rpx;margin:18rpx 0 8rpx}
+.bs{flex:1;position:relative;overflow:hidden;background:linear-gradient(180deg,#FFFFFF 0%,#FAFBFE 100%);border-radius:20rpx;padding:26rpx 6rpx 22rpx;text-align:center;box-shadow:0 0 0 1px rgba(23,30,44,.05),0 2rpx 4rpx rgba(23,30,44,.05),0 28rpx 52rpx -28rpx rgba(23,30,44,.26)}
+.bs::before{content:"";position:absolute;left:0;right:0;top:0;height:8rpx;background:linear-gradient(90deg,#FFD3BE,#F5531C)}
+.bs:nth-child(2)::before{background:linear-gradient(90deg,#BFD8FF,#2F80ED)}
+.bs:nth-child(3)::before{background:linear-gradient(90deg,#FFE0B8,#F5A623)}
+.bs:nth-child(4)::before{background:linear-gradient(90deg,#FFC9CB,#E5484D)}
+.bs-n{font-size:44rpx;font-weight:800;color:#1F2430;line-height:1.1;text-shadow:0 1rpx 0 rgba(255,255,255,.9)}
+.bs-l{font-size:22rpx;color:#66707A;margin-top:8rpx;font-weight:600}
 .c-blue{color:#2F80ED}
 .c-orange{color:#F5531C}
 .c-red{color:#E5484D}
+/* 今日总览条（2026-09-10 新增：深色立体卡，数据全部来自已有 bossStats） */
+.overview{display:flex;align-items:center;gap:24rpx;margin:16rpx 0 4rpx;padding:26rpx 28rpx;border-radius:32rpx;background:linear-gradient(135deg,#2B3240 0%,#1B212C 100%);color:#fff;box-shadow:0 4rpx 6rpx rgba(15,20,30,.28),0 32rpx 60rpx -28rpx rgba(15,20,30,.6),inset 0 1rpx 0 rgba(255,255,255,.14)}
+.ov-ic{width:88rpx;height:88rpx;border-radius:26rpx;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:38rpx;background:linear-gradient(180deg,#FF9C63,#F5531C);box-shadow:0 20rpx 36rpx -16rpx rgba(245,83,28,.9),inset 0 1rpx 0 rgba(255,255,255,.4)}
+.ov-t1{font-size:25rpx;font-weight:700;opacity:.92}
+.ov-t2{font-size:32rpx;font-weight:800;margin-top:6rpx;letter-spacing:.5rpx}
+.ov-hl{color:#FFB08A}
 .towner{font-size:24rpx;color:#66707A;font-weight:400}

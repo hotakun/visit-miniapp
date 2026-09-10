@@ -78,17 +78,39 @@ Page({
       }
       const withEv = visits.map(v => {
         const photos = (v.photos || []).filter(p => p && urls[p.thumbID]);
+        // 2026-09-11 M2b 小步：语音转写摘要（去掉换行，截 60 字）与全文
+        const trText = (v.transcribe && v.transcribe.text) || '';
         return {
           ...v,
           evPhotos: photos.map(p => ({ t: urls[p.thumbID], o: urls[p.fileID] || '' })),
           evListJson: JSON.stringify(photos.map(p => urls[p.fileID]).filter(Boolean)),
           audioUrl: v.audio && v.audio.fileID ? (urls[v.audio.fileID] || '') : '',
           audioText: v.audio && v.audio.duration ? media.fmtSec(v.audio.duration) : '',
-          audioDurMs: v.audio && v.audio.duration ? Math.round(Number(v.audio.duration) * 1000) : 0
+          audioDurMs: v.audio && v.audio.duration ? Math.round(Number(v.audio.duration) * 1000) : 0,
+          tr: v.transcribe || null,
+          trPrev: trText ? trText.replace(/\s+/g, ' ').slice(0, 60) : ''
         };
       });
       this.setData({ history: withEv });
     } catch (e) { /* 历史加载失败不阻断 */ }
+  },
+  // 语音转写全文（2026-09-11 M2b 小步）：点文字打开页内弹层（项目铁律：不用 wx.showModal）
+  openTr(e) {
+    const i = Number(e.currentTarget.dataset.i);
+    const it = (this.data.history || [])[i];
+    if (!it || !it.tr || !it.tr.text) return;
+    const title = `${it.dateMD || ''}${it.timeHM ? ' ' + it.timeHM : ''}${it.salesmanName ? ' · ' + it.salesmanName : ''}`;
+    this.setData({ trShow: true, trTitle: title, trText: it.tr.text });
+  },
+  closeTr() { this.setData({ trShow: false, trText: '' }); },
+  copyTr() {
+    const t = this.data.trText || '';
+    if (!t) return;
+    wx.setClipboardData({
+      data: t,
+      success: () => api.toast('已复制全文', 'success'),
+      fail: () => api.toast('复制失败，请长按选择')
+    });
   },
   // 播放/停止历史录音（页面级单 audio；带播放进度控件：▶/⏸ + 可拖进度条 + 时间）
   playEv(e) {

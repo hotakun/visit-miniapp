@@ -1,5 +1,12 @@
-/* 战况地图（2026-09-09 §7.13 老板拍板） */
-.page { min-height: 100vh; padding-bottom: 140rpx; }
+/* 战况地图（2026-09-09 §7.13 老板拍板）
+   2026-09-10：底部 Tab 迁移到自定义组件 custom-tab-bar；页面底色与首页统一（切页不再出现底色跳变） */
+.page {
+  min-height: 100vh; padding-bottom: 200rpx;
+  background:
+    radial-gradient(120% 55% at 6% -8%, #FFE6D8 0%, rgba(255,230,216,0) 58%),
+    radial-gradient(90% 40% at 100% 4%, #E8F1FD 0%, rgba(232,241,253,0) 60%),
+    linear-gradient(180deg, #FBFCFE 0%, #EFF3F8 100%);
+}
 
 .whead { display: flex; align-items: center; justify-content: space-between; padding: 20rpx 28rpx 8rpx; }
 .wh-t { font-size: 36rpx; font-weight: 800; }
@@ -25,7 +32,7 @@
 .wonly { position: absolute; left: 16rpx; top: 16rpx; background: #FFF; border-radius: 999rpx; padding: 10rpx 20rpx; font-size: 22rpx; font-weight: 600; box-shadow: 0 2rpx 10rpx rgba(31,36,48,.12); }
 /* 小圆钮（2026-09-09 老板定：📍我的位置/↻刷新，地图右上角横排，同任务地图） */
 .wctrl { position: absolute; right: 16rpx; top: 16rpx; display: flex; flex-direction: row; gap: 12rpx; z-index: 12; }
-.wfab { width: 64rpx; height: 64rpx; border-radius: 50%; background: rgba(255,255,255,.96); box-shadow: 0 3px 10px rgba(31,36,48,.16); display: flex; align-items: center; justify-content: center; font-size: 30rpx; }
+.wfab { width: 64rpx; height: 64rpx; border-radius: 50%; background: rgba(255,255,255,.96); box-shadow: 0 3px 10rpx rgba(31,36,48,.16); display: flex; align-items: center; justify-content: center; font-size: 30rpx; }
 .wfab.spin { animation: wspin 0.8s linear; } /* 刷新旋转动效（2026-09-09） */
 @keyframes wspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
@@ -44,8 +51,8 @@
 .wf-l2 { font-size: 22rpx; color: var(--sub); margin-top: 4rpx; }
 .wf-t { font-size: 22rpx; color: var(--sub); }
 
-/* 业务员抽屉卡 */
-.drawer { position: fixed; left: 20rpx; right: 20rpx; bottom: 150rpx; background: #FFF; border-radius: 24rpx; padding: 24rpx; box-shadow: 0 12rpx 40rpx rgba(31,36,48,.25); z-index: 20; }
+/* 业务员抽屉卡（底部让位给胶囊 Tab：28rpx 离底 + 128rpx 高 + 24rpx 间距） */
+.drawer { position: fixed; left: 20rpx; right: 20rpx; bottom: 180rpx; background: #FFF; border-radius: 24rpx; padding: 24rpx; box-shadow: 0 12rpx 40rpx rgba(31,36,48,.25); z-index: 20; }
 .dr-head { display: flex; align-items: center; gap: 12rpx; }
 .dr-dot { width: 20rpx; height: 20rpx; border-radius: 50%; }
 .dr-name { font-size: 32rpx; font-weight: 800; }
@@ -57,8 +64,15 @@
 .drb { flex: 1; height: 76rpx; border-radius: 14rpx; background: #F0F2F5; color: #333A44; display: flex; align-items: center; justify-content: center; font-size: 26rpx; font-weight: 600; }
 .drb.main { background: linear-gradient(135deg,#FF7A3D,#F5531C); color: #FFF; }
 
-/* 四栏底部导航（与 home 同款） */
-.tabbar { position: fixed; left: 0; right: 0; bottom: 0; height: 110rpx; background: #FFF; border-top: 1rpx solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 30; }
-.tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4rpx; font-size: 20rpx; color: var(--sub); }
-.tb .tic { font-size: 38rpx; }
-.tb.on { color: #F5531C; font-weight: 700; }
+/* 四栏底部导航（2026-09-10 改与首页同款悬浮胶囊，位置口径同首页：离底 14px = 28rpx） */
+.tabbar {
+  position: fixed; left: 28rpx; right: 28rpx; bottom: 28rpx; height: 128rpx; border-radius: 44rpx; display: flex; align-items: center;
+  background: linear-gradient(180deg, rgba(255,255,255,.99), rgba(248,250,253,.95));
+  box-shadow: 0 0 0 1px rgba(23,30,44,.05), 0 28rpx 60rpx -20rpx rgba(23,30,44,.38), inset 0 1rpx 0 rgba(255,255,255,.95);
+  z-index: 30;
+}
+.tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6rpx; font-size: 22rpx; color: #88909A; font-weight: 700; }
+.tb .pill { display: flex; flex-direction: column; align-items: center; gap: 4rpx; padding: 14rpx 30rpx; border-radius: 32rpx; }
+.tb .tic { font-size: 38rpx; line-height: 1; }
+.tb.on { color: var(--primary-deep); }
+.tb.on .pill { color: #fff; background: linear-gradient(180deg, #FF8A50, #F5531C); box-shadow: 0 20rpx 40rpx -14rpx rgba(245,83,28,.75), inset 0 1rpx 0 rgba(255,255,255,.5); }

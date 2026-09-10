@@ -75,8 +75,29 @@
                 disabled="{{evPlay !== item._id}}" bindchange="onEvSeek" data-id="{{item._id}}"/>
         <text class="ha-time">{{evPlay === item._id ? (evCurText + ' / ' + (item.audioText || '00:00')) : (item.audioText || '')}}</text>
       </view>
+      <!-- 语音转写（2026-09-11 M2b 小步）：状态胶囊 + 两行摘要，点文字看全文 -->
+      <block wx:if="{{item.tr}}">
+        <view class="tr-row">
+          <text class="tr-pill {{item.tr.status}}">{{item.tr.status === 'done' ? '📝 已转写' : (item.tr.status === 'partial' ? '📝 部分转写成功' : (item.tr.status === 'failed' ? '📝 转写失败' : '📝 转写中…'))}}</text>
+          <text class="tr-n" wx:if="{{item.tr.segCount > 1}}">{{item.tr.segCount}} 段</text>
+        </view>
+        <view class="tr-prev" wx:if="{{item.trPrev}}" data-i="{{index}}" bindtap="openTr">{{item.trPrev}}</view>
+      </block>
     </view>
     <view class="empty" wx:if="{{!history.length}}">暂无拜访记录</view>
+  </view>
+
+  <!-- 语音转写全文弹层（2026-09-11 M2b 小步：点文字打开，项目铁律不用 wx.showModal） -->
+  <view class="c-mask" wx:if="{{trShow}}">
+    <view class="c-box">
+      <view class="ct">语音记录</view>
+      <view class="tr-sub">{{trTitle}}</view>
+      <view class="tr-body">{{trText}}</view>
+      <view class="tr-btns">
+        <view class="tr-btn ghost" bindtap="closeTr">关闭</view>
+        <view class="tr-btn main" bindtap="copyTr">📋 复制全文</view>
+      </view>
+    </view>
   </view>
 
   <view class="foot">

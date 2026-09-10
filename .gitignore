@@ -23,3 +23,13 @@ _scratch_*
 *.log
 backup_icon_old.ico
 .DS_Store
+
+# ===== AI 助手工作目录 / 配置（不上传）=====
+.reasonix/
+reasonix.toml
+
+# ===== 微信开发者工具·多端产物（本机生成，非项目源码）=====
+miniprogram/i18n/
+miniprogram/miniapp/
+miniprogram/project.miniapp.json
+miniprogram/miniprogram/app.miniapp.json

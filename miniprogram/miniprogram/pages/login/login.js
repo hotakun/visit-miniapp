@@ -1,4 +1,7 @@
 const api = require('../../utils/api');
+// 跳转约定（2026-09-10 自定义 tabBar 改造后，务必遵守）：
+//   home / map / bossWar 是 tabBar 页 → 只能用 wx.switchTab（用 redirectTo/navigateTo 会静默失败）
+//   login / task / customer / visit / mine / tasks-all 是非 tab 页 → 用 navigateTo / redirectTo
 
 Page({
   data: {
@@ -17,7 +20,7 @@ Page({
     // 2026-09-09 开发者范宇琨双身份：dev 永远走选择页（不自动进业务员首页）
     if (app.globalData.isDev) { this.check(); return; }
     if (app.globalData.user && app.globalData.user.role === 'salesman') {
-      wx.redirectTo({ url: '/pages/home/home' });
+      wx.switchTab({ url: '/pages/home/home' });
       return;
     }
     this.check();
@@ -31,16 +34,16 @@ Page({
         getApp().globalData.isDev = true;
         this.setData({ devMode: true, devUser: res.user || null });
       } else if (res.ok && res.boss && res.user) {
-        // 2026-09-09 老板定：老板账号（手机号白名单）直接进老板模式，跳过登录页
+        // 2026-09-10 老板定：老板/管理员一律直接进老板模式，跳过登录页
         getApp().setUser(res.user);
         getApp().setBossMode(true);
         getApp().globalData.welcome = res.welcome || null; // 2026-09-10：欢迎仪式配置随登录下发
-        wx.redirectTo({ url: '/pages/home/home' });
+        wx.switchTab({ url: '/pages/home/home' });
       } else if (res.ok && res.user && res.user.role === 'salesman') {
         getApp().setUser(res.user);
-        wx.redirectTo({ url: '/pages/home/home' });
+        wx.switchTab({ url: '/pages/home/home' });
       } else if (res.ok) {
-        // 管理员微信打开了业务员小程序：仅提示使用 Web 后台；boss 白名单账号才显示老板模式入口（2026-09-09 老板定）
+        // 兜底（仅旧版 login 云函数会走到）：业务员小程序内的管理员提示
         this.setData({ adminMode: true, adminName: (res.user || {}).name || '管理员', canBoss: !!res.canBoss });
       } else if (res.code === 'PENDING') {
         const d = new Date(Number(res.createdAt || Date.now()) + 8 * 3600 * 1000);
@@ -102,7 +105,7 @@ Page({
         getApp().setBossMode(true);
         getApp().globalData.welcome = res.welcome || null; // 2026-09-10：欢迎仪式配置随注册下发
         api.toast('老板身份已激活 ✓', 'success');
-        setTimeout(() => wx.redirectTo({ url: '/pages/home/home' }), 800);
+        setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 800);
       } else if (res.ok) {
         this.setData({ registerMode: false, pendingMode: true });
         const d = new Date(Date.now() + 8 * 3600 * 1000);
@@ -137,7 +140,7 @@ Page({
         .then(() => { app.globalData.welcomePending = false; });
     }
     app.setBossMode(true);
-    wx.redirectTo({ url: '/pages/home/home' });
+    wx.switchTab({ url: '/pages/home/home' });
   },
   // 开发者双身份入口（2026-09-09 开发者范宇琨定：只有他的微信可见此页）
   enterAsSalesman() {
@@ -148,7 +151,7 @@ Page({
     app.setUser(u);
     app.globalData.devAuthed = true; // 会话级放行：本次运行期 TAB 来回切换不弹回登录页
     try { wx.setStorageSync('dev_session', 1); } catch (e) { /* 静默 */ }
-    wx.redirectTo({ url: '/pages/home/home' });
+    wx.switchTab({ url: '/pages/home/home' });
   },
   enterAsBoss() {
     const u = this.data.devUser;
@@ -166,7 +169,7 @@ Page({
     app.setBossMode(true);
     app.globalData.devAuthed = true; // 会话级放行：本次运行期 TAB 来回切换不弹回登录页
     try { wx.setStorageSync('dev_session', 1); } catch (e) { /* 静默 */ }
-    wx.redirectTo({ url: '/pages/home/home' });
+    wx.switchTab({ url: '/pages/home/home' });
   },
   // LOGO 云端加载失败 → 回退本地图，避免白板
   onLogoError() {

@@ -215,6 +215,8 @@ Page({
   data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, welShow: false },
   onShow() {
     const app = getApp();
+    // 2026-09-10：自定义 Tab 栏选中态（首页=0；tab 页常驻后切页不再重建底部栏）
+    try { const tb = this.getTabBar && this.getTabBar(); if (tb) tb.setTab(0, !!app.globalData.bossMode); } catch (e) { /* 低版本基础库忽略 */ }
     if (!this._revFn) {
       // 注册审核观察员：审核结果变化时静默刷新首页数据（15 秒被动感知）
       this._revFn = (list) => { if (this._shown) this.load(); };
@@ -273,7 +275,7 @@ Page({
           app.setUser(res.user);
         } else if (res && res.code === 'NEED_REGISTER') {
           // 已被后台解绑 → 清身份回注册页
-          this._kickToLogin('你的微信已解除绑定，请重新注册');
+          this._kickToLogin('你的账号已解除绑定，请重新注册');
         } else if (res && res.code === 'PENDING') {
           this._kickToLogin(res.msg || '申请审核中，请等待管理员审核');
         } else if (res && res.code === 'REJECTED') {
@@ -450,7 +452,7 @@ Page({
         const res = await api.call('subscribe', { token });
         if (res.ok) {
           this.setData({ showSubBanner: false });
-          api.toast('订阅成功 ✓ 有新任务会微信通知你');
+          api.toast('订阅成功 ✓ 有新任务会通知你');
         } else {
           api.toast(res.msg || '订阅保存失败');
         }
@@ -570,7 +572,7 @@ Page({
       this.setData({ logoUrl: '/images/logo.png' });
     }
   },
-  tabMap() { wx.redirectTo({ url: '/pages/map/map' }); },
-  tabWar() { wx.redirectTo({ url: '/pages/bossWar/bossWar' }); }, // 战况地图（2026-09-09 §7.13）
-  tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); }
+  tabMap() { wx.switchTab({ url: '/pages/map/map' }); }, // 2026-09-10：tab 页常驻，切页不再重建（消白闪）
+  tabWar() { wx.switchTab({ url: '/pages/bossWar/bossWar' }); }, // 战况地图（2026-09-09 §7.13）
+  tabMine() { wx.navigateTo({ url: '/pages/mine/mine' }); } // 「我的」不在 tab 体系（老板定：该页保持原样式）
 });

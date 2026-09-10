@@ -144,6 +144,20 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .vd-audio{display:flex;align-items:center;gap:10px;margin-top:8px;background:#F6F7F9;border-radius:10px;padding:8px 12px}
 .vd-audio audio{height:34px;flex:1;min-width:0}
 .vd-adur{font-size:12px;color:var(--sub);font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0}
+/* ===== 语音转写（2026-09-11 M2c）：状态胶囊 + 文字 + 复制 + 用量条 ===== */
+.vd-aseq{font-size:11.5px;color:var(--sub);font-weight:700;flex-shrink:0}
+.vd-tr{margin-top:8px;background:#F7F8FA;border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.vd-tr-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vd-tr-tip{font-size:11.5px;color:var(--sub);font-weight:600}
+.vd-tr-t{margin-top:7px;font-size:13px;color:#333A44;line-height:1.75;white-space:pre-wrap}
+.vd-tr-empty{margin-top:6px;font-size:12px;color:var(--sub)}
+.vd-tr-a{display:flex;justify-content:flex-end;margin-top:6px}
+.vd-usage{margin:0 0 10px;padding:8px 12px;background:#F7F8FA;border:1px solid var(--line);border-radius:10px;font-size:12px;color:#4A5360;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.vd-usage .bar{flex:1;max-width:none;min-width:120px}
+.pill.green{background:#E9F8EF;color:#117A38}
+.pill.orange{background:#FDF3E2;color:#B97A0B}
+.pill.red{background:#FCEBEC;color:#C93A40}
+.pill.blue{background:#EAF2FE;color:#2F80ED}
 /* 序号胶囊：按分配天数 1~7 天各一浅色 */
 .no-tag{display:inline-block;padding:3px 9px;border-radius:8px;font-size:12px;font-weight:700}
 .no-tag.c1{background:#FEF7F0;color:#E8A354}
@@ -2270,7 +2284,13 @@ async function openVisitDetail(id) {
   $('visitOvl').style.display = 'flex';
   const res = await api('listCustomerVisits', { taskId: curDetailTaskId, customerId: id });
   const visits = res.ok ? (res.visits || []) : [];
-  $('vdTitle').textContent = '🕑 拜访详情 · ' + c.name + '（共 ' + visits.length + ' 次）';
+  // 2026-09-11 M2c：本月语音转写用量（附在弹窗标题后，一眼看到额度消耗）
+  let usageSuffix = '';
+  try {
+    const u = await api('transcribeUsage');
+    if (u && u.ok) usageSuffix = ' · 本月转写 ' + u.usedMin + '/' + u.quotaMin + ' 分钟';
+  } catch (e) { /* 用量查询失败不影响弹窗 */ }
+  $('vdTitle').textContent = '🕑 拜访详情 · ' + c.name + '（共 ' + visits.length + ' 次）' + usageSuffix;
   if (!visits.length) {
     $('vdBody').innerHTML = '<div style="padding:24px 0;text-align:center;color:var(--sub);font-size:13.5px">暂无拜访记录</div>';
     return;
@@ -2279,7 +2299,9 @@ async function openVisitDetail(id) {
   const need = [];
   visits.forEach(v => {
     (v.photos || []).forEach(p => { if (p && p.thumbID) need.push(p.thumbID); if (p && p.fileID) need.push(p.fileID); });
-    if (v.audio && v.audio.fileID) need.push(v.audio.fileID);
+    // 2026-09-11 M2c：多段录音（audios）全部换链接，兼容旧 audio 单段
+    const as = Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []);
+    as.forEach(a => { if (a && a.fileID) need.push(a.fileID); });
   });
   let urls = {};
   if (need.length) {
@@ -2300,18 +2322,83 @@ async function openVisitDetail(id) {
       .map(p => `<img class="vd-ph" src="${esc(urls[p.thumbID])}" title="点击查看原图" onclick="showPhoto('${esc(urls[p.fileID] || urls[p.thumbID])}')">`)
       .join('');
     const photoHtml = photos ? `<div class="vd-photos">${photos}</div>` : '';
-    // 录音播放条
-    const audioHtml = v.audio && urls[v.audio.fileID]
-      ? `<div class="vd-audio"><audio controls preload="none" src="${esc(urls[v.audio.fileID])}"></audio><span class="vd-adur">${fmtDur(v.audio.duration)}</span></div>`
-      : '';
+    // 录音播放条（2026-09-11 M2c：支持多段 audios，兼容旧 audio 单段）
+    const auds = Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []);
+    const audioHtml = auds.filter(a => a && urls[a.fileID]).map((a, k) =>
+      `<div class="vd-audio"><span class="vd-aseq">${auds.length > 1 ? ('录音 ' + (k + 1)) : '录音'}</span>` +
+      `<audio controls preload="none" src="${esc(urls[a.fileID])}"></audio><span class="vd-adur">${fmtDur(a.duration)}</span></div>`
+    ).join('');
+    // 语音转写（2026-09-11 M2c）：无转写 → 「转文字」按钮；有转写 → 状态胶囊 + 文字 + 复制
+    const tr = v.transcribe;
+    let trHtml = '';
+    if (auds.length) {
+      if (!tr) {
+        trHtml = `<div class="vd-tr"><div class="vd-tr-h"><button class="btn ghost" style="height:26px;font-size:11.5px" onclick="genTranscript('${v._id}', '${id}', this)">🎙 转文字</button><span class="vd-tr-tip">把这段录音转成文字（短录音约十秒出结果）</span></div></div>`;
+      } else {
+        const pillCls = tr.status === 'done' ? 'green' : (tr.status === 'partial' ? 'orange' : (tr.status === 'failed' ? 'red' : 'blue'));
+        const pillTxt = tr.status === 'done' ? '📝 已转写' : (tr.status === 'partial' ? '📝 部分成功' : (tr.status === 'failed' ? '📝 转写失败' : '📝 转写中…'));
+        const body = tr.text
+          ? `<div class="vd-tr-t">${esc(tr.text)}</div><div class="vd-tr-a"><button class="btn ghost" style="height:24px;font-size:11px" onclick="copyTrText(this)">📋 复制全文</button></div>`
+          : `<div class="vd-tr-empty">${tr.status === 'failed' ? '识别失败' : '正在识别，稍后自动刷新即可看到文字'}</div>`;
+        const again = (tr.status === 'failed')
+          ? `<button class="btn ghost" style="height:26px;font-size:11.5px" onclick="genTranscript('${v._id}', '${id}', this)">↻ 重转</button>`
+          : '';
+        trHtml = `<div class="vd-tr"><div class="vd-tr-h"><span class="pill ${pillCls}">${pillTxt}</span>${tr.segCount > 1 ? '<span class="vd-tr-tip">' + tr.segCount + ' 段</span>' : ''}${again}</div>${body}</div>`;
+      }
+    }
+    // 2026-09-11 M2c：三图标摘要（照片 / 录音 / 转写）—— 老板要求"一眼就知道这条拜访有什么"
+    const icBase = 'display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:11.5px;font-weight:700;';
+    const icOn = icBase + 'background:#EAF2FE;color:#2F80ED;';
+    const icOff = icBase + 'background:#F0F2F5;color:#9AA3AF;';
+    const icWarn = icBase + 'background:#FDF3E2;color:#B97A0B;';
+    const nPhoto = (v.photos || []).length;
+    const trLabel = !auds.length ? '无录音' : (!tr ? '未转写' : (tr.status === 'done' ? '已转写' : (tr.status === 'partial' ? '部分转写' : (tr.status === 'failed' ? '转写失败' : '转写中'))));
+    const trStyle = (tr && tr.status === 'done') ? icOn : (tr ? icWarn : icOff);
+    const iconsHtml = `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <span style="${nPhoto ? icOn : icOff}">📷 照片 ${nPhoto || 0}</span>
+        <span style="${auds.length ? icOn : icOff}">🎙 录音 ${auds.length || 0}</span>
+        <span style="${trStyle}">📝 ${trLabel}</span>
+      </div>`;
     return `<div class="vd-item${i === 0 ? ' latest' : ''}">
       <div class="vd-row1">${tag}<span class="vd-time">${esc(v.visitedAt || '')}${v.timeHM ? ' ' + esc(v.timeHM) : ''}${mins}</span></div>
+      ${iconsHtml}
       ${v.samples ? '<div class="vd-samp">📦 样品：' + esc(v.samples) + '</div>' : ''}
       ${v.text ? '<div class="vd-txt">' + esc(v.text) + '</div>' : ''}
-      ${photoHtml}${audioHtml}
+      ${photoHtml}${audioHtml}${trHtml}
       <div class="vd-meta">业务员：${esc(v.salesmanName || '—')}${dist}<button class="btn ghost" style="height:26px;font-size:11px;margin-left:10px" onclick="openVisitTrack('${v._id}')">📍 轨迹</button></div>
     </div>`;
   }).join('');
+}
+
+// 2026-09-11 M2c：后台手动触发转写（老录音补转 / 失败重转）→ adminapi.transcribeVisit，之后自动刷新弹窗
+async function genTranscript(visitId, customerId, btn) {
+  if (btn && btn.dataset.busy === '1') return;
+  const oldTxt = btn ? btn.textContent : '';
+  if (btn) { btn.dataset.busy = '1'; btn.textContent = '提交中…'; }
+  const r = await api('transcribeVisit', { visitId });
+  if (btn) { btn.dataset.busy = ''; }
+  if (!r || !r.ok) {
+    if (btn) btn.textContent = oldTxt || '🎙 转文字';
+    alert('转写提交失败：' + ((r && r.msg) || '未知错误'));
+    return;
+  }
+  await openVisitDetail(customerId);                          // 立即刷新（显示"转写中…"）
+  setTimeout(() => { openVisitDetail(customerId); }, 6000);   // 短录音此时多半已有结果
+  setTimeout(() => { openVisitDetail(customerId); }, 20000);
+}
+
+// 2026-09-11 M2c：复制转写全文
+function copyTrText(btn) {
+  const box = btn.closest('.vd-tr');
+  const el = box ? box.querySelector('.vd-tr-t') : null;
+  const t = el ? el.textContent : '';
+  if (!t) return;
+  const done = () => { const o = btn.textContent; btn.textContent = '✓ 已复制'; setTimeout(() => { btn.textContent = o; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(done).catch(() => alert('复制失败，请手动选中文字复制'));
+  } else {
+    alert('复制失败，请手动选中文字复制');
+  }
 }
 function startDetailTimer(id) {
   startAuto();

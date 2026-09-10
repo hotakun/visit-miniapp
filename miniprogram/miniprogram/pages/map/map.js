@@ -36,12 +36,18 @@ Page({
     refreshing: false, // ↻ 按钮旋转动效（2026-09-09：静默刷新也要有视觉反馈）
     whStarOn: false, // 2026-09-09 老板定：仓库开关（横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关）
     // 老板模式（2026-09-09 §7.13）：业务员下拉切换（老板拍板：重排按钮位置变业务员选择器，去掉重排）
-    bossMode: false, bossMen: [], curBossIdx: 0
+    bossMode: false, bossMen: [], curBossIdx: 0,
+    mapScale: 12 // 地图缩放级别（2026-09-10 老板定：点 📍 放大到 14 级）
   },
+  // 2026-09-10 已删除 onMapRegion（老板反馈"地图乱跳"）：任何 setData 到地图属性，地图都会按 data 里的中心重新定位，
+  // 而用户拖动后 data 里的中心还是旧的 → 每次缩放都被拽回旧位置。缩放手势交还微信原生处理，不再干预。
   onShow() {
+    // 2026-09-10：自定义 Tab 栏选中态（任务地图=1）
+    try { const tb = this.getTabBar && this.getTabBar(); if (tb) tb.setTab(1, !!getApp().globalData.bossMode); } catch (e) { /* 低版本基础库忽略 */ }
     if (getApp().globalData.bossMode) {
       this.setData({ bossMode: true });
       if (!this._loaded) this.loadBoss();
+      this.startLoc(); // 2026-09-10 老板定：老板也要看自己位置与到店距离（横幅「距你 X」）
       return;
     }
     if (!this._loaded) this.loadTask();
@@ -51,11 +57,12 @@ Page({
   onUnload() { this.stopLoc(); },
 
   // 老板任务地图（2026-09-09 §7.13）：任务列表全量 → 业务员下拉（默认第一个）；切换=换任务重载
+  // 2026-09-10：bossMen 增加 name（业务员名）——下拉按钮只显示 name，避免「业务员名 · 任务名」把按钮撑宽
   async loadBoss() {
     // 2026-09-09 提速 A：缓存先行秒开（首页已静默预取：任务下拉+第一个任务地图）
     const c = getMapCache();
     if (c && c.map) {
-      const bossMen = (c.tasks || []).map(t => ({ label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
+      const bossMen = (c.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
       this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
       this.applyMapData(c.map);
     } else {
@@ -65,7 +72,7 @@ Page({
       const res = await api.call('tasks', { action: 'mapData' }); // 2026-09-09 提速 B：轻量接口一次拿全
       if (!res.ok) { this.setData({ loading: false, empty: res.msg || '加载失败' }); return; }
       setMapCache(res);
-      const bossMen = (res.tasks || []).map(t => ({ label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
+      const bossMen = (res.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
       this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
       if (!bossMen.length) { this.setData({ loading: false, empty: '暂无进行中的任务' }); return; }
       this.applyMapData(res.map);
@@ -128,9 +135,12 @@ Page({
     // 2026-09-09 老板定：刷新保持用户所选天（换天后点刷新不再跳回今天）；首次加载默认今天
     const cd = (keepDay && days.includes(keepDay)) ? keepDay : td;
     this.autoWhStarFrom(map, cd); // 自动检测仓库开关
-    this.setData({ loading: false, task: map.task, days, todayDay: td, curDay: cd });
+    // 2026-09-10 修复：加载成功必须复位空态——否则一次失败后「天数标 + 下一家横幅」会被 empty 永久挡住（切页回来也不自愈，只有冷启动才恢复）
+    this.setData({ loading: false, empty: '', task: map.task, days, todayDay: td, curDay: cd });
     this.renderDay();
-    this.fitAllCustomers(); // 数据就位后撑满当天客户点（刷新=满屏；首次进入=看到全部点；不把单店居中）
+    // 2026-09-10：撑满只在「首次拿到数据」时执行——tab 常驻后切页回来也会走到这里刷新数据，
+    // 若每次都撑满会把用户刚拖到的位置重置（老板反馈"地图乱跳"）。手动刷新 ↻ 仍照旧撑满（见 refreshMap）
+    if (!this._fitted) { this._fitted = true; this.fitAllCustomers(); }
   },
 
   renderDay() {
@@ -354,9 +364,9 @@ Page({
     });
     wx.navigateTo({ url: '/pages/customer/customer' });
   },
-  goHome() { wx.redirectTo({ url: '/pages/home/home' }); },
-  tabWar() { wx.redirectTo({ url: '/pages/bossWar/bossWar' }); }, // 老板四栏：战况（2026-09-09）
-  tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); },
+  goHome() { wx.switchTab({ url: '/pages/home/home' }); }, // 2026-09-10：tab 页常驻，切页不再重建（消白闪）
+  tabWar() { wx.switchTab({ url: '/pages/bossWar/bossWar' }); }, // 老板四栏：战况（2026-09-09）
+  tabMine() { wx.navigateTo({ url: '/pages/mine/mine' }); }, // 「我的」不在 tab 体系
 
   // ===== 地图小圆钮控件（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新）=====
   // 仓库开关（2026-09-09 老板定：横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关；不要任何弹窗）
@@ -425,9 +435,11 @@ Page({
       this.setData({ curDay: this.data.todayDay });
       this.renderDay();
     }
+    // 2026-09-10 老板定：点 📍 放大到 14 级。——只有这一次 setData 写「中心 + 缩放」，配合上面删掉的 onMapRegion，
+    // 保证除用户主动点按外，再无任何后台动作会改地图视野
     loc.getOne(8000).then(p => {
       if (p && p.lat) {
-        this.setData({ centerLat: p.lat, centerLng: p.lng });
+        this.setData({ centerLat: p.lat, centerLng: p.lng, mapScale: 14 });
         api.toast('已回到我的位置', 'success');
       } else {
         api.toast('定位失败，请到开阔处重试');

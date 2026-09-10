@@ -18,7 +18,7 @@
   <!-- 地图（约 55vh；不再自动 include-points 撑满——首次进入撑一次，之后点 ↻ 才撑满，2026-09-09 老板定） -->
   <view class="wmap-wrap">
     <map class="wmap" id="wmp" show-location="{{true}}" markers="{{markers}}" polyline="{{trackPolyline}}"
-         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="12"
+         latitude="{{centerLat}}" longitude="{{centerLng}}" scale="{{mapScale}}"
          bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap" bindtap="clearTrack"></map>
     <!-- 小圆钮（同任务地图）：📍我的位置 / ↻刷新 -->
     <view class="wctrl">
@@ -68,11 +68,5 @@
     </view>
   </view>
 
-  <!-- 四栏底部导航 -->
-  <view class="tabbar">
-    <view class="tb" bindtap="tabHome"><view class="tic">🏠</view>首页</view>
-    <view class="tb" bindtap="tabMap"><view class="tic">🗺</view>任务地图</view>
-    <view class="tb on"><view class="tic">📡</view>战况</view>
-    <view class="tb" bindtap="tabMine"><view class="tic">👤</view>我的</view>
-  </view>
+  <!-- 四栏底部导航已迁移到自定义组件 custom-tab-bar（2026-09-10：tab 页常驻，切换不再重绘 → 消白闪） -->
 </view>

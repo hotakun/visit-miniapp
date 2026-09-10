@@ -14,10 +14,17 @@ Page({
     selMan: null, warnCount: 0, updateText: '',
     refreshing: false, // ↻ 旋转动效（2026-09-09 修复：静默刷新也要视觉反馈）
     trackPolyline: [], trackOn: false, // 2026-09-09 老板定：今日轨迹（绿色折线，点地图空白清除）
-    tabIdx: 2 // 战况 tab 高亮
+    tabIdx: 2, // 战况 tab 高亮
+    mapScale: 12 // 地图缩放级别（2026-09-10 老板定：点 📍 放大到 14 级）
   },
+  // 2026-09-10 已删除 onMapRegion（老板反馈"地图乱跳"）：任何 setData 到地图属性，地图都会按 data 里的中心重新定位，
+  // 而用户拖动后 data 里的中心还是旧的 → 每次缩放都被拽回旧位置。缩放手势交还微信原生处理，不再干预。
 
   onShow() {
+    // 2026-09-10：自定义 Tab 栏选中态（战况=2，仅老板模式可达）
+    try { const tb = this.getTabBar && this.getTabBar(); if (tb) tb.setTab(2, true); } catch (e) { /* 低版本基础库忽略 */ }
+    // 2026-09-10 老板定：老板也要知道自己的位置——启动前台定位流，地图蓝点与「📍我的位置」可用
+    try { loc.startForeground(); } catch (e) { /* 定位不可用则忽略 */ }
     if (!getApp().globalData.bossMode) {
       wx.redirectTo({ url: '/pages/login/login' });
       return;
@@ -85,10 +92,11 @@ Page({
     }
   },
   // 📍 我的位置：定位并移动视野到老板自己位置（2026-09-09 老板定；本地定位不落库）
+  // 2026-09-10 老板定：点 📍 放大到 14 级。——只有这一次 setData 写「中心 + 缩放」，不再有任何后台回写
   backToMe() {
     loc.getOne(8000).then(p => {
       if (p && p.lat) {
-        this.setData({ centerLat: p.lat, centerLng: p.lng });
+        this.setData({ centerLat: p.lat, centerLng: p.lng, mapScale: 14 });
         api.toast('已回到我的位置', 'success');
       } else {
         api.toast('定位失败，请到开阔处重试');
@@ -98,6 +106,7 @@ Page({
 
   // 三色点：蓝=拜访中 / 橙=在移动 / 灰=静止；静止>40 分钟=红圆白感叹号预警
   renderMarkers() {
+    // 2026-09-10 按老板要求退回上一步：本人也照旧画出来（不再剔除），与微信原生蓝点并存
     const src = (this._points || []).filter(p => p && !p.noData);
     this._markerList = src; // 与 markers 顺序一一对应，点按事件按数字 id 取回
     const markers = src.map((p, idx) => {
@@ -180,8 +189,8 @@ Page({
   },
   clearTrack() { this.setData({ trackOn: false, trackPolyline: [] }); },
 
-  // 底部四栏导航（老板模式）
-  tabHome() { wx.redirectTo({ url: '/pages/home/home' }); },
-  tabMap() { wx.redirectTo({ url: '/pages/map/map' }); },
-  tabMine() { wx.redirectTo({ url: '/pages/mine/mine' }); }
+  // 底部导航（2026-09-10：改为自定义 tabBar 常驻栏，switchTab 切页不重建）
+  tabHome() { wx.switchTab({ url: '/pages/home/home' }); },
+  tabMap() { wx.switchTab({ url: '/pages/map/map' }); },
+  tabMine() { wx.navigateTo({ url: '/pages/mine/mine' }); } // 「我的」不在 tab 体系
 });

@@ -41,3 +41,17 @@ page {
   border-radius: 16px;
   box-shadow: 0 2px 10px rgba(31, 36, 48, 0.06);
 }
+
+/* ===== 2026-09-10 老板定：文字不折行 / 放不下就整体换行 =====
+   ① 胶囊、标签、人名等一律「不折行」也不被压缩（flex-shrink:0）
+   ② 承载它们的行容器允许换行（flex-wrap: wrap）→ 放不下时整个胶囊移到下一行，不会被切成两半
+   放在 app.wxss 而不是逐页改：类名虽定义在各页 wxss，全局规则对同选择器依然生效，且不改变各页原有尺寸 */
+.state, .tag, .hr-tag, .cfa, .early-finish, .finish-tag, .reviewing-tag, .expired-tag,
+.cc-st, .nbtn, .dtag, .wh-bell, .wonly, .dr-state, .dr-name, .towner, .timer,
+.recbtn, .recstop, .recop, .cancel { white-space: nowrap; flex-shrink: 0; }
+/* 标题/任务名过长时用省略号，不折行 */
+.tname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 行容器（本身是 flex 的）：放不下时整体换行（.hev / .cc-name 原本已有 wrap，重复声明无影响） */
+.row1, .dr-head, .whead, .tags, .hev, .cc-name { flex-wrap: wrap; }
+/* 非 flex 容器里的胶囊/标签（客户地址行、任务名后的类型标签）：用 inline-block 保证"整体换行"而不是从中间折断 */
+.cfa, .cname .tag { display: inline-block; }

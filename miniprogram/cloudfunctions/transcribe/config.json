@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [
+    {
+      "name": "transcribePoll",
+      "type": "timer",
+      "config": "0 */5 * * * * *"
+    }
+  ]
+}

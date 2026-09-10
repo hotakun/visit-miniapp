@@ -17,6 +17,17 @@
     "backgroundColor": "#F6F7F9",
     "backgroundTextStyle": "dark"
   },
+  "tabBar": {
+    "custom": true,
+    "color": "#88909A",
+    "selectedColor": "#D93E0E",
+    "backgroundColor": "#FFFFFF",
+    "list": [
+      { "pagePath": "pages/home/home", "text": "首页" },
+      { "pagePath": "pages/map/map", "text": "任务地图" },
+      { "pagePath": "pages/bossWar/bossWar", "text": "战况" }
+    ]
+  },
   "permission": {
     "scope.userLocation": {
       "desc": "用于拜访到店位置校验"

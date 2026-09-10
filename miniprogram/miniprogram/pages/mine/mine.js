@@ -2,7 +2,7 @@ const api = require('../../utils/api');
 const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
 
 Page({
-  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.08', bossMode: false, isDev: false, aboutShow: false, aboutText: '' },
+  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.11', bossMode: false, isDev: false, aboutShow: false, aboutText: '' },
   onShow() {
     const app = getApp();
     this.setData({ version: app.globalData.APP_VERSION || '0.9.00', isDev: !!app.globalData.isDev || (app.globalData.user && app.globalData.user.phone === '13067737286') }); // 版本号（2026-09-08 老板定）；isDev=开发者切换入口（2026-09-09 范宇琨，手机号兜底防冷启动未激活标志）
@@ -64,7 +64,7 @@ Page({
         const res = await api.call('subscribe', { token });
         if (res.ok) {
           this.setData({ subOn: true });
-          api.toast('订阅成功 ✓ 有新任务会微信通知你');
+          api.toast('订阅成功 ✓ 有新任务会通知你');
         } else {
           api.toast(res.msg || '订阅保存失败');
         }
@@ -87,7 +87,7 @@ Page({
   },
   closeAbout() { this.setData({ aboutShow: false }); },
   noop() {}, // 弹层卡片点击不冒泡到遮罩关闭（2026-09-09）
-  tabHome() { wx.redirectTo({ url: '/pages/home/home' }); },
-  tabMap() { wx.redirectTo({ url: '/pages/map/map' }); },
-  tabWar() { wx.redirectTo({ url: '/pages/bossWar/bossWar' }); } // 老板四栏（2026-09-09 §7.13）
+  tabHome() { wx.switchTab({ url: '/pages/home/home' }); }, // 2026-09-10：自定义 tabBar 常驻栏
+  tabMap() { wx.switchTab({ url: '/pages/map/map' }); },
+  tabWar() { wx.switchTab({ url: '/pages/bossWar/bossWar' }); } // 老板四栏（2026-09-09 §7.13）
 });

@@ -14,10 +14,10 @@ exports.main = async (event) => {
   const me = await db.collection('users').where({ openid: OPENID }).get();
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
   const meUser = me.data[0];
-  // 老板模式（2026-09-09 §7.13 修订：仅 boss===true 的指定管理员账号启用老板页面，其余管理员不启用）
-  // 2026-09-09 老板定：手机号=15055492888 即老板本人（注册时已打 boss 标，phone 兜底防字段缺失）
+  // 老板模式（2026-09-10 老板定：管理员模式与老板模式合并——管理员（super_admin/admin）一律按老板处理，
+  // 不再看 boss 白名单字段；手机号=15055492888 为老板本人，字段保留仅作历史兜底）
   // 2026-09-09 开发者范宇琨双身份：dev 白名单（13067737286）且请求带 boss 标志 → 按老板处理（写操作全虚拟）
-  const isBoss = (['super_admin', 'admin'].includes(meUser.role) && (meUser.boss === true || meUser.phone === '15055492888'))
+  const isBoss = ['super_admin', 'admin'].includes(meUser.role)
     || (meUser.phone === '13067737286' && event && event.boss === true);
 
   if (action === 'submit') return await submit(meUser, event, isBoss);
@@ -177,7 +177,7 @@ async function cancelVisit(user, e, isBoss) {
 async function submit(user, e, isBoss) {
   // 游客（实习账号）硬拦（2026-09-08 老板定：游客不能提交数据；前端提示+云端兜底双层）
   if (user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
-  const { taskId, customerId, result, text = '', samples = '', durationSeconds = 0, lat, lng, photos, audio } = e;
+  const { taskId, customerId, result, text = '', samples = '', durationSeconds = 0, lat, lng, photos, audio, audios } = e;
 
   // 1. 任务归属校验
   const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
@@ -194,18 +194,29 @@ async function submit(user, e, isBoss) {
   const allowed = customer.customerType === 'new' ? RESULT_ENUM_NEW : RESULT_ENUM_MALL;
   if (!allowed.includes(result)) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
 
-  // 3. 现场证据校验（2026-09-07 拍照+录音提前做二期；照片上限 2026-09-08 老板改 3 张）：photos ≤3 条 {fileID, thumbID}；audio {fileID, duration}
+  // 3. 现场证据校验
+  //    照片：≤3 条 {fileID, thumbID}
+  //    录音（2026-09-11 M2a 多段）：audios ≤5 条，单条 ≤600 秒（10 分钟），合计 ≤1800 秒（30 分钟硬封顶）
+  //      transcribe=false = 只留档不转文字；兼容旧字段 audio（单条）→ 自动并入 audios
   let ph = [];
   if (photos !== undefined && photos !== null) {
     if (!Array.isArray(photos) || photos.length > 3) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数量不合法（最多 3 张）' };
     ph = photos.filter(p => p && typeof p.fileID === 'string' && p.fileID && typeof p.thumbID === 'string' && p.thumbID);
     if (ph.length !== photos.length) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数据不完整，请重新拍摄' };
   }
-  let au = null;
-  if (audio !== undefined && audio !== null) {
-    if (!audio || typeof audio.fileID !== 'string' || !audio.fileID) return { ok: false, code: 'BAD_AUDIO', msg: '录音数据不完整，请重新录制' };
-    au = { fileID: audio.fileID, duration: Math.max(1, Math.min(600, Math.round(Number(audio.duration) || 0))) };
+  let au = [];
+  const rawAudios = Array.isArray(audios) && audios.length ? audios : ((audio && audio.fileID) ? [audio] : []);
+  if (rawAudios.length > 5) return { ok: false, code: 'BAD_AUDIO', msg: '录音最多 5 条' };
+  let totalAudioSec = 0;
+  for (const a of rawAudios) {
+    if (!a || typeof a.fileID !== 'string' || !a.fileID) return { ok: false, code: 'BAD_AUDIO', msg: '录音数据不完整，请重新录制' };
+    const rawSec = Math.round(Number(a.duration) || 0);
+    if (rawSec > 600) return { ok: false, code: 'BAD_AUDIO', msg: '单条录音不能超过 10 分钟' };
+    const dur = Math.max(1, rawSec || 1);
+    totalAudioSec += dur;
+    au.push({ fileID: a.fileID, duration: dur, transcribe: a.transcribe !== false });
   }
+  if (totalAudioSec > 1800) return { ok: false, code: 'BAD_AUDIO', msg: '本次录音合计不能超过 30 分钟，请删除不需要的录音' };
 
   // 老板模式（2026-09-09 §7.13）：校验全走、只算不写——假成功返回，不落任何库
   if (isBoss) return { ok: true, boss: true, visitId: 'boss_' + Date.now(), msg: '已提交 ✓（演示：未保存）' };
@@ -252,7 +263,8 @@ async function submit(user, e, isBoss) {
     visitedAt: date, result, text, samples,
     durationSeconds, submitLat: lat || null, submitLng: lng || null,
     distanceToCustomer: distance ? Math.round(distance) : null,
-    photos: ph, audio: au,
+    // 2026-09-11 M2a：多段录音存 audios（[{fileID,duration,transcribe}]）；audio 仍写第一段，兼容旧读取端
+    photos: ph, audios: au, audio: au.length ? { fileID: au[0].fileID, duration: au[0].duration } : null,
     status,
     finishedAt: Date.now(),
     createdAt: Date.now()
@@ -297,6 +309,33 @@ async function history(user, customerId, isBoss) {
     if (xo !== yo) return xo - yo;
     return ((y.createdAt || y.startedAt || 0)) - ((x.createdAt || x.startedAt || 0));
   });
+  // 2026-09-11 M2b-小步：批量带上「语音转写」状态与文字（一次查询，只针对有录音的拜访）
+  const withAudio = rows.filter(v => (Array.isArray(v.audios) && v.audios.length) || (v.audio && v.audio.fileID));
+  const trMap = {};
+  withAudio.forEach(v => { trMap[v._id] = { total: 0, done: 0, failed: 0, running: 0, segs: [] }; });
+  for (let i = 0; i < withAudio.length; i += 50) {
+    const chunk = withAudio.slice(i, i + 50).map(v => v._id);
+    const tr = await db.collection('transcripts').where({ visitId: _.in(chunk) })
+      .orderBy('segIndex', 'asc').limit(300).get();
+    (tr.data || []).forEach(t => {
+      const m = trMap[t.visitId];
+      if (!m) return;
+      m.total++;
+      if (t.status === 'done') { m.done++; m.segs.push(t); }
+      else if (t.status === 'failed') m.failed++;
+      else m.running++;
+    });
+  }
+  const trOf = (id) => {
+    const m = trMap[id];
+    if (!m || !m.total) return null;
+    const status = m.running > 0 ? 'processing' : (m.done > 0 ? (m.failed > 0 ? 'partial' : 'done') : 'failed');
+    return {
+      status,
+      segCount: m.total,
+      text: m.segs.sort((a, b) => (a.segIndex || 0) - (b.segIndex || 0)).map(x => x.text || '').join('\n')
+    };
+  };
   return { ok: true, visits: rows.map(v => ({
     _id: v._id, visitedAt: v.visitedAt, result: v.result, text: v.text,
     samples: v.samples, status: v.status || '',
@@ -304,7 +343,11 @@ async function history(user, customerId, isBoss) {
     timeHM: fmtHM(v.finishedAt || v.createdAt || v.startedAt),
     salesmanName: v.salesmanName, distanceToCustomer: v.distanceToCustomer,
     photos: Array.isArray(v.photos) ? v.photos : [],
-    audio: v.audio || null
+    // 2026-09-11 M2a：多段录音下发（audios：[{fileID,duration,transcribe}]）；audio 保留为第一段，兼容旧前端
+    audios: Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []),
+    audio: v.audio || null,
+    // 2026-09-11 M2b：语音转写 { status: processing|done|partial|failed, segCount, text }；无录音或未转写为 null
+    transcribe: trOf(v._id)
   })) };
 }
 

@@ -13,12 +13,21 @@
     <view class="x" catchtap="hideSubBanner">✕</view>
   </view>
 
-  <!-- 老板模式（2026-09-09 §7.13）：数字胶囊带 -->
+  <!-- 老板模式（2026-09-09 §7.13）：数字卡带 -->
   <view class="boss-stats" wx:if="{{bossMode}}">
     <view class="bs"><view class="bs-n">{{bossStats.todayDone}}/{{bossStats.todayTotal}}</view><view class="bs-l">今日完成</view></view>
     <view class="bs"><view class="bs-n c-blue">{{bossStats.ongoing}}</view><view class="bs-l">拜访中</view></view>
     <view class="bs"><view class="bs-n c-orange">{{bossStats.online}}</view><view class="bs-l">在线</view></view>
     <view class="bs"><view class="bs-n c-red">{{bossStats.review}}</view><view class="bs-l">待审核</view></view>
+  </view>
+
+  <!-- 今日总览条（2026-09-10 质感升级新增：数据取自已有 bossStats，无云端改动） -->
+  <view class="overview" wx:if="{{bossMode}}">
+    <view class="ov-ic">📡</view>
+    <view>
+      <view class="ov-t1">今日整体进度</view>
+      <view class="ov-t2">{{bossStats.online}} 人在线 · 今日完成 <text class="ov-hl">{{bossStats.todayDone}}/{{bossStats.todayTotal}}</text> 家 · 待审核 <text class="ov-hl">{{bossStats.review}}</text> 单</view>
+    </view>
   </view>
 
   <view class="hero" wx:if="{{!bossMode}}">
@@ -72,12 +81,7 @@
   <view class="empty" wx:if="{{!loading && !tasks.length}}">暂无任务，等管理员派发后即可看到</view>
   <view class="loading" wx:if="{{loading}}">加载中…</view>
 
-  <view class="tabbar">
-    <view class="tb on"><view class="tic">🏠</view>{{bossMode ? '首页' : '任务'}}</view>
-    <view class="tb" bindtap="tabMap"><view class="tic">🗺</view>任务地图</view>
-    <view class="tb" bindtap="tabWar" wx:if="{{bossMode}}"><view class="tic">📡</view>战况</view>
-    <view class="tb" bindtap="tabMine"><view class="tic">👤</view>我的</view>
-  </view>
+  <!-- 底部 Tab 栏已迁移到自定义组件 custom-tab-bar（2026-09-10 老板拍板：tab 页常驻，切页不再重绘底部栏 → 消除白闪） -->
 
   <!-- 老板欢迎仪式（2026-09-10：全屏 canvas「👑 欢迎老板」礼花，播完自动消失，不挡操作） -->
   <canvas type="2d" id="welcomeCv" wx:if="{{welShow}}" style="position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:9999;pointer-events:none"></canvas>
