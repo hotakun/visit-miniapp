@@ -2361,6 +2361,8 @@ let visitTrackMap = null, visitTrackPolyline = null;
 let trackShowAll = false, trackShowLine = false, custLayerOn = true, custSize = 16; // 2026-09-09 老板定：轨迹默认不勾选
 let custKindOn = { ongoing: true, pending: true, visited: true, gray: true };
 let custLayer = null, custInfoWin = null, trackCustCache = null, trackCustCacheAt = 0;
+let trackManWin = null;            // 业务员点气泡（2026-09-10）
+let trackTaskSalesmen = new Set(); // 当前有进行中任务的业务员集合（气泡显示 任务中/无任务）
 // 仓库星（2026-09-08 老板定）：控件卡「仓库」勾选项控制显隐（默认勾选显示，与选店页口径一致）
 const TRACK_WH = { lat: 28.970802, lng: 120.154526 };
 let trackWhOn = true, trackWhStar = null;
@@ -2785,6 +2787,7 @@ function rebuildTrackMap() {
   try { trackMap.destroy(); } catch (e) { /* 静默 */ }
   trackMap = null;
   trackMarkers = null; trackPolyline = null; custLayer = null; custInfoWin = null; custSearchHit = null; // 旧实例随地图作废
+  trackManWin = null;
   if (trackWhStar) { try { trackWhStar.remove(); } catch (e) { /* 静默 */ } trackWhStar = null; }
   buildTrackMap(keep); // 重建后 refreshTrackPage 会重画全部图层
 }
@@ -2890,10 +2893,31 @@ function drawTrackMarkers() {
       width: 24, height: 24, anchor: { x: 12, y: 12 },
       src: dotIcon(l.visitOngoing ? '#2F80ED' : '#F5531C', '#FFFFFF')
     });
-    return { id: l.salesmanId, styleId: 'm' + l.salesmanId, position: new TMap.LatLng(l.lat, l.lng), properties: { name: l.name, t: l.t } };
+    return { id: l.salesmanId, styleId: 'm' + l.salesmanId, position: new TMap.LatLng(l.lat, l.lng), properties: { name: l.name, t: l.t, accuracy: l.accuracy || 0 } };
   });
-  if (trackMarkers) trackMarkers.setGeometries(geos); // 空数组=清空旧点（防残留）
-  else trackMarkers = new TMap.MultiMarker({ map: trackMap, styles, geometries: geos });
+  if (trackMarkers) {
+    trackMarkers.setGeometries(geos); // 空数组=清空旧点（防残留）
+  } else {
+    trackMarkers = new TMap.MultiMarker({ map: trackMap, styles, geometries: geos });
+    // 业务员点点击气泡（2026-09-10 老板定：人名 + 上报时间 + 精度 + 任务中/无任务）
+    trackMarkers.on('click', e => {
+      const g = e.geometry;
+      const p = g && g.properties;
+      if (!p) return;
+      if (custInfoWin) { try { custInfoWin.close(); } catch (err) { /* 静默 */ } }
+      if (trackManWin) { try { trackManWin.close(); } catch (err) { /* 静默 */ } }
+      const inTask = trackTaskSalesmen.has(e.geometry.id);
+      const st = inTask
+        ? '<span style="color:#2F80ED;font-weight:700">● 任务中</span>'
+        : '<span style="color:#9CA3AF;font-weight:700">● 无任务</span>';
+      const acc = p.accuracy ? ' · 精度 ±' + Math.round(p.accuracy) + ' 米' : '';
+      trackManWin = new TMap.InfoWindow({
+        map: trackMap, position: g.position, offset: { x: 0, y: -20 },
+        content: `<div style="font-size:12px;line-height:1.7;padding:2px 4px"><b style="font-size:13px">${esc(p.name || '—')}</b><br>${st}<br><span style="color:#66707A">${p.t ? agoTxt(p.t) + '上报' : '暂无上报时间'}${acc}</span></div>`
+      });
+      trackManWin.open();
+    });
+  }
 }
 
 // ===== 仓库星（2026-09-08 老板定：控件卡「仓库」勾选项，默认显示） =====
@@ -2985,12 +3009,15 @@ async function loadCustData(force) {
   if (!force && trackCustCache && Date.now() - trackCustCacheAt < 60000) return trackCustCache;
   const [cc, tt] = await Promise.all([api('listCustomers', {}), api('listTasks', {})]);
   const taskMap = {};
+  const tSet = new Set(); // 有进行中任务的业务员（2026-09-10：业务员气泡"任务中/无任务"）
   (tt.ok ? (tt.tasks || []) : []).forEach(t => {
     // 2026-09-08 修复：优先新接口顶层 customerIds；老云端兜底用 dayPlan 各天合并
     const ids = (t.customerIds && t.customerIds.length) ? t.customerIds
       : ((t.dayPlan || []).reduce((a, d) => a.concat(d.customerIds || []), []));
     ids.forEach(id => { taskMap[id] = t.salesmanId; });
+    if (t.salesmanId) tSet.add(t.salesmanId);
   });
+  trackTaskSalesmen = tSet;
   trackCustCache = (cc.ok ? (cc.customers || []) : []).filter(c => c && c.lat && c.lng).map(c => ({ ...c, taskSalesmanId: taskMap[c._id] || null }));
   trackCustCacheAt = Date.now();
   return trackCustCache;
@@ -3046,6 +3073,7 @@ async function drawCustLayer() {
       const p = e.geometry && e.geometry.properties;
       if (!p) return;
       if (custInfoWin) { try { custInfoWin.close(); } catch (err) { /* 静默 */ } }
+      if (trackManWin) { try { trackManWin.close(); } catch (err) { /* 静默 */ } } // 与业务员气泡互斥
       custInfoWin = new TMap.InfoWindow({
         map: trackMap, position: e.geometry.position, offset: { x: 0, y: -(custSize / 2 + 8) },
         content: `<div style="font-size:12px;line-height:1.7;padding:2px 4px"><b style="font-size:13px">${esc(p.name)}</b><br><span style="color:${p.statusColor};font-weight:700">● ${esc(p.status)}</span>${p.address ? '<br><span style="color:#66707A">' + esc(p.address) + '</span>' : ''}</div>`
