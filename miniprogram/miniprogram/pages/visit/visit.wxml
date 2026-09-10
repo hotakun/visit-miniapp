@@ -21,8 +21,12 @@
     <view wx:if="{{!foldPic}}">
       <!-- 拍摄入口：连拍 / 相册多选（拍满后自动隐藏） -->
       <view class="picbar" wx:if="{{pics.length < maxPics}}">
-        <view class="picbtn {{prepBusy ? 'busy' : ''}}" bindtap="shootPhoto">📷 {{prepBusy ? '处理中…' : '拍照（可连拍）'}}</view>
-        <view class="picbtn ghost {{prepBusy ? 'busy' : ''}}" bindtap="pickPhoto">🖼 从相册选</view>
+        <view class="picbtn {{prepBusy ? 'busy' : ''}}" bindtap="shootPhoto">
+          <text class="pb-ic">📷</text><text class="pb-tx">{{prepBusy ? '处理中…' : '拍照'}}</text>
+        </view>
+        <view class="picbtn ghost {{prepBusy ? 'busy' : ''}}" bindtap="pickPhoto">
+          <text class="pb-ic">🖼</text><text class="pb-tx">从相册选</text>
+        </view>
       </view>
       <!-- 已拍照片网格（每格固定像素、一行三格自动换行；左下角序号、右上角 ✕ 删除、点图看大图） -->
       <view class="picgrid">
