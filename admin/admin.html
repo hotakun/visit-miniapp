@@ -1055,6 +1055,30 @@ input,textarea{-webkit-user-select:text;user-select:text}
           </div>
         </div>
 
+        <div class="set-row">
+          <div class="set-row-t">老板欢迎仪式</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px">播放 <select class="inp" id="welMode" style="width:130px;margin-left:6px">
+                <option value="daily">每天第一次</option>
+                <option value="every">每次进入</option>
+                <option value="once">只显示一次</option>
+              </select></label>
+              <label style="font-weight:700;font-size:13px">时长 <select class="inp" id="welDuration" style="width:90px;margin-left:6px">
+                <option value="2">2 秒</option>
+                <option value="3">3 秒</option>
+                <option value="5">5 秒</option>
+              </select></label>
+              <label style="font-weight:700;font-size:13px">风格 <select class="inp" id="welStyle" style="width:110px;margin-left:6px">
+                <option value="gold">金色系 👑</option>
+                <option value="color">彩色系 🎉</option>
+              </select></label>
+              <button class="btn primary btn-sm" onclick="saveWelcome()">保存</button>
+            </div>
+            <div class="sb-d" style="margin-top:8px">老板微信进入小程序（老板模式）时播放的欢迎动画：全屏「👑 欢迎老板」+ 礼花彩带炸开，几秒后自动消失显示正常首页。业务员完全不受影响。默认：每天第一次 / 3 秒 / 金色。</div>
+          </div>
+        </div>
+
         <!-- 分组三：系统 -->
         <div class="set-group">⚙️ 系统</div>
         <div class="set-row">
@@ -4984,6 +5008,14 @@ async function loadSettings() {
   $('taskRegionCode').value = res.settings.taskRegionCode || 'JH05';
   const ead = $('expireArchiveDays');
   if (ead) ead.value = String([2, 3, 5].includes(Number(res.settings.expireArchiveDays)) ? res.settings.expireArchiveDays : 3);
+  // 老板欢迎仪式回显（2026-09-10：默认 每天第一次/3秒/金色）
+  const welCfg = res.settings.welcomeConfig || {};
+  const welModeEl = $('welMode');
+  if (welModeEl) welModeEl.value = ['daily', 'every', 'once'].includes(welCfg.mode) ? welCfg.mode : 'daily';
+  const welDurEl = $('welDuration');
+  if (welDurEl) welDurEl.value = String([2, 3, 5].includes(Number(welCfg.duration)) ? Number(welCfg.duration) : 3);
+  const welStyleEl = $('welStyle');
+  if (welStyleEl) welStyleEl.value = welCfg.style === 'color' ? 'color' : 'gold';
   const grf = $('globalRefresh');
   if (grf) grf.value = String([5, 10, 15, 30, 60].includes(Number(res.settings.globalRefreshInterval)) ? res.settings.globalRefreshInterval : 15);
 }
@@ -5003,6 +5035,21 @@ async function saveExpireArchive() {
   const days = parseInt(el.value, 10) || 3;
   const res = await api('setSetting', { key: 'expireArchiveDays', value: days });
   if (res.ok) alert(`已保存：过期任务 ${days} 天后自动归档到历史任务`);
+  else alert(res.msg || '保存失败');
+}
+
+// 老板欢迎仪式（2026-09-10 老板定：频率/时长/风格三件套，云端下发，改完即时生效不需重传体验版）
+async function saveWelcome() {
+  const value = {
+    mode: $('welMode').value,
+    duration: Number($('welDuration').value) || 3,
+    style: $('welStyle').value
+  };
+  const res = await api('setSetting', { key: 'welcomeConfig', value });
+  if (res.ok) {
+    const mLab = { daily: '每天第一次', every: '每次进入', once: '只显示一次' }[value.mode] || value.mode;
+    alert(`已保存：老板欢迎仪式（${mLab} / ${value.duration} 秒 / ${value.style === 'gold' ? '金色系' : '彩色系'}）`);
+  }
   else alert(res.msg || '保存失败');
 }
 

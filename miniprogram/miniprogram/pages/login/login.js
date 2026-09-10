@@ -34,6 +34,7 @@ Page({
         // 2026-09-09 老板定：老板账号（手机号白名单）直接进老板模式，跳过登录页
         getApp().setUser(res.user);
         getApp().setBossMode(true);
+        getApp().globalData.welcome = res.welcome || null; // 2026-09-10：欢迎仪式配置随登录下发
         wx.redirectTo({ url: '/pages/home/home' });
       } else if (res.ok && res.user && res.user.role === 'salesman') {
         getApp().setUser(res.user);
@@ -99,6 +100,7 @@ Page({
         // 2026-09-09 老板定：老板手机号注册免审核直接通过 → 自动进老板模式
         getApp().setUser(res.user);
         getApp().setBossMode(true);
+        getApp().globalData.welcome = res.welcome || null; // 2026-09-10：欢迎仪式配置随注册下发
         api.toast('老板身份已激活 ✓', 'success');
         setTimeout(() => wx.redirectTo({ url: '/pages/home/home' }), 800);
       } else if (res.ok) {
@@ -125,7 +127,14 @@ Page({
   },
   // 老板模式（2026-09-09 §7.13）：boss 白名单管理员入口——全量只读+虚拟写，storage 持久
   enterBoss() {
-    getApp().setBossMode(true);
+    const app = getApp();
+    // 2026-09-10：手动进老板模式时拉取欢迎仪式配置（异步，home 页播放前有等待兜底）
+    if (!app.globalData.welcome) {
+      api.call('login', { action: 'welcomeCfg' })
+        .then(r => { if (r && r.ok && r.welcome) app.globalData.welcome = r.welcome; })
+        .catch(() => { /* 失败用默认 */ });
+    }
+    app.setBossMode(true);
     wx.redirectTo({ url: '/pages/home/home' });
   },
   // 开发者双身份入口（2026-09-09 开发者范宇琨定：只有他的微信可见此页）

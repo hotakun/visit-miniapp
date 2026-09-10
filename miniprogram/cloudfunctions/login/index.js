@@ -40,6 +40,8 @@ exports.main = async (event) => {
     await users.doc(u._id).update({ data: { lastLoginAt: Date.now() } });
     // 老板手机号兜底（口径与 tasks/visits 云函数一致：仅管理员角色认 boss）
     const boss = ['super_admin', 'admin'].includes(u.role) && (u.boss === true || u.phone === BOSS_PHONE);
+    // 2026-09-10 老板定：老板模式登录顺带下发「欢迎仪式」配置（每次登录一次查询，仅老板触发）
+    if (boss) return { ok: true, boss, dev: false, user: publicUser(u), welcome: await readWelcomeCfg() };
     // 2026-09-09 开发者范宇琨双身份：dev 白名单返回 dev 标志 → 前端显示「业务员/老板」两按钮选择页；
     // 其他人（业务员/老板/管理员）完全不受影响
     const dev = u.phone === DEV_PHONE;
@@ -56,6 +58,9 @@ exports.main = async (event) => {
   // 3.5 微信一键验证手机号（2026-09-09 老板定：getPhoneNumber 快速验证组件——
   //     微信向用户发验证码短信，确认后返回该微信绑定的真实手机号；前端自动填入注册表单）
   if (event.action === 'verifyPhone') return await verifyPhone(event);
+
+  // 3.6 欢迎仪式配置（2026-09-10 老板定：管理员从登录页手动进老板模式时拉取；老板自动进由下方返回携带）
+  if (event.action === 'welcomeCfg') return await welcomeCfg();
 
   // 4. 未绑定：返回注册状态（审核中 / 被拒绝可重提 / 未注册）
   // 2026-09-09 反复核验加固：集合刚自愈创建后的首次查询可能仍有短暂延迟 → 查询失败按"无申请"降级，绝不阻断登录页
@@ -114,7 +119,7 @@ async function register(OPENID, e) {
       });
     } catch (e) { /* 集合异常不阻断老板激活 */ }
     const u = await users.doc(bossId).get();
-    return { ok: true, boss: true, user: publicUser(u.data), msg: '老板身份已激活' };
+    return { ok: true, boss: true, user: publicUser(u.data), welcome: await readWelcomeCfg(), msg: '老板身份已激活' };
   }
 
   let pend = { total: 0 };
@@ -144,6 +149,26 @@ async function verifyPhone(e) {
   } catch (err) {
     return { ok: false, code: 'VERIFY_FAIL', msg: '验证失败，请重试（或手动输入手机号）' };
   }
+}
+
+// 欢迎仪式配置（2026-09-10 老板定：后台设置页可配；默认 每天第一次 / 3 秒 / 金色）
+const WELCOME_DEFAULT = { mode: 'daily', duration: 3, style: 'gold' };
+async function readWelcomeCfg() {
+  try {
+    const r = await db.collection('settings').where({ key: 'welcomeConfig' }).limit(1).get();
+    const v = r.data[0] && r.data[0].value;
+    if (v && ['daily', 'every', 'once'].includes(v.mode)) {
+      return {
+        mode: v.mode,
+        duration: [2, 3, 5].includes(Number(v.duration)) ? Number(v.duration) : 3,
+        style: v.style === 'color' ? 'color' : 'gold'
+      };
+    }
+  } catch (e) { /* 读取失败用默认 */ }
+  return WELCOME_DEFAULT;
+}
+async function welcomeCfg() {
+  return { ok: true, welcome: await readWelcomeCfg() };
 }
 
 function maskPhone(p) {

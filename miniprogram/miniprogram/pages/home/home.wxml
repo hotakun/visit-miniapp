@@ -78,4 +78,7 @@
     <view class="tb" bindtap="tabWar" wx:if="{{bossMode}}"><view class="tic">📡</view>战况</view>
     <view class="tb" bindtap="tabMine"><view class="tic">👤</view>我的</view>
   </view>
+
+  <!-- 老板欢迎仪式（2026-09-10：全屏 canvas「👑 欢迎老板」礼花，播完自动消失，不挡操作） -->
+  <canvas type="2d" id="welcomeCv" wx:if="{{welShow}}" style="position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:9999;pointer-events:none"></canvas>
 </view>

@@ -212,7 +212,7 @@ function phraseOf(list, uid) {
 }
 
 Page({
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null },
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, welShow: false },
   onShow() {
     const app = getApp();
     if (!this._revFn) {
@@ -240,6 +240,7 @@ Page({
       const bp = splitEmoji(bossPhrase(u && u._id ? u._id : 'boss'));
       this.setData({ bossMode: true, user: { name: bname }, dateText, pepText: bp.text, pepEmoji: bp.emoji, logoUrl: app.globalData.logoUrl });
       this.load();
+      this.maybePlayWelcome(); // 2026-09-10 老板定：老板欢迎仪式（频率/时长/风格后台可配）
       return;
     }
     if (!u || u.role !== 'salesman') {
@@ -258,9 +259,123 @@ Page({
   onHide() {
     this._shown = false;
     if (this._revFn) { getApp().unregisterReviewListener(this._revFn); this._revFn = null; }
+    // 欢迎仪式进行中切走 → 停止并清理（防定时器泄漏）
+    if (this._welTimer) { clearInterval(this._welTimer); this._welTimer = null; }
+    if (this.data.welShow) this.setData({ welShow: false });
   },
   onUnload() {
     if (this._revFn) { getApp().unregisterReviewListener(this._revFn); this._revFn = null; }
+    if (this._welTimer) { clearInterval(this._welTimer); this._welTimer = null; }
+  },
+
+  // ===== 老板欢迎仪式（2026-09-10 老板定：全屏礼花「👑 欢迎老板」；频率/时长/风格后台可配） =====
+  maybePlayWelcome() {
+    const app = getApp();
+    const cfg = app.globalData.welcome || { mode: 'daily', duration: 3, style: 'gold' };
+    // 频率判定（本地 storage；东八区日期）：once=永远只播一次；daily=每天第一次；every=每次都播
+    try {
+      const d = new Date(Date.now() + 8 * 3600 * 1000);
+      const today = d.toISOString().slice(0, 10);
+      if (cfg.mode === 'once' && wx.getStorageSync('wel_once')) return;
+      if (cfg.mode === 'daily' && wx.getStorageSync('wel_date') === today) return;
+      if (cfg.mode === 'once') wx.setStorageSync('wel_once', 1);
+      if (cfg.mode === 'daily') wx.setStorageSync('wel_date', today);
+    } catch (e) { /* 存储异常：按播放处理，不影响功能 */ }
+    this.setData({ welShow: true }, () => {
+      const q = wx.createSelectorQuery().in(this);
+      q.select('#welcomeCv').fields({ node: true, size: true }).exec(res => {
+        if (!res || !res[0] || !res[0].node) { this.setData({ welShow: false }); return; } // 节点异常静默取消
+        this._startWelAnim(res[0].node, res[0].width, res[0].height, cfg);
+      });
+    });
+  },
+  _startWelAnim(canvas, cssW, cssH, cfg) {
+    const dpr = (wx.getSystemInfoSync().pixelRatio) || 2;
+    canvas.width = cssW * dpr;
+    canvas.height = cssH * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = cssW, H = cssH;
+    // 两套风格共用一套引擎（仅颜色数组不同）
+    const COLORS = cfg.style === 'color'
+      ? ['#FF4D4F', '#FFA940', '#FFD666', '#73D13D', '#40A9FF', '#B37FEB', '#FF85C0', '#FFFFFF']
+      : ['#FFD700', '#FFC300', '#FFF3B0', '#FFFFFF', '#F5B301', '#FFE58F'];
+    const N = 120;
+    const parts = [];
+    for (let i = 0; i < N; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 260 + Math.random() * 780;
+      const ribbon = i % 2 === 0; // 彩带/纸屑各半
+      parts.push({
+        x: W / 2, y: H * 0.40,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 320,
+        rot: Math.random() * Math.PI * 2,
+        vr: (Math.random() - 0.5) * 0.4,
+        w: 5 + Math.random() * 4,
+        h: ribbon ? 12 + Math.random() * 8 : 5 + Math.random() * 4,
+        c: COLORS[i % COLORS.length],
+        ph: Math.random() * Math.PI * 2
+      });
+    }
+    const t0 = Date.now();
+    const durMs = (cfg.duration || 3) * 1000;
+    const fadeMs = 400;
+    const G = 980, DRAG = 0.985, DT = 0.033;
+    if (this._welTimer) { clearInterval(this._welTimer); this._welTimer = null; }
+    this._welTimer = setInterval(() => {
+      const t = Date.now() - t0;
+      const totalMs = durMs + fadeMs;
+      let alpha = 1;
+      if (t > durMs) alpha = Math.max(0, 1 - (t - durMs) / fadeMs);
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(12,14,24,0.5)'; // 全屏遮罩
+      ctx.fillRect(0, 0, W, H);
+      // 「👑 欢迎老板」：前 500ms 放大入场 + 金色光晕
+      const inK = Math.min(1, t / 500);
+      const fontScale = 0.7 + 0.3 * (1 - Math.pow(1 - inK, 3));
+      ctx.save();
+      ctx.translate(W / 2, H * 0.30);
+      ctx.scale(fontScale, fontScale);
+      ctx.font = 'bold ' + Math.round(Math.min(W * 0.12, 64)) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(255,215,0,0.85)';
+      ctx.shadowBlur = 26;
+      ctx.fillStyle = '#FFE28A';
+      ctx.fillText('👑 欢迎老板', 0, 0);
+      ctx.restore();
+      // 粒子物理：爆发段=重力+阻力；淡出段=缓速飘落
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        if (t < durMs) {
+          p.vy += G * DT;
+          p.vx *= DRAG; p.vy *= DRAG;
+          p.x += p.vx * DT;
+          p.y += p.vy * DT;
+          p.rot += p.vr;
+        } else {
+          p.vy += G * 0.25 * DT;
+          p.x += p.vx * DT * 0.4;
+          p.y += p.vy * DT * 0.4;
+          p.rot += p.vr * 0.5;
+        }
+        const sway = Math.sin(t / 260 + p.ph) * (p.h > 10 ? 10 : 3); // 彩带横向飘摆
+        ctx.save();
+        ctx.translate(p.x + sway, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      if (t >= totalMs) {
+        clearInterval(this._welTimer);
+        this._welTimer = null;
+        this.setData({ welShow: false }); // 全部结束 → canvas 卸载，显示正常首页
+      }
+    }, 33);
   },
   // 订阅状态识别：有可用订阅凭证或已绑定服务号（长期通知）则隐藏订阅横幅；无则一直显示提醒
   async checkSubStatus() {
