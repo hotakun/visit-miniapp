@@ -11,6 +11,9 @@ const BOSS_PHONE = '15055492888';
 const DEV_PHONE = '13067737286';
 
 exports.main = async (event) => {
+  // 集合自愈（2026-09-09 老板报障修复：registrations 未建时 69 行查询抛 -502005
+  // → login 整体失败，手机端提示"云函数调用失败"看不到登录页；init 未执行过的新环境必踩）
+  try { await db.createCollection('registrations'); } catch (e) { /* 已存在等错误忽略 */ }
   const { OPENID } = cloud.getWXContext();
   const { bindUserId } = event || {};
 
