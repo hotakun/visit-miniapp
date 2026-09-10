@@ -124,7 +124,8 @@ page { background: #D0D6E0; }
 .ri-ck.on { background: #fff; border-color: #fff; color: #1E7A45; }
 /* 删除键（2026-09-11 老板定：再小一些，降低误触）*/
 .ri-del { width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.22); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
-.trbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+/* 2026-09-11 老板定：「开始转录」下移 + 录音卡底部留白加大，让下面松弛一些 */
+.trbar { display: flex; align-items: center; gap: 8px; margin-top: 20px; padding-bottom: 10px; }
 /* 2026-09-11 老板定：「开始转录」朴素化、小一些、靠右（原橙色渐变太抢眼）*/
 .trgo { margin-left: auto; padding: 6px 12px; border-radius: 999px; border: 1px solid #E4E7EC;
         background: #fff; color: #4A5360; font-size: 12px; font-weight: 700; flex-shrink: 0; }
