@@ -155,7 +155,7 @@
     <view class="c-box">
       <view class="ct">取消本次拜访？</view>
       <view class="csub">取消后该客户仍为「待回访」，可稍后重新开始拜访。</view>
-      <view class="btn-primary" style="background:var(--danger)" bindtap="doCancel">确认取消</view>
+      <view class="btn-primary" style="background:#FDEDED;color:#CE8282;box-shadow:none;border:1px solid #F7D9D9" bindtap="doCancel">确认取消</view>
       <view class="again" bindtap="hideCancel">再看看</view>
     </view>
   </view>
