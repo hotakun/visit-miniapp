@@ -47,9 +47,12 @@ Page({
     trMsg: '',             // 转录状态提示
     delRecShow: false,     // 删除单段：二次确认弹层
     delRecIdx: -1,
-    // 2026-09-11 老板定：现场拍照 / 现场录音 改为可折叠卡片（点标题栏展开收起；独立展开；默认展开）
+    // 2026-09-11 老板定：五个区块【全部】改为可折叠卡片（点标题栏展开收起；独立展开；默认展开）
     foldPic: false,
     foldRec: false,
+    foldSamp: false,
+    foldText: false,
+    foldRes: false,
     evDesc: ''
   },
   onLoad() {
@@ -202,11 +205,12 @@ Page({
       if (this.data.recState === 'rec') this.recorder.stop();
     }
   },
-  // 折叠卡片（2026-09-11 老板定）：点标题栏展开/收起「现场拍照」「现场录音」；独立展开、互不影响
+  // 折叠卡片（2026-09-11 老板定）：点标题栏展开/收起【五个区块】；独立展开、互不影响
   toggleFold(e) {
     const k = e.currentTarget.dataset.k;
-    if (k === 'pic') this.setData({ foldPic: !this.data.foldPic });
-    else if (k === 'rec') this.setData({ foldRec: !this.data.foldRec });
+    const map = { pic: 'foldPic', rec: 'foldRec', samp: 'foldSamp', text: 'foldText', res: 'foldRes' };
+    const key = map[k];
+    if (key) this.setData({ [key]: !this.data[key] });
   },
   // ===== 现场证据：照片（2026-09-11 老板定：上限 15 张，支持连拍 + 相册多选） =====
   // 相册多选：一次最多选到剩余额度

@@ -92,20 +92,41 @@
   </view>
 
   <view class="sec blk blk-samp">
-    <view class="st">📦 样品 / 物料</view>
-    <input class="inp" placeholder="例：带 24 标准白 1 件样品给客户" value="{{samples}}" bindinput="onSamples"/>
+    <view class="fc-head" bindtap="toggleFold" data-k="samp">
+      <text class="fc-ic">📦</text>
+      <text class="fc-t">样品 / 物料</text>
+      <text class="fc-sum">{{samples ? '已填' : '未填'}}</text>
+      <text class="fc-ar">{{foldSamp ? '▸' : '▾'}}</text>
+    </view>
+    <view wx:if="{{!foldSamp}}">
+      <input class="inp" placeholder="例：带 24 标准白 1 件样品给客户" value="{{samples}}" bindinput="onSamples"/>
+    </view>
   </view>
 
   <view class="sec blk blk-text">
-    <view class="st">✍️ 拜访记录</view>
-    <textarea class="inp area" placeholder="客户反馈、跟进事项、下次计划……" value="{{text}}" bindinput="onText" maxlength="-1" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
+    <view class="fc-head" bindtap="toggleFold" data-k="text">
+      <text class="fc-ic">✍️</text>
+      <text class="fc-t">拜访记录</text>
+      <text class="fc-sum {{text ? 'ok' : ''}}">{{text ? ('已填 ' + text.length + ' 字') : '未填'}}</text>
+      <text class="fc-ar">{{foldText ? '▸' : '▾'}}</text>
+    </view>
+    <view wx:if="{{!foldText}}">
+      <textarea class="inp area" placeholder="客户反馈、跟进事项、下次计划……" value="{{text}}" bindinput="onText" maxlength="-1" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
+    </view>
   </view>
 
   <view class="sec blk blk-res">
-    <view class="st">🎯 拜访结果</view>
-    <view class="tags">
-      <view class="rtag {{result === item ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="*this"
-            bindtap="pickResult" data-r="{{item}}">{{item === '极有意向' ? item + ' 🔥' : item}}</view>
+    <view class="fc-head" bindtap="toggleFold" data-k="res">
+      <text class="fc-ic">🎯</text>
+      <text class="fc-t">拜访结果</text>
+      <text class="fc-sum {{result ? 'ok' : 'warn'}}">{{result ? result : '未选择'}}</text>
+      <text class="fc-ar">{{foldRes ? '▸' : '▾'}}</text>
+    </view>
+    <view wx:if="{{!foldRes}}">
+      <view class="tags">
+        <view class="rtag {{result === item ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="*this"
+              bindtap="pickResult" data-r="{{item}}">{{item === '极有意向' ? item + ' 🔥' : item}}</view>
+      </view>
     </view>
   </view>
 
