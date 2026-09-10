@@ -1,5 +1,5 @@
-/* 2026-09-11 老板定：拜访页页面底色【再次加深】（#EDEFF4 → #DDE2EA），让白色卡片更跳（只覆盖本页）*/
-page { background: #DDE2EA; }
+/* 2026-09-11 老板定：拜访页页面底色再加深一档（#DDE2EA → #D0D6E0），只覆盖本页 */
+page { background: #D0D6E0; }
 .page { padding: 16px 18px 150px; }
 .vhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .vname { font-size: 19px; font-weight: 800; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -37,7 +37,7 @@ page { background: #DDE2EA; }
 /* 多行文字框（2026-09-11 老板定：样品 / 物料 与 拜访记录 都放大）*/
 .area { height: 200px; min-height: 200px; padding: 13px 14px; line-height: 1.7; }
 .area-sm { height: 96px; min-height: 96px; padding: 12px 14px; line-height: 1.7; }
-.foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(221,226,234,0), #DDE2EA 30%); }
+.foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(208,214,224,0), #D0D6E0 30%); }
 .btn-blue { background: var(--blue); }
 /* 取消拜访：窄按钮（灰字细边框），离文字框远防误触（老板 2026-09-04 定） */
 .cancel { width: 130px; margin: 48px auto 0; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--sub); background: #F7F8FA; border: 1px solid #E4E7EC; border-radius: 999px; padding: 8px 0; }
@@ -112,19 +112,20 @@ page { background: #DDE2EA; }
 /* 录音段卡片（2026-09-11 老板定：更精致 + 带声音波纹暗影）*/
 .recitem { position: relative; display: flex; align-items: center; gap: 9px; background: #fff; border-radius: 14px;
            padding: 10px 12px; margin-top: 8px; border: 1px solid #EEF1F5; overflow: hidden; }
-/* 声音波纹暗影：极淡的竖条声波纹理，铺在左侧一段（内容在上层，靠 z-index 压住）*/
+/* 声音波纹暗影（2026-09-11 老板定：改成深绿色竖条）*/
 .recitem::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 92px; pointer-events: none; z-index: 0;
-                   background: repeating-linear-gradient(90deg, rgba(47,128,237,.10) 0 2px, rgba(47,128,237,0) 2px 8px); }
+                   background: repeating-linear-gradient(90deg, rgba(21,110,58,.20) 0 2px, rgba(21,110,58,0) 2px 8px); }
 .recitem > view { position: relative; z-index: 1; }
 .ri-idx { font-size: 11px; font-weight: 800; color: #B7BEC7; flex-shrink: 0; }
 .ri-play { width: 30px; height: 30px; border-radius: 50%; background: var(--blue-tint); color: var(--blue); display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
 .ri-play.on { background: var(--blue); color: #fff; }
-.ri-time { flex: 1; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
-/* 转文字勾选框（2026-09-11 老板定：只要勾选框、不要文字，淡蓝色）*/
-.ri-ck { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid #D6DDE5; background: #fff; flex-shrink: 0;
+.ri-time { flex: 1; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; padding-right: 4px; }
+/* 转文字勾选框（2026-09-11 老板定：只要勾选框、淡蓝色；往中间挪，拉开与删除键的距离防误触）*/
+.ri-ck { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid #D6DDE5; background: #fff; flex-shrink: 0; margin-right: 14px;
          display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; color: transparent; }
 .ri-ck.on { background: #7FB0F0; border-color: #7FB0F0; color: #fff; }
-.ri-del { width: 28px; height: 28px; border-radius: 50%; background: #F0F2F5; color: #9AA1AB; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+/* 删除键（2026-09-11 老板定：再小一些，降低误触）*/
+.ri-del { width: 24px; height: 24px; border-radius: 50%; background: #F0F2F5; color: #9AA1AB; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
 .trbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 /* 2026-09-11 老板定：「开始转录」朴素化、小一些、靠右（原橙色渐变太抢眼）*/
 .trgo { margin-left: auto; padding: 6px 12px; border-radius: 999px; border: 1px solid #E4E7EC;
