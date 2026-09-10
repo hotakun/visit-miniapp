@@ -103,7 +103,7 @@
       <text class="fc-ar">{{foldSamp ? '▸' : '▾'}}</text>
     </view>
     <view wx:if="{{!foldSamp}}">
-      <input class="inp" placeholder="例：带 24 标准白 1 件样品给客户" value="{{samples}}" bindinput="onSamples"/>
+      <textarea class="inp area-sm" placeholder="例：带 24 标准白 1 件样品给客户（可多行填写）" value="{{samples}}" bindinput="onSamples" maxlength="-1" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
     </view>
   </view>
 
