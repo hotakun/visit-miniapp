@@ -224,11 +224,15 @@ async function submit(user, e, isBoss) {
   let au = [];
   const rawAudios = Array.isArray(audios) && audios.length ? audios : ((audio && audio.fileID) ? [audio] : []);
   if (rawAudios.length > 6) return { ok: false, code: 'BAD_AUDIO', msg: '录音最多 6 条' };
+  // 2026-09-11 老板定：单条上限真读后台「拜访录音上限」档位（180/300/600 秒，兜底 300；与手机端同源）
+  const recCfgRes = await db.collection('settings').where({ key: 'recordingDurationLimit' }).limit(1).get();
+  const recRaw = Number(recCfgRes.data[0] && recCfgRes.data[0].value) || 300;
+  const segLimitSec = [180, 300, 600].includes(recRaw) ? recRaw : 300;
   let totalAudioSec = 0;
   for (const a of rawAudios) {
     if (!a || typeof a.fileID !== 'string' || !a.fileID) return { ok: false, code: 'BAD_AUDIO', msg: '录音数据不完整，请重新录制' };
     const rawSec = Math.round(Number(a.duration) || 0);
-    if (rawSec > 600) return { ok: false, code: 'BAD_AUDIO', msg: '单条录音不能超过 10 分钟' };
+    if (rawSec > segLimitSec) return { ok: false, code: 'BAD_AUDIO', msg: '单条录音不能超过 ' + Math.round(segLimitSec / 60) + ' 分钟' };
     const dur = Math.max(1, rawSec || 1);
     totalAudioSec += dur;
     au.push({ fileID: a.fileID, duration: dur, transcribe: a.transcribe !== false });
@@ -365,8 +369,11 @@ async function history(user, customerId, isBoss) {
   const segsText = (segs) => {
     const list = (segs || []).slice().sort((a, b) => (a.segIndex || 0) - (b.segIndex || 0));
     if (!list.length) return '';
-    if (list.length === 1) return list[0].text || '';
-    return list.map((x, i) => `【录音 ${i + 1}】\n${x.text || ''}`).join('\n\n');
+    // 2026-09-11 修复（审查发现）：编号用转录记录里的【真实 segIndex】，而不是「已成功段的下标」。
+    // 否则某段未转写/失败时，后面的【录音 N】会前移错位（真实第 3 段被标成第 2 段）。
+    const multi = list.length > 1 || (Number(list[0].segIndex) || 0) > 0;
+    if (!multi) return list[0].text || '';
+    return list.map(x => `【录音 ${(Number(x.segIndex) || 0) + 1}】\n${x.text || ''}`).join('\n\n');
   };
   // 2026-09-11 老板定：转写文字可人工修订 → trEdited 优先，否则用识别的拼接文字
   const trOf = (v) => {

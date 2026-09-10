@@ -37,9 +37,9 @@ Page({
     recWarn: false,        // 剩 ≤30 秒：红字加大闪动
     recPlayId: '',         // 正在试听的段 id（互斥）
     recBusy: false,        // 转存/上传处理中
-    recCountText: '0/5',   // 段数
+    recCountText: '0/6',   // 段数初值（2026-09-11：跟 maxSegs 对齐；实际由 _refreshRecMeta 重算）
     recTotalText: '00:00', // 合计时长
-    recLimitMin: 10,       // 单条上限（分钟；由后台档位决定，上限 10）
+    recLimitMin: 5,        // 单条上限（分钟）初值；onLoad 会按后台档位覆盖（与 segMaxSec: 300 保持一致）
     segMaxSec: 300,        // 单条上限（秒）初值；onLoad 会按后台「拜访录音上限」档位覆盖（2026-09-11 老板定：跟后台走）
     totalMaxSec: 1800,     // 合计硬封顶（秒）= 30 分钟
     maxSegs: 6,            // 最多 6 段（2026-09-11 老板定：由 5 改为 6）

@@ -187,7 +187,8 @@ async function start(me, isBoss, e) {
     });
   }
   if (!segs.length) return { ok: false, code: 'NO_AUDIO', msg: '没有需要转写的录音' };
-  if (segs.length > 8) segs = segs.slice(0, 8);
+  // 2026-09-11：与手机端「最多 6 段」同源（此前写死 8，属魔数不同源）
+  if (segs.length > 6) segs = segs.slice(0, 6);
 
   // 老板模式：虚拟成功（后台管理端触发时 e.real=true → 跳过此分支，走真实执行）
   if (isBoss && !e.real) return { ok: true, boss: true, msg: '已提交转写（演示：未保存）', segs: segs.length };

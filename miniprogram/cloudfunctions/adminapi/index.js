@@ -328,14 +328,18 @@ async function expiredTaskTick() {
   let marked = 0;
   for (const t of rows) {
     if (!t.deadline || String(t.deadline) > today) continue;   // 还没过期
-    if (t.expiredLoggedAt) continue;                            // 已记过 → 跳过（幂等）
+    if (t.expiredLoggedAt) continue;                            // 已记过 → 跳过
     const total = (t.customerIds || []).length;
     const logs = withLog(t, {
       at: now, by: '系统', role: 'system', type: 'expired',
       detail: { deadline: t.deadline, total, taskName: t.name || '' }
     });
-    await db.collection('tasks').doc(t._id).update({ data: { logs, expiredLoggedAt: now } });
-    marked++;
+    // 2026-09-11（审查发现）：改为【条件更新】——只有"仍未标记"时才写入，天然原子，
+    // 避免后台 15 秒轮询与 10 分钟定时器并发时，同一条 expired 日志被重复补记。
+    const up = await db.collection('tasks')
+      .where({ _id: t._id, expiredLoggedAt: _.exists(false) })
+      .update({ data: { logs, expiredLoggedAt: now } });
+    if (up && up.stats && up.stats.updated) marked++;
   }
   return marked;
 }
@@ -1575,8 +1579,11 @@ async function listCustomerVisits(event) {
   const segsText = (segs) => {
     const list = (segs || []).slice().sort((a, b) => (a.segIndex || 0) - (b.segIndex || 0));
     if (!list.length) return '';
-    if (list.length === 1) return list[0].text || '';
-    return list.map((x, i) => `【录音 ${i + 1}】\n${x.text || ''}`).join('\n\n');
+    // 2026-09-11 修复（审查发现）：编号用转录记录里的【真实 segIndex】，而不是「已成功段的下标」。
+    // 否则某段未转写/失败时，后面的【录音 N】会前移错位（真实第 3 段被标成第 2 段）。
+    const multi = list.length > 1 || (Number(list[0].segIndex) || 0) > 0;
+    if (!multi) return list[0].text || '';
+    return list.map(x => `【录音 ${(Number(x.segIndex) || 0) + 1}】\n${x.text || ''}`).join('\n\n');
   };
   // 2026-09-11 老板定：转写文字可人工修订 → trEdited 优先（与 visits.history 同口径，前后台同步）
   const trOf = (v) => {
