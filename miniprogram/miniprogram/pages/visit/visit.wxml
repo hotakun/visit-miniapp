@@ -17,10 +17,11 @@
       <view class="picbtn {{prepBusy ? 'busy' : ''}}" bindtap="shootPhoto">📷 {{prepBusy ? '处理中…' : '拍照（可连拍）'}}</view>
       <view class="picbtn ghost {{prepBusy ? 'busy' : ''}}" bindtap="pickPhoto">🖼 从相册选</view>
     </view>
-    <!-- 已拍照片网格（每格固定像素、一行三格自动换行；点图看大图、✕ 删除） -->
+    <!-- 已拍照片网格（每格固定像素、一行三格自动换行；左下角序号、右上角 ✕ 删除、点图看大图） -->
     <view class="picgrid">
       <view class="pictile" wx:for="{{pics}}" wx:key="id">
         <image class="picimg" src="{{item.thumb}}" data-src="{{item.orig}}" bindtap="previewPhoto" mode="scaleToFill"/>
+        <view class="picno">{{index + 1}}</view>
         <view class="picdel" data-id="{{item.id}}" catchtap="delPhoto">✕</view>
       </view>
     </view>

@@ -47,6 +47,10 @@
 .pictile { position: relative; width: 212rpx; height: 159rpx; flex: none; border-radius: 13px; overflow: hidden; background: #F0F2F5; }
 .picimg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
 .picdel { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; line-height: 21px; text-align: center; background: rgba(0,0,0,.55); color: #fff; border-radius: 50%; font-size: 11px; font-weight: 700; z-index: 2; }
+/* 左下角照片序号（2026-09-11 老板定：拍好的照片格左下角显示 1、2、3…） */
+.picno { position: absolute; left: 6px; bottom: 6px; min-width: 22px; height: 22px; line-height: 22px; padding: 0 6px; box-sizing: border-box;
+         text-align: center; background: rgba(0,0,0,.55); color: #fff; border-radius: 11px; font-size: 12px; font-weight: 800;
+         font-variant-numeric: tabular-nums; z-index: 2; }
 .pictile.add.busy { opacity: .6; }
 .picempty { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; border: 1.5px dashed #D8DCE3; border-radius: 13px; box-sizing: border-box; color: #B7BEC7; }
 .picempty.busy { opacity: .6; }
