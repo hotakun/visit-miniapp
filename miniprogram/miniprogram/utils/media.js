@@ -112,13 +112,16 @@ function isIOS() {
   }
   return _ios;
 }
-// iOS 录音上限单独封顶 5 分钟（300 秒）：后台档位 3→3 分钟；5/10→iOS 最多 5 分钟
+// 2026-09-11 M2b（老板定）：单条上限 ≤10 分钟，iOS 一并放开 —— 原「iOS 单独封顶 5 分钟」取消，改为与安卓同档 600s
+// ⚠️ iPhone 10 分钟长录音仍需真机压测确认（若苹果端异常，改回 Math.min(n, 300) 并告知老板）
 function recLimit(limitSec) {
   const n = Number(limitSec) || 300;
-  return isIOS() ? Math.min(n, 300) : n;
+  return isIOS() ? Math.min(n, 600) : n;
 }
 
 // ===== 录音封装（安卓/鸿蒙 mp3 16kHz 单声道；iOS aac 16kHz 单声道；start 后可 stop；到点自动停） =====
+// 2026-09-11 M2b：录音器仍为单例（微信 RecorderManager 本身是全局单例）→ 多段由页面「串行录制」实现，
+// 每段录完立即 getUploadPath() 转存为持久路径后再入列；试听走下面的 playPath（共用一颗播放器 → 互斥）
 function createRecorder() {
   const rm = wx.getRecorderManager();
   const aud = wx.createInnerAudioContext();
@@ -222,8 +225,49 @@ function createRecorder() {
   };
 }
 
+// ===== 2026-09-11 M2b：多段录音的独立试听播放器 =====
+// 共用一颗 InnerAudioContext → 天然满足「同一时刻只播一条」（试听互斥）；每次切换先 stop
+let _pv = null;      // InnerAudioContext 单例
+let _pvPath = '';    // 当前播放源（空 = 没在播）
+let _pvEnd = null;   // 播放结束/出错回调（复位按钮状态用）
+function _ensurePlayer() {
+  if (_pv) return _pv;
+  _pv = wx.createInnerAudioContext();
+  _pv.autoplay = false;
+  _pv.obeyMuteSwitch = false; // 与 createRecorder 一致：iOS 静音键打开时也要有声
+  _pv.onEnded(() => { _pvPath = ''; const cb = _pvEnd; _pvEnd = null; if (cb) cb(); });
+  _pv.onError(() => {
+    if (!_pvPath) return; // 空实例 stop 会误报 onError（2026-09-08 老板实测：报错却有声）
+    _pvPath = '';
+    const cb = _pvEnd; _pvEnd = null;
+    if (cb) cb();
+    wx.showToast({ title: '播放失败，请重试', icon: 'none' });
+  });
+  return _pv;
+}
+// 播放指定路径（path 为空则仅停止）；onEnded 用于复位按钮状态
+function playPath(path, onEnded) {
+  const p = _pv || _ensurePlayer();
+  p.stop();
+  _pvPath = '';
+  _pvEnd = onEnded || null;
+  if (!path) return;
+  p.src = path;
+  _pvPath = path;
+  p.play();
+}
+// 停止试听并清回调
+function stopPath() {
+  _pvPath = '';
+  _pvEnd = null;
+  if (_pv) _pv.stop();
+}
+// 某路径是否正在播放
+function isPlayingPath(path) { return !!path && _pvPath === path; }
+
 module.exports = {
   PHOTO_EDGE, PHOTO_MAX, THUMB_EDGE, THUMB_MAX,
   REC_SAMPLE, REC_FORMAT,
-  chooseImage, prepPhoto, uploadFile, getTempURLs, fmtSec, createRecorder, getFileSize, isIOS, recLimit
+  chooseImage, prepPhoto, uploadFile, getTempURLs, fmtSec, createRecorder, getFileSize, isIOS, recLimit,
+  playPath, stopPath, isPlayingPath
 };

@@ -278,6 +278,24 @@ async function submit(user, e, isBoss) {
     doc._id = add._id;
   }
 
+  // 2026-09-11 M2b：把「提交前已点过『开始转录』」的转写记录回填 visitId
+  // （按 fileID 精确匹配，不误关联别的拜访；失败不影响提交，后台仍可按客户查看）
+  if (au.length) {
+    try {
+      const trs = await db.collection('transcripts')
+        .where({ audioFileID: _.in(au.map(a => a.fileID)) }).limit(50).get();
+      for (const t of (trs.data || [])) {
+        if (t.visitId === doc._id) continue;
+        await db.collection('transcripts').doc(t._id).update({
+          data: {
+            visitId: doc._id, taskId, customerId,
+            salesmanId: user._id, salesmanName: user.name, updatedAt: Date.now()
+          },
+        });
+      }
+    } catch (err) { /* 回填失败不影响提交 */ }
+  }
+
   if (result === '闭店·搬迁') {
     await db.collection('customers').doc(customerId).update({ data: { reviewFlag: true } });
   }

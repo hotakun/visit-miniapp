@@ -70,7 +70,9 @@ Page({
       const need = [];
       raw.forEach(v => {
         (v.photos || []).forEach(p => { if (p.thumbID) need.push(p.thumbID); if (p.fileID) need.push(p.fileID); });
-        if (v.audio && v.audio.fileID) need.push(v.audio.fileID);
+        // 2026-09-11 M2b：多段录音（audios）全部换链接，兼容旧 audio 单段
+        const as = Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []);
+        as.forEach(a => { if (a && a.fileID) need.push(a.fileID); });
       });
       let urls = {};
       if (need.length) {
@@ -80,11 +82,25 @@ Page({
         const photos = (v.photos || []).filter(p => p && urls[p.thumbID]);
         // 2026-09-11 M2b 小步：语音转写摘要（去掉换行，截 60 字）与全文
         const trText = (v.transcribe && v.transcribe.text) || '';
+        // 2026-09-11 M2b：多段录音列表（逐段独立试听；播放 key = visitId#段号 → 天然互斥）
+        const audRaw = Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []);
+        const audList = audRaw.filter(a => a && a.fileID && urls[a.fileID]).map((a, i) => {
+          const sec = Math.max(0, Math.round(Number(a.duration) || 0));
+          return {
+            key: v._id + '#' + i,
+            label: audRaw.length > 1 ? ('录音 ' + (i + 1)) : '录音',
+            url: urls[a.fileID],
+            text: media.fmtSec(sec),
+            durMs: Math.max(1, sec * 1000),
+            on: a.transcribe !== false // 是否参与转写（未勾选只留档）
+          };
+        });
         return {
           ...v,
           evPhotos: photos.map(p => ({ t: urls[p.thumbID], o: urls[p.fileID] || '' })),
           evListJson: JSON.stringify(photos.map(p => urls[p.fileID]).filter(Boolean)),
-          audioUrl: v.audio && v.audio.fileID ? (urls[v.audio.fileID] || '') : '',
+          audList,
+          audioUrl: v.audio && v.audio.fileID ? (urls[v.audio.fileID] || '') : '', // 兼容旧模板
           audioText: v.audio && v.audio.duration ? media.fmtSec(v.audio.duration) : '',
           audioDurMs: v.audio && v.audio.duration ? Math.round(Number(v.audio.duration) * 1000) : 0,
           tr: v.transcribe || null,

@@ -8,6 +8,7 @@
   <view class="timeout-warn" wx:if="{{timeoutWarn}}">⏰ 拜访将在 {{timeoutLeftMin}} 分钟后自动{{result ? '提交' : '取消'}}，请尽快处理</view>
 
   <!-- 区块顺序（2026-09-08 老板定）：现场拍照 → 现场录音 → 样品/物料 → 拜访记录 → 拜访结果 -->
+  <!-- 2026-09-11 M2b：现场录音改为【多段】—— ≤5 段 / 单条 ≤10 分钟 / 合计 30 分钟硬封顶；按段勾选转写 -->
   <view class="sec">
     <view class="st">📷 现场拍照</view>
     <!-- 固定三个框（2026-09-08 老板定）：有图显示可删，空框点击拍照；永远三等分无浮动添加块 -->
@@ -26,20 +27,49 @@
   </view>
 
   <view class="sec">
-    <view class="st">🎙️ 现场录音 · 最长 {{recLimitMin}} 分钟</view>
-    <view class="recbox">
-      <view class="recbtn" wx:if="{{recState === 'idle'}}" bindtap="onRecTap"><text class="rcdot"/>开始录音</view>
-      <block wx:elif="{{recState === 'rec'}}">
-        <view class="recinfo"><text class="rcdot blink"/>录音中 {{recText}}</view>
-        <view class="recstop" bindtap="onRecTap">■ 停止</view>
-      </block>
-      <block wx:else>
-        <view class="recinfo done">🎙️ 已录 {{recText}}</view>
-        <view class="recops">
-          <view class="recop {{recPlaying ? 'on' : ''}}" bindtap="onRecTap">{{recPlaying ? '⏸ 停' : '▶ 试听'}}</view>
-          <view class="recop" bindtap="reRec">↻ 重录</view>
-        </view>
-      </block>
+    <view class="st">🎙️ 现场录音 · 最多 {{maxSegs}} 段，单条最长 {{recLimitMin}} 分钟，合计 30 分钟</view>
+
+    <!-- 录音中：计时 + 剩余倒计时（剩 30 秒红字加大闪动）+ 停止 -->
+    <view class="recbox" wx:if="{{recState === 'rec'}}">
+      <view class="recinfo"><text class="rcdot blink"/>录音中 {{curText}}</view>
+      <view class="recleft {{recWarn ? 'warn' : ''}}">{{recLeftText}}</view>
+      <view class="recstop" bindtap="onRecTap">■ 停止</view>
+    </view>
+    <!-- 未录音且未录满 -->
+    <view class="recbox" wx:elif="{{recs.length < maxSegs}}">
+      <view class="recbtn" bindtap="onRecTap"><text class="rcdot"/>开始录音</view>
+      <view class="recmeta">已录 {{recCountText}} · 合计 {{recTotalText}}</view>
+    </view>
+    <!-- 已录满最大段数 -->
+    <view class="recbox" wx:else>
+      <view class="recfull">🎙️ 已录满 {{maxSegs}} 段 · 合计 {{recTotalText}}</view>
+    </view>
+
+    <!-- 已录段列表（一条条排着不覆盖：试听 / 勾选转写 / 删除） -->
+    <view class="reclist" wx:if="{{recs.length}}">
+      <view class="recitem" wx:for="{{recs}}" wx:key="id">
+        <view class="ri-idx">{{index + 1}}</view>
+        <view class="ri-play {{recPlayId === item.id ? 'on' : ''}}" bindtap="playRec" data-id="{{item.id}}">{{recPlayId === item.id ? '⏸' : '▶'}}</view>
+        <view class="ri-time">{{item.text}}</view>
+        <view class="ri-tr {{item.transcribe ? 'on' : ''}}" catchtap="toggleRecTr" data-i="{{index}}">{{item.transcribe ? '☑ 转文字' : '☐ 转文字'}}</view>
+        <view class="ri-del" catchtap="askDelRec" data-i="{{index}}">✕</view>
+      </view>
+    </view>
+
+    <!-- 开始转录（老板定：按下 = 上传 + 转写勾选的段，可提前看结果） -->
+    <view class="trbar" wx:if="{{recs.length}}">
+      <view class="trgo {{trBusy ? 'busy' : ''}}" bindtap="startTranscribe">{{trBusy ? '提交中…' : '📝 开始转录'}}</view>
+      <view class="trmsg" wx:if="{{trMsg}}">{{trMsg}}</view>
+    </view>
+  </view>
+
+  <!-- 删除单段录音：二次确认（老板定；项目铁律：页内弹层，不用 wx.showModal） -->
+  <view class="c-mask" wx:if="{{delRecShow}}">
+    <view class="c-box">
+      <view class="ct">删除这段录音？</view>
+      <view class="csub">删除后不可恢复；这一段不会再上传，也不会转写。</view>
+      <view class="btn-primary" style="background:var(--danger)" bindtap="doDelRec">确认删除</view>
+      <view class="again" bindtap="hideDelRec">再看看</view>
     </view>
   </view>
 

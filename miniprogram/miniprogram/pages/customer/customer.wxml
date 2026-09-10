@@ -68,12 +68,14 @@
                src="{{ph.t}}" data-src="{{ph.o}}" data-list="{{item.evListJson}}"
                bindtap="previewEv" mode="scaleToFill"/>
       </view>
-      <view class="hev-audio {{evPlay === item._id ? 'on' : ''}}" wx:if="{{item.audioUrl}}">
-        <view class="ha-play" catchtap="playEv" data-id="{{item._id}}" data-url="{{item.audioUrl}}" data-dur="{{item.audioText}}">{{evPlay === item._id ? '⏸' : '▶'}}</view>
-        <slider class="ha-slider" min="0" max="{{item.audioDurMs || 1}}" value="{{evPlay === item._id ? evCurMs : 0}}"
+      <!-- 录音（2026-09-11 M2b：多段，逐段独立试听；播放 key = visitId#段号 保证同一时刻只播一条） -->
+      <view class="hev-audio {{evPlay === seg.key ? 'on' : ''}}" wx:for="{{item.audList}}" wx:for-item="seg" wx:key="key">
+        <text style="font-size:11.5px;color:var(--sub);font-weight:700;flex-shrink:0">{{seg.label}}</text>
+        <view class="ha-play" catchtap="playEv" data-id="{{seg.key}}" data-url="{{seg.url}}" data-dur="{{seg.text}}">{{evPlay === seg.key ? '⏸' : '▶'}}</view>
+        <slider class="ha-slider" min="0" max="{{seg.durMs}}" value="{{evPlay === seg.key ? evCurMs : 0}}"
                 block-size="14" activeColor="#2F80ED" backgroundColor="#D4DBE4"
-                disabled="{{evPlay !== item._id}}" bindchange="onEvSeek" data-id="{{item._id}}"/>
-        <text class="ha-time">{{evPlay === item._id ? (evCurText + ' / ' + (item.audioText || '00:00')) : (item.audioText || '')}}</text>
+                disabled="{{evPlay !== seg.key}}" bindchange="onEvSeek" data-id="{{seg.key}}"/>
+        <text class="ha-time">{{evPlay === seg.key ? (evCurText + ' / ' + seg.text) : seg.text}}</text>
       </view>
       <!-- 语音转写（2026-09-11 M2b 小步）：状态胶囊 + 两行摘要，点文字看全文 -->
       <block wx:if="{{item.tr}}">

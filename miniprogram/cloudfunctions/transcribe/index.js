@@ -223,7 +223,11 @@ async function start(me, isBoss, e) {
         continue;
       }
       const rec = {
-        visitId: e.visitId || '', taskId: (visit && visit.taskId) || '', customerId: (visit && visit.customerId) || '',
+        // 2026-09-11 M2b：提交前「开始转录」（fileIDs 路径）还没有 visitId → 先存 taskId/customerId 上下文，
+        // 提交拜访时由 visits.submit 按 fileID 回填 visitId（历史卡与后台据此可见）
+        visitId: e.visitId || '',
+        taskId: (visit && visit.taskId) || e.taskId || '',
+        customerId: (visit && visit.customerId) || e.customerId || '',
         salesmanId: (visit && visit.salesmanId) || me._id, salesmanName: (visit && visit.salesmanName) || me.name,
         segIndex: s.segIndex, audioFileID: s.fileID, duration: Math.round(s.duration || 0),
         status: 'processing', asrTaskId: data.TaskId, text: '', errorMsg: '',
