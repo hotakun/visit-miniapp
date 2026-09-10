@@ -90,7 +90,7 @@
     <view class="c-box">
       <view class="ct">删除这段录音？</view>
       <view class="csub">删除后不可恢复；这一段不会再上传，也不会转写。</view>
-      <view class="btn-primary" style="background:var(--danger)" bindtap="doDelRec">确认删除</view>
+      <view class="btn-primary" style="background:#FDEDED;color:#E5484D;font-weight:800;box-shadow:none;border:1px solid #F7D9D9" bindtap="doDelRec">确认删除</view>
       <view class="again" bindtap="hideDelRec">再看看</view>
     </view>
   </view>
