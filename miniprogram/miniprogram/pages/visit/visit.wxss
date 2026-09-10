@@ -113,8 +113,9 @@ page { background: #D0D6E0; }
 .recitem { position: relative; display: flex; align-items: center; gap: 9px; border-radius: 14px;
            padding: 10px 12px; margin-top: 8px; border: 1px solid #2C8A50; overflow: hidden;
            background: linear-gradient(0deg, #1E7A45 0%, #46B173 100%); }
-/* 序号（2026-09-11 老板定：放大、醒目，避免看错序号删错段；后面元素由 flex 自动顺移）*/
-.ri-idx { min-width: 22px; text-align: center; font-size: 16px; font-weight: 900; color: #fff; flex-shrink: 0; }
+/* 序号（2026-09-11 老板定：再放大到 22px，要一眼看清是第几段；后面元素由 flex 自动顺移）*/
+.ri-idx { min-width: 28px; text-align: center; font-size: 22px; font-weight: 900; color: #fff; flex-shrink: 0;
+          text-shadow: 0 1px 3px rgba(0,0,0,.28); }
 .ri-play { width: 30px; height: 30px; border-radius: 50%; background: #fff; color: #1E7A45; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
 .ri-play.on { background: #0E4F2C; color: #fff; }
 .ri-time { flex: 1; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; padding-right: 4px; }
