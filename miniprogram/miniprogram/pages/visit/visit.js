@@ -47,12 +47,13 @@ Page({
     trMsg: '',             // 转录状态提示
     delRecShow: false,     // 删除单段：二次确认弹层
     delRecIdx: -1,
-    // 2026-09-11 老板定：五个区块【全部】改为可折叠卡片（点标题栏展开收起；独立展开；默认展开）
+    // 2026-09-11 老板定：五个区块【全部】可折叠（点标题栏展开收起；独立展开）
+    // 2026-09-11 老板定：进入页面默认只展开【现场拍照】【现场录音】，样品/拜访记录/拜访结果三块默认收起
     foldPic: false,
     foldRec: false,
-    foldSamp: false,
-    foldText: false,
-    foldRes: false,
+    foldSamp: true,
+    foldText: true,
+    foldRes: true,
     evDesc: ''
   },
   onLoad() {
