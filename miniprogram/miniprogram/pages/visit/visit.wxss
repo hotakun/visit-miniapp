@@ -1,5 +1,5 @@
-/* 2026-09-11 老板定：拜访页页面底色加深，让白色卡片更明显（只覆盖本页，不动全局 --bg）*/
-page { background: #EDEFF4; }
+/* 2026-09-11 老板定：拜访页页面底色【再次加深】（#EDEFF4 → #DDE2EA），让白色卡片更跳（只覆盖本页）*/
+page { background: #DDE2EA; }
 .page { padding: 16px 18px 150px; }
 .vhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .vname { font-size: 19px; font-weight: 800; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -37,7 +37,7 @@ page { background: #EDEFF4; }
 /* 多行文字框（2026-09-11 老板定：样品 / 物料 与 拜访记录 都放大）*/
 .area { height: 200px; min-height: 200px; padding: 13px 14px; line-height: 1.7; }
 .area-sm { height: 96px; min-height: 96px; padding: 12px 14px; line-height: 1.7; }
-.foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(237,239,244,0), #EDEFF4 30%); }
+.foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(221,226,234,0), #DDE2EA 30%); }
 .btn-blue { background: var(--blue); }
 /* 取消拜访：窄按钮（灰字细边框），离文字框远防误触（老板 2026-09-04 定） */
 .cancel { width: 130px; margin: 48px auto 0; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--sub); background: #F7F8FA; border: 1px solid #E4E7EC; border-radius: 999px; padding: 8px 0; }
