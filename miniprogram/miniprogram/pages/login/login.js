@@ -128,11 +128,13 @@ Page({
   // 老板模式（2026-09-09 §7.13）：boss 白名单管理员入口——全量只读+虚拟写，storage 持久
   enterBoss() {
     const app = getApp();
-    // 2026-09-10：手动进老板模式时拉取欢迎仪式配置（异步，home 页播放前有等待兜底）
+    // 2026-09-10：手动进老板模式时拉取欢迎仪式配置（异步，home 页播放前等待兜底）
     if (!app.globalData.welcome) {
+      app.globalData.welcomePending = true;
       api.call('login', { action: 'welcomeCfg' })
         .then(r => { if (r && r.ok && r.welcome) app.globalData.welcome = r.welcome; })
-        .catch(() => { /* 失败用默认 */ });
+        .catch(() => { /* 失败用默认 */ })
+        .then(() => { app.globalData.welcomePending = false; });
     }
     app.setBossMode(true);
     wx.redirectTo({ url: '/pages/home/home' });
@@ -152,6 +154,14 @@ Page({
     const u = this.data.devUser;
     if (!u) { this.check(); return; }
     const app = getApp();
+    // 2026-09-10：进老板模式拉取欢迎仪式配置（异步，home 页播放前等待兜底）
+    if (!app.globalData.welcome) {
+      app.globalData.welcomePending = true;
+      api.call('login', { action: 'welcomeCfg' })
+        .then(r => { if (r && r.ok && r.welcome) app.globalData.welcome = r.welcome; })
+        .catch(() => { /* 失败用默认 */ })
+        .then(() => { app.globalData.welcomePending = false; });
+    }
     app.setUser(u);
     app.setBossMode(true);
     app.globalData.devAuthed = true; // 会话级放行：本次运行期 TAB 来回切换不弹回登录页

@@ -271,7 +271,25 @@ Page({
   // ===== 老板欢迎仪式（2026-09-10 老板定：全屏礼花「👑 欢迎老板」；频率/时长/风格后台可配） =====
   maybePlayWelcome() {
     const app = getApp();
-    const cfg = app.globalData.welcome || { mode: 'daily', duration: 3, style: 'gold' };
+    // 手动进老板模式刚发起配置请求（welcomePending）→ 最多等 1 秒，超时用默认；拿到则用云端配置
+    if (app.globalData.welcomePending && !app.globalData.welcome) {
+      let waited = 0;
+      const tick = () => {
+        waited += 150;
+        if (app.globalData.welcome || waited >= 1000) {
+          this._welGo(app.globalData.welcome || null);
+        } else {
+          setTimeout(tick, 150);
+        }
+      };
+      setTimeout(tick, 150);
+      return;
+    }
+    this._welGo(app.globalData.welcome || null);
+  },
+  _welGo(rawCfg) {
+    if (!this._shown) return; // 等待期间已离开首页 → 不播
+    const cfg = rawCfg || { mode: 'daily', duration: 3, style: 'gold' };
     // 频率判定（本地 storage；东八区日期）：once=永远只播一次；daily=每天第一次；every=每次都播
     try {
       const d = new Date(Date.now() + 8 * 3600 * 1000);

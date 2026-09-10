@@ -8,7 +8,8 @@ App({
     APP_VERSION: '0.9.08', // 版本号（2026-09-08 老板定：双方必须统一口径的改动才 bump；界面级改动不动）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
-    welcome: null // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）
+    welcome: null, // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）
+    welcomePending: false // 欢迎仪式配置请求在途（home 页播放前短暂等待，超时用默认）
   },
   reviewTimer: null,      // 审核观察员定时器（仅存在审核中任务时运行）
   reviewSnapshot: null,   // 上次快照 { taskId: status }
