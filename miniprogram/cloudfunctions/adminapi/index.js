@@ -1637,7 +1637,9 @@ async function listAdmins(event) {
     admins: res.data.map(a => ({
       _id: a._id, name: a.name, username: a.username, role: a.role,
       active: a.active !== false, boss: a.boss === true,
-      phone: a.phone || '', lastLoginAt: a.lastLoginAt || 0
+      phone: a.phone || '', lastLoginAt: a.lastLoginAt || 0,
+      // 2026-09-10 老板定：新人注册通知走服务号 → 管理员也支持服务号绑定（人员管理显示绑定状态）
+      mpOpenidMask: a.mpOpenid ? String(a.mpOpenid).slice(0, 8) + '…' + String(a.mpOpenid).slice(-6) : ''
     }))
   };
 }
@@ -1939,7 +1941,8 @@ async function setMpOpenid(event) {
   if (!userId) return { ok: false, code: 'BAD_ARG', msg: '缺少用户' };
   const uRes = await db.collection('users').doc(userId).get().catch(() => null);
   const u = uRes && uRes.data;
-  if (!u || u.role !== 'salesman') return { ok: false, code: 'NOT_FOUND', msg: '业务员不存在' };
+  // 2026-09-10 老板定：管理员（老板）也要绑服务号收注册通知——角色放开为 业务员/管理员/超级管理员
+  if (!u || !['salesman', 'admin', 'super_admin'].includes(u.role)) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
   const val = String(mpOpenid || '').trim();
   await db.collection('users').doc(userId).update({
     data: { mpOpenid: val, mpBoundAt: val ? Date.now() : null }

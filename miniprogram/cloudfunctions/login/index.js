@@ -80,6 +80,77 @@ const mainInner = async (event) => {
   return { ok: false, code: 'NEED_REGISTER', msg: '请注册后等待审核' };
 };
 
+// 2026-09-10 老板定：新人提交注册申请 → 服务号模板消息推送到老板/管理员微信（复用任务通知同一模板 kdgr7e7C-… 5词）
+// 失败静默不影响注册结果；收件人=已绑 mpOpenid 的管理员（绑定入口：后台人员管理「服务号」列）
+async function notifyAdminsNewReg(name, phone) {
+  try {
+    const cfgRes = await db.collection('settings').where({ key: 'mpConfig' }).limit(1).get();
+    const cfg = cfgRes.data[0] && cfgRes.data[0].value;
+    if (!cfg || !cfg.enabled || !cfg.appid || !cfg.appsecret || !cfg.templateId) return;
+    const adm = await users.where({ role: _.in(['super_admin', 'admin']) }).get();
+    const targets = adm.data.filter(a => a.mpOpenid).map(a => a.mpOpenid);
+    if (!targets.length) return;
+    // access_token：优先用老板电脑后台定时同步的云端缓存；过期现场取（可能受 IP 白名单限制，失败即放弃）
+    let token = '';
+    const tRes = await db.collection('settings').where({ key: 'mpAccessToken' }).limit(1).get();
+    const tc = tRes.data[0] && tRes.data[0].value;
+    if (tc && tc.token && Number(tc.expiresAt) > Date.now() + 300000) token = tc.token;
+    if (!token) {
+      const r = await mpRequest(`/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(cfg.appid)}&secret=${encodeURIComponent(cfg.appsecret)}`, null, 'GET');
+      if (!r || !r.access_token) return;
+      token = r.access_token;
+      const data = { key: 'mpAccessToken', value: { token, expiresAt: Date.now() + ((r.expires_in || 7200) - 300) * 1000 }, updatedAt: Date.now() };
+      if (tRes.data[0]) await db.collection('settings').doc(tRes.data[0]._id).update({ data });
+      else await db.collection('settings').add({ data });
+    }
+    const pad = n => String(n).padStart(2, '0');
+    const now = new Date(Date.now() + 8 * 3600 * 1000); // 东八区
+    const timeText = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}`;
+    const limit20 = s => String(s || '').slice(0, 20);
+    const no = String(Date.now()).slice(-6); // 申请编号（character_string 只允许数字字母，用时间戳后 6 位）
+    for (const openid of targets) {
+      try {
+        await mpRequest(`/cgi-bin/message/template/send?access_token=${encodeURIComponent(token)}`, {
+          touser: openid,
+          template_id: cfg.templateId,
+          data: {
+            character_string1: { value: no },           // 订单编号位 → 申请编号
+            thing2: { value: limit20(name) },            // 服务人员位 → 申请人姓名
+            thing6: { value: limit20(phone) },           // 服务用户位 → 申请手机号
+            time5: { value: timeText },                  // 服务时间位 → 申请时间
+            thing7: { value: '提交注册申请，请到后台审核' } // 地点位 → 提示
+          }
+        });
+      } catch (e) { /* 单个收件人失败不影响其他 */ }
+    }
+  } catch (e) {
+    console.error('注册通知发送异常', e);
+  }
+}
+
+// 微信接口请求（云函数直连 api.weixin.qq.com；与 adminapi 同款精简版）
+function mpRequest(pathWithQuery, body, method) {
+  const https = require('https');
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : '';
+    const req = https.request('https://api.weixin.qq.com' + pathWithQuery, {
+      method: method === 'GET' ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    }, res => {
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { buf += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(buf)); } catch (e) { reject(new Error('微信接口返回非 JSON：' + buf.slice(0, 120))); }
+      });
+    });
+    req.setTimeout(4000, () => req.destroy(new Error('微信接口请求超时')));
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
 // 顶层兜底（2026-09-10 容错加固）：任何未预料异常（集合故障/未知错误）都以可读文案返回，
 // 手机端不再只看到「提交失败，请重试」，也不阻断注册表单展示
 exports.main = async (event) => {
@@ -176,6 +247,8 @@ async function register(OPENID, e) {
     console.error('register 提交申请异常', err);
     return { ok: false, code: 'SERVER_ERROR', msg: '提交失败，请稍后重试' };
   }
+  // 2026-09-10 老板定：新人申请 → 老板/管理员手机微信提醒（服务号模板消息；失败静默不阻断）
+  await notifyAdminsNewReg(name, phone);
   return { ok: true, msg: '申请已提交，审核通过后重新打开小程序即可使用' };
 }
 

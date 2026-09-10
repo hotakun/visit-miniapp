@@ -1146,7 +1146,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <tbody id="smTbody"></tbody>
         </table>
         <table class="tbl" id="ptable1" style="display:none">
-          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>当前状态</th><th>状态</th><th style="width:150px;text-align:center">👑 老板</th><th style="width:110px;text-align:center">操作</th></tr></thead>
+          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>当前状态</th><th>状态</th><th>服务号</th><th style="width:150px;text-align:center">👑 老板</th><th style="width:110px;text-align:center">操作</th></tr></thead>
           <tbody id="adTbody"></tbody>
         </table>
         <!-- 注册审核（2026-09-09 老板拍板：登录改「注册→后台审核→通过后免登进入」） -->
@@ -4520,6 +4520,7 @@ async function loadPeople() {
         <td><span class="pill" style="background:#1F2430;color:#fff">👑 老板</span></td>
         <td>${adminActiveHtml(a)}</td>
         <td><span class="pill green">启用</span></td>
+        <td>${mpBindCell(a)}</td>
         <td><span class="pill" style="background:#1F2430;color:#fff">👑 老板</span></td>
         <td><span style="color:#C4CAD1;font-size:12px">—</span></td>
       </tr>`;
@@ -4530,6 +4531,7 @@ async function loadPeople() {
         <td><span class="pill ${a.role === 'super_admin' ? 'orange' : 'gray'}">${a.role === 'super_admin' ? '超级管理员' : '管理员'}</span></td>
         <td>${adminActiveHtml(a)}</td>
         <td>${a.role === 'super_admin' ? '<span class="pill green">启用</span>' : toggleHtml(a._id, a.active)}</td>
+        <td>${mpBindCell(a)}</td>
         <td style="text-align:center;white-space:nowrap">${a.boss ? `<span class="pill" style="background:#1F2430;color:#fff">👑 老板</span> <button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserBoss('${a._id}',false)">停用</button>` : `<button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserBoss('${a._id}',true)">👑 启用老板</button>`}</td>
         <td>${a.role === 'super_admin' ? '<span style="color:#C4CAD1;font-size:12px">—</span>' : `<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${a._id}','${esc(a.name)}')">删除</button>`}</td>
       </tr>`;
@@ -4687,6 +4689,13 @@ async function deleteUser(id, name) {
 // ===== 服务号 OpenID 绑定 =====
 let mpBindUserId = '';
 
+// 2026-09-10 老板定：管理员（老板）也要绑服务号收注册通知——管理员表「服务号」列单元格
+function mpBindCell(a) {
+  return a.mpOpenidMask
+    ? `<span class="pill green" title="${esc(a.mpOpenidMask)}">已绑定</span> <button class="btn ghost" style="height:24px;font-size:11px" onclick="openMpBind('${a._id}','${esc(a.name)}','${esc(a.mpOpenidMask)}')">更换</button>`
+    : `<button class="btn ghost" style="height:24px;font-size:11px;color:var(--primary-deep)" onclick="openMpBind('${a._id}','${esc(a.name)}','')">＋ 绑定</button>`;
+}
+
 function openMpBind(id, name, mask) {
   mpBindUserId = id;
   $('mpBindTitle').textContent = '服务号 OpenID · ' + name;
@@ -4701,7 +4710,7 @@ async function saveMpBind(unbind) {
   if (Date.now() - mpBindBusy < 15000) return;
   mpBindBusy = Date.now();
   if (unbind) {
-    if (!window.confirm('确认解绑该业务员的服务号 OpenID？解绑后新任务将回退到小程序订阅提醒。')) return;
+    if (!window.confirm('确认解绑该账号的服务号 OpenID？解绑后将收不到服务号通知（新任务 / 注册审核提醒）。')) return;
     const res = await api('setMpOpenid', { userId: mpBindUserId, mpOpenid: '' });
     if (!res.ok) { alert(res.msg || '解绑失败'); return; }
   } else {
