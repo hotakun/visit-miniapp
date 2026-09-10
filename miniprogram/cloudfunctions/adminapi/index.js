@@ -295,10 +295,35 @@ function todayStr() {
 // 每 10 分钟定时触发（cron 配置在云开发控制台，见部署说明）：
 // ① remindAt 到点且未提醒 → 服务号提醒一次（标记 remindSentAt 防重复）
 // ② autoCancelAt 到点 → 双态：有草稿结果→自动提交（跳过距离、无照片录音）；无→自动取消；均写任务 logs + 服务号告知
+// ③ 2026-09-11 新增：任务「过期」补记流程档案（老板反馈：过期时档案里没有记录）
 async function visitTimeoutTick() {
   const now = Date.now();
+  await expiredTaskTick();   // ← ③ 必须独立于"是否有拜访中"，所以放在 return 之前
   const ong = await fetchAll('visits', { status: 'ongoing' }, {});
   if (!ong.length) return;
+
+// 2026-09-11 修复（老板反馈：青恩艳那条任务过期后，流程档案里查不到记录）：
+// 「过期」原本只是按 deadline 实时算出来的状态（tasks 的 expired 是现算的），系统里没有任何写入点 → 档案空白。
+// 这里由 10 分钟定时器兜底补记一条 expired 日志；用 expiredLoggedAt 做幂等，同一任务只写一次。
+async function expiredTaskTick() {
+  const today = todayStr();
+  const rows = await fetchAll('tasks', { status: 'published', archivedAt: _.exists(false) },
+    { _id: true, name: true, deadline: true, customerIds: true, salesmanName: true, logs: true, expiredLoggedAt: true });
+  const now = Date.now();
+  let marked = 0;
+  for (const t of rows) {
+    if (!t.deadline || String(t.deadline) > today) continue;   // 还没过期
+    if (t.expiredLoggedAt) continue;                            // 已记过 → 跳过（幂等）
+    const total = (t.customerIds || []).length;
+    const logs = withLog(t, {
+      at: now, by: '系统', role: 'system', type: 'expired',
+      detail: { deadline: t.deadline, total, taskName: t.name || '' }
+    });
+    await db.collection('tasks').doc(t._id).update({ data: { logs, expiredLoggedAt: now } });
+    marked++;
+  }
+  return marked;
+}
   for (const v of ong) {
     try {
       if (!v.autoCancelAt) continue;
