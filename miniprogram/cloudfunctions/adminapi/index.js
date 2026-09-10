@@ -13,7 +13,21 @@ const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 const BOSS_PHONE = '15055492888';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'ping'];
+
+// 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
+async function saveVisitTrText(event) {
+  const visitId = String(event.visitId || '');
+  if (!visitId) return { ok: false, code: 'BAD_ARG', msg: '缺少拜访 ID' };
+  const text = String(event.text == null ? '' : event.text).slice(0, 20000);
+  const vr = await db.collection('visits').doc(visitId).get().catch(() => null);
+  if (!vr || !vr.data) return { ok: false, code: 'NOT_FOUND', msg: '拜访记录不存在' };
+  const adminName = (event._admin && event._admin.name) || '管理员';
+  await db.collection('visits').doc(visitId).update({
+    data: { trEdited: { text, by: adminName, byId: (event._admin && event._admin._id) || '', at: Date.now() } }
+  });
+  return { ok: true, text, editedAt: Date.now(), msg: '已保存' };
+}
 
 exports.main = async (event) => {
   const action = (event && event.action) || 'login';
@@ -99,6 +113,7 @@ exports.main = async (event) => {
     if (action === 'autoArchiveExpired') return await autoArchiveExpired(event);
     if (action === 'updateCustomerRemark') return await updateCustomerRemark(event);
     if (action === 'purgeUnbatchedCustomers') return await purgeUnbatchedCustomers(event);
+    if (action === 'saveVisitTrText') return await saveVisitTrText(event);
     if (action === 'ping') return { ok: true, pong: Date.now() };
     return { ok: true, pong: Date.now() };
   } catch (e) {
@@ -1556,11 +1571,19 @@ async function listCustomerVisits(event) {
       else m.running++;
     });
   }
-  const trOf = (id) => {
-    const m = trMap[id];
+  // 2026-09-11 老板定：转写文字可人工修订 → trEdited 优先（与 visits.history 同口径，前后台同步）
+  const trOf = (v) => {
+    const m = trMap[v._id];
+    const edited = v.trEdited && typeof v.trEdited.text === 'string' ? v.trEdited.text : '';
     if (!m || !m.total) return null;
     const status = m.running > 0 ? 'processing' : (m.done > 0 ? (m.failed > 0 ? 'partial' : 'done') : 'failed');
-    return { status, segCount: m.total, text: m.segs.map(x => x.text || '').join('\n') };
+    return {
+      status,
+      segCount: m.total,
+      edited: !!edited,
+      editedAt: (v.trEdited && v.trEdited.at) || 0,
+      text: edited || m.segs.map(x => x.text || '').join('\n')
+    };
   };
   return {
     ok: true,
@@ -1579,7 +1602,7 @@ async function listCustomerVisits(event) {
       // 2026-09-11 M2c：多段录音下发（audios 优先，audio 兼容旧数据）
       audios: Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []),
       audio: v.audio || null,
-      transcribe: trOf(v._id)
+      transcribe: trOf(v)
     }))
   };
 }

@@ -90,16 +90,28 @@
     <view class="empty" wx:if="{{!history.length}}">暂无拜访记录</view>
   </view>
 
-  <!-- 语音转写全文弹层（2026-09-11 M2b 小步：点文字打开，项目铁律不用 wx.showModal） -->
-  <view class="c-mask" wx:if="{{trShow}}">
-    <view class="c-box">
+  <!-- 语音转写全文弹层（点文字打开；文字可人工修订；编辑态靠上以避开软键盘，2026-09-11 老板反馈） -->
+  <view class="c-mask tr-mask {{trEditing ? 'edit-mode' : ''}}" wx:if="{{trShow}}" bindtap="closeTr">
+    <view class="c-box tr-box" catchtap="noop">
       <view class="ct">语音记录</view>
-      <view class="tr-sub">{{trTitle}}</view>
-      <view class="tr-body">{{trText}}</view>
-      <view class="tr-btns">
-        <view class="tr-btn ghost" bindtap="closeTr">关闭</view>
-        <view class="tr-btn main" bindtap="copyTr">📋 复制全文</view>
-      </view>
+      <view class="tr-sub">{{trTitle}}{{trEdited ? ' · 已人工修订' : ''}}</view>
+      <!-- 阅读态 -->
+      <block wx:if="{{!trEditing}}">
+        <view class="tr-body">{{trText}}</view>
+        <view class="tr-btns">
+          <view class="tr-btn ghost" bindtap="editTr">✏️ 编辑</view>
+          <view class="tr-btn main" bindtap="copyTr">📋 复制全文</view>
+        </view>
+      </block>
+      <!-- 编辑态 -->
+      <block wx:else>
+        <textarea class="tr-edit" value="{{trDraft}}" bindinput="onTrDraft" maxlength="-1" cursor-spacing="24"
+                  adjust-position="{{true}}" show-confirm-bar="{{false}}" placeholder="修改转写文字（改错别字后可保存）"></textarea>
+        <view class="tr-btns">
+          <view class="tr-btn ghost" bindtap="cancelTrEdit">取消</view>
+          <view class="tr-btn main" bindtap="saveTr">保存</view>
+        </view>
+      </block>
     </view>
   </view>
 

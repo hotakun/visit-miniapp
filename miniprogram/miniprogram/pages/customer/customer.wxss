@@ -58,9 +58,18 @@
 .tr-prev { margin-top: 6px; font-size: 12.5px; color: #4A5360; line-height: 1.65;
            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* 全文弹层（复用 .c-mask / .c-box）*/
-.tr-sub { margin-top: 4px; font-size: 11.5px; color: var(--sub); font-weight: 600; text-align: center; }
-.tr-body { margin-top: 11px; max-height: 240px; overflow: auto; background: #F7F8FA; border: 1px solid var(--line);
-           border-radius: 12px; padding: 11px 12px; font-size: 13px; line-height: 1.75; color: #333A44; white-space: pre-wrap; }
+.tr-sub { margin-top: 5px; font-size: 12.5px; color: var(--sub); font-weight: 600; text-align: center; }
+/* 2026-09-11 老板定：弹窗更宽（遮罩左右内边距 34px → 14px）+ 高度收一点（430 → 300px，别太占屏） */
+.c-mask.tr-mask { padding-left: 14px; padding-right: 14px; }
+.tr-box { max-width: none; }
+.tr-body { margin-top: 11px; max-height: 300px; overflow: auto; background: #F7F8FA; border: 1px solid var(--line);
+           border-radius: 12px; padding: 13px 16px; font-size: 15.5px; line-height: 1.8; color: #333A44; white-space: pre-wrap; }
+/* 编辑态文本框（键盘弹起会挡住 → 高度随屏幕自适应，配合弹层靠上）*/
+.tr-edit { width: 100%; box-sizing: border-box; margin-top: 11px; height: 32vh; min-height: 130px; max-height: 270px;
+           background: #F7F8FA; border: 1px solid var(--line);
+           border-radius: 12px; padding: 13px 16px; font-size: 15.5px; line-height: 1.8; color: #333A44; }
+/* 编辑态：弹层顶对齐（否则键盘弹起时，垂直居中的弹层下半部分会被键盘挡住）*/
+.c-mask.edit-mode { align-items: flex-start; padding-top: 22px; }
 .tr-btns { display: flex; gap: 10px; margin-top: 12px; }
 .tr-btn { flex: 1; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
 .tr-btn.ghost { background: #F0F2F5; color: #4A5360; }

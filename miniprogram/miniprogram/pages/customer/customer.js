@@ -119,9 +119,41 @@ Page({
     const it = (this.data.history || [])[i];
     if (!it || !it.tr || !it.tr.text) return;
     const title = `${it.dateMD || ''}${it.timeHM ? ' ' + it.timeHM : ''}${it.salesmanName ? ' · ' + it.salesmanName : ''}`;
-    this.setData({ trShow: true, trTitle: title, trText: it.tr.text });
+    this.setData({
+      trShow: true, trTitle: title, trText: it.tr.text,
+      trVisitId: it._id, trEdited: !!it.tr.edited, trEditing: false, trDraft: it.tr.text
+    });
   },
-  closeTr() { this.setData({ trShow: false, trText: '' }); },
+  // 2026-09-11 老板定：转写文字可人工修订（改错别字）—— 员工可改自己的，老板/管理员可改全部
+  editTr() { this.setData({ trEditing: true, trDraft: this.data.trText || '' }); },
+  cancelTrEdit() { this.setData({ trEditing: false }); },
+  onTrDraft(e) { this.setData({ trDraft: e.detail.value }); },
+  async saveTr() {
+    if (this.trSaving) return;
+    const visitId = this.data.trVisitId;
+    const text = String(this.data.trDraft || '').trim();
+    if (!visitId) return;
+    this.trSaving = true;
+    wx.showLoading({ title: '保存中…', mask: true });
+    try {
+      const res = await api.call('visits', { action: 'saveTrText', visitId, text });
+      wx.hideLoading();
+      this.trSaving = false;
+      if (res && res.ok) {
+        this.setData({ trText: text, trEditing: false, trEdited: true });
+        api.toast('已保存 ✓', 'success');
+        this.loadHistory(this.data.c._id); // 刷新历史卡摘要
+      } else {
+        api.toast((res && res.msg) || '保存失败');
+      }
+    } catch (e) {
+      wx.hideLoading();
+      this.trSaving = false;
+      api.toast('保存失败，请重试');
+    }
+  },
+  closeTr() { this.setData({ trShow: false, trText: '', trEditing: false }); },
+  noop() { /* 仅用于 catchtap：阻止弹层内的点击冒泡到遮罩 */ },
   copyTr() {
     const t = this.data.trText || '';
     if (!t) return;

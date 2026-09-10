@@ -28,8 +28,25 @@ exports.main = async (event) => {
   if (action === 'cancel') return await cancelVisit(meUser, event, isBoss);
   if (action === 'history') return await history(meUser, event.customerId, isBoss);
   if (action === 'mystats') return await mystats(meUser, isBoss);
+  if (action === 'saveTrText') return await saveTrText(meUser, event, isBoss);
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
+
+// 2026-09-11 老板定：转写文字可人工修订（改错别字）—— 存 visits.trEdited，history 优先返回人工版
+async function saveTrText(user, e, isBoss) {
+  const visitId = String(e.visitId || '');
+  if (!visitId) return { ok: false, code: 'BAD_ARG', msg: '缺少拜访 ID' };
+  const text = String(e.text == null ? '' : e.text).slice(0, 20000);
+  const vr = await db.collection('visits').doc(visitId).get().catch(() => null);
+  const v = vr && vr.data;
+  if (!v) return { ok: false, code: 'NOT_FOUND', msg: '拜访记录不存在' };
+  if (!isBoss && v.salesmanId !== user._id) return { ok: false, code: 'FORBIDDEN', msg: '只能修改自己的拜访记录' };
+  if (isBoss) return { ok: true, boss: true, msg: '已保存 ✓（演示：未保存）' };
+  await db.collection('visits').doc(visitId).update({
+    data: { trEdited: { text, by: user.name || '', byId: user._id || '', at: Date.now() } }
+  });
+  return { ok: true, text, editedAt: Date.now(), msg: '已保存' };
+}
 
 // 拜访中：业务员进入拜访页（开始计时）即上报，后台可见"拜访中"状态
 async function start(user, e, isBoss) {
@@ -344,14 +361,18 @@ async function history(user, customerId, isBoss) {
       else m.running++;
     });
   }
-  const trOf = (id) => {
-    const m = trMap[id];
+  // 2026-09-11 老板定：转写文字可人工修订 → trEdited 优先，否则用识别的拼接文字
+  const trOf = (v) => {
+    const m = trMap[v._id];
+    const edited = v.trEdited && typeof v.trEdited.text === 'string' ? v.trEdited.text : '';
     if (!m || !m.total) return null;
     const status = m.running > 0 ? 'processing' : (m.done > 0 ? (m.failed > 0 ? 'partial' : 'done') : 'failed');
     return {
       status,
       segCount: m.total,
-      text: m.segs.sort((a, b) => (a.segIndex || 0) - (b.segIndex || 0)).map(x => x.text || '').join('\n')
+      edited: !!edited,
+      editedAt: (v.trEdited && v.trEdited.at) || 0,
+      text: edited || m.segs.sort((a, b) => (a.segIndex || 0) - (b.segIndex || 0)).map(x => x.text || '').join('\n')
     };
   };
   return { ok: true, visits: rows.map(v => ({
@@ -364,8 +385,8 @@ async function history(user, customerId, isBoss) {
     // 2026-09-11 M2a：多段录音下发（audios：[{fileID,duration,transcribe}]）；audio 保留为第一段，兼容旧前端
     audios: Array.isArray(v.audios) && v.audios.length ? v.audios : (v.audio ? [v.audio] : []),
     audio: v.audio || null,
-    // 2026-09-11 M2b：语音转写 { status: processing|done|partial|failed, segCount, text }；无录音或未转写为 null
-    transcribe: trOf(v._id)
+    // 2026-09-11 M2b：语音转写 { status, segCount, edited, text }；无录音或未转写为 null（文字已支持人工修订）
+    transcribe: trOf(v)
   })) };
 }
 

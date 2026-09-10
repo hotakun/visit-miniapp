@@ -151,7 +151,9 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .vd-tr-tip{font-size:11.5px;color:var(--sub);font-weight:600}
 .vd-tr-t{margin-top:7px;font-size:13px;color:#333A44;line-height:1.75;white-space:pre-wrap}
 .vd-tr-empty{margin-top:6px;font-size:12px;color:var(--sub)}
-.vd-tr-a{display:flex;justify-content:flex-end;margin-top:6px}
+.vd-tr-a{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}
+/* 编辑态文本框（2026-09-11 老板定：转写文字可人工修订）*/
+.vd-tr-edit{width:100%;box-sizing:border-box;margin-top:7px;height:200px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13.5px;line-height:1.8;color:#333A44;font-family:inherit;resize:vertical}
 .vd-usage{margin:0 0 10px;padding:8px 12px;background:#F7F8FA;border:1px solid var(--line);border-radius:10px;font-size:12px;color:#4A5360;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .vd-usage .bar{flex:1;max-width:none;min-width:120px}
 .pill.green{background:#E9F8EF;color:#117A38}
@@ -2341,8 +2343,16 @@ async function openVisitDetail(id) {
       } else {
         const pillCls = tr.status === 'done' ? 'green' : (tr.status === 'partial' ? 'orange' : (tr.status === 'failed' ? 'red' : 'blue'));
         const pillTxt = tr.status === 'done' ? '📝 已转写' : (tr.status === 'partial' ? '📝 部分成功' : (tr.status === 'failed' ? '📝 转写失败' : '📝 转写中…'));
+        // 2026-09-11 老板定：转写文字可人工修订（改错别字）—— 就地换成文本框，可保存
         const body = tr.text
-          ? `<div class="vd-tr-t">${esc(tr.text)}</div><div class="vd-tr-a"><button class="btn ghost" style="height:24px;font-size:11px" onclick="copyTrText(this)">📋 复制全文</button></div>`
+          ? `<div class="vd-tr-t" id="trt-${v._id}">${esc(tr.text)}</div>` +
+            `<textarea class="vd-tr-edit" id="tre-${v._id}" style="display:none" spellcheck="false">${esc(tr.text)}</textarea>` +
+            `<div class="vd-tr-a">` +
+              `<button class="btn ghost" style="height:24px;font-size:11px" id="treb-${v._id}" onclick="editTrText('${v._id}')">✏️ 编辑</button>` +
+              `<button class="btn ghost" style="height:24px;font-size:11px;display:none" id="trsb-${v._id}" onclick="saveTrTextAdmin('${v._id}')">💾 保存</button>` +
+              `<button class="btn ghost" style="height:24px;font-size:11px;display:none" id="trcb-${v._id}" onclick="cancelTrTextAdmin('${v._id}')">取消</button>` +
+              `<button class="btn ghost" style="height:24px;font-size:11px" onclick="copyTrText(this)">📋 复制全文</button>` +
+            `</div>`
           : `<div class="vd-tr-empty">${tr.status === 'failed' ? '识别失败' : '正在识别，稍后自动刷新即可看到文字'}</div>`;
         const again = (tr.status === 'failed')
           ? `<button class="btn ghost" style="height:26px;font-size:11.5px" onclick="genTranscript('${v._id}', '${id}', this)">↻ 重转</button>`
@@ -2404,6 +2414,56 @@ function copyTrText(btn) {
     alert('复制失败，请手动选中文字复制');
   }
 }
+
+// 2026-09-11 老板定：后台编辑转写文字（改错别字）—— 就地切换成文本框，保存写 visits.trEdited
+function editTrText(visitId) {
+  const t = document.getElementById('trt-' + visitId);
+  const e = document.getElementById('tre-' + visitId);
+  if (!t || !e) return;
+  e.value = t.textContent || '';
+  t.style.display = 'none';
+  e.style.display = 'block';
+  e.focus();
+  const eb = document.getElementById('treb-' + visitId);
+  const sb = document.getElementById('trsb-' + visitId);
+  const cb = document.getElementById('trcb-' + visitId);
+  if (eb) eb.style.display = 'none';
+  if (sb) sb.style.display = '';
+  if (cb) cb.style.display = '';
+}
+function cancelTrTextAdmin(visitId) {
+  const t = document.getElementById('trt-' + visitId);
+  const e = document.getElementById('tre-' + visitId);
+  if (t) t.style.display = '';
+  if (e) e.style.display = 'none';
+  const eb = document.getElementById('treb-' + visitId);
+  const sb = document.getElementById('trsb-' + visitId);
+  const cb = document.getElementById('trcb-' + visitId);
+  if (eb) eb.style.display = '';
+  if (sb) sb.style.display = 'none';
+  if (cb) cb.style.display = 'none';
+}
+async function saveTrTextAdmin(visitId) {
+  const t = document.getElementById('trt-' + visitId);
+  const e = document.getElementById('tre-' + visitId);
+  const sb = document.getElementById('trsb-' + visitId);
+  if (!e || !t) return;
+  const text = String(e.value || '').trim();
+  if (sb) { sb.disabled = true; sb.textContent = '保存中…'; }
+  const r = await api('saveVisitTrText', { visitId, text });
+  if (sb) { sb.disabled = false; sb.textContent = '💾 保存'; }
+  if (!r || !r.ok) { alert('保存失败：' + ((r && r.msg) || '未知错误')); return; }
+  t.textContent = text;
+  t.style.display = '';
+  e.style.display = 'none';
+  const eb = document.getElementById('treb-' + visitId);
+  const cb = document.getElementById('trcb-' + visitId);
+  if (eb) eb.style.display = '';
+  if (sb) sb.style.display = 'none';
+  if (cb) cb.style.display = 'none';
+  alert('已保存 ✓');
+}
+
 function startDetailTimer(id) {
   startAuto();
 }
