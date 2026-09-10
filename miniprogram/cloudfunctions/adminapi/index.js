@@ -1819,7 +1819,7 @@ async function setSetting(event) {
   const { key, value } = event;
   if (!key) return { ok: false, code: 'BAD_ARG', msg: '缺少设置项 key' };
   // 仅允许写入已知设置项（防任意写入）
-  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays'];
+  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays', 'welcomeConfig'];
   if (!ALLOWED.includes(key)) return { ok: false, code: 'BAD_KEY', msg: '未知设置项' };
   // locationCheck 规范化：enabled + threshold（0=关闭校验）
   let v = value;
@@ -1828,6 +1828,14 @@ async function setSetting(event) {
     const th = Math.max(0, Math.min(500, parseInt(value.threshold, 10) || 0));
     const en = !!value.enabled && th >= 1 && th <= 500;
     v = { enabled: en, threshold: th };
+  }
+  if (key === 'welcomeConfig') {
+    // 老板欢迎仪式（2026-09-10 老板定）：频率 daily/every/once、时长 2/3/5 秒、风格 gold/color
+    v = {
+      mode: ['daily', 'every', 'once'].includes(value && value.mode) ? value.mode : 'daily',
+      duration: [2, 3, 5].includes(Number(value && value.duration)) ? Number(value.duration) : 3,
+      style: (value && value.style) === 'color' ? 'color' : 'gold'
+    };
   }
   if (key === 'locRefreshInterval') {
     // 正常页面距离刷新档位（2026-09-06 老板定）：仅 30/45/60 秒，其余回默认 30
