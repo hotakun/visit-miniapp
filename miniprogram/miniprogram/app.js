@@ -42,6 +42,9 @@ App({
     wx.removeStorageSync('boss_mode');
     this.globalData.bossMode = false;
     this.globalData.devAuthed = false; // 2026-09-09 修复：退出身份后放行标志一并重置
+    // 2026-09-10：退出身份清欢迎仪式配置缓存（下次进老板模式必重新拉云端配置）
+    this.globalData.welcome = null;
+    this.globalData.welcomePending = false;
   },
   setBossMode(v) {
     this.globalData.bossMode = !!v;

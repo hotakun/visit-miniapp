@@ -289,7 +289,13 @@ Page({
   },
   _welGo(rawCfg) {
     if (!this._shown) return; // 等待期间已离开首页 → 不播
-    const cfg = rawCfg || { mode: 'daily', duration: 3, style: 'gold' };
+    const r = rawCfg || {};
+    // 前端归一（防异常数据：字段缺失用默认；mode 非法回 daily，避免三个判定全 false 导致每次进入都播）
+    const cfg = {
+      mode: ['daily', 'every', 'once'].includes(r.mode) ? r.mode : 'daily',
+      duration: [2, 3, 5].includes(Number(r.duration)) ? Number(r.duration) : 3,
+      style: r.style === 'color' ? 'color' : 'gold'
+    };
     // 频率判定（本地 storage；东八区日期）：once=永远只播一次；daily=每天第一次；every=每次都播
     try {
       const d = new Date(Date.now() + 8 * 3600 * 1000);
@@ -360,7 +366,7 @@ Page({
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(255,215,0,0.85)';
-      ctx.shadowBlur = 26;
+      ctx.shadowBlur = t < 600 ? 26 : 0; // 文字静止后取消光晕（shadowBlur 每帧重算开销大，低端机省渲染）
       ctx.fillStyle = '#FFE28A';
       ctx.fillText('👑 欢迎老板', 0, 0);
       ctx.restore();

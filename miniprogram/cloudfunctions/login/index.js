@@ -40,11 +40,10 @@ exports.main = async (event) => {
     await users.doc(u._id).update({ data: { lastLoginAt: Date.now() } });
     // 老板手机号兜底（口径与 tasks/visits 云函数一致：仅管理员角色认 boss）
     const boss = ['super_admin', 'admin'].includes(u.role) && (u.boss === true || u.phone === BOSS_PHONE);
-    // 2026-09-10 老板定：老板模式登录顺带下发「欢迎仪式」配置（每次登录一次查询，仅老板触发）
-    if (boss) return { ok: true, boss, dev: false, user: publicUser(u), welcome: await readWelcomeCfg() };
-    // 2026-09-09 开发者范宇琨双身份：dev 白名单返回 dev 标志 → 前端显示「业务员/老板」两按钮选择页；
-    // 其他人（业务员/老板/管理员）完全不受影响
+    // 2026-09-09 开发者范宇琨双身份：dev 白名单返回 dev 标志 → 前端显示「业务员/老板」两按钮选择页
     const dev = u.phone === DEV_PHONE;
+    // 2026-09-10 老板定：老板模式登录顺带下发「欢迎仪式」配置（每次登录一次查询，仅老板触发）
+    if (boss) return { ok: true, boss, dev, user: publicUser(u), welcome: await readWelcomeCfg() };
     return { ok: true, boss, dev, user: publicUser(u) };
   }
 
