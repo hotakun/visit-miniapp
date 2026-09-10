@@ -5,7 +5,7 @@ Page({
     user: null, adminMode: false, canBoss: false, adminName: '', logoUrl: '',
     // 注册状态机（2026-09-09 老板拍板：注册→审核→免登；拒绝可重提）
     registerMode: false, pendingMode: false, rejectedMode: false,
-    name: '', phone: '', regBusy: false, trialId: '',
+    name: '', phone: '', regBusy: false,
     phoneVerified: false, // 2026-09-09 老板定：微信一键验证标记（getPhoneNumber 快速验证组件）
     pendingAt: '', rejectReason: '',
     // 开发者双身份选择页（2026-09-09 开发者范宇琨定：只他自己可见）
@@ -48,13 +48,9 @@ Page({
       } else if (res.code === 'REJECTED') {
         this.setData({ rejectedMode: true, rejectReason: res.reason || '' });
       } else if (res.code === 'NEED_REGISTER' || res.code === 'NEED_BIND') {
-        // 兼容旧云端返回 NEED_BIND：同样进注册表单；trialId 优先新字段，旧版从 salesmen 里找 trial
-        let trialId = res.trialId || '';
-        if (!trialId && Array.isArray(res.salesmen)) {
-          const tr = res.salesmen.find(s => s.trial);
-          trialId = tr ? tr._id : '';
-        }
-        this.setData({ registerMode: true, trialId });
+        // 2026-09-10 老板定：实习角色永远不能绑定——不再取 trialId（游客入口已移除），
+        // 未注册微信一律进注册表单，随时可自己注册
+        this.setData({ registerMode: true });
       } else {
         api.toast(res.msg || '登录失败');
       }
@@ -126,23 +122,6 @@ Page({
   // 被拒绝 → 重新申请（2026-09-09 老板拍板：可重提，旧记录留痕）
   reapply() {
     this.setData({ rejectedMode: false, registerMode: true, name: '', phone: '', phoneVerified: false });
-  },
-  // 游客体验入口（2026-09-09 老板定保留：审核/演示用，直接绑实习账号）
-  async enterTrial() {
-    if (!this.data.trialId) { api.toast('游客入口暂不可用'); return; }
-    try {
-      const res = await api.call('login', { bindUserId: this.data.trialId });
-      if (res.ok) {
-        getApp().setUser(res.user);
-        api.toast('绑定成功 ✓', 'success');
-        setTimeout(() => wx.redirectTo({ url: '/pages/home/home' }), 600);
-      } else {
-        api.toast(res.msg || '绑定失败');
-        this.check();
-      }
-    } catch (err) {
-      api.toast('绑定失败，请重试');
-    }
   },
   // 老板模式（2026-09-09 §7.13）：boss 白名单管理员入口——全量只读+虚拟写，storage 持久
   enterBoss() {

@@ -1,6 +1,7 @@
 // 云函数 login：业务员微信登录 / 首次绑定
 // 2026-09-09 老板拍板改版：正式业务员一律「注册申请 → 后台审核 → 通过后绑定 openid → 免登录进入首页」
-// 流程：已绑定直接进；有申请=审核中/被拒绝状态；无申请=注册表单（附游客入口 trialId）
+// 2026-09-10 老板定：实习（trial）角色永远不能绑定——原游客入口已移除，未注册微信永远看到注册表单
+// 流程：已绑定直接进；有申请=审核中/被拒绝状态；无申请=注册表单
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -15,7 +16,6 @@ exports.main = async (event) => {
   // → login 整体失败，手机端提示"云函数调用失败"看不到登录页；init 未执行过的新环境必踩）
   try { await db.createCollection('registrations'); } catch (e) { /* 已存在等错误忽略 */ }
   const { OPENID } = cloud.getWXContext();
-  const { bindUserId } = event || {};
 
   const users = db.collection('users');
   const _ = db.command;
@@ -46,20 +46,9 @@ exports.main = async (event) => {
     return { ok: true, boss, dev, user: publicUser(u) };
   }
 
-  // 2. 绑定指定人（2026-09-09 老板定：正式账号一律走注册审核，此入口仅保留给游客「实习」体验）
-  if (bindUserId) {
-    const target = await users.doc(bindUserId).get().catch(() => null);
-    const t = target && target.data;
-    if (!t) return { ok: false, code: 'USER_NOT_FOUND', msg: '人员不存在' };
-    if (t.role !== 'salesman') return { ok: false, code: 'NOT_SALESMAN', msg: '该人员不是业务员' };
-    if (!t.trial) return { ok: false, code: 'NEED_REVIEW', msg: '请先提交注册申请，审核通过后自动进入' };
-    // 游客体验账号（trial，2026-09-08 老板定）：允许任意微信绑定/覆盖——小程序审核/演示用
-    // 2026-09-09 老板报障修复：先解除其它 trial 账号对本 openid 的占用，再绑定目标
-    await users.where({ _id: _.neq(bindUserId), openid: OPENID, trial: true }).update({ data: { openid: '' } });
-    await users.doc(bindUserId).update({ data: { openid: OPENID, lastLoginAt: Date.now() } });
-    const u = await users.doc(bindUserId).get();
-    return { ok: true, user: publicUser(u.data) };
-  }
+  // 2. 【已移除，2026-09-10 老板定：实习角色永远不能绑定】原 bindUserId 游客绑定入口删除——
+  //    未注册微信每次进来都是注册表单，随时可自己注册，不再被绑定成实习身份。
+  //    兼容：旧前端若仍传 bindUserId，一律忽略并走下方注册状态流程。
 
   // 3. 注册申请（2026-09-09 老板拍板：姓名+手机号 → 后台审核）
   if (event.action === 'register') return await register(OPENID, event);
@@ -81,9 +70,8 @@ exports.main = async (event) => {
   if (r && r.status === 'rejected') {
     return { ok: false, code: 'REJECTED', msg: '申请未通过，可重新申请', reason: r.reason || '', reviewedAt: r.reviewedAt || 0, canReapply: true };
   }
-  // 游客入口信息（2026-09-09 老板定：保留小字入口，供审核/演示）
-  const trialRes = await users.where({ role: 'salesman', trial: true, active: true }).limit(1).get();
-  return { ok: false, code: 'NEED_REGISTER', msg: '请注册后等待审核', trialId: trialRes.data[0] ? trialRes.data[0]._id : '' };
+  // 游客入口信息（2026-09-10 老板定：实习角色永远不能绑定——不再返回 trialId，前端无游客入口）
+  return { ok: false, code: 'NEED_REGISTER', msg: '请注册后等待审核' };
 };
 
 // 注册申请（2026-09-09 老板拍板）：姓名+手机号；同一 openid 有 pending 不重复提交；拒绝后可重提

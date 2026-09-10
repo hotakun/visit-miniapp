@@ -39,7 +39,6 @@
       <view class="btn-primary" style="margin-top:20px" bindtap="submitReg">{{regBusy ? '提交中…' : '提交申请'}}</view>
       <view class="reg-note">提交后由管理员审核，通过后重新打开小程序即可直接进入</view>
     </view>
-    <view class="trial-link" wx:if="{{trialId}}" bindtap="enterTrial">🖐 游客体验入口（审核/演示用）</view>
   </block>
 
   <!-- 审核中 -->
