@@ -213,7 +213,7 @@ async function submit(user, e, isBoss) {
 
   // 3. 现场证据校验
   //    照片（2026-09-11 老板定：上限 3 → 15，手机端支持连拍 + 相册多选）：≤15 条 {fileID, thumbID}
-  //    录音（2026-09-11 M2a 多段）：audios ≤5 条，单条 ≤600 秒（10 分钟），合计 ≤1800 秒（30 分钟硬封顶）
+  //    录音（2026-09-11 老板定：≤6 段；单条上限跟后台「拜访录音上限」档位，兜底 ≤600 秒；合计 ≤1800 秒=30 分钟硬封顶）
   //      transcribe=false = 只留档不转文字；兼容旧字段 audio（单条）→ 自动并入 audios
   let ph = [];
   if (photos !== undefined && photos !== null) {
@@ -223,7 +223,7 @@ async function submit(user, e, isBoss) {
   }
   let au = [];
   const rawAudios = Array.isArray(audios) && audios.length ? audios : ((audio && audio.fileID) ? [audio] : []);
-  if (rawAudios.length > 5) return { ok: false, code: 'BAD_AUDIO', msg: '录音最多 5 条' };
+  if (rawAudios.length > 6) return { ok: false, code: 'BAD_AUDIO', msg: '录音最多 6 条' };
   let totalAudioSec = 0;
   for (const a of rawAudios) {
     if (!a || typeof a.fileID !== 'string' || !a.fileID) return { ok: false, code: 'BAD_AUDIO', msg: '录音数据不完整，请重新录制' };

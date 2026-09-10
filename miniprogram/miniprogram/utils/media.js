@@ -159,11 +159,15 @@ function createRecorder() {
 
   function recStart(fmt) {
     curFmt = fmt;
+    // ⚠️ 关键修复（2026-09-11 老板真机反馈"录 1 分钟就停"）：
+    // 微信 RecorderManager 的 duration 单位是【毫秒】，不传默认 60000（1 分钟）→ 会把长录音截断。
+    // 这里按闭包里的 limitSec（后台档位换算而来）换算成毫秒传下去。
+    const durMs = Math.max(1000, Math.round(limitSec * 1000));
     if (fmt === 'mp3') {
-      rm.start({ format: 'mp3', sampleRate: REC_SAMPLE, numberOfChannels: REC_CHANNELS, encodeBitRate: REC_BITRATE });
+      rm.start({ format: 'mp3', sampleRate: REC_SAMPLE, numberOfChannels: REC_CHANNELS, encodeBitRate: REC_BITRATE, duration: durMs });
     } else {
       // iOS aac：不传码率（苹果自适应，16kHz 单声道）
-      rm.start({ format: 'aac', sampleRate: REC_SAMPLE, numberOfChannels: REC_CHANNELS });
+      rm.start({ format: 'aac', sampleRate: REC_SAMPLE, numberOfChannels: REC_CHANNELS, duration: durMs });
     }
   }
 

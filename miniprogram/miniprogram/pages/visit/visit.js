@@ -40,9 +40,9 @@ Page({
     recCountText: '0/5',   // 段数
     recTotalText: '00:00', // 合计时长
     recLimitMin: 10,       // 单条上限（分钟；由后台档位决定，上限 10）
-    segMaxSec: 600,        // 单条上限（秒）
+    segMaxSec: 300,        // 单条上限（秒）初值；onLoad 会按后台「拜访录音上限」档位覆盖（2026-09-11 老板定：跟后台走）
     totalMaxSec: 1800,     // 合计硬封顶（秒）= 30 分钟
-    maxSegs: 5,
+    maxSegs: 6,            // 最多 6 段（2026-09-11 老板定：由 5 改为 6）
     trBusy: false,         // 「开始转录」进行中
     trMsg: '',             // 转录状态提示
     delRecShow: false,     // 删除单段：二次确认弹层
@@ -278,7 +278,8 @@ Page({
     if (recs.length >= this.data.maxSegs) { api.toast('最多 ' + this.data.maxSegs + ' 段录音'); return; }
     const leftTotal = this.data.totalMaxSec - this._recUsed();
     if (leftTotal <= 5) { api.toast('录音合计已达 30 分钟上限，不能再录'); return; }
-    // 本次可录上限 = min(单条上限, 剩余合计) —— 「合计 30 分钟硬封顶」在此生效
+    // 本次可录上限 = min(后台档位设置的单条上限, 剩余合计) —— 合计 30 分钟硬封顶在此生效
+    // 2026-09-11 老板定：单条上限跟后台「拜访录音上限」档位走（后台一改，这里自动跟随；文案也动态显示）
     const segMax = media.recLimit(Number(this.data.c && this.data.c.recordingDurationLimit) || 300);
     const limit = Math.min(segMax, leftTotal);
     this._recLimit = limit;
