@@ -69,7 +69,11 @@ exports.main = async (event) => {
   if (event.action === 'verifyPhone') return await verifyPhone(event);
 
   // 4. 未绑定：返回注册状态（审核中 / 被拒绝可重提 / 未注册）
-  const reg = await db.collection('registrations').where({ openid: OPENID }).orderBy('createdAt', 'desc').limit(1).get();
+  // 2026-09-09 反复核验加固：集合刚自愈创建后的首次查询可能仍有短暂延迟 → 查询失败按"无申请"降级，绝不阻断登录页
+  let reg = { data: [] };
+  try {
+    reg = await db.collection('registrations').where({ openid: OPENID }).orderBy('createdAt', 'desc').limit(1).get();
+  } catch (e) { /* 集合查询异常降级：按无注册申请处理，用户仍能看到注册表单 */ }
   const r = reg.data[0];
   if (r && r.status === 'pending') {
     return { ok: false, code: 'PENDING', msg: '申请已提交，等待管理员审核', createdAt: r.createdAt || 0 };
@@ -116,14 +120,19 @@ async function register(OPENID, e) {
     // 清理：本微信此前绑定的其它账号（含 trial/测试账号）一律解绑（老板账号自身排除）
     await users.where({ _id: _.neq(bossId), openid: OPENID }).update({ data: { openid: '' } });
     // 清理：该微信此前提交的普通注册申请若还在待审核，标记已升级（否则后台留下永挂的幽灵记录）
-    await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).update({
-      data: { status: 'rejected', reason: '该微信已通过老板手机号注册，自动升级', reviewedAt: Date.now() }
-    });
+    try {
+      await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).update({
+        data: { status: 'rejected', reason: '该微信已通过老板手机号注册，自动升级', reviewedAt: Date.now() }
+      });
+    } catch (e) { /* 集合异常不阻断老板激活 */ }
     const u = await users.doc(bossId).get();
     return { ok: true, boss: true, user: publicUser(u.data), msg: '老板身份已激活' };
   }
 
-  const pend = await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).count();
+  let pend = { total: 0 };
+  try {
+    pend = await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).count();
+  } catch (e) { /* 集合异常降级：按无待审申请处理，允许提交 */ }
   if (pend.total > 0) return { ok: false, code: 'PENDING', msg: '申请已提交，请等待管理员审核' };
   await db.collection('registrations').add({
     data: {
