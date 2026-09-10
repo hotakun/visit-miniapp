@@ -6,16 +6,15 @@
 .timeout-warn { margin-top: 12px; background: #FDF1F1; border: 1px solid #F5C2C2; color: #C0392B; border-radius: 12px; padding: 9px 12px; font-size: 13px; font-weight: 700; line-height: 1.5; }
 .sec { margin-top: 16px; }
 /* ===== 区块配色（2026-09-11 老板定：只有【标题栏】带淡色，展开的内容区保持白色；颜色再淡一档）===== */
-/* 思路：卡片整体白底 → 标题栏一条极淡雾面色 + 左侧同色系细条点缀，内容区纯白 */
+/* 思路：卡片整体白底 → 只有标题栏一条极淡雾面色，内容区纯白（左侧色条已去掉，2026-09-11 老板定）*/
 .blk { position: relative; border-radius: 16px; padding: 13px 15px; box-shadow: 0 2px 10px rgba(31,36,48,.05); background: #fff; overflow: hidden; }
-.blk::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 2px; border-radius: 0 2px 2px 0; z-index: 2; }
 /* 标题栏：通栏淡色底 + 顶部圆角（负 margin 撑满卡片上沿，实现「只有标题带色」）*/
 .blk .fc-head { margin: -13px -15px 12px; padding: 12px 15px; border-radius: 16px 16px 0 0; border-bottom: 1px solid #F0F2F5; }
-.blk-pic  .fc-head { background: #F7FAFD; } .blk-pic::before  { background: #C8DAEC; } /* 现场拍照 · 雾蓝 */
-.blk-rec  .fc-head { background: #F8F7FD; } .blk-rec::before  { background: #D4CDEE; } /* 现场录音 · 雾紫 */
-.blk-samp .fc-head { background: #FDFAF6; } .blk-samp::before { background: #F1DFC9; } /* 样品物料 · 雾杏 */
-.blk-text .fc-head { background: #F7FBF8; } .blk-text::before { background: #CFE6D8; } /* 拜访记录 · 雾绿 */
-.blk-res  .fc-head { background: #FDF8F9; } .blk-res::before  { background: #F2D6D9; } /* 拜访结果 · 雾玫 */
+.blk-pic  .fc-head { background: #F7FAFD; } /* 现场拍照 · 雾蓝 */
+.blk-rec  .fc-head { background: #F8F7FD; } /* 现场录音 · 雾紫 */
+.blk-samp .fc-head { background: #FDFAF6; } /* 样品物料 · 雾杏 */
+.blk-text .fc-head { background: #F7FBF8; } /* 拜访记录 · 雾绿 */
+.blk-res  .fc-head { background: #FDF8F9; } /* 拜访结果 · 雾玫 */
 /* ===== 折叠卡片（2026-09-11 老板定：五个区块都可点标题栏展开收起）===== */
 .fcard { border-radius: 16px; padding: 13px 15px; box-shadow: 0 2px 10px rgba(31,36,48,.05); }
 /* 摘要状态色（2026-09-11）：已填 / 已选 = 绿；未选择 = 红（提醒提交前必选） */
