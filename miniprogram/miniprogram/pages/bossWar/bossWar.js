@@ -7,6 +7,10 @@ const P_COLOR = { ongoing: '#2F80ED', moving: '#F5531C', still: '#9CA3AF' };
 const P_LABEL = { ongoing: '拜访中', moving: '在移动', still: '静止' };
 
 Page({
+  // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
+  onShareAppMessage() {
+    return { title: '聚火拜访 · 业务员拜访管理', path: '/pages/home/home' };
+  },
   data: {
     loading: true, empty: '',
     points: [], events: [], stats: null,

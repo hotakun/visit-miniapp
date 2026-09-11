@@ -12,6 +12,10 @@ function daysAgo(dateStr) {
 }
 
 Page({
+  // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
+  onShareAppMessage() {
+    return { title: '聚火拜访 · 业务员拜访管理', path: '/pages/home/home' };
+  },
   data: { c: null, history: [], evPlay: '', evCurMs: 0, evCurText: '00:00', typeName: 'mall', coordConfirmShow: false, coordNewText: '', coordDistLine1: '', coordDistLine2: '', coordNote: '', coordQuality: '', coordRefreshing: false, coordCooldown: 0, coordSpinChar: '◐', coordPics: [], coordPicBusy: false },
   onShow() {
     const c = wx.getStorageSync('curCustomer');

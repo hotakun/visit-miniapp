@@ -1,6 +1,10 @@
 const api = require('../../utils/api');
 
 Page({
+  // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
+  onShareAppMessage() {
+    return { title: '聚火拜访 · 业务员拜访管理', path: '/pages/home/home' };
+  },
   data: { tasks: [], loading: true },
   onShow() {
     const app = getApp();

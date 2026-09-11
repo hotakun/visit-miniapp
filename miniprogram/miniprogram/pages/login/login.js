@@ -4,6 +4,10 @@ const api = require('../../utils/api');
 //   login / task / customer / visit / mine / tasks-all 是非 tab 页 → 用 navigateTo / redirectTo
 
 Page({
+  // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
+  onShareAppMessage() {
+    return { title: '聚火拜访 · 业务员拜访管理', path: '/pages/home/home' };
+  },
   data: {
     user: null, adminMode: false, canBoss: false, adminName: '', logoUrl: '',
     // 注册状态机（2026-09-09 老板拍板：注册→审核→免登；拒绝可重提）
