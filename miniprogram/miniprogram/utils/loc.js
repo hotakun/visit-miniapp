@@ -169,16 +169,24 @@ function sampleTrack(pt) {
   try {
     const app = getApp();
     const cfg = (app && app.globalData.locCfg) || {};
+    // 2026-09-11 降频：**轨迹总开关**（关闭＝不采样、不上传；后台「轨迹回放 / 当天轨迹」无数据，最新位置另受 locLatestEnabled 控制）
+    if (cfg.locTrackEnabled === false) return;
     const sh = cfg.workStartHour != null ? Number(cfg.workStartHour) : 7;
     const eh = cfg.workEndHour != null ? Number(cfg.workEndHour) : 20;
-    const tier = ['5_30', '10_60', '20_120', '30_180'].includes(cfg.offDutyTier) ? cfg.offDutyTier : '10_60';
-    const TIERS = { '5_30': [5000, 30000], '10_60': [10000, 60000], '20_120': [20000, 120000], '30_180': [30000, 180000] };
+    // 非工作档位（2026-09-11 老板定：只留较大的两档 + 新增最省档 60S/300S）
+    const tier = ['20_120', '30_180', '60_300'].includes(cfg.offDutyTier) ? cfg.offDutyTier : '20_120';
+    const TIERS = { '20_120': [20000, 120000], '30_180': [30000, 180000], '60_300': [60000, 300000] };
     const pair = TIERS[tier];
     const hour = new Date(now + 8 * 3600 * 1000).getUTCHours();
     const isWork = hour >= sh && hour < eh;
     const visiting = !!(app && app.globalData.visitOngoing);
-    const sampleMs = isWork ? (visiting ? 5000 : 30000) : (visiting ? pair[0] : pair[1]);
-    const uploadMs = isWork ? 60000 : pair[1];
+    // 2026-09-11 降频：工作时段改为**档位驱动**（原先写死「拜访中 5s / 平时 30s + 上传 60s」）
+    //   [拜访中采样, 平时采样, 上传间隔]；其中 5_30 与旧行为完全一致，默认 30_120 最省调用
+    const WORK_TIERS = { '5_30': [5000, 30000, 60000], '15_60': [15000, 60000, 90000], '30_120': [30000, 120000, 120000] };
+    const wtier = ['5_30', '15_60', '30_120'].includes(String(cfg.locWorkTier)) ? String(cfg.locWorkTier) : '30_120';
+    const wpair = WORK_TIERS[wtier];
+    const sampleMs = isWork ? (visiting ? wpair[0] : wpair[1]) : (visiting ? pair[0] : pair[1]);
+    const uploadMs = isWork ? wpair[2] : pair[1];
     if (!seg.last || now - seg.last >= sampleMs) {
       seg.last = now;
       const acc = Number(pt.accuracy) || 0;
@@ -187,6 +195,9 @@ function sampleTrack(pt) {
       if (!drift && lastTrackPt && lastTrackDay === day) {
         const dt = (now - lastTrackPt.t) / 1000;
         if (dt > 0 && haversineM(lastTrackPt.lat, lastTrackPt.lng, pt.lat, pt.lng) / dt > 30) drift = true; // 速度超 30m/s
+        // 2026-09-11 降频：**移动阈值**——距上一轨迹点不足 N 米视为原地未动，不记录（默认 20 米，0=关闭该判断）
+        const mvTh = Number(cfg.locMoveThreshold);
+        if (!drift && mvTh > 0 && haversineM(lastTrackPt.lat, lastTrackPt.lng, pt.lat, pt.lng) < mvTh) drift = true;
       }
       if (!drift) {
         seg.buffer.push({ lat: pt.lat, lng: pt.lng, acc, t: now });
@@ -215,6 +226,12 @@ let lastUploadAt = 0;
 function maybeUpload(pt) {
   const now = Date.now();
   if (now - lastUploadAt < 60000) return;
+  // 2026-09-11 降频：**最新位置开关**（关闭＝不再上报，后台只保留最后一次已知位置）
+  try {
+    const a0 = getApp();
+    const c0 = (a0 && a0.globalData.locCfg) || {};
+    if (c0.locLatestEnabled === false) return;
+  } catch (e) { /* 取不到配置时按开启处理 */ }
   lastUploadAt = now;
   try {
     const app = getApp();

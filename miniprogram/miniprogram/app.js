@@ -5,7 +5,7 @@ const { LOGO_FILE_ID } = require('./utils/config');
 App({
   globalData: {
     user: null,
-    APP_VERSION: '0.9.11', // 版本号（2026-09-11：改成一眼可自检是否加载到新代码——「我的」页左下角显示 v{版本}；原口径：双方统一口径的改动才 bump）
+    APP_VERSION: '0.9.12', // 版本号（2026-09-11 批 2：手机端降频——轨迹档位默认 30S/120S + 轨迹/最新位置开关；与后台 admin.html 一致）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
     welcome: null, // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）
@@ -61,6 +61,9 @@ App({
   },
   startReviewWatcher() {
     if (this.reviewTimer) return;
+    // 2026-09-11 降频：审核观察员轮询开关（后台设置页可关；关闭后不再轮询，省调用）
+    const cfg = (this.globalData && this.globalData.sysCfg) || {};
+    if (cfg.reviewWatchEnabled === false) return;
     this.reviewTick();
     this.reviewTimer = setInterval(() => this.reviewTick(), 15000);
   },

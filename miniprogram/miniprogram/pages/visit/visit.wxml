@@ -40,7 +40,8 @@
     </view>
   </view>
 
-  <view class="sec fcard blk blk-rec">
+  <!-- 2026-09-11：录音开关——后台设置页可关闭（关闭后整块录音区不显示；云端也会拒收录音） -->
+  <view class="sec fcard blk blk-rec" wx:if="{{recEnabled}}">
     <view class="fc-head" bindtap="toggleFold" data-k="rec">
       <text class="fc-ic">🎙️</text>
       <text class="fc-t">现场录音</text>

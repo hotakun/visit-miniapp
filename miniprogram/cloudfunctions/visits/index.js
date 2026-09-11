@@ -7,7 +7,34 @@ const _ = db.command;
 const RESULT_ENUM_MALL = ['极有意向', '有意向', '已下单', '无需求', '有抵触', '联系不上', '闭店·搬迁', '其他'];
 const RESULT_ENUM_NEW = [...RESULT_ENUM_MALL, '已注册商城'];
 
+// ===== 2026-09-11 批 3：云调用用量自建统计（与 adminapi 写同一份 settings.usageCounter；攒批落库）=====
+let _ucCount = 0, _ucAt = 0;
+function ucMonth(ts) {
+  const d = new Date((ts || Date.now()) + 8 * 3600 * 1000);
+  return d.toISOString().slice(0, 7);
+}
+async function bumpUsage(n) {
+  _ucCount += Number(n) || 1;
+  const now = Date.now();
+  if (_ucCount < 20 && now - _ucAt < 60000) return;
+  const add = _ucCount;
+  _ucCount = 0; _ucAt = now;
+  try {
+    const month = ucMonth(now);
+    const r = await db.collection('settings').where({ key: 'usageCounter' }).limit(1).get();
+    const cur = r.data[0];
+    const val = (cur && cur.value) || { total: 0, months: {} };
+    val.total = (val.total || 0) + add;
+    val.months = val.months || {};
+    val.months[month] = (val.months[month] || 0) + add;
+    val.updatedAt = now;
+    if (cur) await db.collection('settings').doc(cur._id).update({ data: { value: val, updatedAt: now } });
+    else await db.collection('settings').add({ data: { key: 'usageCounter', value: val, updatedAt: now } });
+  } catch (e) { /* 统计失败不影响业务 */ }
+}
+
 exports.main = async (event) => {
+  bumpUsage(1); // 2026-09-11 批 3：用量计数（每次调用 +1，攒批落库）
   const { OPENID } = cloud.getWXContext();
   const { action } = event || {};
 
@@ -191,6 +218,26 @@ async function cancelVisit(user, e, isBoss) {
   return { ok: true, visitId: doc._id, msg: '已取消本次拜访，该客户仍为待回访' };
 }
 
+// 2026-09-11 降频：开关类设置「一次读全表 + 实例内 60 秒缓存」
+// 用途：submit 的照片上限/录音开关/强制拍照，coordfix 的报错开关等，避免每次调用都读 settings
+let _swCache = null, _swCacheAt = 0;
+async function getSwitchCfg() {
+  if (_swCache && Date.now() - _swCacheAt < 60000) return _swCache;
+  const r = await db.collection('settings').limit(100).get().catch(() => ({ data: [] }));
+  const m = {};
+  (r.data || []).forEach(s => { m[s.key] = s.value; });
+  const recRaw = Number(m.recordingDurationLimit) || 300;
+  _swCache = {
+    photoLimit: [3, 6, 9, 15].includes(Number(m.photoLimit)) ? Number(m.photoLimit) : 9,
+    recEnabled: m.recEnabled === undefined ? true : !!m.recEnabled,
+    evidenceRequired: !!m.evidenceRequired,
+    coordFixEnabled: m.coordFixEnabled === undefined ? true : !!m.coordFixEnabled,
+    segLimitSec: [180, 300, 600].includes(recRaw) ? recRaw : 300
+  };
+  _swCacheAt = Date.now();
+  return _swCache;
+}
+
 async function submit(user, e, isBoss) {
   // 游客（实习账号）硬拦（2026-09-08 老板定：游客不能提交数据；前端提示+云端兜底双层）
   if (user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
@@ -211,23 +258,26 @@ async function submit(user, e, isBoss) {
   const allowed = customer.customerType === 'new' ? RESULT_ENUM_NEW : RESULT_ENUM_MALL;
   if (!allowed.includes(result)) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
 
-  // 3. 现场证据校验
-  //    照片（2026-09-11 老板定：上限 3 → 15，手机端支持连拍 + 相册多选）：≤15 条 {fileID, thumbID}
-  //    录音（2026-09-11 老板定：≤6 段；单条上限跟后台「拜访录音上限」档位，兜底 ≤600 秒；合计 ≤1800 秒=30 分钟硬封顶）
+  // 3. 现场证据校验（2026-09-11 降频：上限与开关统一走 getSwitchCfg —— 一次读全表 + 60 秒缓存）
+  //    照片：上限跟后台「照片上限」档位（3/6/9/15，默认 9）
+  //    录音：≤6 段；单条上限跟后台「拜访录音上限」档位（180/300/600，兜底 300）；合计 ≤1800 秒=30 分钟硬封顶
   //      transcribe=false = 只留档不转文字；兼容旧字段 audio（单条）→ 自动并入 audios
+  const sw = await getSwitchCfg();
   let ph = [];
   if (photos !== undefined && photos !== null) {
-    if (!Array.isArray(photos) || photos.length > 15) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数量不合法（最多 15 张）' };
+    if (!Array.isArray(photos) || photos.length > sw.photoLimit) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数量不合法（最多 ' + sw.photoLimit + ' 张）' };
     ph = photos.filter(p => p && typeof p.fileID === 'string' && p.fileID && typeof p.thumbID === 'string' && p.thumbID);
     if (ph.length !== photos.length) return { ok: false, code: 'BAD_PHOTOS', msg: '照片数据不完整，请重新拍摄' };
   }
+  // 强制拍照（后台开关，默认关）：开启后必须至少 1 张
+  if (sw.evidenceRequired && !ph.length) return { ok: false, code: 'NEED_PHOTO', msg: '请至少拍 1 张现场照片后再提交' };
   let au = [];
   const rawAudios = Array.isArray(audios) && audios.length ? audios : ((audio && audio.fileID) ? [audio] : []);
+  // 现场录音开关（后台设置页可关，默认开）
+  if (!sw.recEnabled && rawAudios.length) return { ok: false, code: 'AUDIO_DISABLED', msg: '后台已关闭现场录音，本次录音未提交' };
   if (rawAudios.length > 6) return { ok: false, code: 'BAD_AUDIO', msg: '录音最多 6 条' };
-  // 2026-09-11 老板定：单条上限真读后台「拜访录音上限」档位（180/300/600 秒，兜底 300；与手机端同源）
-  const recCfgRes = await db.collection('settings').where({ key: 'recordingDurationLimit' }).limit(1).get();
-  const recRaw = Number(recCfgRes.data[0] && recCfgRes.data[0].value) || 300;
-  const segLimitSec = [180, 300, 600].includes(recRaw) ? recRaw : 300;
+  // 单条上限跟后台档位（与手机端同源）
+  const segLimitSec = sw.segLimitSec;
   let totalAudioSec = 0;
   for (const a of rawAudios) {
     if (!a || typeof a.fileID !== 'string' || !a.fileID) return { ok: false, code: 'BAD_AUDIO', msg: '录音数据不完整，请重新录制' };

@@ -116,8 +116,16 @@ Page({
         customers, activeDay, loading: false
       });
       // 时间分层配置同步全局（2026-09-08 M2 审查修复：task 页也要同步，loc.js 采集器依赖）
+      // 2026-09-11 降频：把轨迹开关与工作档位一并写入（loc.js 采集器读这里）；同时存一份完整系统配置供各页读开关
       const app = getApp();
-      if (app) app.globalData.locCfg = { workStartHour: res.task.workStartHour, workEndHour: res.task.workEndHour, offDutyTier: res.task.offDutyTier };
+      if (app) {
+        app.globalData.locCfg = {
+          workStartHour: res.task.workStartHour, workEndHour: res.task.workEndHour, offDutyTier: res.task.offDutyTier,
+          locTrackEnabled: res.task.locTrackEnabled, locLatestEnabled: res.task.locLatestEnabled,
+          locWorkTier: res.task.locWorkTier, locMoveThreshold: res.task.locMoveThreshold
+        };
+        app.globalData.sysCfg = res.task;
+      }
       // 任务在审核中：启动全局审核观察员，15 秒被动等待审批结果
       if (res.task.status === 'reviewing') getApp().startReviewWatcher();
       this.refreshShow();

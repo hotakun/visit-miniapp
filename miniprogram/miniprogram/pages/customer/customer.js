@@ -20,12 +20,16 @@ Page({
       imageUrl: '/images/share.png'   // 分享封面（5:4，由 logo 生成）
     };
   },
-  data: { c: null, history: [], evPlay: '', evCurMs: 0, evCurText: '00:00', typeName: 'mall', coordConfirmShow: false, coordNewText: '', coordDistLine1: '', coordDistLine2: '', coordNote: '', coordQuality: '', coordRefreshing: false, coordCooldown: 0, coordSpinChar: '◐', coordPics: [], coordPicBusy: false },
+  data: { c: null, history: [], evPlay: '', evCurMs: 0, evCurText: '00:00', typeName: 'mall', coordConfirmShow: false, coordNewText: '', coordDistLine1: '', coordDistLine2: '', coordNote: '', coordQuality: '', coordRefreshing: false, coordCooldown: 0, coordSpinChar: '◐', coordPics: [], coordPicBusy: false, coordFixEnabled: true },
   onShow() {
     const c = wx.getStorageSync('curCustomer');
     if (!c) { api.toast('客户信息丢失'); wx.navigateBack(); return; }
     // 游客（实习账号）：店家电话后四位打码（2026-09-08 老板定）
+    // 2026-09-11 老板定：**不做"电话打码"开关** —— 正式业务员一律看到完整电话（仅游客打码）
     const trial = api.isTrialUser();
+    // 2026-09-11：手机端开关跟后台走（sysCfg 由 tasks.detail / mapData 写入全局）
+    const sysCfg = (getApp().globalData && getApp().globalData.sysCfg) || {};
+    const coordFixEnabled = sysCfg.coordFixEnabled === undefined ? true : !!sysCfg.coordFixEnabled;
     this.setData({
       c: {
         ...c,
@@ -35,7 +39,8 @@ Page({
         phone2Show: trial ? api.maskTrialPhone(c.phone2) : c.phone2
       },
       typeName: c.customerType === 'new' ? 'new' : 'mall',
-      isTrial: trial
+      isTrial: trial,
+      coordFixEnabled
     });
     this.loadHistory(c._id);
     this.refreshOngoing(c._id, c.taskId); // 开始拜访/取消/提交后按钮底色要实时正确

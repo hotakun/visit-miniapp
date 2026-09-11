@@ -13,7 +13,7 @@ const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 const BOSS_PHONE = '15055492888';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -29,8 +29,201 @@ async function saveVisitTrText(event) {
   return { ok: true, text, editedAt: Date.now(), msg: '已保存' };
 }
 
+// ===== 2026-09-11 批 3：云调用用量自建统计（老板要「看得见、能刹车」）=====
+// 原理：微信云开发查不到自己的用量 → 自己数：每次函数调用 +1（实例内累计），
+//       攒够 20 次或满 60 秒才合并写一次库（避免"统计本身"产生大量写调用）。
+// 口径：只统计「我们自己云函数的调用次数」，不含数据库/存储调用 → 低于控制台真值，仅作趋势与预警。
+const UC_QUOTA_DEFAULT = 1000000; // 免费额度参考：100 万次/月（设置页可配 usageQuota）
+let _ucCount = 0, _ucAt = 0;
+function ucMonth(ts) {
+  const d = new Date((ts || Date.now()) + 8 * 3600 * 1000);
+  return d.toISOString().slice(0, 7); // YYYY-MM（东八区）
+}
+async function bumpUsage(n) {
+  _ucCount += Number(n) || 1;
+  const now = Date.now();
+  if (_ucCount < 20 && now - _ucAt < 60000) return; // 攒够 20 次或满 60 秒才落库
+  const add = _ucCount;
+  _ucCount = 0; _ucAt = now;
+  try {
+    const month = ucMonth(now);
+    const r = await db.collection('settings').where({ key: 'usageCounter' }).limit(1).get();
+    const cur = r.data[0];
+    const val = (cur && cur.value) || { total: 0, months: {} };
+    val.total = (val.total || 0) + add;
+    val.months = val.months || {};
+    val.months[month] = (val.months[month] || 0) + add;
+    val.updatedAt = now;
+    if (cur) await db.collection('settings').doc(cur._id).update({ data: { value: val, updatedAt: now } });
+    else await db.collection('settings').add({ data: { key: 'usageCounter', value: val, updatedAt: now } });
+  } catch (e) { /* 统计失败不影响业务 */ }
+}
+
+// ===== 用量告警模板（2026-09-12 老板新申请「实时交易提醒」模板，编号 47862）=====
+// 后台设置页可填模板 ID（mpAlertTemplateId）；留空则回落到任务通知模板
+async function getAlertTemplateId() {
+  try {
+    const r = await db.collection('settings').where({ key: 'mpAlertTemplateId' }).limit(1).get();
+    const v = String((r.data[0] && r.data[0].value) || '').trim();
+    if (v) return v;
+  } catch (e) { /* 读失败 → 回落任务模板 */ }
+  const cfg = await getMpConfig();
+  return (cfg && cfg.templateId) || '';
+}
+
+// 管理员信息收件人（2026-09-12 老板定）：系统/管理类通知（用量告警等）只发这些手机号对应的账号
+// ⚠️ 口径：**不走"绑了服务号的管理员"自动收件** —— 老板明确要求这类信息不要发给朱小利的微信
+// 配置项 key = adminNotifyPhones（逗号/空格/分号分隔，只认 11 位数字，最多 10 个）
+async function getNotifyPhones() {
+  try {
+    const r = await db.collection('settings').where({ key: 'adminNotifyPhones' }).limit(1).get();
+    const raw = String((r.data[0] && r.data[0].value) || '');
+    return raw.split(/[,，;\s]+/).map(s => s.trim()).filter(s => /^\d{11}$/.test(s)).slice(0, 10);
+  } catch (e) { return []; }
+}
+
+// 取「管理员信息收件人」对应的服务号 OpenID 列表（未绑定服务号的手机号会被跳过并回报）
+async function resolveNotifyOpenids(extraPhone) {
+  const phones = await getNotifyPhones();
+  if (extraPhone && /^\d{11}$/.test(String(extraPhone).trim())) phones.unshift(String(extraPhone).trim());
+  const uniq = [...new Set(phones)];
+  if (!uniq.length) return { list: [], skipped: [], phones: [] };
+  const r = await db.collection('users').where({ phone: _.in(uniq) }).limit(20).get().catch(() => ({ data: [] }));
+  const byPhone = {};
+  r.data.forEach(u => { byPhone[String(u.phone || '')] = u; });
+  const list = [];
+  const skipped = [];
+  uniq.forEach(ph => {
+    const u = byPhone[ph];
+    if (u && u.mpOpenid) { if (!list.includes(u.mpOpenid)) list.push(u.mpOpenid); }
+    else skipped.push(ph + (u ? '（未绑服务号）' : '（无此账号）'));
+  });
+  return { list, skipped, phones: uniq };
+}
+
+// 用量告警模板数据（参数名取自模板详情：thing1 商户名称 / thing3 交易类型 / amount4 交易金额 / time2 交易时间 / thing7 商品名称）
+// 类型规则（微信）：thing ≤20 字；amount 只能是数字；time 需 "YYYY-MM-DD HH:mm" → 详细文案放 thing7，金额只放数字
+function buildAlertMpData(info) {
+  const limit20 = s => String(s || '').slice(0, 20);
+  const now = new Date(Date.now() + 8 * 3600 * 1000);
+  const p = n => String(n).padStart(2, '0');
+  const timeStr = `${now.getUTCFullYear()}-${p(now.getUTCMonth() + 1)}-${p(now.getUTCDate())} ${p(now.getUTCHours())}:${p(now.getUTCMinutes())}`;
+  // 2026-09-12：数字可读性修正 —— 不足 1 万次时直接用「次」，避免小量被"万次"抹平成 0（测试消息当时显示 0 就是这个原因）
+  const usedN = Number(info.used) || 0;
+  const isBig = usedN >= 10000;
+  const amountNum = isBig ? (Math.round(usedN / 1000) / 10) : usedN;
+  const unitTxt = isBig ? '万次' : '次';
+  return {
+    thing1: { value: limit20('聚火拜访') },
+    thing3: { value: limit20('云开发调用用量提醒') },
+    amount4: { value: String(amountNum) },
+    time2: { value: timeStr },
+    thing7: { value: limit20('用量已达 ' + (info.pct || 0) + '%，共 ' + amountNum + ' ' + unitTxt) }
+  };
+}
+
+// 用量查询（后台设置页展示 + 红线告警）
+async function usageStats(event) {
+  const month = ucMonth(Date.now());
+  const r = await db.collection('settings').where({ key: 'usageCounter' }).limit(1).get();
+  const val = (r.data[0] && r.data[0].value) || { total: 0, months: {} };
+  const used = Number((val.months || {})[month] || 0);
+  const qRes = await db.collection('settings').where({ key: 'usageQuota' }).limit(1).get();
+  const quota = Number((qRes.data[0] && qRes.data[0].value) || 0) || UC_QUOTA_DEFAULT;
+  const aRes = await db.collection('settings').where({ key: 'usageAlertPct' }).limit(1).get();
+  const alertRaw = Number((aRes.data[0] && aRes.data[0].value) || 0);
+  const alertPct = [60, 80].includes(alertRaw) ? alertRaw : 60;
+  const pct = quota > 0 ? Math.round(used / quota * 1000) / 10 : 0;
+  // 红线告警（每月一次）：达到 alertPct 就给「已绑定服务号」的管理员发模板消息
+  // 2026-09-12：改用用量告警专用模板（mpAlertTemplateId，后台可填；留空回落任务模板）
+  let alerted = '';
+  try {
+    if (pct >= alertPct && val.alertedMonth !== month) {
+      // 2026-09-12 老板定：**只发给「管理员信息收件人」**（后台配置的手机号），
+      // 不再自动发给"绑了服务号的管理员"（老板明确：这类信息不要发给朱小利的微信）
+      const rn = await resolveNotifyOpenids();
+      const toList = rn.list;
+      const skipped = rn.skipped || [];
+      const cfg = await getMpConfig();
+      const tplId = await getAlertTemplateId();
+      if (!toList.length) {
+        alerted = '未发送：未配置「管理员信息收件人」' + (skipped.length ? '（' + skipped.join('、') + '）' : '');
+      } else if (cfg && cfg.enabled && tplId) {
+        const token = await getMpAccessToken(cfg);
+        for (const to of toList) {
+          await mpRequest(`/cgi-bin/message/template/send?access_token=${encodeURIComponent(token)}`, {
+            touser: to,
+            template_id: tplId,
+            data: buildAlertMpData({ used, pct, quota })
+          }).catch(() => null);
+        }
+        alerted = `已发送用量提醒（${toList.length} 人）`;
+      }
+      val.alertedMonth = month;
+      if (r.data[0]) await db.collection('settings').doc(r.data[0]._id).update({ data: { value: val, updatedAt: Date.now() } }).catch(() => null);
+    }
+  } catch (e) { /* 告警失败静默 */ }
+  return {
+    ok: true, month, used, quota, pct, alertPct, alerted,
+    total: Number(val.total || 0), months: val.months || {},
+    quotaDefault: UC_QUOTA_DEFAULT,
+    updatedAt: val.updatedAt || null,
+    note: '自建统计，只含云函数调用次数，低于控制台真值，看趋势用'
+  };
+}
+
+// 用量告警「测试发送」（2026-09-12 老板定）：按当前模板 ID + 字段映射发一条真实消息，便于核对文案
+// 收件人：openid 直传 > phone 指定账号 > 设置页「管理员信息收件人」的第一个（**不发管理员微信**）
+async function testMpAlert(event) {
+  const cfg = await getMpConfig();
+  if (!cfg || !cfg.enabled || !cfg.appid || !cfg.appsecret) {
+    return { ok: false, code: 'MP_CFG', msg: '请先在系统设置启用服务号配置' };
+  }
+  const tplId = await getAlertTemplateId();
+  if (!tplId) return { ok: false, code: 'NO_TPL', msg: '未配置用量告警模板 ID' };
+  let openid = String(event.openid || '').trim();
+  let picked = 'openid';
+  if (!openid && event.phone) {
+    const u = await db.collection('users').where({ phone: String(event.phone).trim() }).limit(1).get();
+    const uu = u.data[0];
+    openid = (uu && uu.mpOpenid) || '';
+    picked = uu ? (uu.name || '') + '（' + uu.phone + '）' : ('手机号 ' + event.phone);
+    if (!openid) return { ok: false, code: 'NO_OPENID', msg: picked + ' 未绑定服务号 OpenID（请先在「人员管理」绑定）' };
+  }
+  if (!openid) {
+    // 2026-09-12 老板定：默认发给「管理员信息收件人」配置里的第一个手机号（**不再自动发给管理员微信**）
+    const rn = await resolveNotifyOpenids();
+    if (!rn.list.length) {
+      return {
+        ok: false, code: 'NO_RECIPIENT',
+        msg: '未配置「管理员信息收件人」' + (rn.skipped && rn.skipped.length ? '（' + rn.skipped.join('、') + '）' : '') + '，请在设置页填写收件人手机号'
+      };
+    }
+    openid = rn.list[0];
+    picked = '管理员信息收件人 ' + (rn.phones[0] || '');
+  }
+  const stats = await usageStats({}); // 复用真实用量（内部含红线去重，不会重复告警）
+  try {
+    const token = await getMpAccessToken(cfg);
+    const r = await mpRequest(`/cgi-bin/message/template/send?access_token=${encodeURIComponent(token)}`, {
+      touser: openid,
+      template_id: tplId,
+      data: buildAlertMpData({ used: stats.used, pct: stats.pct, quota: stats.quota })
+    });
+    if (r && r.errcode === 0) {
+      return { ok: true, sent: true, msgid: r.msgid, templateId: tplId, to: picked, used: stats.used, pct: stats.pct, msg: '测试消息已发送给 ' + picked + '，请查看该微信服务号的「服务通知」' };
+    }
+    return { ok: false, sent: false, code: 'MP_ERR', templateId: tplId, to: picked, msg: `errcode=${r && r.errcode} ${(r && r.errmsg) || ''}` };
+  } catch (e) {
+    return { ok: false, sent: false, code: 'MP_ERR', templateId: tplId, msg: e.message || '发送失败' };
+  }
+}
+
 exports.main = async (event) => {
   const action = (event && event.action) || 'login';
+
+  // 2026-09-11 批 3：用量计数（每次调用 +1；只统计函数调用次数，攒批落库）
+  bumpUsage(1);
 
   // 定时触发器入口（2026-09-08 M1：拜访时长上限动态闹钟，每 10 分钟 cron 调一次，免管理员鉴权）
   if (event && (event.TriggerName || event.Type === 'Timer')) {
@@ -114,6 +307,8 @@ exports.main = async (event) => {
     if (action === 'updateCustomerRemark') return await updateCustomerRemark(event);
     if (action === 'purgeUnbatchedCustomers') return await purgeUnbatchedCustomers(event);
     if (action === 'saveVisitTrText') return await saveVisitTrText(event);
+    if (action === 'usageStats') return await usageStats(event); // 2026-09-11 批 3：云调用用量查询
+    if (action === 'testMpAlert') return await testMpAlert(event); // 2026-09-12：用量告警测试发送
     if (action === 'ping') return { ok: true, pong: Date.now() };
     return { ok: true, pong: Date.now() };
   } catch (e) {
@@ -304,22 +499,10 @@ function todayStr() {
   return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-// 过期任务自动归档（2026-09-08 老板定：自然完成的进历史；过期达设置档位天数的自动归档终态）
-// 档位 settings.expireArchiveDays：2/3/5 天（默认 3）；后台 15 秒轮询静默触发（幂等）
-// ===== 拜访时长上限 · 动态闹钟（2026-09-08 M1 老板定） =====
-// 每 10 分钟定时触发（cron 配置在云开发控制台，见部署说明）：
-// ① remindAt 到点且未提醒 → 服务号提醒一次（标记 remindSentAt 防重复）
-// ② autoCancelAt 到点 → 双态：有草稿结果→自动提交（跳过距离、无照片录音）；无→自动取消；均写任务 logs + 服务号告知
-// ③ 2026-09-11 新增：任务「过期」补记流程档案（老板反馈：过期时档案里没有记录）
-async function visitTimeoutTick() {
-  const now = Date.now();
-  await expiredTaskTick();   // ← ③ 必须独立于"是否有拜访中"，所以放在 return 之前
-  const ong = await fetchAll('visits', { status: 'ongoing' }, {});
-  if (!ong.length) return;
-
 // 2026-09-11 修复（老板反馈：青恩艳那条任务过期后，流程档案里查不到记录）：
 // 「过期」原本只是按 deadline 实时算出来的状态（tasks 的 expired 是现算的），系统里没有任何写入点 → 档案空白。
 // 这里由 10 分钟定时器兜底补记一条 expired 日志；用 expiredLoggedAt 做幂等，同一任务只写一次。
+// 返回补记条数。调用点=visitTimeoutTick 开头（必须独立于"是否有拜访中"，故放在其 return 之前）。
 async function expiredTaskTick() {
   const today = todayStr();
   const rows = await fetchAll('tasks', { status: 'published', archivedAt: _.exists(false) },
@@ -343,6 +526,18 @@ async function expiredTaskTick() {
   }
   return marked;
 }
+
+// ===== 拜访时长上限 · 动态闹钟（2026-09-08 M1 老板定） =====
+// 每 10 分钟定时触发（cron 配置在云开发控制台，见部署说明）：
+// ① remindAt 到点且未提醒 → 服务号提醒一次（标记 remindSentAt 防重复）
+// ② autoCancelAt 到点 → 双态：有草稿结果→自动提交（跳过距离、无照片录音）；无→自动取消；均写任务 logs + 服务号告知
+// ③ 2026-09-11 新增：任务「过期」补记流程档案（老板反馈：过期时档案里没有记录）
+async function visitTimeoutTick() {
+  const now = Date.now();
+  await expiredTaskTick();   // ← ③ 必须独立于"是否有拜访中"，所以放在 return 之前
+  const ong = await fetchAll('visits', { status: 'ongoing' }, {});
+  if (!ong.length) return;
+
   for (const v of ong) {
     try {
       if (!v.autoCancelAt) continue;
@@ -386,6 +581,8 @@ async function expiredTaskTick() {
   }
 }
 
+// 过期任务自动归档（2026-09-08 老板定：自然完成的进历史；过期达设置档位天数的自动归档终态）
+// 档位 settings.expireArchiveDays：2/3/5 天（默认 3）；后台 15 秒轮询静默触发（幂等）
 async function autoArchiveExpired(event) {
   const setRes = await db.collection('settings').where({ key: 'expireArchiveDays' }).limit(1).get();
   const raw = Number(setRes.data[0] && setRes.data[0].value) || 3;
@@ -1962,15 +2159,100 @@ async function getSettings(event) {
   }
   // 腾讯地图 Key：前端渲染地图必需，明文返回；未配置回默认
   if (!map.mpKey) map.mpKey = 'SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D';
+  // ===== 2026-09-11 降频与开关类设置：未设置时回默认值（前端不必各自兜底）=====
+  // 默认值口径：维持线上现有行为；locWorkTier 默认 30S/120S、photoLimit 默认 9（老板 2026-09-11 拍板）
+  const DEF_SETTINGS = {
+    locTrackEnabled: true, locLatestEnabled: true,
+    locWorkTier: '30_120', locPackUpload: true, locPackSec: 60, locMoveThreshold: 20,
+    adminAutoRefresh: true, adminHiddenPause: true,
+    tickIntervalMin: 30, asrPollMin: 15, reviewWatchEnabled: true,
+    recEnabled: true, photoLimit: 9, evidenceRequired: false,
+    platformPhotoShow: true, coordFixEnabled: true, salesmanScope: 'task', usageAlertPct: 60,
+    usageQuota: 1000000, // 2026-09-11 批 3：云调用月度额度参考值（100 万次/月）
+    mpAlertTemplateId: '', // 2026-09-12：用量告警模板 ID（留空则回落到任务通知模板）
+    adminNotifyPhones: '' // 2026-09-12：管理员信息收件人手机号（逗号分隔；留空=不发此类系统通知）
+  };
+  Object.keys(DEF_SETTINGS).forEach(k => { if (map[k] === undefined || map[k] === null) map[k] = DEF_SETTINGS[k]; });
+  // ===== 2026-09-12 老板定：模板 ID 不在界面明文显示（避免被看到/误改误伤）=====
+  // 口径与 AppSecret 一致：只回掩码 + 是否已配置；改的时候整段粘贴覆盖，留空＝不修改
+  if (map.mpAlertTemplateId) {
+    map.mpAlertTemplateIdSet = true;
+    map.mpAlertTemplateIdMask = maskSecret(map.mpAlertTemplateId);
+  } else {
+    map.mpAlertTemplateIdSet = false;
+    map.mpAlertTemplateIdMask = '';
+  }
+  delete map.mpAlertTemplateId; // 绝不回明文
   return { ok: true, settings: map };
 }
 
+// 敏感串掩码：形如 --DI4LbB…Nuz24A（保留头 8 尾 6，够核对又拿不全）
+function maskSecret(s) {
+  const t = String(s || '');
+  if (t.length <= 16) return '****';
+  return t.slice(0, 8) + '…' + t.slice(-6);
+}
+
 async function setSetting(event) {
-  const { key, value } = event;
+  const { key } = event;
+  // 2026-09-11 修复：下面要改写 value（取值规范化），原写法 `const { key, value } = event`
+  // 解构出的是常量，一赋值就抛 "Assignment to constant variable"（老板点开关时踩到）→ 改为 let
+  let value = event.value;
   if (!key) return { ok: false, code: 'BAD_ARG', msg: '缺少设置项 key' };
   // 仅允许写入已知设置项（防任意写入）
-  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays', 'welcomeConfig'];
+  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays', 'welcomeConfig', 'locTrackEnabled', 'locLatestEnabled', 'locWorkTier', 'locPackUpload', 'locPackSec', 'locMoveThreshold', 'adminAutoRefresh', 'adminHiddenPause', 'tickIntervalMin', 'asrPollMin', 'reviewWatchEnabled', 'recEnabled', 'photoLimit', 'evidenceRequired', 'platformPhotoShow', 'coordFixEnabled', 'salesmanScope', 'usageAlertPct', 'usageQuota', 'mpAlertTemplateId', 'adminNotifyPhones'];
   if (!ALLOWED.includes(key)) return { ok: false, code: 'BAD_KEY', msg: '未知设置项' };
+  // ===== 2026-09-11 降频与开关类设置（老板定：应对云开发「调用次数」用尽）=====
+  // 说明：统一在此预规范化并改写 value，后面的 `let v = value;` 自然拿到规范化结果；
+  //      所有默认值 = 维持线上现有行为（locWorkTier 例外：默认 30S/120S 最省档，老板 2026-09-11 拍板）
+  const BOOL_SET = ['locTrackEnabled', 'locLatestEnabled', 'locPackUpload', 'adminAutoRefresh', 'adminHiddenPause', 'reviewWatchEnabled', 'recEnabled', 'evidenceRequired', 'platformPhotoShow', 'coordFixEnabled'];
+  if (BOOL_SET.includes(key)) value = !!value;
+  const ENUM_SET = {
+    locWorkTier: ['5_30', '15_60', '30_120'],  // 工作时段上报档位（拜访中/平时）
+    locPackSec: [30, 60, 120],                 // 打包上报间隔（秒）
+    photoLimit: [3, 6, 9, 15],                 // 现场照片档位
+    tickIntervalMin: [10, 30, 60],             // 定时器频率（分钟）
+    asrPollMin: [5, 15, 30],                   // 转写轮询频率（分钟）
+    usageAlertPct: [60, 80],                   // 用量红线（百分比）
+    salesmanScope: ['task', 'all']             // 业务员可见范围
+  };
+  const ENUM_DEF = { locWorkTier: '30_120', locPackSec: 60, photoLimit: 9, tickIntervalMin: 30, asrPollMin: 15, usageAlertPct: 60, salesmanScope: 'task' };
+  if (ENUM_SET[key]) {
+    const isNum = ['locPackSec', 'photoLimit', 'tickIntervalMin', 'asrPollMin', 'usageAlertPct'].includes(key);
+    const val = isNum ? Number(value) : String(value);
+    value = ENUM_SET[key].includes(val) ? val : ENUM_DEF[key];
+  }
+  if (key === 'locMoveThreshold') {
+    // 移动超过 N 米才上报（0=不启用该阈值），钳制 0~200
+    const n = Number(value);
+    value = Number.isInteger(n) && n >= 0 && n <= 200 ? n : 20;
+  }
+  if (key === 'usageQuota') {
+    // 2026-09-11 批 3：云调用月度额度（自建统计对照用）——1 万~1 亿，默认 100 万次/月
+    const n = Math.round(Number(value) || 0);
+    value = (n >= 10000 && n <= 100000000) ? n : 1000000;
+  }
+  if (key === 'mpAlertTemplateId') {
+    // 2026-09-12：用量告警模板 ID（「实时交易提醒」模板，编号 47862）
+    // ⚠️ 老板确认：开头那截 "--" 也是 ID 的一部分（不是页面装饰）→ 只去首尾空格，绝不动其它字符
+    // ⚠️ 2026-09-12 老板定：界面不显示明文（防看到/误改）→ 留空＝保持原值不修改；传 __CLEAR__ ＝清空
+    const raw = String(value == null ? '' : value).trim();
+    if (raw === '__CLEAR__') {
+      value = '';
+    } else if (!raw) {
+      const curRes = await db.collection('settings').where({ key }).limit(1).get();
+      value = (curRes.data[0] && curRes.data[0].value) || '';
+    } else {
+      value = raw;
+    }
+  }
+  if (key === 'adminNotifyPhones') {
+    // 2026-09-12 老板定：**管理员信息收件人手机号** —— 系统/管理类通知（用量告警等）只发给这些号
+    // （老板明确：这类信息不要发给朱小利的微信；也不改绑任何微信，纯靠这份配置）
+    // 逗号/中文逗号/分号/空格分隔，只保留 11 位数字，最多 10 个
+    value = String(value == null ? '' : value)
+      .split(/[,，;\s]+/).map(s => s.trim()).filter(s => /^\d{11}$/.test(s)).slice(0, 10).join(',');
+  }
   // locationCheck 规范化：enabled + threshold（0=关闭校验）
   let v = value;
   if (key === 'locationCheck') {
@@ -2018,8 +2300,9 @@ async function setSetting(event) {
     v = Number.isInteger(n) && n >= 0 && n <= 23 ? n : 20;
   }
   if (key === 'offDutyTier') {
-    // 非工作时段四档（2026-09-08 M2）：5S/30S / 10S/60S / 20S/120S / 30S/180S，默认 10_60
-    v = ['5_30', '10_60', '20_120', '30_180'].includes(String(value)) ? String(value) : '10_60';
+    // 非工作时段三档（2026-09-11 老板定：只保留较大的两档并新增最省档）：
+    // 20S/120S（默认）/ 30S/180S / 60S/300S；旧的 5_30、10_60 不再提供，历史值一律归到默认档
+    v = ['20_120', '30_180', '60_300'].includes(String(value)) ? String(value) : '20_120';
   }
   if (key === 'trackKeepDays') {
     // 轨迹保留天数（2026-09-08 M2）：1~365 整数，默认 30

@@ -4,7 +4,34 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+// ===== 2026-09-11 批 3：云调用用量自建统计（与 adminapi / visits 写同一份 settings.usageCounter；攒批落库）=====
+let _ucCount = 0, _ucAt = 0;
+function ucMonth(ts) {
+  const d = new Date((ts || Date.now()) + 8 * 3600 * 1000);
+  return d.toISOString().slice(0, 7);
+}
+async function bumpUsage(n) {
+  _ucCount += Number(n) || 1;
+  const now = Date.now();
+  if (_ucCount < 20 && now - _ucAt < 60000) return;
+  const add = _ucCount;
+  _ucCount = 0; _ucAt = now;
+  try {
+    const month = ucMonth(now);
+    const r = await db.collection('settings').where({ key: 'usageCounter' }).limit(1).get();
+    const cur = r.data[0];
+    const val = (cur && cur.value) || { total: 0, months: {} };
+    val.total = (val.total || 0) + add;
+    val.months = val.months || {};
+    val.months[month] = (val.months[month] || 0) + add;
+    val.updatedAt = now;
+    if (cur) await db.collection('settings').doc(cur._id).update({ data: { value: val, updatedAt: now } });
+    else await db.collection('settings').add({ data: { key: 'usageCounter', value: val, updatedAt: now } });
+  } catch (e) { /* 统计失败不影响业务 */ }
+}
+
 exports.main = async (event) => {
+  bumpUsage(1); // 2026-09-11 批 3：用量计数（每次调用 +1，攒批落库）
   const { OPENID } = cloud.getWXContext();
   const { action, taskId } = event || {};
 
@@ -352,30 +379,47 @@ async function lastVisitMap(taskId, ids) {
   return lastMap;
 }
 
-// 2026-09-09 提速（C 方案）：8 项系统配置一次并行取齐（原 detail 串行 8 次查询）
+// 2026-09-11 降频改造：改为**一次性拉全表 settings**（原来是 8 个配置各查一次的并行查询）
+// 原因：配置项从 8 个涨到 19 个，逐个查询会让每次「任务详情」多出十几条读调用；全表一次读最省（settings 表条目很少）
 async function loadSettings() {
-  const one = async key => {
-    const r = await db.collection('settings').where({ key }).limit(1).get();
-    return r.data[0] ? r.data[0].value : undefined;
-  };
-  const [lc, lr, lkr, rec, vd, ws, we, od] = await Promise.all([
-    one('locationCheck'), one('locRefreshInterval'), one('locKeyRefreshInterval'),
-    one('recordingDurationLimit'), one('visitDurationLimit'), one('workStartHour'),
-    one('workEndHour'), one('offDutyTier')
-  ]);
-  const locCfg = lc || { enabled: true, threshold: 100 };
-  const lrVal = Number(lr) || 30;
+  const all = {};
+  try {
+    const r = await db.collection('settings').limit(100).get();
+    (r.data || []).forEach(s => { all[s.key] = s.value; });
+  } catch (e) { /* 读失败则全部走默认值 */ }
+  const locCfg = all.locationCheck || { enabled: true, threshold: 100 };
+  const lrVal = Number(all.locRefreshInterval) || 30;
   const locRefresh = [30, 45, 60].includes(lrVal) ? lrVal : 30;
-  const lkrVal = Number(lkr) || 15;
+  const lkrVal = Number(all.locKeyRefreshInterval) || 15;
   const locKeyRefresh = [8, 12, 15, 20].includes(lkrVal) ? lkrVal : 15;
-  const recVal = Number(rec) || 300;
+  const recVal = Number(all.recordingDurationLimit) || 300;
   const recordingDurationLimit = [180, 300, 600].includes(recVal) ? recVal : 300;
-  const vdVal = Number(vd) || 3600;
+  const vdVal = Number(all.visitDurationLimit) || 3600;
   const visitDurationLimit = [1800, 3600, 7200].includes(vdVal) ? vdVal : 3600;
-  const workStartHour = Number.isInteger(Number(ws)) ? Number(ws) : 7;
-  const workEndHour = Number.isInteger(Number(we)) ? Number(we) : 20;
-  const offDutyTier = ['5_30', '10_60', '20_120', '30_180'].includes(String(od)) ? String(od) : '10_60';
-  return { locCfg, locRefresh, locKeyRefresh, recordingDurationLimit, visitDurationLimit, workStartHour, workEndHour, offDutyTier };
+  const workStartHour = Number.isInteger(Number(all.workStartHour)) ? Number(all.workStartHour) : 7;
+  const workEndHour = Number.isInteger(Number(all.workEndHour)) ? Number(all.workEndHour) : 20;
+  // 非工作档位：2026-09-11 老板定只留三档（20_120 默认 / 30_180 / 60_300）
+  const offDutyTier = ['20_120', '30_180', '60_300'].includes(String(all.offDutyTier)) ? String(all.offDutyTier) : '20_120';
+  // ===== 2026-09-11 降频与开关类（默认值与 adminapi.getSettings 保持一致）=====
+  const locTrackEnabled = all.locTrackEnabled === undefined ? true : !!all.locTrackEnabled;
+  const locLatestEnabled = all.locLatestEnabled === undefined ? true : !!all.locLatestEnabled;
+  const locWorkTier = ['5_30', '15_60', '30_120'].includes(String(all.locWorkTier)) ? String(all.locWorkTier) : '30_120';
+  const mt = Number(all.locMoveThreshold);
+  const locMoveThreshold = Number.isInteger(mt) && mt >= 0 && mt <= 200 ? mt : 20;
+  const photoLimit = [3, 6, 9, 15].includes(Number(all.photoLimit)) ? Number(all.photoLimit) : 9;
+  const recEnabled = all.recEnabled === undefined ? true : !!all.recEnabled;
+  const evidenceRequired = !!all.evidenceRequired;
+  const coordFixEnabled = all.coordFixEnabled === undefined ? true : !!all.coordFixEnabled;
+  const reviewWatchEnabled = all.reviewWatchEnabled === undefined ? true : !!all.reviewWatchEnabled;
+  const salesmanScope = String(all.salesmanScope) === 'all' ? 'all' : 'task';
+  const phoneVisibility = String(all.phoneVisibility) === 'masked' ? 'masked' : 'visible';
+  return {
+    locCfg, locRefresh, locKeyRefresh, recordingDurationLimit, visitDurationLimit,
+    workStartHour, workEndHour, offDutyTier,
+    locTrackEnabled, locLatestEnabled, locWorkTier, locMoveThreshold,
+    photoLimit, recEnabled, evidenceRequired, coordFixEnabled, reviewWatchEnabled,
+    salesmanScope, phoneVisibility
+  };
 }
 
 async function detail(salesmanId, taskId, isBoss) {
@@ -456,6 +500,12 @@ async function detail(salesmanId, taskId, isBoss) {
       recordingDurationLimit,
       visitDurationLimit,
       workStartHour, workEndHour, offDutyTier,
+      // 2026-09-11 降频与开关类下发（手机端 loc.js / 拜访页 / app.js 读取；默认值口径同 adminapi.getSettings）
+      locTrackEnabled: cfgP.locTrackEnabled, locLatestEnabled: cfgP.locLatestEnabled,
+      locWorkTier: cfgP.locWorkTier, locMoveThreshold: cfgP.locMoveThreshold,
+      photoLimit: cfgP.photoLimit, recEnabled: cfgP.recEnabled, evidenceRequired: cfgP.evidenceRequired,
+      coordFixEnabled: cfgP.coordFixEnabled, reviewWatchEnabled: cfgP.reviewWatchEnabled,
+      salesmanScope: cfgP.salesmanScope, phoneVisibility: cfgP.phoneVisibility,
       aboutToVisit: enriched.filter(c => !c.visitedToday).length
     },
     customers: enriched
@@ -519,7 +569,13 @@ async function mapData(salesmanId, taskId, isBoss) {
     locCheck: { enabled: !!(cfgP.locCfg && cfgP.locCfg.enabled), threshold: Number((cfgP.locCfg && cfgP.locCfg.threshold) || 0) },
     locRefresh: cfgP.locRefresh, locKeyRefresh: cfgP.locKeyRefresh,
     recordingDurationLimit: cfgP.recordingDurationLimit, visitDurationLimit: cfgP.visitDurationLimit,
-    workStartHour: cfgP.workStartHour, workEndHour: cfgP.workEndHour, offDutyTier: cfgP.offDutyTier
+    workStartHour: cfgP.workStartHour, workEndHour: cfgP.workEndHour, offDutyTier: cfgP.offDutyTier,
+    // 2026-09-11 降频与开关类（地图页也用到轨迹配置；其余开关供手机端各页读取）
+    locTrackEnabled: cfgP.locTrackEnabled, locLatestEnabled: cfgP.locLatestEnabled,
+    locWorkTier: cfgP.locWorkTier, locMoveThreshold: cfgP.locMoveThreshold,
+    photoLimit: cfgP.photoLimit, recEnabled: cfgP.recEnabled, evidenceRequired: cfgP.evidenceRequired,
+    coordFixEnabled: cfgP.coordFixEnabled, reviewWatchEnabled: cfgP.reviewWatchEnabled,
+    salesmanScope: cfgP.salesmanScope, phoneVisibility: cfgP.phoneVisibility
   };
   return { ok: true, tasks: tasksOut, map: { task, customers } };
 }

@@ -36,7 +36,8 @@ Page({
     timeoutWarn: false, timeoutLeftMin: 5,
     // 现场证据（2026-09-07 二期提前做）：照片双轨瓦片 + 录音状态机
     // 2026-09-11 M2b：录音改为【多段】—— ≤5 条 / 单条 ≤10 分钟 / 合计 30 分钟硬封顶；按段勾选转写
-    pics: [], prepBusy: false, maxPics: 15, // 现场照片上限（2026-09-11 老板定：3 → 15，支持连拍 + 相册多选）
+    pics: [], prepBusy: false, maxPics: 9, // 现场照片上限（2026-09-11 老板定：改为跟后台「照片上限」档位走，默认 9；onLoad 按配置覆盖）
+    recEnabled: true,      // 录音开关（2026-09-11：跟后台走；关闭后本页隐藏录音区，onLoad 覆盖）
     recs: [],              // 已录段：[{id, path, ext, sec, text, transcribe, up, fileID, trStatus}]
     recState: 'idle',      // idle | rec（同一时刻只录一段）
     curText: '00:00',      // 本次录制计时
@@ -73,11 +74,19 @@ Page({
     this.vLimit = [1800, 3600, 7200].includes(vlRaw) ? vlRaw : 3600;
     this._warned = false;
     this._timeoutDone = false;
+    // 2026-09-11：现场证据与业务开关跟后台走（sysCfg 由 tasks.detail / mapData 写入全局）
+    const _app = getApp();
+    const _cfg = (_app && _app.globalData && _app.globalData.sysCfg) || {};
+    const maxPics = [3, 6, 9, 15].includes(Number(_cfg.photoLimit)) ? Number(_cfg.photoLimit) : 9;
+    this.recEnabled = _cfg.recEnabled === undefined ? true : !!_cfg.recEnabled;
+    this.evidenceRequired = !!_cfg.evidenceRequired;
     this.setData({
       c,
       resultList: c.customerType === 'new' ? NEW : MALL,
       recLimitMin: Math.max(3, Math.round(lim / 60)),
-      segMaxSec: lim
+      segMaxSec: lim,
+      maxPics,                        // 照片上限（后台设置页可配 3/6/9/15，默认 9）
+      recEnabled: this.recEnabled     // 录音开关（关闭后本页隐藏录音区）
     });
     // 录音器（页面级单例；串行录制，离开页面即停并丢弃，未提交不上传）
     this.recorder = media.createRecorder();
@@ -566,6 +575,8 @@ Page({
   // 第 2 步：确认提交 —— 先上传现场证据（成功才落库；已传的自动复用，失败可重试），再提交拜访
   async confirmSubmit() {
     if (this.submitting) return;
+    // 2026-09-11：后台「强制拍至少 1 张」开启时前端先拦一次（云端 visits.submit 同样校验）
+    if (this.evidenceRequired && !this.data.pics.length) { api.toast('请至少拍 1 张现场照片'); return; }
     this.submitting = true;
     try {
       // 0) 录音若仍在进行：先自动停止，等文件就绪

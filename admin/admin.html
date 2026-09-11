@@ -982,6 +982,19 @@ input,textarea{-webkit-user-select:text;user-select:text}
       <div class="title-bar"><span class="t">系统设置</span></div>
       <div class="card" style="max-width:1000px;padding:20px 24px">
 
+        <!-- 2026-09-11 批 3：云调用用量（自建统计，见 adminapi usageStats） -->
+        <div class="set-row" style="border-left:3px solid var(--primary);background:#FBFCFF;border-radius:8px;padding:10px 14px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="font-size:14px;font-weight:700">☁️ 本月云调用</span>
+            <span id="usageLine" style="font-size:13.5px;font-weight:700">统计中…</span>
+            <span style="flex:1;min-width:180px;height:8px;background:#EEF1F6;border-radius:99px;overflow:hidden">
+              <span id="usageBar" style="display:block;height:100%;width:0%;background:linear-gradient(90deg,#9BE0B8,#1E9E5A);border-radius:99px"></span>
+            </span>
+            <button class="btn ghost btn-sm" onclick="loadUsage()">刷新</button>
+          </div>
+          <div class="sb-d" style="margin-top:6px">数据来自<b>自建统计</b>（云函数每次调用 +1）——只含我们云函数的调用次数，<b>不含数据库/存储调用，所以低于控制台真值，看趋势用</b>。达到红线会变色（默认 60% 橙 / 80% 红）并给管理员发一次服务号提醒；额度与红线可在下面「定时器与轮询」调整。</div>
+        </div>
+
         <!-- 分组一：定位与拜访 -->
         <div class="set-group">📍 定位与拜访</div>
         <div class="set-row">
@@ -1016,21 +1029,85 @@ input,textarea{-webkit-user-select:text;user-select:text}
             <div class="sb-d" style="margin-top:8px">业务员提交拜访时校验与客户的距离：勾选后按<b> 1~500 米</b>阈值校验，<b>填 0 或不勾选=关闭</b>；定位失败直接拦截提交。<br><b>正常页面刷新</b>=普通页面的定位刷新频率（默认 30 秒）；<b>重要页面刷新</b>=拜访记录等重要定位页面的频率（默认 15 秒）。定位失败静默保留旧数字。<br><b>拜访录音上限</b>=手机端现场录音单段最长时间（默认 5 分钟），到点自动停止。<br><b>拜访时长上限</b>=一次拜访最长计时（默认 1 小时）：到点前 5 分钟提醒；已选结果自动提交（跳过距离、无照片录音）、未选结果自动取消，均写入任务流程档案。</div>
           </div>
         </div>
+        <!-- 2026-09-11 新增：定位上报开关（老板定：应对云开发「调用次数」用尽） -->
         <div class="set-row">
-          <div class="set-row-t">定位轨迹</div>
+          <div class="set-row-t">定位上报</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                定位轨迹<input type="checkbox" id="locTrackEnabled" onchange="saveSwitch('locTrackEnabled', this.checked)">
+              </label>
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                最新位置上报<input type="checkbox" id="locLatestEnabled" onchange="saveSwitch('locLatestEnabled', this.checked)">
+              </label>
+            </div>
+            <div class="sb-d" style="margin-top:8px">
+              <b>定位轨迹</b>：开启＝手机端记录并上传行踪轨迹，后台可回放全天路线、看每段停留，消耗调用较多；<b>关闭＝不再记录任何轨迹</b>（后台「轨迹回放 / 当天轨迹」无数据），但最新位置仍按下一项执行 → 定位类调用大幅下降。<br>
+              <b>最新位置上报</b>：开启＝后台「位置监控」能看到业务员当前在哪、是否在拜访中；<b>关闭＝后台只保留最后一次已知位置</b>（不再刷新）→ 定位类调用降到最低。
+            </div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-row-t">定位轨迹参数</div>
           <div class="set-row-c">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <label style="font-weight:700;font-size:13px">工作时段<select class="inp" id="workStartHour" style="width:84px;margin-left:6px"></select> 点 ~ <select class="inp" id="workEndHour" style="width:84px"></select> 点</label>
-              <label style="font-weight:700;font-size:13px">非工作档位<select class="inp" id="offDutyTier" style="width:130px;margin-left:6px">
-                <option value="5_30">5S/30S 不降频</option>
-                <option value="10_60">10S/60S（默认）</option>
-                <option value="20_120">20S/120S</option>
+              <label style="font-weight:700;font-size:13px">工作档位<select class="inp" id="locWorkTier" style="width:170px;margin-left:6px">
+                <option value="5_30">5S/30S 全速</option>
+                <option value="15_60">15S/60S</option>
+                <option value="30_120">30S/120S（省调用）</option>
+              </select></label>
+              <label style="font-weight:700;font-size:13px">非工作档位<select class="inp" id="offDutyTier" style="width:160px;margin-left:6px">
+                <option value="20_120">20S/120S（默认）</option>
                 <option value="30_180">30S/180S</option>
+                <option value="60_300">60S/300S 最省</option>
               </select></label>
               <label style="font-weight:700;font-size:13px">轨迹保留<input class="inp" id="trackKeepDays" type="number" min="1" max="365" style="width:80px;margin-left:6px"> 天</label>
               <button class="btn primary btn-sm" onclick="saveTrackSetting()">保存</button>
             </div>
-            <div class="sb-d" style="margin-top:8px"><b>工作时段</b>=采样全速（拜访中 5 秒/平时 30 秒）；<b>非工作档位</b>=拜访中/平时联动降频，上传发包跟随档位、绝不空转；最新位置非工作时段移动超 10 米才写。<b>轨迹保留</b>=云端轨迹片段保留天数（默认 30），到期自动清理。</div>
+            <div class="sb-d" style="margin-top:8px"><b>工作档位</b>＝工作时段（拜访中/平时）的上报频率，<b>默认 30S/120S 最省调用</b>（每 30 秒一个点，只能看大致动线与停留，看不出秒级行踪）；<b>非工作档位</b>＝非工作时段的联动降频、绝不空转；<b>轨迹保留</b>＝云端轨迹片段保留天数（默认 30），到期自动清理。</div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-row-t">现场证据</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px">照片上限<select class="inp" id="photoLimit" style="width:100px;margin-left:6px">
+                <option value="3">3 张</option>
+                <option value="6">6 张</option>
+                <option value="9">9 张</option>
+                <option value="15">15 张</option>
+              </select></label>
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                允许录音<input type="checkbox" id="recEnabled" onchange="saveSwitch('recEnabled', this.checked)">
+              </label>
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                强制拍至少 1 张<input type="checkbox" id="evidenceRequired" onchange="saveSwitch('evidenceRequired', this.checked)">
+              </label>
+              <button class="btn primary btn-sm" onclick="saveEvidenceSetting()">保存</button>
+            </div>
+            <div class="sb-d" style="margin-top:8px"><b>照片上限</b>＝一次拜访最多上传张数（默认 9）；<b>允许录音</b>＝关闭后手机端不显示录音区、云端拒收录音；<b>强制拍至少 1 张</b>＝开启后提交拜访必须有照片（默认关）。</div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-row-t">手机端显示</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                平台参考图<input type="checkbox" id="platformPhotoShow" onchange="saveSwitch('platformPhotoShow', this.checked)">
+              </label>
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                坐标报错入口<input type="checkbox" id="coordFixEnabled" onchange="saveSwitch('coordFixEnabled', this.checked)">
+              </label>
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                审核轮询<input type="checkbox" id="reviewWatchEnabled" onchange="saveSwitch('reviewWatchEnabled', this.checked)">
+              </label>
+              <label style="font-weight:700;font-size:13px">可见范围<select class="inp" id="salesmanScope" style="width:158px;margin-left:6px" onchange="saveSwitch('salesmanScope', this.value)">
+                <option value="task">只看本任务客户</option>
+                <option value="all">全部客户</option>
+              </select></label>
+            </div>
+            <div class="sb-d" style="margin-top:8px">手机端界面开关：<b>平台参考图</b>＝新客户页是否显示平台抓取的参考图；<b>坐标报错入口</b>＝客户页「📍报错」按钮；<b>审核轮询</b>＝手机端审核状态观察员（关闭可省调用）；<b>可见范围</b>＝业务员能否看到非本任务客户。<br>（2026-09-11 老板定：<b>不做电话打码</b> —— 正式业务员一律看到完整电话号码，仅游客打码）</div>
           </div>
         </div>
 
@@ -1054,6 +1131,28 @@ input,textarea{-webkit-user-select:text;user-select:text}
               <button class="btn primary btn-sm" onclick="saveMpConfig()">保存</button>
             </div>
             <div class="sb-d" id="mpTokenStatus" style="margin-top:6px;font-weight:700">服务号 token：检测中…</div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-row-t">用量告警模板</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px">模板 ID<input class="inp" id="mpAlertTemplateId" type="password" autocomplete="new-password" style="width:400px;margin-left:6px" placeholder="留空＝不修改；要换模板时整段粘贴新 ID"></label>
+              <button class="btn primary btn-sm" onclick="saveMpAlertTpl()">保存</button>
+              <button class="btn ghost btn-sm" onclick="clearMpAlertTpl()">清除</button>
+              <button class="btn ghost btn-sm" onclick="testMpAlert()">📨 测试发送</button>
+              <span id="mpAlertTplNow" style="font-size:12.5px;color:#5B6472"></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px">
+              <label style="font-weight:700;font-size:13px">管理员信息收件人<input class="inp" id="adminNotifyPhones" style="width:340px;margin-left:6px" placeholder="手机号，多个用逗号隔开（如 13067737286）"></label>
+              <button class="btn primary btn-sm" onclick="saveAdminNotifyPhones()">保存</button>
+            </div>
+            <div class="sb-d" style="margin-top:6px">
+              <b>模板 ID 不在界面显示明文</b>（2026-09-12 定，避免被看到/误改）：<b>输入框留空＝不修改</b>，要更换模板时把新 ID <b>整段粘贴</b>进来再点保存；不想要了就点「清除」。当前配置状态显示在按钮右侧。<br>
+              <b>管理员信息收件人</b>（2026-09-12 定）：<b>系统/管理类通知（用量告警等）只发给这里填的手机号</b>，<b>不会自动发给系统管理员/老板账号绑定的微信</b>（避免打扰业务方）。填多个用逗号隔开；留空 = 这类通知不发送。手机号对应的账号须已绑定服务号 OpenID 才会收到。<br>
+              模板：「实时交易提醒」（编号 47862）用于「本月云调用」超红线时发提醒。字段映射（写死在云端）：<b>商户名称</b>=聚火拜访 · <b>交易类型</b>=云开发调用用量提醒 · <b>交易金额</b>=本月用量（万次）· <b>交易时间</b>=发送时刻 · <b>商品名称</b>=用量百分比提示。<br>
+              ⚠️「交易金额」是 amount 类型只能填数字；模板 ID 开头那截 <b>--</b> 也是 ID 的一部分。清除模板 ID 后告警将回落到「新任务提醒」的模板。
+            </div>
           </div>
         </div>
         <div class="set-row">
@@ -1100,7 +1199,13 @@ input,textarea{-webkit-user-select:text;user-select:text}
         <div class="set-row">
           <div class="set-row-t">数据刷新间隔</div>
           <div class="set-row-c">
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                自动刷新<input type="checkbox" id="adminAutoRefresh" onchange="saveSwitch('adminAutoRefresh', this.checked)">
+              </label>
+              <label style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                窗口隐藏时暂停<input type="checkbox" id="adminHiddenPause" onchange="saveSwitch('adminHiddenPause', this.checked)">
+              </label>
               <label style="font-weight:700;font-size:13px">每 <select class="inp" id="globalRefresh" style="width:100px;margin-left:6px">
                 <option value="5">5 秒</option>
                 <option value="10">10 秒</option>
@@ -1110,7 +1215,30 @@ input,textarea{-webkit-user-select:text;user-select:text}
               </select> 自动刷新全量数据</label>
               <button class="btn primary btn-sm" onclick="saveGlobalRefresh()">保存</button>
             </div>
-            <div class="sb-d" style="margin-top:8px">后台全局轮询（任务/审核/过期/坐标报错检测）的间隔，默认 15 秒；保存后立即生效。<br>标题栏铃铛左侧的 🔄 刷新图标可随时手动刷新当前页面（含响铃检测）。</div>
+            <div class="sb-d" style="margin-top:8px">后台全局轮询（任务/审核/过期/坐标报错检测）的间隔，默认 15 秒（<b>建议改为 60 秒</b>，可显著降低云开发调用次数）；<b>自动刷新</b>关闭后只能手动刷新；<b>窗口隐藏时暂停</b>开启后，最小化 / 切走标签页即停止轮询，回到前台自动补一次。<br>标题栏铃铛左侧的 🔄 刷新图标可随时手动刷新当前页面（含响铃检测）。</div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-row-t">定时器与轮询</div>
+          <div class="set-row-c">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <label style="font-weight:700;font-size:13px">超时/归档检查<select class="inp" id="tickIntervalMin" style="width:120px;margin-left:6px" onchange="saveSwitch('tickIntervalMin', Number(this.value))">
+                <option value="10">每 10 分钟</option>
+                <option value="30">每 30 分钟</option>
+                <option value="60">每 60 分钟</option>
+              </select></label>
+              <label style="font-weight:700;font-size:13px">转写结果轮询<select class="inp" id="asrPollMin" style="width:120px;margin-left:6px" onchange="saveSwitch('asrPollMin', Number(this.value))">
+                <option value="5">每 5 分钟</option>
+                <option value="15">每 15 分钟</option>
+                <option value="30">每 30 分钟</option>
+              </select></label>
+              <label style="font-weight:700;font-size:13px">调用额度/月<input class="inp" id="usageQuota" type="number" min="10000" max="100000000" step="10000" style="width:130px;margin-left:6px" onchange="saveSwitch('usageQuota', Number(this.value))"></label>
+              <label style="font-weight:700;font-size:13px">红线<select class="inp" id="usageAlertPct" style="width:120px;margin-left:6px" onchange="saveSwitch('usageAlertPct', Number(this.value))">
+                <option value="60">60% 提醒</option>
+                <option value="80">80% 提醒</option>
+              </select></label>
+            </div>
+            <div class="sb-d" style="margin-top:8px">云端定时器频率：<b>超时/归档检查</b>＝拜访超时双态提交、过期任务补记流程档案（默认 30 分钟）；<b>转写结果轮询</b>＝语音转写结果查询（默认 15 分钟）。<br>⚠️ 这里保存的是"期望频率"，实际 cron 在云开发控制台设置，改动后需同步调整（我会提醒）。<br><b>调用额度/月</b>＝顶部「本月云调用」进度条的对照基准（免费版约 100 万次/月）；<b>红线</b>＝达到该比例时进度条变色并给管理员发一次服务号提醒。</div>
           </div>
         </div>
         <div class="set-row">
@@ -1842,7 +1970,7 @@ function renderDetail(res) {
 }
 
 // ===== 任务流程档案：日志时间线 + 提交审核情况（2026-09-08 老板定稿） =====
-const APP_VERSION = '0.9.11'; // 版本号（2026-09-11 老板定：与手机端 app.js 的 APP_VERSION 统一为 0.9.11）
+const APP_VERSION = '0.9.12'; // 版本号（2026-09-11 批 1：降频与设置开关改造；与手机端 app.js 保持一致）
 try { $('sideVer').textContent = 'v' + APP_VERSION; $('curVerText').textContent = 'v' + APP_VERSION; } catch (e) { /* 静默 */ }
 const ARCH_IC = { create: '📝', send: '📨', edit: '✏️', extend: '⏰', reassign: '👤', withdraw: '↩️', finishReq: '📤', reviewApprove: '✅', reviewReject: '⛔', autoDone: '🤖', archive: '🗄️', replan: '🗺', visit: '🏪', resched: '📅', visitAutoSubmit: '⏱', visitAutoCancel: '⏱', expired: '⌛' };
 const ARCH_COLOR = { create: '#2F80ED', send: '#2F80ED', edit: '#F5A623', extend: '#B97A0B', reassign: '#7C3AED', withdraw: '#8A93A0', finishReq: '#B97A0B', reviewApprove: '#34A853', reviewReject: '#E5484D', autoDone: '#34A853', archive: '#E5484D', replan: '#2F80ED', visit: '#16A34A', resched: '#2F80ED', visitAutoSubmit: '#34A853', visitAutoCancel: '#8A93A0', expired: '#E5484D' };
@@ -2476,17 +2604,33 @@ function stopDetailTimer(msg) {
 // 全局刷新间隔（秒；2026-09-08 老板定：设置页可配 5/10/15/30/60，默认 15；云端 settings.globalRefreshInterval）
 let refreshIntervalSec = 15;
 let rfBusy = false;
+// 2026-09-11 新增（降频）：自动刷新总开关 + 窗口隐藏时暂停（设置页可配，云端下发）
+let autoRefreshOn = true;
+let hiddenPauseOn = true;
+let autoTickPaused = false; // 窗口隐藏期间已暂停的标记（回到前台补一次拉取）
 
 async function startAuto() {
-  if (autoTimer) return;
   try {
     const s = await api('getSettings');
     if (s.ok) {
       const v = Number(s.settings.globalRefreshInterval) || 15;
       refreshIntervalSec = [5, 10, 15, 30, 60].includes(v) ? v : 15;
+      // 2026-09-11 降频开关：自动刷新 / 隐藏暂停（云端已给默认 true）
+      autoRefreshOn = (s.settings.adminAutoRefresh === undefined || s.settings.adminAutoRefresh === null) ? true : !!s.settings.adminAutoRefresh;
+      hiddenPauseOn = (s.settings.adminHiddenPause === undefined || s.settings.adminHiddenPause === null) ? true : !!s.settings.adminHiddenPause;
     }
   } catch (e) { /* 拉取失败用默认 15 秒 */ }
-  autoTimer = setInterval(autoTick, refreshIntervalSec * 1000);
+  if (!autoRefreshOn) {
+    // 自动刷新已关闭：只做一次首屏拉取（界面数据不空），不建定时器 → 省调用
+    autoTick();
+    checkRegAlerts();
+    return;
+  }
+  if (autoTimer) return; // 防重复启动（restartAuto 会先清除定时器）
+  autoTimer = setInterval(() => {
+    if (hiddenPauseOn && document.hidden) { autoTickPaused = true; return; } // 窗口不可见 → 不轮询
+    autoTick();
+  }, refreshIntervalSec * 1000);
   autoTick(); // 2026-09-09 老板定【首屏立即全域拉取】：进系统不等首轮刷新间隔——先立刻完整跑一轮（归档+任务+坐标报错+注册审核+按当前页渲染），
               // 此前首屏任务卡片要等第一轮轮询（15 秒/30 秒）才显现；首帧 applyTaskDiff 会全量渲染，之后照常增量
   checkRegAlerts(); // 2026-09-09 老板定：登录后立即同步一次待审核角标（不用等首轮 15 秒）
@@ -2494,7 +2638,15 @@ async function startAuto() {
   fetch('/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '系统', type: 'regReview' }) }).catch(() => {});
 }
 
-// 重启定时器（设置页保存新间隔后立即生效）
+// 2026-09-11：窗口从隐藏回到前台 → 补一次轮询（隐藏期间暂停、回来立即刷新，不丢状态）
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && autoTickPaused) {
+    autoTickPaused = false;
+    try { autoTick(); } catch (e) { /* 静默 */ }
+  }
+});
+
+// 重启定时器（设置页保存新间隔/新开关后立即生效）
 function restartAuto() {
   if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
   startAuto();
@@ -5162,12 +5314,29 @@ async function loadSettings() {
     we.value = String(res.settings.workEndHour != null ? res.settings.workEndHour : 20);
   }
   const odt = $('offDutyTier');
-  if (odt) odt.value = ['5_30', '10_60', '20_120', '30_180'].includes(String(res.settings.offDutyTier)) ? String(res.settings.offDutyTier) : '10_60';
+  // 2026-09-11 老板定：非工作档位只留三档（20_120 / 30_180 / 60_300），默认 20_120
+  if (odt) odt.value = ['20_120', '30_180', '60_300'].includes(String(res.settings.offDutyTier)) ? String(res.settings.offDutyTier) : '20_120';
   const tkd = $('trackKeepDays');
   if (tkd) tkd.value = String(res.settings.trackKeepDays || 30);
   $('finAutoApprove').checked = !!res.settings.autoApproveFinish;
   const mp = res.settings.mpConfig || {};
   $('mpEnabled').checked = !!mp.enabled;
+  // 2026-09-12：模板 ID 不回明文 → 输入框永远留空（留空＝不修改），右侧只显示掩码状态
+  const matEl = $('mpAlertTemplateId');
+  if (matEl) matEl.value = '';
+  const matNow = $('mpAlertTplNow');
+  if (matNow) {
+    if (res.settings.mpAlertTemplateIdSet) {
+      matNow.textContent = '当前：' + (res.settings.mpAlertTemplateIdMask || '已配置');
+      matNow.style.color = '#18A058';
+    } else {
+      matNow.textContent = '当前：未配置（回落「新任务提醒」模板）';
+      matNow.style.color = '#E6A23C';
+    }
+  }
+  // 管理员信息收件人（手机号列表，非敏感，正常回显）
+  const anpEl = $('adminNotifyPhones');
+  if (anpEl) anpEl.value = String(res.settings.adminNotifyPhones || '');
   const mpTok = res.settings.mpAccessToken || {};
   const tokEl = $('mpTokenStatus');
   if (tokEl) {
@@ -5187,6 +5356,62 @@ async function loadSettings() {
   if (welStyleEl) welStyleEl.value = welCfg.style === 'color' ? 'color' : 'gold';
   const grf = $('globalRefresh');
   if (grf) grf.value = String([5, 10, 15, 30, 60].includes(Number(res.settings.globalRefreshInterval)) ? res.settings.globalRefreshInterval : 15);
+  // ===== 2026-09-11 降频与开关类设置回显（云端已给默认值，这里再兜一层）=====
+  const S = res.settings || {};
+  const setChk = (id, val, def) => { const el = $(id); if (el) el.checked = (val === undefined || val === null) ? def : !!val; };
+  const setSel = (id, val, allow, def) => { const el = $(id); if (el) el.value = String(allow.includes(val) ? val : def); };
+  setChk('locTrackEnabled', S.locTrackEnabled, true);
+  setChk('locLatestEnabled', S.locLatestEnabled, true);
+  setSel('locWorkTier', S.locWorkTier, ['5_30', '15_60', '30_120'], '30_120');
+  setChk('adminAutoRefresh', S.adminAutoRefresh, true);
+  setChk('adminHiddenPause', S.adminHiddenPause, true);
+  setSel('tickIntervalMin', Number(S.tickIntervalMin), [10, 30, 60], 30);
+  setSel('asrPollMin', Number(S.asrPollMin), [5, 15, 30], 15);
+  setSel('photoLimit', Number(S.photoLimit), [3, 6, 9, 15], 9);
+  setChk('recEnabled', S.recEnabled, true);
+  setChk('evidenceRequired', S.evidenceRequired, false);
+  setChk('platformPhotoShow', S.platformPhotoShow, true);
+  setChk('coordFixEnabled', S.coordFixEnabled, true);
+  setChk('reviewWatchEnabled', S.reviewWatchEnabled, true);
+  setSel('salesmanScope', S.salesmanScope, ['task', 'all'], 'task');
+  // 2026-09-11 批 3：用量额度与红线回显
+  setSel('usageAlertPct', Number(S.usageAlertPct), [60, 80], 60);
+  const uqEl = $('usageQuota');
+  const uqN = Number(S.usageQuota);
+  if (uqEl) uqEl.value = String(uqN >= 10000 && uqN <= 100000000 ? uqN : 1000000);
+  // 2026-09-11 老板定：不做电话打码开关（正式业务员一律看到完整电话），故不再回显 phoneVisibility
+  // 后台自动刷新与隐藏暂停：同步到全局（startAuto 用）
+  autoRefreshOn = (S.adminAutoRefresh === undefined || S.adminAutoRefresh === null) ? true : !!S.adminAutoRefresh;
+  hiddenPauseOn = (S.adminHiddenPause === undefined || S.adminHiddenPause === null) ? true : !!S.adminHiddenPause;
+  // 2026-09-11 批 3：顺手刷新一次云调用用量
+  loadUsage();
+}
+
+// ===== 2026-09-11 批 3：云调用用量展示（自建统计；达到红线变色）=====
+// 口径：adminapi.usageStats 只统计云函数调用次数，不含数据库/存储调用 → 低于控制台真值，看趋势用
+async function loadUsage() {
+  const line = $('usageLine');
+  const bar = $('usageBar');
+  if (!line) return;
+  try {
+    const r = await api('usageStats');
+    if (!r || !r.ok) { line.textContent = '暂不可用'; line.style.color = '#8A93A1'; return; }
+    const wan = (x) => (Number(x) || 0) >= 10000 ? (Math.round(Number(x) / 1000) / 10) + ' 万' : String(Number(x) || 0);
+    line.textContent = wan(r.used) + ' / ' + wan(r.quota) + '（' + r.pct + '%）';
+    // 颜色：<60% 绿 / ≥alertPct 橙 / ≥80% 红
+    const color = r.pct >= 80 ? '#E5484D' : (r.pct >= r.alertPct ? '#E6A23C' : '#18A058');
+    line.style.color = color;
+    if (bar) {
+      bar.style.width = Math.min(100, r.pct) + '%';
+      bar.style.background = color === '#E5484D'
+        ? 'linear-gradient(90deg,#FFB4B6,#E5484D)'
+        : (color === '#E6A23C' ? 'linear-gradient(90deg,#FFE0A6,#E6A23C)' : 'linear-gradient(90deg,#9BE0B8,#1E9E5A)');
+    }
+    line.title = '自建统计：本月 ' + (r.used || 0) + ' 次（累计 ' + (r.total || 0) + ' 次）· 额度 ' + r.quota + ' 次/月 · 红线 ' + r.alertPct + '%' + (r.alerted ? ' · ' + r.alerted : '');
+  } catch (e) {
+    line.textContent = '读取失败';
+    line.style.color = '#E5484D';
+  }
 }
 
 async function saveFinReview() {
@@ -5274,16 +5499,55 @@ async function saveTrackSetting() {
   const we = parseInt($('workEndHour').value, 10);
   if (isNaN(ws) || isNaN(we)) { alert('请选择工作时段'); return; }
   const odt = $('offDutyTier').value;
+  const tier = $('locWorkTier') ? $('locWorkTier').value : '30_120';
   const days = parseInt($('trackKeepDays').value, 10) || 30;
   const r1 = await api('setSetting', { key: 'workStartHour', value: ws });
   if (!r1.ok) { alert(r1.msg || '保存失败'); return; }
   const r2 = await api('setSetting', { key: 'workEndHour', value: we });
   if (!r2.ok) { alert(r2.msg || '保存失败'); return; }
+  const r2b = await api('setSetting', { key: 'locWorkTier', value: tier });
+  if (!r2b.ok) { alert(r2b.msg || '保存失败'); return; }
   const r3 = await api('setSetting', { key: 'offDutyTier', value: odt });
   if (!r3.ok) { alert(r3.msg || '保存失败'); return; }
   const r4 = await api('setSetting', { key: 'trackKeepDays', value: days });
   if (!r4.ok) { alert(r4.msg || '保存失败'); return; }
-  alert(`已保存：工作时段 ${r1.value}:00~${r2.value}:00 · 非工作档位 ${odt} · 轨迹保留 ${r4.value} 天`);
+  const tierLab = { '5_30': '5S/30S 全速', '15_60': '15S/60S', '30_120': '30S/120S 省调用' }[tier] || tier;
+  alert(`已保存：工作时段 ${r1.value}:00~${r2.value}:00 · 工作档位 ${tierLab} · 非工作档位 ${odt} · 轨迹保留 ${r4.value} 天`);
+}
+
+// ===== 2026-09-11 新增：通用开关保存（降频与业务开关统一走这里）=====
+// 云端 adminapi.setSetting 已对每个 key 做取值规范化，这里只负责发请求 + 回执
+async function saveSwitch(key, value) {
+  const res = await api('setSetting', { key, value });
+  if (!res.ok) {
+    alert(res.msg || '保存失败');
+    try { loadSettings(); } catch (e) { /* 失败时回滚界面显示 */ }
+    return;
+  }
+  const LAB = {
+    locTrackEnabled: v => v ? '定位轨迹已开启：手机端记录并上传行踪轨迹' : '定位轨迹已关闭：不再记录轨迹（最新位置按另一开关执行），定位类调用大幅下降',
+    locLatestEnabled: v => v ? '最新位置上报已开启：后台位置监控可看到实时位置' : '最新位置上报已关闭：后台只保留最后一次已知位置',
+    adminAutoRefresh: v => v ? '后台自动刷新已开启' : '后台自动刷新已关闭（只能手动刷新）',
+    adminHiddenPause: v => v ? '窗口隐藏时暂停刷新已开启（省调用）' : '窗口隐藏时不再暂停（保持常轮询）',
+    recEnabled: v => v ? '现场录音已开启' : '现场录音已关闭：手机端不显示录音区',
+    evidenceRequired: v => v ? '已要求提交拜访必须至少 1 张照片' : '不再强制拍照',
+    platformPhotoShow: v => v ? '新客户页显示平台参考图' : '新客户页不显示平台参考图',
+    coordFixEnabled: v => v ? '坐标报错入口已开启' : '坐标报错入口已关闭',
+    reviewWatchEnabled: v => v ? '手机端审核轮询已开启' : '手机端审核轮询已关闭（省调用）',
+    salesmanScope: v => v === 'all' ? '业务员可见全部客户' : '业务员只看本任务客户',
+    tickIntervalMin: v => `超时/归档检查频率已设为每 ${v} 分钟（需在云开发控制台同步 cron）`,
+    asrPollMin: v => `转写结果轮询频率已设为每 ${v} 分钟（需在云开发控制台同步 cron）`
+  };
+  alert(LAB[key] ? LAB[key](value) : '已保存');
+  if (key === 'adminAutoRefresh' || key === 'adminHiddenPause') { try { restartAuto(); } catch (e) { /* 静默 */ } }
+}
+
+// 现场证据保存（照片档位；录音/强制拍照两个开关是即时生效的 checkbox）
+async function saveEvidenceSetting() {
+  const pl = parseInt($('photoLimit').value, 10) || 9;
+  const r1 = await api('setSetting', { key: 'photoLimit', value: pl });
+  if (!r1.ok) { alert(r1.msg || '保存失败'); return; }
+  alert(`已保存：现场照片上限 ${r1.value} 张`);
 }
 
 // ===== 版本检查与更新（2026-09-08 老板定：仅设置页手动触发；标题栏刷新不查版本） =====
@@ -5391,6 +5655,54 @@ async function saveMpConfig() {
     loadSettings();
   } else {
     alert(res.msg || '保存失败');
+  }
+}
+
+// ===== 2026-09-12：用量告警模板 + 管理员信息收件人（老板新申请「实时交易提醒」模板）=====
+// 保存模板 ID（2026-09-12 老板定：界面不回明文 → 留空＝不修改；保存后立即清空输入框）
+async function saveMpAlertTpl() {
+  const el = $('mpAlertTemplateId');
+  const v = el ? String(el.value || '').trim() : '';
+  if (!v) {
+    alert('输入框留空＝不修改。\n\n要更换模板，请把新模板 ID 整段粘贴进来再点「保存」；不想要了就点「清除」。');
+    return;
+  }
+  const res = await api('setSetting', { key: 'mpAlertTemplateId', value: v });
+  if (!res.ok) { alert(res.msg || '保存失败'); return; }
+  if (el) el.value = ''; // 保存后清空，界面上不留明文
+  alert('已保存用量告警模板 ID（界面不再显示明文，按钮右侧显示当前状态）\n\n可点「📨 测试发送」立即验证文案');
+  loadSettings();
+}
+// 清除模板 ID（清空后用量告警回落到「新任务提醒」模板）
+async function clearMpAlertTpl() {
+  if (!confirm('确定清除用量告警模板 ID？\n\n清除后，用量告警会回落到「新任务提醒」的模板。')) return;
+  const res = await api('setSetting', { key: 'mpAlertTemplateId', value: '__CLEAR__' });
+  if (!res.ok) { alert(res.msg || '清除失败'); return; }
+  const el = $('mpAlertTemplateId');
+  if (el) el.value = '';
+  alert('已清除用量告警模板 ID');
+  loadSettings();
+}
+// 保存「管理员信息收件人」手机号（2026-09-12 老板定：系统/管理类通知只发这些号，不发管理员自己的微信）
+async function saveAdminNotifyPhones() {
+  const el = $('adminNotifyPhones');
+  const v = el ? String(el.value || '').trim() : '';
+  const res = await api('setSetting', { key: 'adminNotifyPhones', value: v });
+  if (!res.ok) { alert(res.msg || '保存失败'); return; }
+  alert(v
+    ? ('已保存管理员信息收件人：' + res.value + '\n\n用量告警等系统通知只会发给这些手机号对应的账号（需已绑定服务号）')
+    : '已清空：用量告警等系统通知将不再发送');
+  loadSettings();
+}
+async function testMpAlert() {
+  if (!confirm('将用当前模板 ID 给「管理员信息收件人」里的第一个手机号发一条测试消息（不发管理员自己的微信），确定发送？')) return;
+  try {
+    const r = await api('testMpAlert', {});
+    // 2026-09-12 老板定：模板 ID 不在界面上显现（连测试回执也不带明文）
+    if (r.ok) alert((r.msg || '已发送') + '\n\n本月用量：' + (r.used || 0) + ' 次（' + (r.pct || 0) + '%）');
+    else alert('发送失败：' + (r.msg || '未知错误'));
+  } catch (e) {
+    alert('发送失败：' + ((e && e.message) || e));
   }
 }
 // ===== 商城客户列表导入 + 比对 =====

@@ -137,7 +137,15 @@ Page({
     this.task = map.task;
     this.customers = map.customers || [];
     const app = getApp();
-    if (app) app.globalData.locCfg = { workStartHour: map.task.workStartHour, workEndHour: map.task.workEndHour, offDutyTier: map.task.offDutyTier };
+    if (app) {
+      // 2026-09-11 降频：地图页同样把轨迹开关与工作档位写进全局（loc.js 采集器读这里）
+      app.globalData.locCfg = {
+        workStartHour: map.task.workStartHour, workEndHour: map.task.workEndHour, offDutyTier: map.task.offDutyTier,
+        locTrackEnabled: map.task.locTrackEnabled, locLatestEnabled: map.task.locLatestEnabled,
+        locWorkTier: map.task.locWorkTier, locMoveThreshold: map.task.locMoveThreshold
+      };
+      app.globalData.sysCfg = map.task;
+    }
     const days = (map.task.dayPlan || []).map(p => p.day);
     const td = Math.max(1, Math.min(map.task.todayDay || 1, days.length || 1));
     // 2026-09-09 老板定：刷新保持用户所选天（换天后点刷新不再跳回今天）；首次加载默认今天
