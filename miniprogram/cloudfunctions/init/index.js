@@ -25,7 +25,7 @@ const SALESMEN = [
   { name: '丰炳全', phone: '13894080558' },
   { name: '程绍君', phone: '18867597219' },
   { name: '宋子军', phone: '18968090390' },
-  { name: '范宇琨', phone: '13067737286', remark: '老板测试账号' }
+  { name: '范宇琨', phone: '13067737286', remark: '开发者本人（测试账号；不是老板——真正的老板是朱小利 15055492888）' }
 ];
 
 async function ensureCollection(name) {

@@ -12,6 +12,14 @@
     linear-gradient(180deg, #FBFCFE 0%, #EFF3F8 100%);
 }
 .head { display: flex; align-items: center; gap: 12px; padding: 8px 2px 20px; }
+/* ===== 2026-09-12 老板首页右上角极小分享按钮
+   ⚠️ 该按钮的定位与尺寸**全部内联写在 home.wxml 上**，本文件刻意不再保留任何相关规则。踩过的 4 个坑：
+   ① 放进 .head（display:flex）→ 被当成 flex 项排到「姓名」后面（老板看到过）；
+   ② position:fixed → 相对视口，位置不可控（老板实测没对齐）；
+   ③ 把 position/right 写在 <button> 上 → 被微信 button 组件内置样式（position:relative / margin:auto / padding）顶掉，
+      right 不生效 → 老板截图实测图标距右边框还差约 85px；
+   ④ 外层容器与 button 互相用 100% → 尺寸循环依赖算成 0 → 图标直接消失（老板反馈「彻底搞不见了」）。
+   现方案：外层 view 内联定位（right:0 贴屏幕最右）+ button 只管唤起分享 + 图标纯 CSS 绘制（不依赖图片文件）。 */
 .head-logo { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 3px #fff, 0 10px 22px -6px rgba(245,83,28,.55); }
 .head-txt { min-width: 0; }
 .hi { font-size: 23px; font-weight: 800; line-height: 1.3; text-shadow: 0 1px 0 rgba(255,255,255,.8); }
