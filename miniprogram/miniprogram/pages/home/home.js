@@ -236,7 +236,11 @@ function bossNewsOfDay() {
 Page({
   // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
   onShareAppMessage() {
-    return { title: '聚火拜访 · 业务员拜访管理', path: '/pages/home/home' };
+    return {
+      title: '聚火拜访 · 业务员拜访管理',
+      path: '/pages/home/home',
+      imageUrl: '/images/share.png'   // 分享封面（5:4，由 logo 生成）
+    };
   },
   data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false },
   onShow() {
