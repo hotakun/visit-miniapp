@@ -4,8 +4,8 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
-const RESULT_ENUM_MALL = ['极有意向', '有意向', '已下单', '无需求', '有抵触', '联系不上', '闭店·搬迁', '其他'];
-const RESULT_ENUM_NEW = [...RESULT_ENUM_MALL, '已注册商城'];
+const RESULT_ENUM_MALL = ['加入商城', '需要样品', '已下单', '不愿改', '有抵触', '联系不上', '闭店·搬迁', '其他'];
+const RESULT_ENUM_NEW = [...RESULT_ENUM_MALL, '已签约商城', '未签约'];
 
 // ===== 2026-09-11 批 3：云调用用量自建统计（与 adminapi 写同一份 settings.usageCounter；攒批落库）=====
 let _ucCount = 0, _ucAt = 0;
@@ -100,6 +100,7 @@ async function start(user, e, isBoss) {
     return {
       ok: false,
       code: 'ONGOING_OTHERS',
+      ongoingName: (cRes && cRes.data && cRes.data.name) || '另一家',
       msg: `「${(cRes && cRes.data && cRes.data.name) || '另一家'}」还未完成拜访，请先完成或取消`,
       ongoingCustomerId: o.customerId
     };

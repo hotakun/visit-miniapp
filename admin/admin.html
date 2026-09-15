@@ -547,7 +547,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="ni dis" title="开发中">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
     <div class="ni" data-p="customers" onclick="nav('customers')">🏪 客户管理</div>
-    <div class="ni dis" title="开发中">📥 销售导入</div>
+    <div class="ni" data-p="import" onclick="nav('import')">📥 导入信息</div>
     <div class="ni" data-p="track" onclick="nav('track')">🌐 战况监控</div>
     <div class="grp">系统</div>
     <div class="ni" data-p="people" onclick="nav('people')">👥 人员管理<span class="nav-badge" id="peopleNavBadge" hidden>0</span></div>
@@ -566,6 +566,129 @@ input,textarea{-webkit-user-select:text;user-select:text}
       <div class="top-right">
         <div class="wb-tag" onclick="showWb()" id="wbTag">🔥 回访工作台 ▾</div>
         <div class="nf-fab" id="nfFab" onclick="toggleNotify()" title="消息中心">🔔<span class="nf-badge" id="nfBadge" style="display:none"></span></div>
+      </div>
+    </div>
+
+    <!-- ===== 导入信息（2026-09-13 新增；规划见 _scratch/客户数据导入规范.md）===== -->
+    <!-- 四个入口可分批反复导入：商城客户 / 大众点评客户 / 销售订单 / 订单明细 -->
+    <div id="page-import" style="display:none">
+      <div class="title-bar"><span class="t">导入信息</span></div>
+
+      <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid var(--primary)">
+        <div style="font-size:13.5px;font-weight:700;margin-bottom:6px">📋 建议按这个顺序导入</div>
+        <div class="sb-d">
+          ① <b>商城客户</b>（打底：建客户档案） → ② <b>大众点评客户</b>（补平台画像，靠 shopuuid 对齐） → ③ <b>销售订单</b>（挂到客户） → ④ <b>订单明细</b>（挂到订单）<br>
+          每一步都能<b>分批反复导入</b>：按<b>客户编号 / 订单号</b>自动合并，同一份文件重复导不会产生重复数据。
+        </div>
+      </div>
+
+      <div style="max-width:1040px;display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:14px">
+
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <span style="font-size:19px">🏪</span>
+            <span style="font-size:15px;font-weight:700">商城客户导入</span>
+            <span class="sb-d" id="st-mall" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
+          </div>
+          <div class="sb-d" style="margin-top:6px">
+            商城导出的客户表（48 列 + 末列 <b>shopuuid</b>）。<br>
+            按<b>客户编号</b>入库；同一编号多条档案自动并成一家（购买次数多者为主，其余为副）。
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
+            <input type="file" id="f-mall" accept=".xlsx,.xls" style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('mall')">选择文件…</button>
+            <button class="btn ghost btn-sm" onclick="startImp('mall')">开始导入</button>
+            <span class="sb-d" id="m-mall" style="flex:1;min-width:110px"></span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <span style="font-size:19px">📍</span>
+            <span style="font-size:15px;font-weight:700">大众点评客户导入</span>
+            <span class="sb-d" id="st-plat" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
+          </div>
+          <div class="sb-d" style="margin-top:6px">
+            大众点评抓取的店铺表（45 列）。<br>
+            按 <b>shopuuid</b> 与商城客户对齐；点评侧重复记录自动合并（信息更丰富 → 评分更高 → 随机）。
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
+            <input type="file" id="f-plat" accept=".xlsx,.xls" style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('plat')">选择文件…</button>
+            <button class="btn ghost btn-sm" onclick="startImp('plat')">开始导入</button>
+            <span class="sb-d" id="m-plat" style="flex:1;min-width:110px"></span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <span style="font-size:19px">🧾</span>
+            <span style="font-size:15px;font-weight:700">销售订单导入</span>
+            <span class="sb-d" id="st-order" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
+          </div>
+          <div class="sb-d" style="margin-top:6px">
+            销售订单表（36 列，含<b>订单号 / 客户单位</b>）。<br>
+            按订单号去重；自动挂到对应客户的<b>主档案</b>（同编号主副两家的订单都要）。
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
+            <input type="file" id="f-order" accept=".csv,.xlsx,.xls" style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('order')">选择文件…</button>
+            <button class="btn ghost btn-sm" onclick="startImp('order')">开始导入</button>
+            <span class="sb-d" id="m-order" style="flex:1;min-width:110px"></span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <span style="font-size:19px">📦</span>
+            <span style="font-size:15px;font-weight:700">订单明细导入</span>
+            <span class="sb-d" id="st-item" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
+          </div>
+          <div class="sb-d" style="margin-top:6px">
+            订单明细<b>目录</b>（每个订单一个 CSV，文件名含订单号）。<br>
+            支持<b>多选 / 整个目录</b>，按订单号挂到对应订单；<b>19 列全字段</b>入库，不做汇总。
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
+            <input type="file" id="f-item" accept=".csv" multiple style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('item')">选择文件/目录…</button>
+            <button class="btn ghost btn-sm" onclick="startImp('item')">开始导入</button>
+            <span class="sb-d" id="m-item" style="flex:1;min-width:110px"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="impProgressBox" style="display:none;max-width:1040px;padding:14px 20px;margin-top:14px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:13.5px;font-weight:700" id="impProgressTitle">导入中…</span>
+          <span style="flex:1;min-width:200px;height:8px;background:#EEF1F6;border-radius:99px;overflow:hidden">
+            <span id="impProgressBar" style="display:block;height:100%;width:0%;background:linear-gradient(90deg,#FFB27A,var(--primary));border-radius:99px"></span>
+          </span>
+          <span class="sb-d" id="impProgressText"></span>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:1040px;padding:18px 20px;margin-top:16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:700">📊 当前库内数据</span>
+          <button class="btn ghost btn-sm" onclick="loadImportStats()">刷新</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:12px">
+          <div><div class="sb-d">客户档案</div><div style="font-size:22px;font-weight:800" id="cnt-cust">—</div></div>
+          <div><div class="sb-d">其中已加入商城</div><div style="font-size:22px;font-weight:800" id="cnt-cust-mall">—</div></div>
+          <div><div class="sb-d">订单</div><div style="font-size:22px;font-weight:800" id="cnt-order">—</div></div>
+          <div><div class="sb-d">订单明细行</div><div style="font-size:22px;font-weight:800" id="cnt-item">—</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:1040px;padding:18px 20px;margin-top:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:6px">✏️ 客户资料编辑管理</div>
+        <div class="sb-d">
+          在「客户管理」里可以搜索、筛选、查看与编辑客户资料（商城字段、平台画像、门店照片、管理员备注都在那里）。<br>
+          导入进来的数据若有个别不准，直接改即可 —— 改动不会被后续导入覆盖（除非新文件里该字段明确有新值）。
+        </div>
+        <div style="display:flex;gap:9px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn primary btn-sm" onclick="nav('customers')">进入客户管理</button>
+        </div>
       </div>
     </div>
 
@@ -1269,8 +1392,16 @@ input,textarea{-webkit-user-select:text;user-select:text}
             <div class="sb-t" style="color:var(--danger)">重置业务数据</div>
             <button class="btn" style="height:30px;border-radius:8px;padding:0 14px;font-size:13px;font-weight:400;background:var(--danger);color:#fff" onclick="confirmResetData()">重置业务数据</button>
           </div>
-          <div class="sb-d" style="margin-top:8px">将<b>清空全部任务、拜访记录、坐标报错申请、认领记录、批次</b>，所有客户状态恢复「待回访」。拜访照片与录音文件将一并从云存储删除。客户档案、账号、系统设置、商城客户名单<b>保留</b>。<br>⚠️ <b style="color:var(--danger)">此操作不可恢复</b>——仅用于重新开始测试；执行后业务员端将看不到任何任务。</div>
+          <div class="sb-d" style="margin-top:8px">将<b>清空全部任务、拜访记录、坐标报错申请、转写文本</b>，所有客户状态恢复「待回访」。拜访照片与录音文件将一并从云存储删除。客户档案、批次、账号、系统设置、商城客户名单<b>保留</b>。<br>⚠️ <b style="color:var(--danger)">此操作不可恢复</b>——仅用于重新开始测试；执行后业务员端将看不到任何任务。<br><span style="color:#8A93A1">（2026-09-12 起改为<b>分批循环清理</b>，数据再多也不会超时失败；中途失败可再次点击继续。）</span></div>
         </div>
+        <div class="set-danger" style="margin-top:14px">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <div class="sb-t" style="color:var(--danger)">全清客户数据</div>
+            <button class="btn" style="height:30px;border-radius:8px;padding:0 14px;font-size:13px;font-weight:400;background:#8B1A1A;color:#fff" onclick="confirmWipeAll()">全清客户数据</button>
+          </div>
+          <div class="sb-d" style="margin-top:8px">将<b>清空全部客户档案</b>（含已签约商城客户）、<b>全部批次与批内成员</b>，以及上面「重置业务数据」的全部内容（任务/拜访/报错/转写/认领 + 云存储照片录音）。账号、系统设置、待审核注册<b>保留</b>。<br>⚠️ <b style="color:var(--danger)">此操作不可恢复</b>——用于<b>换新数据结构后重新导入</b>；清完后客户表是空的，需要重新导入数据。</div>
+        </div>
+        <div id="wipeProgressBar" style="display:none;margin-top:12px;padding:10px 13px;border-radius:10px;background:#FFF8F3;border:1px solid #FBE0CE;color:#8A4B23;font-size:13px;font-weight:600;line-height:1.6"></div>
       </div>
     </div>
 
@@ -1671,9 +1802,9 @@ function curPurposeId() {
 function nav(p) {
   stopDetailTimer('');
   document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === p));
-  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track'].forEach(id => { $('page-' + id).style.display = 'none'; });
-  const title = { tasks: '任务管理', customers: '客户管理', people: '人员管理', settings: '系统设置', track: '战况监控' }[p] || '';
-  if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台'); }
+  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import'].forEach(id => { $('page-' + id).style.display = 'none'; });
+  const title = { tasks: '任务管理', customers: '客户管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息' }[p] || '';
+  if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台')); }
   // 顶部导航：仅回访工作台的客户管理页显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
   $('topActions').style.display = (p === 'customers' && curMode === 'mall') ? 'flex' : 'none';
   if (p === 'track') { loadTrackMapLib(); }
@@ -1699,6 +1830,77 @@ function nav(p) {
   if (p === 'customers') { if (curMode === 'new') loadCustomers(); else loadBatches(); }
   if (p === 'people') loadPeople();
   if (p === 'settings') loadSettings();
+  if (p === 'import') initImportPage();
+}
+
+// ===== 导入信息栏目（2026-09-13 新增；规划见 _scratch/客户数据导入规范.md）=====
+// 四个入口：mall=商城客户 / plat=大众点评客户 / order=销售订单 / item=订单明细
+const IMP_META = {
+  mall:  { label: '商城客户',     file: 'f-mall',  msg: 'm-mall',  state: 'st-mall'  },
+  plat:  { label: '大众点评客户', file: 'f-plat',  msg: 'm-plat',  state: 'st-plat'  },
+  order: { label: '销售订单',     file: 'f-order', msg: 'm-order', state: 'st-order' },
+  item:  { label: '订单明细',     file: 'f-item',  msg: 'm-item',  state: 'st-item'  }
+};
+const impPicked = { mall: null, plat: null, order: null, item: null };  // 用户已选的文件
+
+function initImportPage() { loadImportStats(); }
+
+// 选文件（明细支持多选/整目录）
+function pickImpFile(kind) {
+  const m = IMP_META[kind];
+  const el = $(m.file);
+  if (!el) return;
+  el.value = '';
+  el.onchange = () => {
+    const fs = Array.from(el.files || []);
+    if (!fs.length) return;
+    impPicked[kind] = fs;
+    const total = fs.reduce((a, f) => a + f.size, 0);
+    $(m.msg).textContent = fs.length === 1
+      ? ('已选：' + fs[0].name + '（' + (fs[0].size / 1024).toFixed(0) + ' KB）')
+      : ('已选 ' + fs.length + ' 个文件，共 ' + (total / 1024 / 1024).toFixed(1) + ' MB');
+  };
+  el.click();
+}
+
+// 开始导入（真正的导入逻辑待接：解析 → 分片调云函数 → 断点续跑）
+async function startImp(kind) {
+  const m = IMP_META[kind];
+  const fs = impPicked[kind];
+  if (!fs || !fs.length) { alert('请先「选择文件…」'); return; }
+  showImpProgress(m.label + '：解析中…', 0, '');
+  $(m.msg).textContent = '⏳ ' + fs.length + ' 个文件已就绪，导入逻辑待接入';
+  setTimeout(() => {
+    showImpProgress(m.label + '：导入逻辑待接入', 0, '');
+    $(m.msg).textContent = '⚠️ 导入逻辑尚未接入（栏目已就绪）';
+  }, 300);
+}
+
+// 进度条
+function showImpProgress(title, pct, text) {
+  const box = $('impProgressBox');
+  if (!box) return;
+  if (title === null) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  $('impProgressTitle').textContent = title || '';
+  $('impProgressBar').style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+  $('impProgressText').textContent = text || '';
+}
+
+// 库内数据统计（客户数走 listCustomers；订单/明细待云函数统计接口）
+async function loadImportStats() {
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('cnt-cust', '…'); set('cnt-cust-mall', '…'); set('cnt-order', '…'); set('cnt-item', '…');
+  try {
+    const res = await api('listCustomers');
+    if (res && res.ok) {
+      const list = res.customers || [];
+      set('cnt-cust', list.length);
+      set('cnt-cust-mall', list.filter(c => c.mallKey || c.mallJoinedAt).length);
+    } else { set('cnt-cust', '—'); set('cnt-cust-mall', '—'); }
+  } catch (e) { set('cnt-cust', '—'); set('cnt-cust-mall', '—'); }
+  set('cnt-order', '待接入');
+  set('cnt-item', '待接入');
 }
 
 // ===== 任务 =====
@@ -1874,7 +2076,7 @@ let autoTimer = null; // 全局 15 秒自动刷新定时器（任务列表/详�
 let autoBusy = false;
 const ST_MAP = { visited: ['已回访', 'green'], ongoing: ['拜访中', 'blue'], pending: ['待回访', 'gray'] };
 // 拜访结果 → 胶囊配色（语义：绿系=正向，蓝=入商城，灰=中性，红=抵触，黄=联系不上，紫=闭店）
-const RESULT_PILL = { '极有意向': 'green', '有意向': 'r-warm', '已下单': 'r-deal', '已注册商城': 'blue', '无需求': 'gray', '有抵触': 'r-resist', '联系不上': 'warn', '闭店·搬迁': 'r-close', '其他': 'r-other' };
+const RESULT_PILL = { '加入商城': 'green', '需要样品': 'r-warm', '已下单': 'r-deal', '已签约商城': 'blue', '未签约': 'gray', '不愿改': 'gray', '有抵触': 'r-resist', '联系不上': 'warn', '闭店·搬迁': 'r-close', '其他': 'r-other' };
 
 // 地址瘦身：去省与地级市，保留县级市及以后（浙江省金华市永康市东城街道… → 永康市东城街道…）
 // 仅当第一个"市"后面紧跟 2~5 字行政区划（XX市/区/县）时才去掉——防止"永康市…"开头被误删、远离的"小区"字样干扰
@@ -1970,7 +2172,7 @@ function renderDetail(res) {
 }
 
 // ===== 任务流程档案：日志时间线 + 提交审核情况（2026-09-08 老板定稿） =====
-const APP_VERSION = '0.9.12'; // 版本号（2026-09-11 批 1：降频与设置开关改造；与手机端 app.js 保持一致）
+const APP_VERSION = '0.9.14'; // 版本号（2026-09-13：新增「📥 导入信息」栏目——四个导入入口 + 库内数据统计 + 客户资料管理入口）
 try { $('sideVer').textContent = 'v' + APP_VERSION; $('curVerText').textContent = 'v' + APP_VERSION; } catch (e) { /* 静默 */ }
 const ARCH_IC = { create: '📝', send: '📨', edit: '✏️', extend: '⏰', reassign: '👤', withdraw: '↩️', finishReq: '📤', reviewApprove: '✅', reviewReject: '⛔', autoDone: '🤖', archive: '🗄️', replan: '🗺', visit: '🏪', resched: '📅', visitAutoSubmit: '⏱', visitAutoCancel: '⏱', expired: '⌛' };
 const ARCH_COLOR = { create: '#2F80ED', send: '#2F80ED', edit: '#F5A623', extend: '#B97A0B', reassign: '#7C3AED', withdraw: '#8A93A0', finishReq: '#B97A0B', reviewApprove: '#34A853', reviewReject: '#E5484D', autoDone: '#34A853', archive: '#E5484D', replan: '#2F80ED', visit: '#16A34A', resched: '#2F80ED', visitAutoSubmit: '#34A853', visitAutoCancel: '#8A93A0', expired: '#E5484D' };
@@ -5627,22 +5829,56 @@ async function saveRegionCode() {
   }
 }
 
+// 分批清理驱动器（2026-09-12：原来一次调用清全部会在数据多时超时 -601008，
+// 改成前端循环——每轮只清一小批，把云端返回的 st 原样传回去接着清，直到 done）
+async function wipeRun(scope, onProgress) {
+  let st = { i: 0, stats: {}, files: 0, fids: 0 };
+  let guard = 0;
+  while (guard++ < 800) {                       // 800 轮封顶：80 条/轮 × 800 = 6.4 万条，够用
+    const res = await api('wipeData', { scope, st });
+    if (!res || !res.ok) throw new Error((res && res.msg) || '清理失败');
+    if (res.st) st = res.st;
+    if (typeof onProgress === 'function') onProgress(res, guard);
+    if (res.done) return st;
+  }
+  throw new Error('清理轮次超过 800 轮，已中止（数据量异常大，请分批手动处理）');
+}
+
 // 重置业务数据（2026-09-07 老板要重新测试）：双重警告确认，不可恢复
 async function confirmResetData() {
-  if (!window.confirm('⚠️ 危险操作\n\n即将清空：全部任务、拜访记录、坐标报错申请、认领记录、批次；\n所有客户状态恢复「待回访」。\n\n拜访照片与录音文件将一并从云存储删除。\n客户档案、账号、系统设置、商城客户名单保留。\n\n此操作不可恢复！\n\n确定要重置吗？')) return;
+  if (!window.confirm('⚠️ 危险操作\n\n即将清空：全部任务、拜访记录、坐标报错申请、转写文本；\n所有客户状态恢复「待回访」。\n\n拜访照片与录音文件将一并从云存储删除。\n客户档案、批次、账号、系统设置、商城客户名单保留。\n\n此操作不可恢复！\n\n确定要重置吗？')) return;
   if (!window.confirm('再次确认\n\n真的要重置全部业务数据吗？\n执行后业务员端将看不到任何任务。')) return;
+  await runWipe('test', '重置业务数据');
+}
+
+// 全清客户数据（2026-09-12 新增）：连客户档案、批次、认领一起清空 —— 用于换新数据结构后重新导入
+async function confirmWipeAll() {
+  if (!window.confirm('⚠️⚠️ 全清客户数据（比「重置业务数据」更狠）\n\n即将清空：\n· 全部客户档案（含已签约商城客户）\n· 全部批次与批内成员\n· 全部任务、拜访记录、坐标报错、转写文本、比对认领\n· 云存储里的照片与录音文件\n\n保留：账号、系统设置、待审核注册。\n\n清除后客户表是空的，需要用最新数据重新导入。\n此操作不可恢复！\n\n确定要全清吗？')) return;
+  if (!window.confirm('再次确认\n\n输入前请确认：本地已备份好数据（_scratch/backup/customers-*.json）。\n\n真的要全清客户数据吗？')) return;
+  await runWipe('all', '全清客户数据');
+}
+
+// 循环清理 + 进度显示（进度写进按钮文字，避免每轮弹窗）
+async function runWipe(scope, label) {
+  const btn = document.getElementById('wipeProgressBar');
+  const setTxt = t => { if (btn) btn.textContent = t; if (btn) btn.style.display = 'block'; };
+  setTxt('⏳ ' + label + '：准备中…');
   try {
-    const res = await api('resetTestData');
-    if (res.ok) {
-      const s = res.stats || {};
-      alert('✅ 已重置：\n任务 ' + (s.tasks || 0) + ' 条、拜访 ' + (s.visits || 0) + ' 条、\n坐标报错 ' + (s.coord_fix_requests || 0) + ' 条、认领 ' + (s.mall_claims || 0) + ' 条、\n批次 ' + (s.customer_batches || 0) + ' 个已清空；\n照片/录音文件已删除 ' + (s.files_deleted || 0) + ' 个；\n客户 ' + (s.customers_reset || 0) + ' 家状态已归零（待回访）。');
-      if (typeof loadTasks === 'function') loadTasks();
-      if (typeof loadCustomers === 'function') loadCustomers();
-    } else {
-      alert(res.msg || '重置失败');
-    }
+    const st = await wipeRun(scope, (res, round) => {
+      setTxt('⏳ ' + label + '（第 ' + round + ' 轮）' + (res.msg || ''));
+    });
+    const s = st.stats || {};
+    const lines = Object.keys(s).map(k => k + ' ' + s[k]).join('、');
+    setTxt('✅ ' + label + '完成');
+    alert('✅ ' + label + '完成\n\n' + (lines || '（无数据需清理）') +
+      '\n照片/录音文件删除 ' + (st.files || 0) + ' 个');
+    setTimeout(() => { if (btn) btn.style.display = 'none'; }, 6000);
+    if (typeof loadTasks === 'function') loadTasks();
+    if (typeof loadCustomers === 'function') loadCustomers();
+    if (typeof loadCustomerBatches === 'function') loadCustomerBatches();
   } catch (e) {
-    alert('重置失败：' + ((e && e.message) || e));
+    setTxt('❌ ' + label + '中断：' + ((e && e.message) || e));
+    alert(label + '失败：' + ((e && e.message) || e) + '\n\n可再次点击继续（已清的不会重复清）。');
   }
 }
 

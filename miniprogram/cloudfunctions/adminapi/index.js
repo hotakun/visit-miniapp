@@ -13,7 +13,7 @@ const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 const BOSS_PHONE = '15055492888';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -294,6 +294,7 @@ exports.main = async (event) => {
     if (action === 'reviewCoordFix') return await reviewCoordFix(event);
     if (action === 'smartSortDay') return await smartSortDay(event);
     if (action === 'resetTestData') return await resetTestData(event);
+    if (action === 'wipeData') return await wipeData(event);
     if (action === 'listCustomerBatches') return await listCustomerBatches(event);
     if (action === 'getCustomerBatchInfo') return await getCustomerBatchInfo(event);
     if (action === 'renameCustomerBatch') return await renameCustomerBatch(event);
@@ -2576,6 +2577,95 @@ async function resetTestData(event) {
     stats,
     msg: `测试数据已重置：任务/拜访/报错/认领/批次已清空，照片与录音文件已删除 ${deletedFiles} 个（引用到 ${fidList.length} 个），客户状态归零（档案与设置保留）`
   };
+}
+
+// ===== 分批可续的数据清理（2026-09-12 新增，修 -601008 超时；老板：60 秒都不够）=====
+// 思路：一次调用只清一小批就返回，前端拿返回的 st 原样回传再调下一轮，直到 done。
+//      —— 跟「导入分片 100/片 + 断点续跑」是完全一样的套路。
+// scope：
+//   'test' = 重置业务数据（清 任务/拜访/报错/转写，保留客户档案与批次，客户状态归零）
+//   'all'  = 全清（在上面基础上连 认领/批内成员/批次/客户档案 一起清空，用于换新数据结构重导）
+// 云存储：清 visits 时先把 fileID 攒进 settings.__wipeFiles（清了记录就找不到文件了），
+//        全部清完后再走 __files__ 阶段分批删，删完把暂存文档清掉。
+const WIPE_STAGES = {
+  test: ['tasks', 'coord_fix_requests', 'transcripts', 'visits', '__files__', '__reset_cust__'],
+  all: ['tasks', 'coord_fix_requests', 'transcripts', 'mall_claims', 'batch_members', 'customer_batches', 'customers', 'visits', '__files__']
+};
+const WIPE_ROWS = 80;   // 每轮每个集合最多删 80 条文档（确保单次调用几秒内返回）
+const WIPE_FIDS = 100;  // 每轮最多删 100 个云存储文件
+
+async function wipeData(event) {
+  const scope = event.scope === 'all' ? 'all' : 'test';
+  const stages = WIPE_STAGES[scope];
+  const st = Object.assign({ i: 0, stats: {}, files: 0, fids: 0 }, event.st || {});
+  if (st.i >= stages.length) {
+    st.i = 0;
+    return { ok: true, done: true, st, msg: '清理完成' };
+  }
+  const stage = stages[st.i];
+
+  // ---- 阶段：云存储文件（分批删，每轮 100 个）----
+  if (stage === '__files__') {
+    const doc = await db.collection('settings').doc('__wipeFiles').get().catch(() => null);
+    const list = (doc && doc.data && doc.data.list) || [];
+    if (!st.fids) st.fids = list.length;
+    if (!list.length) {
+      await db.collection('settings').doc('__wipeFiles').remove().catch(() => {});
+      st.i++;
+      return { ok: true, done: false, st, stage, msg: '云存储文件已全部删除' };
+    }
+    const take = list.slice(0, WIPE_FIDS);
+    let del = 0;
+    for (let i = 0; i < take.length; i += 50) {
+      try {
+        const r = await cloud.deleteFile({ fileList: take.slice(i, i + 50) });
+        (r.fileList || []).forEach(f => { if (f.status === 0) del++; });
+      } catch (e) { /* 该批失败不阻断 */ }
+    }
+    const rest = list.slice(take.length);
+    await db.collection('settings').doc('__wipeFiles').set({ data: { list: rest } }).catch(() => {});
+    st.files = (st.files || 0) + del;
+    return { ok: true, done: false, st, stage, remain: rest.length, msg: `删除照片/录音文件 ${st.files}/${st.fids}…` };
+  }
+
+  // ---- 阶段：客户状态归零（test 模式专用；档案保留）----
+  if (stage === '__reset_cust__') {
+    const rc = await db.collection('customers').limit(WIPE_ROWS).get();
+    const crows = rc.data || [];
+    if (!crows.length) { st.i++; return { ok: true, done: false, st, stage, msg: '客户状态已全部归零' }; }
+    await Promise.all(crows.map(c => db.collection('customers').doc(c._id).update({
+      data: { reviewFlag: false, coord_status: (c.lat && c.lng) ? 'ok' : 'pending' }
+    }).catch(() => {})));
+    st.stats.customers_reset = (st.stats.customers_reset || 0) + crows.length;
+    return { ok: true, done: false, st, stage, msg: `客户状态归零 ${st.stats.customers_reset} 家…` };
+  }
+
+  // ---- 阶段：普通集合（每轮 80 条）----
+  try { await db.createCollection(stage); } catch (e) { /* 已存在 */ }
+  const r = await db.collection(stage).limit(WIPE_ROWS).get();
+  const rows = r.data || [];
+  if (!rows.length) { st.i++; return { ok: true, done: false, st, stage, msg: `${stage} 已清空` }; }
+
+  // visits：删记录前先把照片/录音 fileID 攒进暂存（删了记录就再也找不到文件了）
+  if (stage === 'visits') {
+    const ids = rows.map(d => d._id);
+    const fresh = await db.collection('visits').where({ _id: _.in(ids) })
+      .field({ photos: true, audio: true }).get().catch(() => null);
+    const fids = [];
+    ((fresh && fresh.data) || []).forEach(v => {
+      (v.photos || []).forEach(p => { if (p && p.fileID) fids.push(p.fileID); if (p && p.thumbID) fids.push(p.thumbID); });
+      if (v.audio && v.audio.fileID) fids.push(v.audio.fileID);
+    });
+    if (fids.length) {
+      const doc = await db.collection('settings').doc('__wipeFiles').get().catch(() => null);
+      const list = ((doc && doc.data && doc.data.list) || []).concat(fids);
+      await db.collection('settings').doc('__wipeFiles').set({ data: { list } }).catch(() => {});
+    }
+  }
+
+  await Promise.all(rows.map(d => db.collection(stage).doc(d._id).remove()));
+  st.stats[stage] = (st.stats[stage] || 0) + rows.length;
+  return { ok: true, done: false, st, stage, msg: `正在清理 ${stage}…已删 ${st.stats[stage]} 条` };
 }
 
 // ===================== 客户批次管理（2026-09-07 老板定稿，方案见交接文档 §7.12） =====================
