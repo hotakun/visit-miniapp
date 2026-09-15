@@ -5,7 +5,7 @@ const { LOGO_FILE_ID } = require('./utils/config');
 App({
   globalData: {
     user: null,
-    APP_VERSION: '0.9.12', // 版本号（2026-09-11 批 2：手机端降频——轨迹档位默认 30S/120S + 轨迹/最新位置开关；与后台 admin.html 一致）
+    APP_VERSION: '0.9.14', // 版本号（2026-09-13：与后台 admin.html 一致；后台新增「导入信息」栏目）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
     welcome: null, // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）

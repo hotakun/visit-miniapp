@@ -1,0 +1,283 @@
+<!-- 客户详情（演示）· 纯静态演示页（2026-09-13 老板要求）
+     数据写死在 customerDemo.js，不连云端；配色照 _scratch/客户详情页-A-手机演示.html
+     铁律：WXML 只用 view / text，禁止 HTML 标签 -->
+<view class="page">
+
+  <!-- ===================== 店名卡（不折叠） ===================== -->
+  <view class="head">
+    <view class="hrow1">
+      <text class="nm">{{d.name}}</text>
+      <text class="tag old" wx:if="{{d.listedYears >= 3}}">收录 {{d.listedYears}} 年</text>
+    </view>
+    <view class="meta">
+      <view class="mline">
+        <text class="ic">📍</text><text class="tx">{{d.addr}}</text>
+      </view>
+      <view class="mline">
+        <text class="ic">🕙</text>
+        <text class="tx">{{d.hours}} · <text class="strong">{{d.status}}</text></text>
+      </view>
+      <view class="mline cat" wx:if="{{d.cat || d.rank}}">
+        <text class="ic">🏷</text>
+        <text class="tx">{{d.cat}}</text>
+        <text class="rk" wx:if="{{d.rank}}">🏆 {{d.rank}}</text>
+      </view>
+    </view>
+    <view class="telrow">
+      <view class="call">📞</view>
+      <view class="pwrap">
+        <view class="ph">{{d.tel}}</view>
+        <view class="lb">联系人：{{d.contact}}</view>
+      </view>
+      <view class="fixbtn" bindtap="tip" data-t="真机：这里提交坐标报错，等管理员审核">
+        <text class="fi">📍</text><text>报错</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 🏪 商城信息 ===================== -->
+  <view class="card {{open.mall ? '' : 'collapsed'}}">
+    <view class="ch" data-k="mall" bindtap="toggle">
+      <text class="ci">🏪</text><text class="t">商城信息</text>
+      <text class="sub">最近购买 8月24日</text>
+      <text class="chev">⌄</text>
+    </view>
+    <view class="cb">
+      <view class="r" wx:for="{{d.mallRows}}" wx:key="*this">
+        <text class="k">{{item[0]}}</text>
+        <text class="v {{item[0] === '最近下单' ? 'warn' : ''}}">{{item[1]}}</text>
+      </view>
+      <view class="subsec">📷 门店照片</view>
+      <view class="shotrow">
+        <view class="shot3 {{d.photos[index] ? '' : 'empty'}}"
+              wx:for="{{d.photos}}" wx:key="index"
+              data-i="{{index}}" data-url="{{item}}"
+              bindtap="{{d.photos[index] ? 'openPhoto' : 'takePhoto'}}">
+          <image class="shot-img" wx:if="{{d.photos[index]}}" src="{{item}}" mode="aspectFill"></image>
+          <block wx:else>
+            <text class="cam3">📷</text><text class="t3">拍照</text>
+          </block>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 📦 购买记录 ===================== -->
+  <view class="card {{open.purchase ? '' : 'collapsed'}}">
+    <view class="ch" data-k="purchase" bindtap="toggle">
+      <text class="ci">📦</text><text class="t">购买记录</text>
+      <text class="sub">累计 {{d.purchase.total}} · {{d.purchase.amount}}</text>
+      <text class="chev">⌄</text>
+    </view>
+    <view class="cb">
+      <view class="r">
+        <text class="k">最近下单</text><text class="v warn">{{d.purchase.last}}</text>
+      </view>
+      <view class="subfold">
+        <text class="fold-t">常买（次数）</text>
+        <text class="fold-mini" wx:for="{{d.purchase.freq}}" wx:if="{{index < 2}}" wx:key="*this">{{item[0]}} ×{{item[1]}}</text>
+      </view>
+      <view class="chips" style="margin-top:6px">
+        <text class="chip" wx:for="{{d.purchase.freq}}" wx:key="*this">{{item[0]}} ×{{item[1]}}</text>
+      </view>
+      <view class="r" style="margin-top:9px;border-top:1px solid var(--line);border-bottom:none">
+        <text class="k">最近一单</text><text class="v mut">{{d.purchase.lastItems}}</text>
+      </view>
+      <view class="btn-all" bindtap="openSheet">查看全部 {{d.orders.length}} 单 ›</view>
+      <view class="warnbox" wx:if="{{d.purchase.note}}">💡 {{d.purchase.note}}</view>
+    </view>
+  </view>
+
+  <!-- ===================== 📊 平台口碑 ===================== -->
+  <view class="card {{open.rate ? '' : 'collapsed'}}">
+    <view class="ch" data-k="rate" bindtap="toggle">
+      <text class="ci">📊</text><text class="t">平台口碑</text>
+      <text class="sub">{{d.rate}} 分 · 人均 ¥46/人</text>
+      <text class="chev">⌄</text>
+    </view>
+    <view class="cb">
+      <view class="rate">
+        <text class="num">{{d.rate}}</text><text class="of">/5</text>
+        <text class="txt">{{d.rateTxt}}</text>
+      </view>
+      <view class="bars">
+        <view class="bline" wx:for="{{d.bars}}" wx:key="*this">
+          <text class="bk">{{item[0]}}</text>
+          <view class="bar"><view class="bar-i" style="width:{{item[2]}}%"></view></view>
+          <text class="bn">{{item[1]}}</text>
+        </view>
+      </view>
+      <view class="r" wx:for="{{d.extra}}" wx:key="*this">
+        <text class="k">{{item[0]}}</text><text class="v">{{item[1]}}</text>
+      </view>
+      <view class="r"><text class="k">榜单</text><text class="v gold">{{d.rank}}</text></view>
+      <view class="subsec">🍜 招牌菜</view>
+      <view class="chips">
+        <text class="chip" wx:for="{{d.dishes}}" wx:key="*this">{{item}}</text>
+        <view class="empty3" bindtap="openAdd" data-kind="dish">
+          <text class="addtap">＋</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 🛎 服务与设施 ===================== -->
+  <view class="card {{open.serv ? '' : 'collapsed'}}">
+    <view class="ch" data-k="serv" bindtap="toggle">
+      <text class="ci">🛎</text><text class="t">服务与设施</text>
+      <text class="sub" wx:if="{{d.flags[1][1]}}">外卖 有</text>
+      <text class="chev">⌄</text>
+    </view>
+    <view class="cb">
+      <view class="kvrow">
+        <view class="kv">
+          <text class="flag {{item[1] ? 'y' : 'n'}}"
+                wx:for="{{d.flags}}" wx:key="*this"
+                data-name="{{item[0]}}" data-on="{{item[1]}}"
+                bindtap="openFlag">{{item[0]}} {{item[1] ? '已开' : '未开'}}</text>
+        </view>
+        <view class="plusbar" bindtap="openAdd" data-kind="fac">＋</view>
+      </view>
+      <view class="facsec" wx:if="{{d.fac.length}}">
+        <view class="fack">配套·服务·设施</view>
+        <view class="chips">
+          <text class="chip" wx:for="{{d.fac}}" wx:key="*this">{{item}}</text>
+        </view>
+      </view>
+      <view class="subsec">📍 商圈与位置</view>
+      <view class="r"><text class="k">地址</text><text class="v mut">{{d.addr}}</text></view>
+      <view class="r" wx:if="{{d.region}}"><text class="k">商圈</text><text class="v">{{d.region}}</text></view>
+      <!-- 小地图（2026-09-13 老板要求加上）：以客户坐标为中心、不可拖、可缩 10~20 级、初始 16 级
+           ⚠️ <map> 是原生组件，卡片折叠用的 CSS display:none 压不住它 → 必须用 wx:if 跟展开状态走 -->
+      <map class="cmap" wx:if="{{open.serv}}"
+           latitude="{{d.lat}}" longitude="{{d.lng}}"
+           scale="16" min-scale="10" max-scale="20"
+           enable-scroll="{{false}}" enable-zoom="{{true}}"
+           enable-rotate="{{false}}" enable-overlooking="{{false}}"
+           show-location="{{false}}" enable-poi="{{false}}" markers="{{markers}}"
+           polyline="{{polyline}}"></map>
+      <!-- ↑ enable-poi 关掉地图上的其他店铺 POI（2.14.0+）；必须写 Mustache 绑定，"false" 会被当字符串真值 -->
+      <view class="coords" wx:if="{{d.lat}}">
+        <text class="cdot"></text>我的位置（离店约 80 米） · <text class="cwalk"></text>步行路线 · 📍 纬度 {{d.lat}} · 经度 {{d.lng}}
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 📝 管理员备注 ===================== -->
+  <view class="card remark {{open.remark ? '' : 'collapsed'}}">
+    <view class="ch" data-k="remark" bindtap="toggle">
+      <text class="ci">📝</text><text class="t">管理员备注</text>
+      <text class="sub">{{d.remarks.length}} 条</text>
+      <text class="chev">⌄</text>
+    </view>
+    <view class="cb">
+      <view class="rkrow" wx:for="{{d.remarks}}" wx:key="d">
+        <text class="rkd">{{item.d}}</text><text class="rkt">{{item.t}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 🕑 拜访历史 ===================== -->
+  <view class="card hist {{open.hist ? '' : 'collapsed'}}">
+    <view class="ch" data-k="hist" bindtap="toggle">
+      <text class="ci">🕑</text><text class="t">拜访历史</text>
+      <text class="sub">{{d.history.length}} 次</text>
+      <text class="chev">⌄</text>
+    </view>
+    <view class="cb">
+      <view class="tl-item {{item.latest ? 'latest' : ''}}" wx:for="{{d.history}}" wx:key="md">
+        <view class="hrow">
+          <text class="hr-tag">{{item.tag}}</text>
+          <text class="hm">{{item.md}} · {{item.who}}</text>
+          <text class="hd">{{item.mins}}</text>
+        </view>
+        <view class="htxt" wx:if="{{item.txt}}">{{item.txt}}</view>
+        <view class="htxt samp" wx:if="{{item.samp}}">📦 样品：{{item.samp}}</view>
+
+        <!-- 现场证据（演示）：① 拜访录音（点播放键，进度条走一遍） -->
+        <view class="hrec" wx:if="{{item.rec}}">
+          <view class="hplay" data-i="{{index}}" bindtap="playRec">{{item.rec.playing ? '❚❚' : '▶'}}</view>
+          <text class="hrec-t">拜访录音 {{item.rec.dur}}</text>
+          <view class="hrec-bar"><view class="hrec-i" style="width:{{item.rec.pct}}%"></view></view>
+        </view>
+        <!-- ② 录音转文字 -->
+        <view class="htrans" wx:if="{{item.rec}}">
+          <view class="htrans-h">🎙 录音转文字</view>
+          <view class="htrans-b">{{item.rec.txt}}</view>
+        </view>
+        <!-- ③ 现场拍的 3 张照片（点开放大） -->
+        <view class="hshots" wx:if="{{item.shots}}">
+          <view class="hshot" wx:for="{{item.shots}}" wx:for-item="s" wx:for-index="si" wx:key="*this"
+                data-url="{{s}}" bindtap="openPhoto">
+            <image class="hshot-img" src="{{s}}" mode="aspectFill"></image>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 底部悬浮：开始拜访 ===================== -->
+  <view class="fab-wrap">
+    <view class="fab" bindtap="goVisit">开始拜访</view>
+  </view>
+
+  <!-- ===================== 录入弹层 ===================== -->
+  <view class="mask" wx:if="{{addShow}}" bindtap="addNo">
+    <view class="box" catchtap="noop">
+      <view class="box-t">{{addTitle}}</view>
+      <view class="box-s">平台没收录的，到店问一句就能补上</view>
+      <input class="box-i" placeholder="{{addPh}}" value="{{addVal}}" bindinput="addInput" />
+      <view class="box-btns">
+        <view class="bbtn ghost" bindtap="addNo">取消</view>
+        <view class="bbtn main" bindtap="addYes">保存</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 团购/外卖 确认弹层 ===================== -->
+  <view class="mask" wx:if="{{flagShow}}" bindtap="flagNo">
+    <view class="box" catchtap="noop">
+      <view class="box-t">把「{{flagName}}」标记为「{{flagTo ? '已开' : '未开'}}」？</view>
+      <view class="box-s">到店了解到的实际情况，点确定就改过来</view>
+      <view class="box-btns">
+        <view class="bbtn ghost" bindtap="flagNo">取消</view>
+        <view class="bbtn main" bindtap="flagYes">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 购买记录抽屉 ===================== -->
+  <view class="sheet" wx:if="{{sheetShow}}" bindtap="closeSheet">
+    <view class="sheet-box" catchtap="noop">
+      <view class="sheet-h">
+        <text class="sheet-t">购买记录 · {{d.name}}</text>
+        <text class="sheet-x" bindtap="closeSheet">✕</text>
+      </view>
+      <scroll-view class="sheet-b" scroll-y>
+        <view class="sheet-note">共 {{d.orders.length}} 单 · 合计 {{d.purchase.amount}}（点一单看明细）</view>
+        <block wx:for="{{d.orders}}" wx:key="d">
+          <view class="ord" data-i="{{index}}" bindtap="toggleOrder">
+            <text class="ord-d">{{item.d}}</text>
+            <text class="ord-s">{{item.items[0][0]}} 等</text>
+            <text class="ord-a">¥{{item.a}}</text>
+            <text class="ord-v">{{item.open ? '⌄' : '›'}}</text>
+          </view>
+          <view class="ord-det" wx:if="{{item.open}}">
+            <view class="ord-item" wx:for="{{item.items}}" wx:for-item="it" wx:key="*this">
+              <text class="oi-n">{{it[0]}}</text>
+              <text class="oi-q">{{it[1]}}</text>
+              <text class="oi-m">¥{{it[3]}}</text>
+            </view>
+          </view>
+        </block>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- ===================== 大图查看 ===================== -->
+  <view class="viewer" wx:if="{{viewerShow}}" bindtap="closePhoto">
+    <image class="viewer-img" src="{{viewerUrl}}" mode="aspectFit"></image>
+    <view class="viewer-x">关闭</view>
+  </view>
+
+</view>

@@ -50,6 +50,16 @@
     </view>
   </view>
 
+  <!-- 客户详情页演示入口（2026-09-13 老板要求：放在「今日战况」黑卡下面） -->
+  <view class="demo-entry" wx:if="{{bossMode}}" bindtap="goCustomerDemo">
+    <view class="de-ic">📄</view>
+    <view class="de-tx">
+      <view class="de-t1">客户详情页演示</view>
+      <view class="de-t2">看看业务员点开一家客户会看到什么</view>
+    </view>
+    <view class="de-ar">›</view>
+  </view>
+
   <view class="hero" wx:if="{{!bossMode}}">
     <view class="h1">{{dateText}}</view>
     <view class="hring" wx:if="{{cardMode === 'today'}}">

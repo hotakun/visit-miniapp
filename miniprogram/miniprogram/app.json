@@ -8,7 +8,8 @@
     "pages/map/map",
     "pages/mine/mine",
     "pages/tasks-all/tasks-all",
-    "pages/bossWar/bossWar"
+    "pages/bossWar/bossWar",
+    "pages/customerDemo/customerDemo"
   ],
   "window": {
     "navigationBarBackgroundColor": "#F5531C",

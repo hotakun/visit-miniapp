@@ -70,7 +70,7 @@
       <!-- 已录段列表（一条条排着不覆盖：试听 / 勾选转写 / 删除） -->
       <view class="reclist" wx:if="{{recs.length}}">
         <view class="recitem" wx:for="{{recs}}" wx:key="id">
-          <view class="ri-idx">{{index + 1}}</view>
+          <view class="ri-idx">{{index + 1}}.</view>
           <view class="ri-play {{recPlayId === item.id ? 'on' : ''}}" bindtap="playRec" data-id="{{item.id}}">{{recPlayId === item.id ? '⏸' : '▶'}}</view>
           <view class="ri-time">{{item.text}}</view>
           <view class="ri-ck {{item.transcribe ? 'on' : ''}}" catchtap="toggleRecTr" data-i="{{index}}">✓</view>
@@ -130,7 +130,7 @@
     <view wx:if="{{!foldRes}}">
       <view class="tags">
         <view class="rtag {{result === item ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="*this"
-              bindtap="pickResult" data-r="{{item}}">{{item === '极有意向' ? item + ' 🔥' : item}}</view>
+              bindtap="pickResult" data-r="{{item}}">{{item}}</view>
       </view>
     </view>
   </view>
@@ -145,8 +145,11 @@
   <view class="c-mask" wx:if="{{blocked}}">
     <view class="c-box block-box">
       <view class="block-ic">⚠️</view>
+      <!-- 三段式（2026-09-12 老板定）：① 店名单独一行 ②「还在拜访中…」另起一行（带省略号）③ 提示居中、逗号后换行 -->
       <view class="block-msg">{{blockMsg}}</view>
-      <view class="block-sub">请先完成或取消该家的拜访，再开始新的拜访</view>
+      <view class="block-msg2">还在拜访中…</view>
+      <view class="block-sub">请先完成或取消该家的拜访，</view>
+      <view class="block-sub" style="margin-top:0">再开始新的拜访</view>
       <view class="btn-primary" bindtap="goBackFromBlock">知道了</view>
     </view>
   </view>

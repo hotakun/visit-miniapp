@@ -2,17 +2,20 @@ const api = require('../../utils/api');
 const loc = require('../../utils/loc');
 const media = require('../../utils/media');
 
-const MALL = ['极有意向', '有意向', '已下单', '无需求', '有抵触', '联系不上', '闭店·搬迁', '其他'];
-const NEW = [...MALL, '已注册商城'];
+// 拜访结果标签（2026-09-13 老板定稿，见 _scratch/拜访页-设计定稿.md）
+// 已签约商城的客户 → 8 个；未签约的客户（新客）→ 在此基础上多「已签约商城」「未签约」共 10 个
+const MALL = ['加入商城', '需要样品', '已下单', '不愿改', '有抵触', '联系不上', '闭店·搬迁', '其他'];
+const NEW = [...MALL, '已签约商城', '未签约'];
 
 // 提交成功话语库（按拜访结果分类，随机取一条，短句 ≤14 字）
 // 正面=表扬活跃气氛 / 中性=激励 / 负面=温暖治愈打气
 const PRAISE = {
-  '极有意向': ['厉害！客户心动了 💪', '漂亮！这单有戏了 🔥', '好兆头！趁热打铁冲！🏃'],
-  '有意向': ['不错哦，有苗头了 ✨', '有想法了，趁热打铁！', '有戏！保持跟进就成啦！'],
+  '加入商城': ['厉害！客户心动了 💪', '漂亮！这单有戏了 🔥', '好兆头！趁热打铁冲！🏃'],
+  '需要样品': ['不错哦，有苗头了 ✨', '有想法了，趁热打铁！', '有戏！保持跟进就成啦！'],
   '已下单': ['太棒了！真金白银到手 🎉', '成交啦！这一趟值了！', '漂亮！业绩又添一笔 📈'],
-  '已注册商城': ['恭喜！又拉进一位新客 🎊', '成功入圈，干得漂亮！', '新客到手，持续跟进哦 🚀'],
-  '无需求': ['正常滴，先混个脸熟 😄', '没需求也留了印象，值！', '先结缘，后成交，慢慢来！'],
+  '已签约商城': ['恭喜！又拉进一位新客 🎊', '成功入圈，干得漂亮！', '新客到手，持续跟进哦 🚀'],
+  '未签约': ['没事，先混个脸熟 😄', '这次没签下，门已经敲开了！', '留了印象就是收获，下次再来！'],
+  '不愿改': ['正常滴，先混个脸熟 😄', '没需求也留了印象，值！', '先结缘，后成交，慢慢来！'],
   '其他': ['记录在案，下次再战！', '辛苦了，稳稳拿下！', '跑一趟就有一趟的收获！'],
   '有抵触': ['没关系，慢慢来，下次更好 🌤', '别灰心，门总会打开的', '冷脸也是信息，你辛苦了！'],
   '联系不上': ['扑空不算白跑，下次逮住他 😉', '缘分未到，改天再来！', '人不在店也在，下次再约！'],
@@ -57,9 +60,9 @@ Page({
     delRecShow: false,     // 删除单段：二次确认弹层
     delRecIdx: -1,
     // 2026-09-11 老板定：五个区块【全部】可折叠（点标题栏展开收起；独立展开）
-    // 2026-09-11 老板定：进入页面默认只展开【现场拍照】【现场录音】，样品/拜访记录/拜访结果三块默认收起
-    foldPic: false,
-    foldRec: false,
+    // 2026-09-13 老板改：进入页面【五个区块全部默认收起】（点标题栏再展开）
+    foldPic: true,
+    foldRec: true,
     foldSamp: true,
     foldText: true,
     foldRes: true,
@@ -93,11 +96,15 @@ Page({
     this._recSecs = 0;
     this._recTicker = null;
     this._dead = false;
+    // 演示模式（2026-09-13）：从「客户详情页演示」进来 → 不建档、不校验单开，只跑计时
+    this.isDemo = !!c.demo;
+    if (this.isDemo) { this.beginTimer(c); return; }
     // 开始拜访：云端校验（任务内单开：其他家还在拜访中会拦截）
     api.call('visits', { action: 'start', taskId: c.taskId, customerId: c._id }).then(res => {
       if (res && res.code === 'ONGOING_OTHERS') {
         // 大弹窗提示（不再用 toast）：停留至用户点击「知道了」，避免一闪而过
-        this.setData({ blocked: true, blockMsg: res.msg || '有一家还未完成拜访' });
+        // 2026-09-13：弹窗改三段式（店名一行 / 还在拜访中… 一行 / 提示两行居中）→ 这里只取店名
+        this.setData({ blocked: true, blockMsg: '「' + (res.ongoingName || '另一家') + '」' });
         return;
       }
       this.beginTimer(c);
@@ -119,6 +126,11 @@ Page({
     }
     this.t0 = t0;
     this._startKey = key;
+    if (this.isDemo) {           // 演示模式（2026-09-13）：只要计时，不碰定位/信标/上报
+      this.tick();
+      this.timer = setInterval(() => this.tick(), 1000);
+      return;
+    }
     getApp().globalData.visitOngoing = true; // 最新位置上报标记（2026-09-08 M1）
     loc.beacon(); // 状态信标：进入拜访中（2026-09-08 老板定：后台立即感知）
     // 后台定位（2026-09-08 M2）：仅拜访中开启，拒绝不阻断；首次提示一次
@@ -449,6 +461,17 @@ Page({
     if (this.submitting) return;
     if (!this.data.result) {
       api.toast('请先选择拜访结果');
+      return;
+    }
+    // 演示模式（2026-09-13 老板定）：从「客户详情页演示」进来 → 走到这一步只提示，不写任何数据；
+    // 位置在「拜访结果」校验之后，所以演示时照样要先选结果，跟真机一致。
+    if (this.isDemo) {
+      this.submitting = true;
+      this.clearStart();
+      this.submitting = false;
+      this.setData({ confirmShow: false });
+      api.toast('演示版：到这里就结束了，真机才会真的提交 ✓', 'success');
+      setTimeout(() => wx.navigateBack(), 1200);
       return;
     }
     // 游客（实习账号）模拟提交（2026-09-08 老板定）：走完整流程但不写任何数据；

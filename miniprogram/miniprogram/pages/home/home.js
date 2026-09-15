@@ -595,6 +595,7 @@ Page({
     wx.navigateTo({ url: `/pages/task/task?taskId=${e.currentTarget.dataset.id}` });
   },
   goAllTasks() { wx.navigateTo({ url: '/pages/tasks-all/tasks-all' }); },
+  goCustomerDemo() { wx.navigateTo({ url: '/pages/customerDemo/customerDemo' }); }, // 客户详情页演示（2026-09-13）
   hideSubBanner() { this.setData({ showSubBanner: false }); },
   // LOGO 云端加载失败 → 回退本地图，避免白板
   onLogoError() {
