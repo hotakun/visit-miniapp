@@ -1,6 +1,59 @@
 // 管理后台 API（HTTP 访问服务入口）
 // 鉴权：开发期使用账号+密码逐次校验（sha256 比对），上线前升级为 token 会话
 // 模板：服务单提醒 tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │ 📖 文件结构索引（2026-09-23 加 —— 为了在 3000+ 行里能快速找到东西）
+// └──────────────────────────────────────────────────────────────────────┘
+//
+// 本文件 = 后台唯一入口（3000+ 行，行数/行号都会随编辑漂移 —— 别背数字）。内容按
+// `// ===== 标题 =====` 分成 **22 个域**；action 由 exports.main 用 `if (action === 'xxx')`
+// 逐条分发（实现在同域内，多数函数与 action 同名）。
+// ⚠️ 本索引块**故意不用 `// =====` 边框** —— 免得被 grep/脚本当成一个"域"。
+//
+// 【怎么定位（⚠️ 行号会随编辑漂移，不要背行号）】
+//   1) 列出全部域：     grep -n "// =====" miniprogram/cloudfunctions/adminapi/index.js
+//   2) 找某个 action：  grep -n "'getTask'" miniprogram/cloudfunctions/adminapi/index.js
+//      —— 命中处即分发点
+//   3) 刷新「域 + action 行号」对照表：python _scratch/gen_adminapi_index.py
+//      → 输出 _scratch/_adminapi_index.txt（22 个域 + 69 条 dispatch + ACTIONS 全集）
+//
+// 【22 个域（按分节标题，顺序即文件顺序）】
+//    1) 云调用用量自建统计        2) 用量告警模板            3) 拜访时长上限·动态闹钟
+//    4) 位置监控接口              5) 后台文件分发            6) 任务操作
+//    7) 流程流水 logs             8) 服务号模板消息          9) 商城客户列表导入＋三档模糊比对
+//   10) 本地比对支持            11) 待确认认领清单         12) 注册审核
+//   13) 人员管理                14) 系统设置               15) 降频开关类设置（默认值）
+//   16) 模板 ID 不明文回显       17) 降频开关类设置         18) 服务号 OpenID 绑定
+//   19) 坐标报错审核            20) 分批可续的数据清理      21) 客户批次管理
+//   22) 智能排序
+//   （另有 **2 处不在分节里**：文件头正下方的 `saveVisitTrText`，以及 `exports.main` 自身）
+//
+// 【action 按用途分组（全集见下方 ACTIONS 数组，共 67 个）】
+//   登录：login
+//   任务：listTasks, getTask, createTask, editTask, rescheduleTask, extendTask,
+//         reassignTask, withdrawTask, deleteTask, sendTask, reviewFinishRequest,
+//         cancelOngoing, autoArchiveExpired, smartSortDay
+//   客户与数据维护：listCustomers, importCustomers, importMallCustomers,
+//         updateCustomerRemark, purgeUnbatchedCustomers, resetTestData, wipeData,
+//         getTempFileURL, listCustomerVisits, purgeCancelled, purgeCustomerVisits
+//   商城库比对与认领：runMallMatch, listMallLibrary, applyMallMatch, listMallClaims,
+//         resolveMallClaim, getLastMallImport
+//   客户批次：listCustomerBatches, getCustomerBatchInfo, renameCustomerBatch,
+//         deleteCustomerBatch, createManualBatch, archiveInitialBatch,
+//         removeCustomerFromBatch, addCustomersToBatch
+//   审核：listRegistrations, reviewRegistration, listCoordFixes, reviewCoordFix
+//   位置监控：listLatestLocations, getDayTrack, getVisitTrack
+//   人员与设置：listSalesmen, listAdmins, addSalesman, addAdmin, setUserActive,
+//         unbindUser, deleteUser, setUserBoss, getSettings, setSetting
+//   服务号与用量：setMpOpenid, testMpSend, mpTokenPush, usageStats, testMpAlert
+//   转写：transcribeVisit, transcribeUsage, saveVisitTrText
+//   分发与杂项：uploadAdminDist, ping
+//
+// 【⚠️ 免鉴权特例（安全相关，动它们之前先读注释）】
+//   ① getAdminDistMeta / getAdminDistPart —— 在 ACTIONS 校验之前 return（文员机拉更新包用）。
+//      注意：这 2 条**不在 ACTIONS 数组里** → 所以 dispatch 有 69 条、ACTIONS 只有 67 个。
+//   ② 定时器入口 —— 必须同时满足 `Type === 'Timer'` 与 `TriggerName === TICK_TRIGGER_NAME`
+//      （2026-09-23 收紧；原写法 `event.TriggerName || event.Type === 'Timer'` 可被客户端伪造）
 const cloud = require('wx-server-sdk');
 const crypto = require('crypto');
 
@@ -11,6 +64,9 @@ const _ = db.command;
 const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 // 老板手机号（2026-09-09 老板定：谁用这个号码注册谁就是老板；老板账号后台不可停用/不可关老板模式/不可删除）
 const BOSS_PHONE = '15055492888';
+// 定时触发器名（2026-09-23 新增）：**必须与 config.json 的 triggers[0].name 一致**。
+// 用途：在 exports.main 顶部区分「云开发定时触发器」与「客户端伪造的 { Type:'Timer' }」（见入口处注释）。
+const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
 const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
@@ -223,10 +279,18 @@ exports.main = async (event) => {
   const action = (event && event.action) || 'login';
 
   // 2026-09-11 批 3：用量计数（每次调用 +1；只统计函数调用次数，攒批落库）
+  // ⚠️ 2026-09-23 复核：**故意留在鉴权之前** —— 未鉴权/被伪造的调用同样消耗云调用配额，
+  //    挪到鉴权之后会让「本月云调用」统计偏低、失去趋势意义（"被刷高"= 真实消耗，不是安全问题）。
   bumpUsage(1);
 
   // 定时触发器入口（2026-09-08 M1：拜访时长上限动态闹钟，每 10 分钟 cron 调一次，免管理员鉴权）
-  if (event && (event.TriggerName || event.Type === 'Timer')) {
+  // ⚠️ 2026-09-23 收紧（安全修复）：原写法 `event.TriggerName || event.Type === 'Timer'` 语义太宽 ——
+  //    小程序端任意用户 `wx.cloud.callFunction({ name:'adminapi', data:{ Type:'Timer' } })` 即可**越过鉴权**
+  //    触发 visitTimeoutTick（一个会改任务/拜访状态的写操作）。现要求「Type=Timer」**且**「TriggerName
+  //    与 config.json 声明的触发器名一致」。
+  // 🔴 部署配套：**必须去云开发控制台核对触发器名就叫 TICK_TRIGGER_NAME**，否则定时任务会静默停摆
+  //    （它负责拜访超时自动提交/取消、过期任务补记，坏了没有任何人会察觉）。
+  if (event && event.Type === 'Timer' && event.TriggerName === TICK_TRIGGER_NAME) {
     await visitTimeoutTick();
     return { ok: true, cron: true };
   }
