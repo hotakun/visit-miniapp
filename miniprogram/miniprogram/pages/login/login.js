@@ -6,11 +6,7 @@ const api = require('../../utils/api');
 Page({
   // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
   onShareAppMessage() {
-    return {
-      title: '聚火拜访 · 业务员拜访管理',
-      path: '/pages/home/home',
-      imageUrl: '/images/share.png'   // 分享封面（5:4，由 logo 生成）
-    };
+    return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
   data: {
     user: null, adminMode: false, canBoss: false, adminName: '', logoUrl: '',
@@ -106,12 +102,15 @@ Page({
     if (!/^1\d{10}$/.test(phone)) { api.toast('请填写正确的 11 位手机号'); return; }
     this.setData({ regBusy: true });
     try {
-      const res = await api.call('login', { action: 'register', name, phone, phoneVerified: !!this.data.phoneVerified });
+      // 推荐人（2026-09-24）：分享链接带进来的 users._id（app.js 的 captureRef 已存好；没有就是空串）
+      const ref = String(getApp().globalData.refFrom || '');
+      const res = await api.call('login', { action: 'register', name, phone, phoneVerified: !!this.data.phoneVerified, ref });
       if (res.ok && res.boss) {
         // 2026-09-09 老板定：老板手机号注册免审核直接通过 → 自动进老板模式
         getApp().setUser(res.user);
         getApp().setBossMode(true);
         getApp().globalData.welcome = res.welcome || null; // 2026-09-10：欢迎仪式配置随注册下发
+        this.clearRef(); // 2026-09-24：推荐人已用掉
         api.toast('老板身份已激活 ✓', 'success');
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 800);
       } else if (res.ok) {
@@ -119,9 +118,11 @@ Page({
         const d = new Date(Date.now() + 8 * 3600 * 1000);
         const p = n => String(n).padStart(2, '0');
         this.setData({ pendingAt: `${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}` });
+        this.clearRef(); // 2026-09-24：推荐人已写进待审核申请
         api.toast('申请已提交，等待管理员审核');
       } else if (res.code === 'PENDING') {
         this.setData({ registerMode: false, pendingMode: true });
+        this.clearRef();
         api.toast(res.msg || '申请已提交');
       } else {
         api.toast(res.msg || '提交失败');
@@ -131,6 +132,13 @@ Page({
     } finally {
       this.setData({ regBusy: false });
     }
+  },
+  // 推荐人已用掉 → 清本地记录（2026-09-24）。失败时不调它，保留 ref 供重试
+  clearRef() {
+    try {
+      getApp().globalData.refFrom = '';
+      wx.removeStorageSync('ref_from');
+    } catch (e) { /* 静默 */ }
   },
   // 被拒绝 → 重新申请（2026-09-09 老板拍板：可重提，旧记录留痕）
   reapply() {

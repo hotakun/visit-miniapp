@@ -5,17 +5,18 @@ const { LOGO_FILE_ID } = require('./utils/config');
 App({
   globalData: {
     user: null,
-    APP_VERSION: '0.9.14', // 版本号（2026-09-13：与后台 admin.html 一致；后台新增「导入信息」栏目）
+    APP_VERSION: '0.9.15', // 版本号（2026-09-24：与后台 admin.html 一致；后台人员管理新增「推荐人」列 + 「推荐排行」Tab）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
     welcome: null, // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）
-    welcomePending: false // 欢迎仪式配置请求在途（home 页播放前短暂等待，超时用默认）
+    welcomePending: false, // 欢迎仪式配置请求在途（home 页播放前短暂等待，超时用默认）
+    refFrom: '' // 推荐人（2026-09-24）：从分享链接 ?ref=<分享者 users._id> 带进来，注册时随申请提交
   },
   reviewTimer: null,      // 审核观察员定时器（仅存在审核中任务时运行）
   reviewSnapshot: null,   // 上次快照 { taskId: status }
   reviewListeners: [],    // 页面注册的监听回调（状态变化时调用）
 
-  onLaunch() {
+  onLaunch(options) {
     if (!wx.cloud) {
       console.error('请使用 2.2.3 或以上的基础库以使用云能力');
       return;
@@ -30,6 +31,31 @@ App({
     // devAuthed：会话级放行标志（2026-09-09 修复：选过身份后本次运行期内 TAB 来回切换不再被弹回登录页；
     // 冷启动不恢复=每次重开小程序仍走选择页）
     this.globalData.devAuthed = false;
+    // 推荐人：接分享链接带进来的 ref（2026-09-24）
+    this.captureRef(options);
+  },
+
+  // 冷启动走 onLaunch、**热启动走 onShow** —— 两处都要接（否则"小程序已在后台、再点分享卡片进来"收不到 ref）
+  onShow(options) {
+    this.captureRef(options);
+  },
+
+  // ===== 推荐人（2026-09-24 老板定：谁分享的链接拉来的人，就记谁为推荐人）=====
+  // 来源：9 个页面的 onShareAppMessage 统一生成 /pages/login/login?ref=<分享者 users._id>
+  // 处理：① 本次带 ref → 记下并**持久化**（防"点链接进来但当时没注册，之后再打开就丢了"）
+  //       ② 本次没带 ref 且内存里也没有 → 从 storage 恢复（若之前带过）
+  // 清除：注册**成功提交**后由登录页清（见 pages/login/login.js），此后不再影响
+  captureRef(options) {
+    let ref = '';
+    try { ref = String(((options || {}).query || {}).ref || '').trim(); } catch (e) { ref = ''; }
+    if (ref) {
+      this.globalData.refFrom = ref;
+      try { wx.setStorageSync('ref_from', ref); } catch (e) { /* 静默 */ }
+      return;
+    }
+    if (!this.globalData.refFrom) {
+      try { this.globalData.refFrom = wx.getStorageSync('ref_from') || ''; } catch (e) { this.globalData.refFrom = ''; }
+    }
   },
 
   setUser(u) {

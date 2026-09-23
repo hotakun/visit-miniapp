@@ -4,11 +4,7 @@ const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
 Page({
   // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
   onShareAppMessage() {
-    return {
-      title: '聚火拜访 · 业务员拜访管理',
-      path: '/pages/home/home',
-      imageUrl: '/images/share.png'   // 分享封面（5:4，由 logo 生成）
-    };
+    return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
   // 2026-09-23：version 只是初值（空串）—— onShow 会用 getApp().globalData.APP_VERSION 覆盖它。
   // 版本号的**唯一来源**是 app.js 的 APP_VERSION（此处不再硬编码，避免"三处不一致"）
