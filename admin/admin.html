@@ -50,6 +50,17 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .toggle-mini::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
 .toggle-mini.on{background:var(--green)}
 .toggle-mini.on::after{left:16px}
+/* 业务员星级（2026-09-24 老板定）：平时只显示星串；鼠标移上去浮出一排可点的星；
+   点第 N 颗 = 该位三态循环（无 → 半 → 全 → 无），落到整条 10 档上是 N-1 / N-0.5 / N 三档循环 */
+.starcell{position:relative;display:inline-block;cursor:pointer;min-width:54px}
+.starview{color:#F5A623;font-weight:800;letter-spacing:1px;font-size:14px}
+.starpick{display:none;position:absolute;left:-5px;top:calc(100% - 2px);z-index:60;background:#fff;border:1px solid #E4E7EC;border-radius:8px;padding:3px 6px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.14)}
+.starcell:hover .starpick{display:block}
+.staro{font-size:17px;line-height:1;cursor:pointer;margin:0 1px;display:inline-block}
+.staro.full{color:#F5A623}
+.staro.half{color:#F5A623;opacity:.5}
+.staro.none{color:#D5DAE0}
+.staro:hover{transform:scale(1.25)}
 .badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--primary);color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;margin-left:5px}
 /* 注册审核角标（2026-09-09 老板定：左侧栏菜单+待审核 Tab 右上角计数） */
 .nav-badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;margin-left:auto}
@@ -1418,7 +1429,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
         </div>
         <div class="task-shell-body" style="overflow-y:auto">
         <table class="tbl" id="ptable0">
-          <thead><tr><th>姓名</th><th>手机号</th><th>推荐人</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
+          <thead><tr><th>姓名</th><th style="width:76px">星级</th><th>手机号</th><th>推荐人</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
           <tbody id="smTbody"></tbody>
         </table>
         <table class="tbl" id="ptable1" style="display:none">
@@ -2199,7 +2210,7 @@ function renderDetail(res) {
 }
 
 // ===== 任务流程档案：日志时间线 + 提交审核情况（2026-09-08 老板定稿） =====
-const APP_VERSION = '0.9.15'; // 版本号（2026-09-24：人员管理新增「推荐人」列 + 「📊 推荐排行」Tab + 推荐人补录）
+const APP_VERSION = '0.9.16'; // 版本号（2026-09-24：人员管理业务员列表新增「星级」列——0.5~5 共 10 档，管理员可设）
 try { $('sideVer').textContent = 'v' + APP_VERSION; $('curVerText').textContent = 'v' + APP_VERSION; } catch (e) { /* 静默 */ }
 const ARCH_IC = { create: '📝', send: '📨', edit: '✏️', extend: '⏰', reassign: '👤', withdraw: '↩️', finishReq: '📤', reviewApprove: '✅', reviewReject: '⛔', autoDone: '🤖', archive: '🗄️', replan: '🗺', visit: '🏪', resched: '📅', visitAutoSubmit: '⏱', visitAutoCancel: '⏱', expired: '⌛' };
 const ARCH_COLOR = { create: '#2F80ED', send: '#2F80ED', edit: '#F5A623', extend: '#B97A0B', reassign: '#7C3AED', withdraw: '#8A93A0', finishReq: '#B97A0B', reviewApprove: '#34A853', reviewReject: '#E5484D', autoDone: '#34A853', archive: '#E5484D', replan: '#2F80ED', visit: '#16A34A', resched: '#2F80ED', visitAutoSubmit: '#34A853', visitAutoCancel: '#8A93A0', expired: '#E5484D' };
@@ -5043,6 +5054,7 @@ async function loadPeople() {
   $('smTbody').innerHTML = sm.ok
     ? sm.salesmen.map(s => `<tr>
         <td><b>${esc(s.name)}</b>${s.trial ? '<span class="pill blue" style="margin-left:6px" title="游客体验：任意微信可绑定登录">🖐 游客</span>' : ''}${s.hasTask ? '<span class="pill blue" style="margin-left:6px">任务中</span>' : ''}</td>
+        <td>${starCellHtml(s)}</td>
         <td>${esc(s.phone || '—')}</td>
         <td>${referrerCellHtml(s)}</td>
         <td>${s.bound ? '<span class="pill green">已绑定</span>' : '<span class="pill warn">待绑定</span>'}</td>
@@ -5053,7 +5065,7 @@ async function loadPeople() {
         <td>${toggleHtml(s._id, s.active)}</td>
         <td>${s.bound ? `<button class="btn ghost" style="height:28px;font-size:12px;color:#B45309;margin-right:8px" onclick="unbindUser('${s._id}','${esc(s.name)}')">解绑</button>` : ''}<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${s._id}','${esc(s.name)}')">删除</button></td>
       </tr>`).join('')
-    : '<tr><td colspan="8" class="empty">加载失败</td></tr>';
+    : '<tr><td colspan="9" class="empty">加载失败</td></tr>';
   const ad = await api('listAdmins');
   $('adTbody').innerHTML = ad.ok
     ? ad.admins.map(a => {
@@ -5134,6 +5146,53 @@ function renderRegs(res) {
         <td style="color:var(--sub)">${esc(r.reason || '—')}</td>
       </tr>`).join('')
     : '<tr><td colspan="6" class="empty">暂无记录</td></tr>';
+}
+
+// ===== 业务员星级（2026-09-24 老板定：管理员在这里设定；手机端首页显示在姓名右边）=====
+// 档位 0.5~5、步长 0.5 共 10 档（新人进来默认半星，**没有"未评"**）；★ = 1 星，☆ = 半星
+// 交互（2026-09-24 老板定）：平时只显示星串（不占位）；**鼠标移上去浮出一排 5 颗可点的星**；
+//   **点第 N 颗 = 该位三态循环：无 → 半 → 全 → 无** —— 落到整条上就是 N-1 星 / N-0.5 星 / N 星 三档循环
+//   （第 1 颗的"无"理论上=全空，但最低档就是半星 → 实际只有 半 ↔ 全 两态）
+function starTextOf(v) {
+  const n = Number(v) || 0.5;
+  const f = Math.floor(n);
+  return '★'.repeat(f) + ((n - f) >= 0.5 ? '☆' : '');
+}
+// 第 i 颗（1~5）在当前星级 v 下的样子：满 ★ / 半 ☆（半透明）/ 无 ☆（灰）
+function starGlyphOf(v, i) {
+  if (v >= i) return { ch: '★', cls: 'full' };
+  if (Math.abs(v - (i - 0.5)) < 1e-9) return { ch: '☆', cls: 'half' };
+  return { ch: '☆', cls: 'none' };
+}
+// 点第 i 颗之后的新值（三态循环）
+function nextStarOf(cur, i) {
+  const half = i - 0.5;
+  const low = Math.max(0.5, i - 1);
+  if (cur >= i) return low;                    // 满 → 无（回落到前 i-1 颗全满）
+  if (Math.abs(cur - half) < 1e-9) return i;    // 半 → 满
+  return half;                                  // 无 → 半
+}
+function starInnerHtml(s) {
+  const v = Number(s.star) || 0.5;
+  const picks = [1, 2, 3, 4, 5].map(i => {
+    const g = starGlyphOf(v, i);
+    return `<span class="staro ${g.cls}" onclick="clickStar('${s._id}',${i})" title="点一下=半星 · 再点=全星 · 再点=取消">${g.ch}</span>`;
+  }).join('');
+  return `<span class="starview">${starTextOf(v)}</span><span class="starpick">${picks}</span>`;
+}
+function starCellHtml(s) {
+  return `<div class="starcell" data-star="${s._id}">${starInnerHtml(s)}</div>`;
+}
+// 点第 i 颗星：算新值 → 存云端 → **只就地重渲染这一格**（不整表刷新，否则鼠标下的浮层会被刷掉）
+async function clickStar(userId, i) {
+  const s = (peopleCache.salesmen || []).find(x => x._id === userId);
+  const cur = Number(s && s.star) || 0.5;
+  const nv = nextStarOf(cur, i);
+  const res = await api('setUserStar', { userId, star: nv });
+  if (!res.ok) { alert(res.msg || '设置失败'); return; }
+  if (s) s.star = nv; // 同步缓存，下一次点击基于新值循环
+  const cell = document.querySelector('.starcell[data-star="' + userId + '"]');
+  if (cell) cell.innerHTML = starInnerHtml(s || { _id: userId, star: nv });
 }
 
 // ===== 推荐人（2026-09-24 老板定：谁分享的链接 / 谁拉的，就记谁为推荐人）=====
