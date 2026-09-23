@@ -69,7 +69,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserReferrer', 'referrerStats', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -342,6 +342,8 @@ exports.main = async (event) => {
     if (action === 'addSalesman') return await addSalesman(event);
     if (action === 'addAdmin') return await addAdmin(event);
     if (action === 'setUserActive') return await setUserActive(event);
+    if (action === 'setUserReferrer') return await setUserReferrer(event); // 2026-09-24 推荐人：手工补录/修改
+    if (action === 'referrerStats') return await referrerStats(event);     // 2026-09-24 推荐人：拉人排行
     if (action === 'unbindUser') return await unbindUser(event);
     if (action === 'deleteUser') return await deleteUser(event);
     if (action === 'listRegistrations') return await listRegistrations(event);
@@ -2000,6 +2002,12 @@ async function listSalesmen(event) {
   const tRes = await db.collection('tasks').where({ status: _.in(['published', 'reviewing']) }).field({ salesmanId: true }).limit(100).get();
   const busy = {};
   tRes.data.forEach(t => { busy[t.salesmanId] = true; });
+  // 2026-09-24 推荐人：每个人"拉了几个人"（users 里 referrerId 指向他的已入职人数）
+  const refCountMap = {};
+  try {
+    const refRows = await db.collection('users').field({ referrerId: true }).limit(1000).get();
+    refRows.data.forEach(u => { if (u.referrerId) refCountMap[u.referrerId] = (refCountMap[u.referrerId] || 0) + 1; });
+  } catch (e) { /* 统计失败不影响人员列表 */ }
   // 2026-09-09 老板定：人员列表显示当前状态——latest 位置（在线/离线/拜访中）+ 今日拜访数
   const locRows = await fetchAll('salesman_locations', { type: 'latest' }, { salesmanId: true, t: true, visitOngoing: true });
   const locMap = {};
@@ -2019,7 +2027,12 @@ async function listSalesmen(event) {
       mpOpenidMask: s.mpOpenid ? String(s.mpOpenid).slice(0, 8) + '…' + String(s.mpOpenid).slice(-6) : '',
       lastLoginAt: s.lastLoginAt || 0,
       loc: locMap[s._id] || null,
-      todayCount: todayMap[s._id] || 0
+      todayCount: todayMap[s._id] || 0,
+      // 2026-09-24 推荐人（谁分享的链接把他拉来的 / 后台手工补录的）
+      referrerId: s.referrerId || '',
+      referrerName: s.referrerName || '',
+      referrerSource: s.referrerSource || '', // 'link' | 'manual'
+      refCount: refCountMap[s._id] || 0        // 他拉了几个人（已入职）
     }))
   };
 }
@@ -2061,7 +2074,8 @@ async function listRegistrations(event) {
     _id: r._id, name: r.name || '', phone: r.phone || '', status: r.status,
     reason: r.reason || '', createdAt: r.createdAt || 0, reviewedAt: r.reviewedAt || 0,
     phoneVerified: !!r.phoneVerified, // 2026-09-09 老板定：微信一键验证标记，后台审核可见
-    openidMask: r.openid ? String(r.openid).slice(0, 8) + '…' + String(r.openid).slice(-4) : ''
+    openidMask: r.openid ? String(r.openid).slice(0, 8) + '…' + String(r.openid).slice(-4) : '',
+    refFrom: r.refFrom || '', refFromName: r.refFromName || '' // 2026-09-24 推荐人（分享链接带进来的）
   });
   return { ok: true, pending: pend.data.map(fmt), done: done.data.map(fmt) };
 }
@@ -2101,6 +2115,28 @@ async function reviewRegistration(event) {
       }
     });
     boundId = add._id;
+  }
+  // 推荐人（2026-09-24）：谁分享的链接把他拉来的 → 落进 users
+  // 兜底：本次申请没带 refFrom（被拒后重提会**新建**一条申请，带 refFrom 的是旧那条）→ 回查同 openid 的历史申请
+  let refFrom = String(r.refFrom || '');
+  let refFromName = String(r.refFromName || '');
+  if (!refFrom) {
+    try {
+      const hist = await db.collection('registrations')
+        .where({ openid: r.openid, refFrom: _.neq('') })
+        .orderBy('createdAt', 'desc').limit(1).get();
+      if (hist.data.length) {
+        refFrom = String(hist.data[0].refFrom || '');
+        refFromName = String(hist.data[0].refFromName || '');
+      }
+    } catch (e) { /* 兜底失败就不记推荐人 */ }
+  }
+  if (refFrom) {
+    try {
+      await db.collection('users').doc(boundId).update({
+        data: { referrerId: refFrom, referrerName: refFromName, referrerSource: 'link', referrerAt: Date.now() }
+      });
+    } catch (e) { /* 推荐人写入失败不阻断审核通过 */ }
   }
   await rRef.update({ data: { status: 'approved', reviewedAt: Date.now(), userId: boundId } });
   return { ok: true, msg: '已通过并绑定微信（免登录进入）' };
@@ -2177,6 +2213,104 @@ async function setUserActive(event) {
   if (u.phone === BOSS_PHONE && !active) return { ok: false, code: 'FORBIDDEN', msg: '老板账号不可停用' };
   await db.collection('users').doc(userId).update({ data: { active: !!active } });
   return { ok: true, active: !!active };
+}
+
+// ===== 推荐人（2026-09-24 老板定：谁分享的链接 / 谁拉的，就记谁为推荐人）=====
+// ① 手工补录/修改：存量的人当年没有分享链路，只能由管理员在人员管理里指定（来源标记 'manual'）
+// ② 校验：不能选自己；不能形成互相推荐（沿"候选人的推荐人链"往上走，链上出现本用户就拒绝）
+async function setUserReferrer(event) {
+  const { userId, referrerId } = event || {};
+  if (!userId) return { ok: false, code: 'BAD_ARG', msg: '缺少用户' };
+  const uRes = await db.collection('users').doc(userId).get().catch(() => null);
+  const u = uRes && uRes.data;
+  if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
+  const rid = String(referrerId || '').trim();
+  if (!rid) {
+    await db.collection('users').doc(userId).update({ data: { referrerId: '', referrerName: '', referrerSource: '', referrerAt: 0 } });
+    return { ok: true, msg: '已清除推荐人' };
+  }
+  if (rid === userId) return { ok: false, code: 'BAD_ARG', msg: '不能把自己设为推荐人' };
+  const rRes = await db.collection('users').doc(rid).get().catch(() => null);
+  const r = rRes && rRes.data;
+  if (!r) return { ok: false, code: 'NOT_FOUND', msg: '推荐人不存在（只能是系统里的人）' };
+  let cur = r, depth = 0;
+  while (cur && cur.referrerId && depth < 20) {
+    if (cur.referrerId === userId) return { ok: false, code: 'LOOP', msg: '会形成互相推荐（A→B→A），请换一个' };
+    const nx = await db.collection('users').doc(cur.referrerId).get().catch(() => null);
+    cur = nx && nx.data;
+    depth++;
+  }
+  await db.collection('users').doc(userId).update({
+    data: { referrerId: rid, referrerName: String(r.name || ''), referrerSource: 'manual', referrerAt: Date.now() }
+  });
+  return { ok: true, msg: '推荐人已设为 ' + (r.name || '（未填姓名）') };
+}
+
+// 推荐排行（2026-09-24 老板定：不光记谁拉的，还要看"谁拉来的人最能干"）
+// 口径（已与老板对齐）：
+//   拉人数 hired   = users 里 referrerId=我 的**已入职**人数
+//   待审核 pending = registrations 里 refFrom=我 且仍在 pending 的条数
+//   拜访数 visits  = 我这些下级的 visits 条数
+//   完成率         = 下级的 tasks 里 status='done' ÷ 非草稿任务数（任务终态只有 done）
+//   入商城数       = 下级拜访结果选了「加入商城 / 已签约商城」的**去重客户数**
+// ⚠️ 刻意**不用**"客户档案的签约业务员" —— 那是客户表「业务负责人」原值（如 快餐盒c聚火配送🔥），
+//    与 users 姓名根本对不上；混进来会让"推荐贡献"和"客户归属"两个口径打架
+async function referrerStats(event) {
+  const uAll = await db.collection('users').field({ name: true, referrerId: true }).limit(1000).get();
+  const byId = {}; const kids = {};
+  uAll.data.forEach(u => {
+    byId[u._id] = u;
+    if (u.referrerId) (kids[u.referrerId] = kids[u.referrerId] || []).push(u._id);
+  });
+  // 待审核（链接拉来、还没入职）
+  const pendBy = {};
+  try {
+    const pr = await db.collection('registrations').where({ status: 'pending' }).field({ refFrom: true }).limit(200).get();
+    pr.data.forEach(r => { if (r.refFrom) pendBy[r.refFrom] = (pendBy[r.refFrom] || 0) + 1; });
+  } catch (e) { /* 忽略 */ }
+  const allKids = [];
+  Object.keys(kids).forEach(k => { allKids.push(...kids[k]); });
+  // 只拉"被推荐的人"的拜访与任务（避免全表扫；分批 _.in，每批 50）
+  const visits = [], taskRows = [];
+  for (let i = 0; i < allKids.length; i += 50) {
+    const part = allKids.slice(i, i + 50);
+    const vr = await fetchAll('visits', { salesmanId: _.in(part) }, { salesmanId: true, customerId: true, result: true });
+    visits.push(...vr);
+    try {
+      const tr = await db.collection('tasks').where({ salesmanId: _.in(part) })
+        .field({ salesmanId: true, status: true }).limit(1000).get();
+      taskRows.push(...tr.data);
+    } catch (e) { /* 任务统计失败不影响其它指标 */ }
+  }
+  const MALL_RESULTS = ['加入商城', '已签约商城'];
+  const rows = Object.keys(kids).map(rid => {
+    const kidSet = {}; kids[rid].forEach(id => { kidSet[id] = true; });
+    let visitCount = 0; const mallCust = {};
+    visits.forEach(v => {
+      if (!kidSet[v.salesmanId]) return;
+      visitCount++;
+      if (v.customerId && MALL_RESULTS.includes(v.result)) mallCust[v.customerId] = true;
+    });
+    let tDone = 0, tAll = 0;
+    taskRows.forEach(t => {
+      if (!kidSet[t.salesmanId] || t.status === 'draft') return;
+      tAll++;
+      if (t.status === 'done') tDone++;
+    });
+    const ref = byId[rid];
+    return {
+      referrerId: rid,
+      referrerName: (ref && ref.name) ? ref.name : '（推荐人已删除）',
+      hired: kids[rid].length,
+      pending: pendBy[rid] || 0,
+      visits: visitCount,
+      taskDone: tDone,
+      taskTotal: tAll,
+      taskRate: tAll ? Math.round(tDone * 100 / tAll) : 0,
+      mallCustomers: Object.keys(mallCust).length
+    };
+  }).sort((a, b) => (b.hired - a.hired) || (b.mallCustomers - a.mallCustomers) || (b.visits - a.visits));
+  return { ok: true, rows };
 }
 
 async function deleteUser(event) {

@@ -235,11 +235,23 @@ async function register(OPENID, e) {
     pend = await db.collection('registrations').where({ openid: OPENID, status: 'pending' }).count();
   } catch (e) { /* 集合异常降级：按无待审申请处理，允许提交 */ }
   if (pend.total > 0) return { ok: false, code: 'PENDING', msg: '申请已提交，请等待管理员审核' };
+  // 推荐人（2026-09-24）：分享链接带来的 users._id —— **必须校验真实存在**（防伪造）；
+  // 查不到就静默忽略（只是不记推荐人，绝不阻断正常注册）
+  let refFrom = '', refFromName = '';
+  const refId = String((e && e.ref) || '').trim();
+  if (refId) {
+    try {
+      const rf = await users.doc(refId).get();
+      const ru = rf && rf.data;
+      if (ru) { refFrom = ru._id || refId; refFromName = String(ru.name || ''); }
+    } catch (err) { /* 传了不存在的 id：忽略 */ }
+  }
   try {
     await db.collection('registrations').add({
       data: {
         openid: OPENID, name, phone, status: 'pending', reason: '', createdAt: Date.now(),
-        phoneVerified: !!e.phoneVerified // 2026-09-09 老板定：微信一键验证过的手机号打标，后台审核可见
+        phoneVerified: !!e.phoneVerified, // 2026-09-09 老板定：微信一键验证过的手机号打标，后台审核可见
+        refFrom, refFromName, refAt: refFrom ? Date.now() : 0 // 2026-09-24 推荐人（谁分享的链接拉来的）
       }
     });
   } catch (err) {
