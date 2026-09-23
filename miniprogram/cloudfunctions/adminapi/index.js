@@ -69,7 +69,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserReferrer', 'referrerStats', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -342,6 +342,7 @@ exports.main = async (event) => {
     if (action === 'addSalesman') return await addSalesman(event);
     if (action === 'addAdmin') return await addAdmin(event);
     if (action === 'setUserActive') return await setUserActive(event);
+    if (action === 'setUserStar') return await setUserStar(event);         // 2026-09-24 星级：后台设定业务员星级
     if (action === 'setUserReferrer') return await setUserReferrer(event); // 2026-09-24 推荐人：手工补录/修改
     if (action === 'referrerStats') return await referrerStats(event);     // 2026-09-24 推荐人：拉人排行
     if (action === 'unbindUser') return await unbindUser(event);
@@ -2020,6 +2021,7 @@ async function listSalesmen(event) {
     ok: true,
     salesmen: res.data.map(s => ({
       _id: s._id, name: s.name, phone: s.phone,
+      star: Number(s.star || 0.5), // 2026-09-24 星级（0.5~5 共 10 档，新人默认半星；存量/未设过的一律按半星兜底）
       hasTask: !!busy[s._id], active: s.active !== false,
       bound: !!s.openid,
       trial: !!s.trial,
@@ -2213,6 +2215,24 @@ async function setUserActive(event) {
   if (u.phone === BOSS_PHONE && !active) return { ok: false, code: 'FORBIDDEN', msg: '老板账号不可停用' };
   await db.collection('users').doc(userId).update({ data: { active: !!active } });
   return { ok: true, active: !!active };
+}
+
+// ===== 业务员星级（2026-09-24 老板定：管理员在人员管理里设定；手机端首页显示在姓名右边）=====
+// 档位：**0.5 ~ 5，步长 0.5，共 10 档**（新人进来默认半星，**没有"未评"**）
+// 显示：★ = 1 星，☆ = 半星（2 星半 → ★★☆）；见小程序 pages/home/home.js 的 _starText
+async function setUserStar(event) {
+  const { userId, star } = event || {};
+  if (!userId) return { ok: false, code: 'BAD_ARG', msg: '缺少用户' };
+  const n = Number(star);
+  if (!isFinite(n) || n < 0.5 || n > 5 || Math.abs(n * 2 - Math.round(n * 2)) > 1e-9) {
+    return { ok: false, code: 'BAD_ARG', msg: '星级只能是 0.5 ~ 5 之间的半星档位' };
+  }
+  const uRes = await db.collection('users').doc(userId).get().catch(() => null);
+  const u = uRes && uRes.data;
+  if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
+  const v = Math.round(n * 2) / 2; // 归一化，避免浮点尾巴
+  await db.collection('users').doc(userId).update({ data: { star: v } });
+  return { ok: true, star: v, msg: '星级已设为 ' + v + ' 星' };
 }
 
 // ===== 推荐人（2026-09-24 老板定：谁分享的链接 / 谁拉的，就记谁为推荐人）=====

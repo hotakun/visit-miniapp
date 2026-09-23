@@ -304,5 +304,7 @@ function maskPhone(p) {
 }
 
 function publicUser(u) {
-  return { _id: u._id, name: u.name, phone: u.phone, role: u.role, trial: !!u.trial };
+  // star：业务员星级（2026-09-24 老板定：**0.5 ~ 5 共 10 档**，步长 0.5 —— **新人进来默认半星**，没有"未评"）
+  //       存量账号没有 star 字段 → 一律按 0.5（半星）兜底，保证每个人都有星级
+  return { _id: u._id, name: u.name, phone: u.phone, role: u.role, trial: !!u.trial, star: Number(u.star || 0.5) };
 }
