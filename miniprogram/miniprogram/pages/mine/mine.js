@@ -10,7 +10,9 @@ Page({
       imageUrl: '/images/share.png'   // 分享封面（5:4，由 logo 生成）
     };
   },
-  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '0.9.11', bossMode: false, isDev: false, aboutShow: false, aboutText: '' },
+  // 2026-09-23：version 只是初值（空串）—— onShow 会用 getApp().globalData.APP_VERSION 覆盖它。
+  // 版本号的**唯一来源**是 app.js 的 APP_VERSION（此处不再硬编码，避免"三处不一致"）
+  data: { user: {}, stats: { monthCount: 0, monthCust: 0, taskRate: 0 }, subOn: false, version: '', bossMode: false, isDev: false, aboutShow: false, aboutText: '' },
   onShow() {
     const app = getApp();
     this.setData({ version: app.globalData.APP_VERSION || '0.9.00', isDev: !!app.globalData.isDev || (app.globalData.user && app.globalData.user.phone === '13067737286') }); // 版本号（2026-09-08 老板定）；isDev=开发者切换入口（2026-09-09 范宇琨，手机号兜底防冷启动未激活标志）
