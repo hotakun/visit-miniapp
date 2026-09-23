@@ -24,6 +24,7 @@
 .head-txt { min-width: 0; }
 .hi { font-size: 23px; font-weight: 800; line-height: 1.3; text-shadow: 0 1px 0 rgba(255,255,255,.8); }
 .boss-crown { margin-left: 4px; font-size: 20px; } /* 老板模式皇冠（2026-09-09 老板定：名字后跟皇冠） */
+.star { margin-left: 6px; font-size: 15px; font-weight: 700; color: #F5A623; letter-spacing: 1px; } /* 业务员星级（2026-09-24 老板定：管理员设定；★=1星 ☆=半星，未评不显示） */
 .pep { margin-top: 4px; font-size: 13px; font-weight: 400; }
 .pep-t { color: var(--sub); }
 /* emoji 不设文字色：保持系统彩色渲染，不被灰色染色 */

@@ -5,7 +5,7 @@ const { LOGO_FILE_ID } = require('./utils/config');
 App({
   globalData: {
     user: null,
-    APP_VERSION: '0.9.15', // 版本号（2026-09-24：与后台 admin.html 一致；后台人员管理新增「推荐人」列 + 「推荐排行」Tab）
+    APP_VERSION: '0.9.16', // 版本号（2026-09-24：与后台 admin.html 一致；后台新增「星级」列 + 手机端首页姓名右边显示星级）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
     welcome: null, // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）

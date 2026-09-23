@@ -286,9 +286,18 @@ Page({
     const dateText = `今日计划 · ${now.getUTCMonth() + 1}月${now.getUTCDate()}日 周${week[now.getUTCDay()]}`;
     const pepText = dailyPhrase(u._id || 'guest');
     const pep = splitEmoji(pepText);
-    this.setData({ user: u, bossMode: false, dateText, pepText: pep.text, pepEmoji: pep.emoji, logoUrl: getApp().globalData.logoUrl });
+    this.setData({ user: u, bossMode: false, starText: this._starText(u.star), dateText, pepText: pep.text, pepEmoji: pep.emoji, logoUrl: getApp().globalData.logoUrl });
     this.load();
     this.checkSubStatus();
+  },
+  // 星级串（2026-09-24 老板定）：**0.5 ~ 5 共 10 档**（新人进来默认半星，**没有"未评"**）
+  // 实心 ★ = 1 星，空心 ☆ = 半星；例：2 星半 → ★★☆、3 星 → ★★★（星数后面不再补空心）
+  // n<=0 只是防御（数据异常时不出星），正常情况下最低是 0.5
+  _starText(v) {
+    const n = Number(v) || 0;
+    if (n <= 0) return '';
+    const f = Math.floor(n);
+    return '★'.repeat(f) + ((n - f) >= 0.5 ? '☆' : '');
   },
   // 2026-09-10 老板定：云端身份复核——login 云函数说"无绑定/审核中/被拒绝"就清本地缓存踢回登录页；
   // 云端说"仍是业务员"则顺手刷新本地缓存（拿到最新身份）；网络异常/系统繁忙一律放行（离线可用）
@@ -297,8 +306,9 @@ Page({
     api.call('login', {})
       .then(res => {
         if (res && res.ok && res.user && res.user.role === 'salesman') {
-          // 云端确认仍是业务员 → 更新本地身份（后台改名/角色调整同步生效）
+          // 云端确认仍是业务员 → 更新本地身份（后台改名/角色调整同步生效；**星级也在这一步刷新**）
           app.setUser(res.user);
+          this.setData({ starText: this._starText(res.user.star) });
         } else if (res && res.code === 'NEED_REGISTER') {
           // 已被后台解绑 → 清身份回注册页
           this._kickToLogin('你的账号已解除绑定，请重新注册');
