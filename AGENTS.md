@@ -2,8 +2,8 @@
 
 项目：客户回访/新客开发管理系统。业务员用微信小程序执行拜访任务，老板用 Web 后台（qingyan）派单与看板。当前：一期验收闭环 + 服务号通知 + 坐标报错审核 + 现场证据（拍照/录音）+ 任务历史/自动归档 + 手机地图页 + 客户批次管理 + 老板手机端四页 + **语音转写（腾讯云 ASR：录音→文字，M2 已全量完成）** 均已开发完成，大多已真机验证，**只剩部署上线**（重传云函数 + 上传小程序体验版）。
 **切换会话/换人接手前，必读 `D:\WFR\visit-miniapp\项目交接-当前进度.md`（未决事项+坑清单+口径字典），详细设计见 `开发计划.md`。**
-**做「客户详情页」（`pages/customer/`）之前必读四份文档**（都在 `_scratch/`）：`客户详情页-界面设计文档.md`（**界面说明书**，照着它就能画这一页）+ `客户详情页-设计定稿.md`（老板拍板口径速查）+ `客户详情页-演示.html`（纯静态演示稿，A/B/C/D 四样本）+ `客户数据导入规范.md`（数据入库口径）；本轮结论见 `项目交接-当前进度.md` §0.0。
-**本轮大改（数据结构 + 页面统一）开工前必读 `_scratch/开发前修正-口径对齐.md`** —— 逐条记录**与旧口径冲突 / 已作废的表达**的修正（**修正 001 = 取消「新客/回访严格独立开发」**），含**全部待议题队列**与**旧文档同步清单**；⚠️ **它与其他任何旧文档冲突时，以它为准**。
+**做「客户详情页」（`pages/customer/`）之前必读四份文档**（都在 `_scratch/`）：`客户详情页-界面设计文档.md`（**界面说明书**，照着它就能画这一页）+ `客户详情页-设计定稿.md`（老板拍板口径速查）+ `客户详情页-演示.html`（纯静态演示稿，A/B/C/D 四样本）+ `客户数据导入规范.md`（数据入库口径）；本轮结论见 `项目交接-当前进度.md` §0.0a（09-23 最新）与 §0.0（09-13）。
+**本轮大改（数据结构 + 页面统一）开工前必读 `_scratch/开发前修正-口径对齐.md`** —— 逐条记录**与旧口径冲突 / 已作废的表达**的修正（**修正 001 已收窄为"只管手机端"；最新为修正 013 = 后台保留双工作台「方案 D」**），含**全部议题队列**（2026-09-23 已清空）与**旧文档同步清单**（已全部处理）；⚠️ **它与其他任何旧文档冲突时，以它为准**。
 
 ## Commands
 
@@ -18,14 +18,14 @@
 
 ## Architecture
 
-- `miniprogram/miniprogram/` 小程序 **9 页**（home/login/task/customer/visit/tasks-all/mine/map/**bossWar 战况地图**；页序见 app.json，底部自定义 tabBar 三项=首页/任务地图/战况）+ `utils/media.js`（照片缩略图 drawOnce/coverJpg、录音 createRecorder 平台分化）+ `utils/api.js`（**云函数调用单入口 `api.call(name, data)`**，别绕开）；app.js 配 envId `cloud1-d0gwlmbwp31181eb5` + 全局审核观察员（reviewWatcher）+ `APP_VERSION`（「我的」页左下角显示，用于自检是否加载到新代码）；**9 页均含 `onShareAppMessage`**（title 统一「聚火拜访 · 业务员拜访管理」/ path=`/pages/home/home` / imageUrl=`/images/share.png`；`onShareTimeline` 未做）
+- `miniprogram/miniprogram/` 小程序 **10 页**（home/login/task/customer/visit/tasks-all/mine/map/**bossWar 战况地图**/**customerDemo 客户详情演示页**（纯静态演示，不连云端、不写库）；页序见 app.json，底部自定义 tabBar 三项=首页/任务地图/战况）+ `utils/media.js`（照片缩略图 drawOnce/coverJpg、录音 createRecorder 平台分化）+ `utils/api.js`（**云函数调用单入口 `api.call(name, data)`**，别绕开）；app.js 配 envId `cloud1-d0gwlmbwp31181eb5` + 全局审核观察员（reviewWatcher）+ `APP_VERSION`（「我的」页左下角显示，用于自检是否加载到新代码）；**10 页中 9 个页面含 `onShareAppMessage`**（仅 customerDemo 演示页没有；title 统一「聚火拜访 · 业务员拜访管理」/ path=`/pages/home/home` / imageUrl=`/images/share.png`；`onShareTimeline` 未做）
 - `miniprogram/cloudfunctions/` 云函数 **11 个**：init（COLLECTIONS 自愈，含 `transcripts`/`customer_batches`/`batch_members`/`registrations`）、login、tasks（list 过滤 archivedAt；detail 返回 locCheck/coordFixPending/taskNo/recordingDurationLimit/logs）、visits（start 任务内单开拦截、submit 收 photos{fileID,thumbID}+`audios`≤6{fileID,duration,transcribe}、cancel 直接删除零痕迹、history 带转写）、**transcribe（语音转写：start/poll/retry/list/usage；腾讯云 ASR 异步 CreateRecTask→DescribeTaskStatus；`config.json` 带 `transcribePoll` cron 每 5 分钟，**需控制台确认已创建**）**、subscribe、coordfix（note+photos 兼容旧 string）、bindadmin、ping、seed、adminapi（后台唯一入口：任务 CRUD/导入分片/商城比对/**本地比对配套 listMallLibrary+applyMallMatch（比对在浏览器跑，云端只拉库写决定）**/审批/坐标审核/服务号通知/autoArchiveExpired 自动归档/客户备注/purgeUnbatchedCustomers 清空未分批/resetTestData 连删云存储文件/transcribeVisit+transcribeUsage+saveVisitTrText 转写）
 - `admin/`：admin.html 单文件前端（CRLF）+ server.js 本地代理（HTTP API 直连 + /mpTokenRefresh 服务号 token 每 108 分钟同步）+ tts_gen.py（云希男声）+ voice/ 缓存 + notify.wav（任务审核响铃）+ bengbao.wav（坐标报错响铃）。已无 Web Push。
 - `packager/shell/`：无边框壳 Program.cs（WebView2）：普惠体 55 Regular 内嵌 TTF、CS_DROPSHADOW、自定义最大化不盖任务栏、退出确认弹窗；标题条图标=通知(铃铛显隐)/**刷新(铃铛左侧自绘 Panel 旋转动画，点击=当前页刷新+autoArchiveExpired+响铃检测)**/设置/全屏/最小化/关闭；标题条 Control 遍历必须 `foreach (Control b in right)`（Panel 强转 Button 会启动崩溃）。**2026-09-08 DPI 大修**：Main 第一行声明 PMv2（否则 WebView2 中途提升 DPI→最大化盖任务栏）；初始窗口=工作区 96%×92% 手动居中（CenterScreen 会偏右下角）；标题栏按 DpiX/96 放大；禁右键+禁 F5/Ctrl+R；改壳必须 csc 重编译+关壳复制 exe 到 admin/ 与 D:\JuHuoVisit\admin\ +重打文员包
 
 ## Conventions
 
-- **不再区分新客户与回访客户（2026-09-16 老板定，作废原「严格各自独立开发」铁律）**：下一步**整体一起开发** —— 页面骨架与表达方式**共用一套**，**不按客户类型分叉**；呈现上的差异**只来自该客户自身有没有这项数据**（有值就显示 / 没值走空态）。⚠️ **边界**：共用的只是页面与表达，**数据字段与统计口径该不同的仍然不同**（如已入商城客户才有商城/订单/口碑数据）。⚠️ 相关**20 处代码落点 + 待议题队列**见 `_scratch/开发前修正-口径对齐.md` 修正 001
+- **后台保留双工作台，手机端共用一套（2026-09-23 老板拍板「方案 D」）**：后台**保留** 🔥 回访工作台 / 🌱 新客开发工作台**两个入口与数据分区**（登录后仍先选工作台；客户按 `customerType`、任务按 `purpose` 分线**不变**）；**但台内共用一套实现** —— 组件 / 列 / 弹窗共用一套，列的值按"该客户有没有这项数据"显示。⚠️ **手机端**（`pages/`）**不按客户类型分叉**：详情页共用一套 7 卡、拜访结果共用一套 10 项枚举，差异只来自数据有无（有值显示 / 没值空态）。⚠️ **数据模型永远只有一套 `customers` 集合**（＋ `customerType` 字段），**不搞两套集合**。⚠️ 修正 013 全文、方案 D 落地清单（后台要做 A3/A4/A5/A6 四处；A1/A2/A7/A8 **不动**）与历史沿革见 `_scratch/开发前修正-口径对齐.md`（修正 001 已**收窄为只管手机端**）
 - 口径：回访客户（不叫商城客户）；「激活增单/走访维护/活动推广」=回访工作台三目的（值 activate/maintain/promote）；新客=develop；「注册商城时间」；「签约业务员」；坐标状态 ok=正常 / pending=补标 / pending_confirm=待定；坐标显示**纬度在前**（数据存储不动）
 - 任务编号：`区域码-8位混码` 如 `JH05-42379761`（settings.taskRegionCode 可配，混码不可逆查库）
 - 截止日：开始日=任务第 1 天；**截止日当天 0 点起任务即截止**（全完成=已完成，否则=已过期）；延期按新日期恢复
@@ -33,24 +33,24 @@
 - 坐标报错审核：手机端「📍 报错」→ coord_fix_requests(pending) → 后台审核；**同意不写回坐标，coord_status=pending_confirm 待定**（后台暗红胶囊只读查看）
 - 任务结束：autoApproveFinish 勾选=全完自动通过；不勾选=人工审核；**提前交始终人工审核**
 - 定位校验：阈值 1~500 整数；0/不勾选=关闭；默认 100 米；定位失败=拦截提交；前端文案按设置阈值展示（locCheck）
-- **照片显示铁律（30 元教训定稿，勿再用被否方案）**：缩略图单次 canvas 绘制**零分支零循环**（320×240 中心裁切+quality70 固定）；显示格宽高**固定像素写死**（拜访页 212×159rpx / 坐标弹窗 88×66px / 历史卡 84×63px）；mode scaleToFill；三格绝对一样大；裁切丢内容没关系、原图保留点开看。被否方案：min-width+absolute、aspectFill 裁切、widthFix、letterbox 白底、1:1 方形、padding-top 撑高
+- **照片显示铁律（30 元教训定稿，勿再用被否方案）**：缩略图单次 canvas 绘制**零分支零循环**（320×240 中心裁切+quality70 固定）；显示格宽高**固定像素写死**（拜访页 **192×144rpx**〔= 96×72px，一行三个〕 / 坐标弹窗 88×66px / 历史卡 84×63px；**照片上限默认 9 张**，后台可配 3/6/9/15）；mode scaleToFill；三格绝对一样大；裁切丢内容没关系、原图保留点开看。被否方案：min-width+absolute、aspectFill 裁切、widthFix、letterbox 白底、1:1 方形、padding-top 撑高
 - 录音（2026-09-11 更新口径）：**最多 6 段**；单条上限**跟后台「拜访录音上限」档位走**（180/300/600 秒，**禁止写死**，后台一改前端与云函数同步跟随）；**合计 30 分钟硬封顶**；安卓/鸿蒙 mp3(16k/32kbps)，**iOS 用 aac(.m4a)**（另有封顶）；mp3 失败自动降级 aac；试听/上传前 saveFile 转存（saveFile 是移动，转存后必须回写路径）；obeyMuteSwitch=false；路径存闭包变量
 - **录音必须传 `duration`（2026-09-11 真机坑，现象"录音 1 分钟就停"）**：`wx.getRecorderManager().start()` 的 `duration` **单位是毫秒、默认 60000** → 不传就被系统 1 分钟截停；必须传 `秒数 * 1000`（详见交接文档 §4 坑 27）
 - **上传改动到云端**：双击 `admin/上传后台到云端.bat`（= `admin/upload_dist.js`，自动读 `APP_VERSION` → 分片调 `adminapi.uploadAdminDist` 写 `settings/admin_dist` → 回查核对）。文员端在后台设置页点「检查更新 → 立即更新」拉取
-- **后台版本号 = 「检查更新」判据（2026-09-11 老板定，不是"纯展示"）**：改后台代码**必须 bump `admin.html` 的 `APP_VERSION` 并上传云端**，否则文员永远显示"已是最新"、更新不到；小程序 `app.js` 的 `APP_VERSION` 与之保持一致（当前统一 **0.9.12**）。⚠️ 本地版本高于云端时文员会看到"发现新版本 v<旧>"，**别点「立即更新」（会降级）**，直接重新上传
-- 导入：**免费环境云函数 30s 超时，大导入必须前端分片 100 条/片+断点续跑**；自动建批只第一片锁定 batchId 防每片各建一批；decisions 必须传数组
+- **后台版本号 = 「检查更新」判据（2026-09-11 老板定，不是"纯展示"）**：改后台代码**必须 bump `admin.html` 的 `APP_VERSION` 并上传云端**，否则文员永远显示"已是最新"、更新不到；小程序 `app.js` 的 `APP_VERSION` 与之保持一致（**当前统一 0.9.14**，2026-09-23 实测 `admin.html:2175` 与 `app.js:8` 均为 0.9.14；⚠️ `mine.js:13` 初值仍留着 `0.9.11`，是**代码残留**，待清理）。⚠️ 本地版本高于云端时文员会看到"发现新版本 v<旧>"，**别点「立即更新」（会降级）**，直接重新上传
+- 导入：**免费环境云函数 30s 超时，大导入必须前端分片 + 断点续跑**；⚠️ **2026-09-23 口径变更（修正 010）：分片改为"按字节" 60~70 KB/片，不再按条数** —— 实测单行体积 customers 平均 2371 B / 最大 6200 B、orders 1026 B、order_items 441 B，按 100 条/片会到 **142~205 KB，超出入参 100 KB 上限**；自动建批只第一片锁定 batchId 防每片各建一批；decisions 必须传数组
 - 商城比对三档：≥75 自动认领 / 45~74 进 mall_claims 待确认 / 忽略；比对认领/待确认认领**按批次卡操作**（batchId）
 - **批次卡铁律**：一个批次全部信息只在一张卡内，绝不分开；批内状态生命周期=新入批待回访→发布拜访中→完成已回访→撤回退回；统计实时算；业务员端不显批次名
 - **客户筛选与分辨是老板长期重点，涉及改动主动提醒优化**
 - 任务历史：过期 N 天（2/3/5 默认 3）自动归档终态只读；logs 统一流水；sendTask 不重置 createdAt
 - 通知：后台全局轮询（指纹增量渲染）+ 响铃→1.6s→云希语音→浮窗；任务审核=notify.wav、坐标报错=bengbao.wav；手机端审核观察员（有 reviewing 才轮询）
 - 诊断数据用 adminapi（账号密码），别用云端测试测 tasks/visits（无 OPENID 必报 where undefined）
-- **行尾规矩（2026-09-12 复核更正）**：`admin.html` **实测是 LF**（HEAD 与工作区均无 CR，2026-09-12 用 `grep -c $'\r'` 核实）→ 编辑它**不需要**再做"还原 CRLF"；`.bat` 必须 CRLF（cmd 要求）；`_scratch/` 里的旧经验"admin.html 是 CRLF"已作废
+- **行尾规矩（2026-09-23 字节级复测更正，覆盖 09-12 那次错误结论）**：`admin.html` **实测是 CRLF** —— 字节级实测 **CRLF=6305 行 ＋ 裸 LF=16 行**（裸 LF 全在那段 `mpAlertTemplateId` 回显附近 `5525~5540`），无 BOM；**编辑它必须保留 CRLF，并原样保留那 16 个裸 LF**（改前数一遍、改完再数一遍）。⚠️ **判定必须用字节级方法**（python/node 以 `rb` 读，数 `\r\n` 与 `\n`）—— **`grep -c $'\r'` 在 Git Bash/MSYS 下会剥离 CR、恒返回 0**，09-12 那次"实测是 LF"就是被这个假象骗的（同一命令下 `admin.html` 和真的 LF 文件 `app.js` 都显示"没有 CR"，根本区分不出来）。`.bat` 必须 CRLF（cmd 要求）。同理：**`开发计划.md` 是 CRLF ＋ 29 个裸 LF 的混合文件**，编辑时同样要数
 - **WXML 只用 view/text，禁止任何 HTML 标签（div/br 曾致白屏）**；临时文件放 `_scratch/`（**不要主动清理，等老板通知清零**——2026-09-11 老板口径，覆盖原「用完即删」）
 - **身份与通知收件人（2026-09-12 明确，别再搞混）**：手机号 `13067737286` = **开发者本人**（这套系统的开发 + 管理员/运维），他在系统里为了测试注册成业务员「**范宇琨**」（`users.role=salesman`），dev 白名单就是他（`app.js` 的 `isDev`、`visits`/`tasks` 里 `phone === '13067737286' && event.boss === true` 按老板处理）；手机号 `15055492888` = 「**朱小利**」= **真正的老板（业务方/客户）**（`users.boss=true`、adminapi 里 `BOSS_PHONE` 指他）。**开发/运维类系统通知（云调用用量告警、模板测试消息等）只发给后台设置项 `adminNotifyPhones`（「管理员信息收件人」）里配置的手机号**，不自动发给"绑了服务号的管理员"、**不打扰朱小利**；用量告警模板用独立的 `mpAlertTemplateId`（**界面不回明文**，留空＝不修改，清除传 `__CLEAR__`）
 - **首页分享按钮（2026-09-12 老板定，6 轮返工换来的口径）**：老板端与业务员端首页右上角**各有一个、用的是同一段 WXML**（都在页面容器第一层、`.head` 之外）；必须是 `<button open-type="share">`（**小程序没有"用代码拉起好友列表"的 API**，普通 view 点击不触发）；图标用 `images/share-icon.png`（90×90 透明底、由 SVG **矢量精确渲染**，**别再用 CSS 手拼**）；**定位与尺寸全部内联 `style` 且写死 px**：`right:8px` / `top:10px` / 图标 20px / `transform:scaleY(.75)` 垂直压到 15px。**四个坑**：① 定位别写在 `<button>` 上（组件内置样式会顶掉，实测差 85px）；② 别用 `100%` 互相定尺寸（会算成 0，图标直接消失）；③ 内联 style 里别用 `rpx`（会被当 px 放大）；④ 小图标别手拼。详见交接文档 §4 坑 30~35
 - **分享卡片封面**：`images/share.png`（**500×400 = 微信 5:4 规格**；当前是老板指定图 `TMP/FENX-1.jpg` 的 **JPEG q85 压缩版，52KB**）。**9 个页面的 `onShareAppMessage` 都写死引用这个文件** → **换封面只换文件、不改任何 JS**；照片类图务必用 JPEG（同内容 PNG 336KB vs JPEG 52KB）。原图与历次备份都在 `TMP/`
-- **工作协作习惯（长期）**：文员包只在重要节点或老板要求时打包；文档只记重要步骤，小修小改不记；但每次改动后仍需语法检查 + CRLF 还原
+- **工作协作习惯（长期）**：文员包只在重要节点或老板要求时打包；文档只记重要步骤，小修小改不记；但每次改动后仍需**语法检查 + 行尾核对**（按文件类型：`admin.html` 与 `开发计划.md` 是 **CRLF 系**〔后者还带 29 个裸 LF〕、`.bat` 必须 CRLF、多数 `.md`/`.js` 是 LF —— **一律用字节级方法数**，别用 `grep`）
 
 ## Notes
 
@@ -60,9 +60,10 @@
 - 2026-09-08 后最新：**手机地图页**（独立自取任务、天页签、绿色路线 dayPlan[].route、下一家引导条+导航+去拜访，home 底部「🗺 地图」进入）；**导入分片 100/片+断点续跑**（-601008 超时教训）；**批次管理开发完成待部署**（批次卡/未分批清空/比对认领下沉批次卡）；客户备注卡；登录预填+记住我默认勾选；壳程序刷新图标；手动刷新=当前页刷新+autoArchiveExpired+响铃检测；后台照片点击=页内 photoOvl 弹窗（勿用 window.open，浏览器会当下载）
 - 2026-09-08 晚间（明细见交接文档 §3.11/坑 28/29）：**导入 -601008 修复**（fetchAll 1000、importCustomers 两遍处理+15 并发写库、占位批内去重）；**弹窗死循环修复**（decisions 带 index+全局转片内+累积不清空）；删除批次/加客户并行化；**比对认领本地化**（listMallLibrary+applyMallMatch，前端本地比对+预览总览+应用认领，任何电脑可用）；**壳程序 DPI 大修**（PMv2 声明/工作区 96%×92% 手动居中/标题栏 uiScale/禁右键禁 F5/登录 sessionStorage 会话恢复）；任务行加高；文员包已重打
 - 2026-09-10（明细见交接文档 §7.13/§7.14）：**老板手机端四页**（首页/任务地图/bossWar 战况/我的，入口「👑 进入老板模式」，`users.boss===true` 白名单）；**欢迎仪式**（`welcomeConfig`：daily/every/once × 2/3/5 秒 × gold/color，canvas 礼花）；登录改版落地（注册→后台审核→免登进入，新集合 `registrations`）；人员管理第三 Tab「⏳待审核」+ 解绑 + 老板开关 `setUserBoss`；壳标题条刷新按钮（当前页刷新 + autoArchiveExpired + 响铃检测）
-- 2026-09-11（明细见交接文档 §3.12 / §7.15）：**录音「1 分钟就停」致命 bug 修复**（`rm.start()` 必须传 `duration` 毫秒，默认 60000，坑 27）；**拜访页 UI 大迭代**（5 区块可折叠、默认只展开拍照+录音、深绿渐变录音段卡、照片上限 15、确认按钮改浅粉）；全域检查 6 项修复（`visits.submit` 真读后台档位、多段转写按真实 `segIndex` 编号）；老板模式首页「今日战况」文案按天轮换；**前后端版本号统一 0.9.11**；分享 `onShareAppMessage` 铺 9 页 + 品牌封面 `images/share.png`；**语音转写 M2 全量完成**（多段录音≤6/按段勾选转写/文字前后台可编辑 `trEdited`）；`adminapi.expiredTaskTick` 归位（技术债）
+- 2026-09-11（明细见交接文档 §3.12 / §7.15）：**录音「1 分钟就停」致命 bug 修复**（`rm.start()` 必须传 `duration` 毫秒，默认 60000，坑 27）；**拜访页 UI 大迭代**（5 区块可折叠、默认只展开拍照+录音、深绿渐变录音段卡、照片上限（**默认 9，后台可配 3/6/9/15**）、确认按钮改浅粉）；全域检查 6 项修复（`visits.submit` 真读后台档位、多段转写按真实 `segIndex` 编号）；老板模式首页「今日战况」文案按天轮换；**前后端版本号统一 0.9.11**；分享 `onShareAppMessage` 铺 9 页 + 品牌封面 `images/share.png`；**语音转写 M2 全量完成**（多段录音≤6/按段勾选转写/文字前后台可编辑 `trEdited`）；`adminapi.expiredTaskTick` 归位（技术债）
 - 部署待办（按序）：**重传云函数 adminapi（含 09-11 归位）/transcribe/visits/tasks/coordfix/init → 上传小程序体验版（含录音 duration 修复/拜访页 UI/分享封面/转写可编辑）→ 后台重启壳 + Ctrl+F5 → 控制台核对定时器（`transcribePoll` 每 5 分钟、adminapi 10 分钟轮询）→ 真机验证**（照片三格/试听/录音档位准停/坐标拍照/历史任务 Tab/归档/地图页/导入分片/批次卡比对认领/转发卡片封面/老板端四页）
 - 待办：上线前清单（改名「聚火拜访」/头像/qingyan 密码）；服务号两个新模板老板已选未添加；iPhone 录音 aac 与地图页真机验证未完成；定位系列优化待真机反馈；正式版提审
 - 2026-09-13（**客户详情页设计定稿**；全程只在 `_scratch/` 文档与演示稿里，**小程序/后台代码一行未动**）：**7 张卡**（店名卡不折叠 + 商城信息/购买记录/平台口碑/服务与设施/管理员备注/拜访历史 —— 后 6 张**永远出现**，没数据给空态）；**两类空态**（能录入=橙色 ＋ / 客观数据缺失=淡灰 `.empty4`）；**商圈 / 平台地址 / 平台图片 / 点评页 都不显示**（商圈没值连行都不出）；**服务与设施**：标题栏小胶囊只显「有」、设施录入 ＋ 在「团购/外卖」那一行**行尾**、设施没值不显示行；**门头照**＝平台图打底 + 现场拍覆盖（平台图取 `poipicadd` 主图、转存云存储）；**小地图**（📍商圈与位置内）= 不可拖 + 可缩 10~20 级 + **以客户坐标为中心**（不定位/不要权限）+ 初始 16 级 + 高 150px / 圆角 12px，**演示稿里是 CSS 示意块、真机才是 `<map>`**；视觉：页面底色 `--bg` 降三档到 `#E7EAF1`、标题栏箭头 13px / 分割线 2px `#EDF1F7`。文档见 §Notes 上方指针；**下一步待老板发话**：按界面设计文档改 `pages/customer/` + 导入 `customers`/`orders`/`order_items`
+- **2026-09-23（口径路线调整 + 文档纠错；代码一行未动）**：老板拍板 **「方案 D」** —— **后台保留双工作台**（🔥 回访 / 🌱 新客，**入口与数据分区不动**）**＋ 台内共用一套实现**；**手机端继续共用一套**（详情页 7 卡 / 10 项枚举）。**数据模型仍是一套 `customers` 集合**。连带：修正 001 **收窄为"只管手机端"**；议题 ① 结论**从"方案 A 合并"改为"方案 D"**（§七 已就地标注）；修正 002（批次对所有客户开放）与 013 合流；「🛒 商城库导入 / 🔎 待确认认领」**两个工作台都放开**。本轮同步 6 份文档 ＋ 纠正 4 处既有错误（admin.html 行尾 CRLF〔非 LF〕/ 照片上限 9〔非 15〕/ 小程序 10 页〔非 9〕/ 版本 0.9.14〔非 0.9.12〕）→ 明细见 `_scratch/开发前修正-口径对齐.md` **修正 013** 与 §六
 - backlog：AI 日报评分（§7.10，智谱 key 已有）→ 导出+报表 → 操作档案（§7.8）→ 重复客户体检
 - 详见 `项目交接-当前进度.md` §3.3 部署队列、§4 坑清单、§5 口径字典、§7.12 批次方案
