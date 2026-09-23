@@ -1413,11 +1413,12 @@ input,textarea{-webkit-user-select:text;user-select:text}
             <span class="ts-tab on" id="ptab0" onclick="peopleTab(0)">🏃 业务员</span>
             <span class="ts-tab" id="ptab1" onclick="peopleTab(1)">👤 管理员</span>
             <span class="ts-tab" id="ptab2" onclick="peopleTab(2)">⏳ 待审核<span class="reg-badge" id="regPendPill" hidden>0</span></span>
+            <span class="ts-tab" id="ptab3" onclick="peopleTab(3)">📊 推荐排行</span>
           </div>
         </div>
         <div class="task-shell-body" style="overflow-y:auto">
         <table class="tbl" id="ptable0">
-          <thead><tr><th>姓名</th><th>手机号</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
+          <thead><tr><th>姓名</th><th>手机号</th><th>推荐人</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
           <tbody id="smTbody"></tbody>
         </table>
         <table class="tbl" id="ptable1" style="display:none">
@@ -1428,16 +1429,42 @@ input,textarea{-webkit-user-select:text;user-select:text}
         <div id="ptable2" style="display:none">
           <div style="padding:10px 14px;font-size:12.5px;color:var(--sub);font-weight:600">待审核注册申请（手机号匹配已有业务员=直接绑定；不匹配=通过后自动新建业务员）</div>
           <table class="tbl">
-            <thead><tr><th>姓名</th><th>手机号</th><th>微信</th><th>申请时间</th><th style="width:180px">操作</th></tr></thead>
+            <thead><tr><th>姓名</th><th>手机号</th><th>推荐人</th><th>微信</th><th>申请时间</th><th style="width:180px">操作</th></tr></thead>
             <tbody id="regTbody"></tbody>
           </table>
           <div style="padding:12px 14px;font-size:13px;font-weight:800;border-top:1px solid var(--line)">已处理（最近 20 条）</div>
           <table class="tbl">
-            <thead><tr><th>姓名</th><th>手机号</th><th>结果</th><th>处理时间</th><th>原因</th></tr></thead>
+            <thead><tr><th>姓名</th><th>手机号</th><th>推荐人</th><th>结果</th><th>处理时间</th><th>原因</th></tr></thead>
             <tbody id="regDoneTbody"></tbody>
           </table>
         </div>
+        <!-- 推荐排行（2026-09-24 老板定：不光记谁拉的，还要看"谁拉来的人最能干"） -->
+        <div id="ptable3" style="display:none">
+          <div style="padding:10px 14px;font-size:12.5px;color:var(--sub);font-weight:600">
+            口径：<b>拉人数</b>＝他拉来且已入职的人数（待审核的单独一列）；<b>下级拜访数 / 任务完成率 / 带来入商城客户</b> 都只算"他拉来的人"的战果。<br>
+            ⚠️「带来入商城客户」＝这些人的拜访结果选了「加入商城 / 已签约商城」的 <b>去重客户数</b>；<b>不是</b>客户档案里的「签约业务员」（那是客户表「业务负责人」原值，跟业务员姓名对不上，两个口径不能混）。
+          </div>
+          <table class="tbl">
+            <thead><tr><th>推荐人</th><th>拉人数</th><th>待审核</th><th>下级拜访数</th><th>任务完成率</th><th>带来入商城客户</th></tr></thead>
+            <tbody id="refStatTbody"></tbody>
+          </table>
+        </div>
         <div style="padding:12px 14px;font-size:12px;color:var(--sub);font-weight:600;border-top:1px solid var(--line)">💡 业务员在小程序自助注册（姓名+手机号）→ 此处审核通过后其微信自动绑定、免登录进入；管理员在浏览器登录后台。超级管理员「卿燕」唯一，不可停用/删除。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 推荐人补录弹窗（2026-09-24 老板定：存量的人当年没有分享链路，只能手工指定） -->
+    <div class="ovl" id="refModal" style="display:none">
+      <div class="modal" style="max-width:430px">
+        <div class="mt" id="refTitle">设置推荐人</div>
+        <p style="margin-top:0">从<b>系统内</b>的人员里选一个作为他的推荐人（＝谁分享的链接把他拉来的）。</p>
+        <p class="hint">存量业务员当年没有分享链路，只能在这里手工补录（来源会标成「✏️ 手工」）。不能选他自己，也不能选会形成"互相推荐"的人。</p>
+        <select id="refSelect" class="inp" style="width:100%;box-sizing:border-box;padding:9px 12px;margin-top:6px"></select>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
+          <button class="btn primary btn-sm" onclick="saveSetRef()">保存</button>
+          <button class="btn ghost btn-sm" onclick="clearSetRef()">清除推荐人</button>
+          <button class="btn ghost btn-sm" onclick="document.getElementById('refModal').style.display='none'">取消</button>
         </div>
       </div>
     </div>
@@ -2172,7 +2199,7 @@ function renderDetail(res) {
 }
 
 // ===== 任务流程档案：日志时间线 + 提交审核情况（2026-09-08 老板定稿） =====
-const APP_VERSION = '0.9.14'; // 版本号（2026-09-13：新增「📥 导入信息」栏目——四个导入入口 + 库内数据统计 + 客户资料管理入口）
+const APP_VERSION = '0.9.15'; // 版本号（2026-09-24：人员管理新增「推荐人」列 + 「📊 推荐排行」Tab + 推荐人补录）
 try { $('sideVer').textContent = 'v' + APP_VERSION; $('curVerText').textContent = 'v' + APP_VERSION; } catch (e) { /* 静默 */ }
 const ARCH_IC = { create: '📝', send: '📨', edit: '✏️', extend: '⏰', reassign: '👤', withdraw: '↩️', finishReq: '📤', reviewApprove: '✅', reviewReject: '⛔', autoDone: '🤖', archive: '🗄️', replan: '🗺', visit: '🏪', resched: '📅', visitAutoSubmit: '⏱', visitAutoCancel: '⏱', expired: '⌛' };
 const ARCH_COLOR = { create: '#2F80ED', send: '#2F80ED', edit: '#F5A623', extend: '#B97A0B', reassign: '#7C3AED', withdraw: '#8A93A0', finishReq: '#B97A0B', reviewApprove: '#34A853', reviewReject: '#E5484D', autoDone: '#34A853', archive: '#E5484D', replan: '#2F80ED', visit: '#16A34A', resched: '#2F80ED', visitAutoSubmit: '#34A853', visitAutoCancel: '#8A93A0', expired: '#E5484D' };
@@ -4944,14 +4971,21 @@ async function openNewTaskForBatch(batchId, batchName) {
 // ===== 人员 =====
 let peopleKind = 0;
 let userModalKind = 0;
+let peopleCache = { salesmen: [], admins: [] }; // 2026-09-24 推荐人下拉的候选人员（loadPeople 时刷新）
 
 function peopleTab(k) {
   peopleKind = k;
-  ['ptab0', 'ptab1', 'ptab2'].forEach((id, i) => $(id).classList.toggle('on', i === k));
+  // 2026-09-24：新增第 4 个 Tab「📊 推荐排行」；顺手把 ptable1 的显隐改成 k === 1
+  //（原来是 k === 0 ? 'none' : '' —— 点"待审核"时管理员表格也跟着显示；加了排行页会把这个错乱放大）
+  ['ptab0', 'ptab1', 'ptab2', 'ptab3'].forEach((id, i) => {
+    const el = $(id); if (el) el.classList.toggle('on', i === k);
+  });
   $('ptable0').style.display = k === 0 ? '' : 'none';
-  $('ptable1').style.display = k === 0 ? 'none' : '';
+  $('ptable1').style.display = k === 1 ? '' : 'none';
   $('ptable2').style.display = k === 2 ? '' : 'none';
+  const t3 = $('ptable3'); if (t3) t3.style.display = k === 3 ? '' : 'none';
   if (k === 2) refreshRegs();
+  if (k === 3) loadReferrerStats(); // 点开才拉（省云调用）
 }
 
 function toggleHtml(id, active) {
@@ -5000,10 +5034,17 @@ function adminActiveHtml(a) {
 async function loadPeople() {
   refreshRegs(); // 注册审核角标+列表（2026-09-09 老板拍板）
   const sm = await api('listSalesmen');
+  // 2026-09-24 推荐人：缓存人员列表，供「设置推荐人」弹窗做下拉候选
+  try {
+    peopleCache.salesmen = (sm.ok ? sm.salesmen : []) || [];
+    const ad0 = await api('listAdmins');
+    peopleCache.admins = (ad0.ok ? ad0.admins : []) || [];
+  } catch (e) { /* 缓存失败不影响列表渲染 */ }
   $('smTbody').innerHTML = sm.ok
     ? sm.salesmen.map(s => `<tr>
         <td><b>${esc(s.name)}</b>${s.trial ? '<span class="pill blue" style="margin-left:6px" title="游客体验：任意微信可绑定登录">🖐 游客</span>' : ''}${s.hasTask ? '<span class="pill blue" style="margin-left:6px">任务中</span>' : ''}</td>
         <td>${esc(s.phone || '—')}</td>
+        <td>${referrerCellHtml(s)}</td>
         <td>${s.bound ? '<span class="pill green">已绑定</span>' : '<span class="pill warn">待绑定</span>'}</td>
         <td>${s.mpBound
           ? `<span class="pill green" title="${esc(s.mpOpenidMask)}">已绑定</span> <button class="btn ghost" style="height:24px;font-size:11px" onclick="openMpBind('${s._id}','${esc(s.name)}','${esc(s.mpOpenidMask)}')">更换</button>`
@@ -5012,7 +5053,7 @@ async function loadPeople() {
         <td>${toggleHtml(s._id, s.active)}</td>
         <td>${s.bound ? `<button class="btn ghost" style="height:28px;font-size:12px;color:#B45309;margin-right:8px" onclick="unbindUser('${s._id}','${esc(s.name)}')">解绑</button>` : ''}<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${s._id}','${esc(s.name)}')">删除</button></td>
       </tr>`).join('')
-    : '<tr><td colspan="7" class="empty">加载失败</td></tr>';
+    : '<tr><td colspan="8" class="empty">加载失败</td></tr>';
   const ad = await api('listAdmins');
   $('adTbody').innerHTML = ad.ok
     ? ad.admins.map(a => {
@@ -5074,6 +5115,7 @@ function renderRegs(res) {
     ? res.pending.map(r => `<tr>
         <td><b>${esc(r.name)}</b></td>
         <td>${esc(r.phone)}${r.phoneVerified ? '<span class="pill green" style="margin-left:4px">✓ 已验证</span>' : ''}</td>
+        <td>${r.refFromName ? '<span class="pill" style="background:#EEF3FF;color:#3B5BDB" title="谁分享的链接把他拉来的">🔗 ' + esc(r.refFromName) + '</span>' : '<span style="color:#C4CAD1">—</span>'}</td>
         <td style="color:var(--sub)">${esc(r.openidMask)}</td>
         <td>${fmtT(r.createdAt)}</td>
         <td>
@@ -5081,16 +5123,78 @@ function renderRegs(res) {
           <button class="btn ghost" style="height:26px;font-size:12px;color:var(--danger)" onclick="reviewReg('${r._id}','reject','${esc(r.name)}')">✗ 拒绝</button>
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="5" class="empty">暂无待审核申请</td></tr>';
+    : '<tr><td colspan="6" class="empty">暂无待审核申请</td></tr>';
   $('regDoneTbody').innerHTML = res.done.length
     ? res.done.map(r => `<tr>
         <td>${esc(r.name)}</td>
         <td>${esc(r.phone)}</td>
+        <td>${r.refFromName ? '<span class="pill" style="background:#EEF3FF;color:#3B5BDB">🔗 ' + esc(r.refFromName) + '</span>' : '<span style="color:#C4CAD1">—</span>'}</td>
         <td>${r.status === 'approved' ? '<span class="pill green">已通过</span>' : '<span class="pill" style="background:#FDEBEC;color:#E5484D">已拒绝</span>'}</td>
         <td>${fmtT(r.reviewedAt)}</td>
         <td style="color:var(--sub)">${esc(r.reason || '—')}</td>
       </tr>`).join('')
-    : '<tr><td colspan="5" class="empty">暂无记录</td></tr>';
+    : '<tr><td colspan="6" class="empty">暂无记录</td></tr>';
+}
+
+// ===== 推荐人（2026-09-24 老板定：谁分享的链接 / 谁拉的，就记谁为推荐人）=====
+// 人员列表的「推荐人」单元格：姓名 + 来源标记（🔗 链接自动带 / ✏️ 后台手工补录）+ 拉了几人，点「设置」可改
+function referrerCellHtml(s) {
+  const ref = s.referrerName
+    ? `${esc(s.referrerName)} <span style="font-size:11px;color:var(--sub)">${s.referrerSource === 'manual' ? '✏️ 手工' : '🔗 链接'}</span>`
+    : '<span style="color:#C4CAD1">—</span>';
+  const cnt = s.refCount ? ` <span class="pill" style="background:#EEF3FF;color:#3B5BDB;font-size:11px">拉了 ${s.refCount} 人</span>` : '';
+  return `<div style="white-space:nowrap">${ref}${cnt}<button class="btn ghost" style="height:22px;font-size:11px;margin-left:6px;padding:0 8px" onclick="openSetRef('${s._id}','${esc(s.name)}','${s.referrerId || ''}')">设置</button></div>`;
+}
+
+// 打开「设置推荐人」弹窗（候选＝系统内的业务员 + 管理员，排除他自己）
+let refUserId = '';
+function openSetRef(userId, name, curId) {
+  const opts = [];
+  (peopleCache.salesmen || []).forEach(x => { if (x._id !== userId) opts.push({ id: x._id, name: (x.name || '（未填姓名）') + '（业务员）' }); });
+  (peopleCache.admins || []).forEach(x => { if (x._id !== userId) opts.push({ id: x._id, name: (x.name || x.username || '（未填姓名）') + (x.role === 'super_admin' ? '（超级管理员）' : '（管理员）') }); });
+  if (!opts.length) { alert('人员列表还没加载，请先切到「🏃 业务员」页刷新一次再回来设置'); return; }
+  refUserId = userId;
+  $('refTitle').textContent = '设置推荐人 · ' + name;
+  $('refSelect').innerHTML = '<option value="">（不设置 / 清除推荐人）</option>' +
+    opts.map(o => `<option value="${o.id}"${o.id === curId ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
+  $('refModal').style.display = 'flex';
+}
+
+let refBusy = 0;
+async function saveSetRef() {
+  if (Date.now() - refBusy < 3000) return; // 防连点
+  refBusy = Date.now();
+  const res = await api('setUserReferrer', { userId: refUserId, referrerId: $('refSelect').value });
+  if (!res.ok) { alert(res.msg || '保存失败'); return; }
+  $('refModal').style.display = 'none';
+  loadPeople();
+}
+
+async function clearSetRef() {
+  if (!window.confirm('清除该业务员的推荐人记录？（以后还可以重新设置）')) return;
+  const res = await api('setUserReferrer', { userId: refUserId, referrerId: '' });
+  if (!res.ok) { alert(res.msg || '清除失败'); return; }
+  $('refModal').style.display = 'none';
+  loadPeople();
+}
+
+// 推荐排行（切到该 Tab 时才拉，省云调用）
+async function loadReferrerStats() {
+  const tb = $('refStatTbody');
+  if (!tb) return;
+  tb.innerHTML = '<tr><td colspan="6" class="empty">加载中…</td></tr>';
+  const res = await api('referrerStats');
+  const rows = res.ok ? (res.rows || []) : [];
+  tb.innerHTML = rows.length
+    ? rows.map(r => `<tr>
+        <td><b>${esc(r.referrerName)}</b></td>
+        <td><span class="pill" style="background:#EEF3FF;color:#3B5BDB">${r.hired} 人</span></td>
+        <td>${r.pending ? `<span class="pill warn">${r.pending} 人</span>` : '<span style="color:#C4CAD1">—</span>'}</td>
+        <td>${r.visits} 次</td>
+        <td>${r.taskTotal ? `${r.taskRate}%（${r.taskDone}/${r.taskTotal}）` : '<span style="color:#C4CAD1">—</span>'}</td>
+        <td>${r.mallCustomers ? `<span class="pill green">${r.mallCustomers} 家</span>` : '<span style="color:#C4CAD1">—</span>'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="empty">还没有人被推荐入职（或还没补录推荐人）</td></tr>';
 }
 
 // 注册审核增量检测（2026-09-09 老板定：挂在全局 15 秒轮询；有新注册 → 两角标 + 男声「有新的人员需要您审核」两遍，不响铃）
