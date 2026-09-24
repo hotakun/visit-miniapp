@@ -313,6 +313,12 @@ tr.row-off td:not(.keep){opacity:.4}
 /* 坐标列(7)与最近下单列(9)内容字重 400（2026-09-08 老板定） */
 #batchTbody td:nth-child(7),#batchTbody td:nth-child(9){font-weight:400}
 .del-x:hover{background:var(--danger);color:#fff}
+/* 备注按钮（2026-09-24 老板定：批次详情页最后一列，取代原「从本批次移除」的 ✕）
+   有备注时高亮成蓝色 —— 一眼看出哪些客户已经有备注（老板长期重点：客户筛选与分辨） */
+.rmk-btn{display:inline-flex;width:22px;height:22px;border:1px solid #C9D2DB;border-radius:6px;color:#8A939C;align-items:center;justify-content:center;cursor:pointer;font-size:11px;background:#fff;line-height:1}
+.rmk-btn:hover{border-color:var(--primary);color:var(--primary)}
+.rmk-btn.on{border-color:var(--blue);color:var(--blue);background:var(--blue-tint)}
+#batchTbody .rmk-btn{width:20px;height:20px;font-size:10px}
 /* 页面电梯圆标：↓ 到列表底 / ↑ 回地图顶，固定悬浮右侧 */
 .wiz-elevator{display:none;position:fixed;right:26px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;background:#fff;border:1.5px solid var(--line);box-shadow:0 4px 14px rgba(31,36,48,.18);align-items:center;justify-content:center;font-size:18px;font-weight:400;color:var(--ink);cursor:pointer;z-index:9999;transition:background .15s,transform .15s,color .15s}
 .wiz-elevator:hover{background:#FFF7ED;transform:translateY(-50%) scale(1.06)}
@@ -995,11 +1001,18 @@ tr.row-off td:not(.keep){opacity:.4}
         </span>
         <span class="r" id="batchDetailOps" style="display:flex;align-items:center;gap:10px">
           <span id="batchSelStat" style="display:none;font-size:13px;color:var(--primary-deep);font-weight:700">已选 <b id="batchSelNum" style="color:var(--primary-deep)">0</b></span>
-          <button class="btn ghost" id="batchCopyBtn" style="display:none;height:34px;font-size:13px;color:var(--primary-deep);font-weight:700" onclick="openCopyBatch()">📋 复制到新批次</button>
-          <button class="btn ghost" style="height:34px;font-size:13px" onclick="deleteBatch(curBatchId, curBatchName, curBatchCount)">🗑 删除</button>
-          <button class="btn ghost" style="height:34px;font-size:13px" onclick="openAddCustToBatch()">＋ 添加客户</button>
-          <button class="btn ghost" style="height:34px;font-size:13px" onclick="openImport(true, curBatchId)">📥 追加导入</button>
-          <button class="btn primary" style="height:34px;font-size:13px" onclick="openNewTaskForBatch(curBatchId, curBatchName)">＋ 新建任务</button>
+          <!-- ===== 批次内专用（进「未分批」时整体隐藏）===== -->
+          <button class="btn ghost" id="batchCopyBtn" style="display:none;height:34px;font-size:13px;color:var(--primary-deep);font-weight:700;border:1px solid var(--primary)" onclick="openCopyBatch()">📋 复制到新批次</button>
+          <button class="btn ghost" id="batchDelSelBtn" style="display:none;height:34px;font-size:13px;color:var(--primary-deep);font-weight:700;border:1px solid var(--primary)" onclick="deleteSelectedFromBatch()">🗑 删除所选</button>
+          <!-- 2026-09-24 老板定：批次详情页不再放「删除整批」入口（避免在详情页误删整批）；
+               要移除客户改用「删除所选」（勾选后出现，移回未分批） -->
+          <button class="btn ghost" id="batchAddCustBtn" style="height:34px;font-size:13px" onclick="openAddCustToBatch()">＋ 添加客户</button>
+          <button class="btn ghost" id="batchImportBtn" style="height:34px;font-size:13px" onclick="openImport(true, curBatchId)">📥 追加导入</button>
+          <button class="btn primary" id="batchNewTaskBtn" style="height:34px;font-size:13px" onclick="openNewTaskForBatch(curBatchId, curBatchName)">＋ 新建任务</button>
+          <!-- ===== 未分批专用（2026-09-24 老板定：勾选客户后才出现，给未分批客户分流或清理）===== -->
+          <button class="btn ghost" id="unbAddBtn" style="display:none;height:34px;font-size:13px;color:var(--primary-deep);font-weight:700;border:1px solid var(--primary)" onclick="openBatchPick()">📁 加入批次</button>
+          <button class="btn ghost" id="unbNewBtn" style="display:none;height:34px;font-size:13px;color:var(--primary-deep);font-weight:700;border:1px solid var(--primary)" onclick="createBatchWithSelected()">➕ 建新批次并放入</button>
+          <button class="btn ghost" id="unbDelBtn" style="display:none;height:34px;font-size:13px;color:var(--danger);font-weight:700;border:1px solid var(--danger)" onclick="deleteSelectedCustomers()">🗑 彻底删除</button>
         </span>
       </div>
       <div class="card" style="box-shadow:0 3px 10px rgba(31,36,48,.06);padding:0;overflow:hidden">
@@ -1084,6 +1097,19 @@ tr.row-off td:not(.keep){opacity:.4}
           <div class="cust-select" id="addCustList" style="max-height:48vh;min-height:220px"><div class="loading">加载中…</div></div>
         </div>
         <div class="mf"><button class="btn ghost" onclick="$('addCustOvl').style.display='none'">取消</button><button class="btn primary" onclick="saveAddCusts()">加入批次</button></div>
+      </div>
+    </div>
+
+    <!-- 加入批次（2026-09-24 老板定，未分批页用）：**选批次、可多选** —— 把勾选的客户加进这些批次 -->
+    <div class="ovl" id="batchPickOvl" style="display:none">
+      <div class="modal" style="width:460px;max-width:92vw">
+        <div class="mh"><b>📁 加入批次</b><span class="mx" onclick="$('batchPickOvl').style.display='none'">✕</span></div>
+        <div class="mb">
+          <div class="hint" style="margin-bottom:10px">把所选的 <b id="batchPickCount">0</b> 家客户加入下面勾选的批次（<b>可多选</b>）。</div>
+          <div class="cust-select" id="batchPickList" style="max-height:42vh;min-height:160px"><div class="loading">加载中…</div></div>
+          <div style="margin-top:8px"><span id="batchPickSelCount" style="font-size:12.5px;color:var(--sub)">已勾选 0 个批次</span></div>
+        </div>
+        <div class="mf"><button class="btn ghost" onclick="$('batchPickOvl').style.display='none'">取消</button><button class="btn primary" id="batchPickBtn" onclick="saveBatchPick()">加入所选批次</button></div>
       </div>
     </div>
 
@@ -1534,20 +1560,38 @@ tr.row-off td:not(.keep){opacity:.4}
       <div class="modal" style="max-width:460px">
         <div class="mt" id="cmTitle">客户详情</div>
         <div id="cmBody"></div>
-        <!-- 客户备注（2026-09-08 老板定：业务员手机端可见） -->
-        <div style="margin-top:14px;border-top:1px solid #F0F2F5;padding-top:12px">
-          <div style="font-size:12.5px;font-weight:700;color:var(--sub);margin-bottom:6px">📝 客户备注（手机端仅见最新备注 · 后台信息不留存）</div>
-          <textarea id="cmRemark" class="inp" style="height:74px;width:100%;box-sizing:border-box;padding:9px 12px;font-size:13px;line-height:1.6;font-weight:400;resize:vertical" placeholder="输入备注内容…"></textarea>
-          <div style="display:flex;justify-content:center;margin-top:8px">
-            <button class="btn primary btn-sm" onclick="saveCustRemark()">保存备注</button>
-          </div>
-          <!-- 分割线（2026-09-08 老板定：备注块与底部信息栏分块显示） -->
-          <div style="border-top:1px dashed #E4E7EC;margin-top:12px"></div>
-        </div>
+        <!-- 2026-09-24 老板定：备注块从这里搬走 —— 挪到「批次详情页最后一列的 📝 按钮」，
+             用下面那个独立的 custRemarkOvl 弹窗（客户详情弹窗只保留纯详情） -->
         <!-- 底部信息栏（2026-09-08 老板定：拜访次数+全局状态胶囊+任务内状态胶囊｜关闭） -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px">
           <div id="cmFooterInfo" style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--sub);font-weight:400;flex-wrap:wrap"></div>
           <button class="btn ghost" onclick="$('custModal').style.display='none'">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 客户备注弹窗（2026-09-24 老板定：从「客户详情」里搬出来，入口 = 批次详情页最后一列的 📝 按钮） -->
+    <div class="ovl" id="custRemarkOvl" style="display:none">
+      <div class="modal" style="max-width:560px">
+        <div class="mt" id="crTitle">📝 客户备注</div>
+        <p style="margin-top:0;font-size:12.5px;color:var(--sub);line-height:1.6">
+          <b>业务员手机端只看到「最新一条」</b>；后台<b>逐条保留历史</b>（新增不会覆盖旧记录）。
+        </p>
+        <!-- 历史备注（新 → 旧） -->
+        <div style="margin-top:12px">
+          <div style="font-size:12.5px;font-weight:700;color:var(--sub);margin-bottom:6px">历史备注</div>
+          <div id="crHistory" style="max-height:34vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:#FCFDFE;min-height:52px">
+            <div class="loading">加载中…</div>
+          </div>
+        </div>
+        <!-- 新增一条 -->
+        <div style="margin-top:14px">
+          <div style="font-size:12.5px;font-weight:700;color:var(--sub);margin-bottom:6px">新增一条备注</div>
+          <textarea id="crRemark" class="inp" style="height:76px;width:100%;box-sizing:border-box;padding:9px 12px;font-size:13px;line-height:1.6;font-weight:400;resize:vertical" placeholder="输入备注内容…"></textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+          <button class="btn ghost" onclick="$('custRemarkOvl').style.display='none'">关闭</button>
+          <button class="btn primary" id="crSaveBtn" onclick="saveCustRemark()">保存备注</button>
         </div>
       </div>
     </div>
@@ -1663,6 +1707,11 @@ tr.row-off td:not(.keep){opacity:.4}
           <div class="hint">选择客户名单文件（.xls / .xlsx），表头需含「客户单位 / 地址」等列。<br>支持多电话（自动拆主号/备号）、经纬度。</div>
           <p><input type="file" id="impFile" accept=".xls,.xlsx" onchange="pickImportFile()"></p>
           <p><span class="impType">将导入为：<b id="impTypeLabel">🔥 回访客户（回访工作台）</b></span></p>
+          <!-- 2026-09-24 老板定：追加导入时，也可直接从「未分批客户」里挑几家加入本批次（不用文件） -->
+          <div id="impPickUnbatched" style="display:none;margin-top:14px;padding-top:12px;border-top:1px dashed #E4E7EC">
+            <div class="hint" style="margin-bottom:8px">也可以不用文件 —— 直接从<b>未分批客户</b>里勾选几家加入本批次：</div>
+            <button class="btn ghost" onclick="pickUnbatchedIntoBatch()">＋ 未分批</button>
+          </div>
         </div>
         <div id="impStep2" style="display:none">
           <p>解析成功：共 <b id="impTotal"></b>。前 5 行预览：</p>
@@ -4356,7 +4405,7 @@ function showCustDetail(id) {
   const c = detailCustCache.find(x => x._id === id) || custListCache.find(x => x._id === id);
   if (!c) { alert('未找到客户数据'); return; }
   curCustId = id;
-  $('cmRemark').value = c.remark || ''; // 备注回填（2026-09-08 老板定）
+  // 2026-09-24：备注已搬到「批次详情页最后一列的 📝 按钮」（独立弹窗），此处不再回填备注
   $('cmTitle').textContent = (c.customerType === 'new' ? '🌱 ' : '🏪 ') + (c.name || '客户详情');
   const isNew = c.customerType === 'new';
   // 两类型各自一套字段，互不混淆
@@ -4401,14 +4450,15 @@ function showCustDetail(id) {
   $('custModal').style.display = 'flex';
 }
 
-// 客户备注保存（2026-09-08 老板定：后台编辑，业务员手机端「管理员备注」卡显示）
+// 客户备注保存（2026-09-24 老板定：从「客户详情」搬到批次详情页最后一列的 📝 按钮）
 let curCustId = null;
 let remarkBusy = 0; // 2026-09-09 防连点
 async function saveCustRemark() {
   if (Date.now() - remarkBusy < 15000) return;
   remarkBusy = Date.now();
-  if (!curCustId) return;
-  const remark = ($('cmRemark').value || '').trim().slice(0, 500);
+  if (!curCustId) { remarkBusy = 0; return; }
+  const remark = ($('crRemark').value || '').trim().slice(0, 500);
+  if (!remark) { remarkBusy = 0; alert('请输入备注内容'); return; }
   const res = await api('updateCustomerRemark', { customerId: curCustId, remark });
   if (!res.ok) { alert(res.msg || '保存失败'); return; }
   // 同步本地缓存（重开弹窗/任务详情即时一致）
@@ -4416,7 +4466,48 @@ async function saveCustRemark() {
     const c = cache && cache.find(x => x._id === curCustId);
     if (c) c.remark = res.remark;
   });
-  alert(res.msg || '已保存');
+  // 2026-09-24 逐条留存：保存后**不关窗** —— 清空输入框、刷新历史列表（新记录出现在最上面）
+  $('crRemark').value = '';
+  loadCustRemarkHistory(curCustId);
+  // 批次详情页就地重画一次：📝 的高亮状态（有备注=蓝色）要跟着更新
+  if ($('page-batchDetail').style.display !== 'none' && typeof renderBatchTbody === 'function') {
+    try { renderBatchTbody(); } catch (e) { /* 静默 */ }
+  }
+}
+
+// 打开客户备注弹窗（2026-09-24）：入口是批次详情页（含未分批）最后一列的 📝 按钮
+// 2026-09-24 老板定：备注**逐条保留历史** —— 弹窗里上面是历史列表，下面是"新增一条"
+function openCustRemark(id, name) {
+  const c = custListCache.find(x => x._id === id) || detailCustCache.find(x => x._id === id) || null;
+  curCustId = id;
+  $('crTitle').textContent = '📝 ' + (name || (c && c.name) || '客户') + ' · 备注';
+  $('crRemark').value = ''; // 新增框留空；已有内容看下面的历史列表
+  $('crHistory').innerHTML = '<div class="loading">加载中…</div>';
+  $('custRemarkOvl').style.display = 'flex';
+  setTimeout(function () { const t = $('crRemark'); if (t) t.focus(); }, 50);
+  loadCustRemarkHistory(id);
+}
+
+// 拉该客户的历史备注并渲染（新 → 旧；带时间 + 操作人）
+async function loadCustRemarkHistory(id) {
+  const el = $('crHistory');
+  if (!el) return;
+  let res = null;
+  try { res = await api('listCustomerRemarks', { customerId: id }); } catch (e) { res = null; }
+  const list = (res && res.ok) ? (res.remarks || []) : [];
+  if (!list.length) {
+    el.innerHTML = '<div class="empty" style="padding:14px">还没有备注记录</div>';
+    return;
+  }
+  const p2 = n => String(n).padStart(2, '0');
+  el.innerHTML = list.map(r => {
+    const d = r.at ? new Date(Number(r.at)) : null;
+    const when = d ? `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}` : '—';
+    return '<div style="padding:9px 12px;border-bottom:1px solid var(--line)">'
+      + '<div style="font-size:11.5px;color:var(--sub);margin-bottom:3px">' + when + (r.by ? ' · ' + esc(r.by) : '') + '</div>'
+      + '<div style="font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word">' + esc(r.text) + '</div>'
+      + '</div>';
+  }).join('');
 }
 
 // 格式化上次导入时间（毫秒时间戳 → 本地 YYYY-MM-DD HH:mm）
@@ -4465,7 +4556,7 @@ async function loadCustomers(batchId, batchName) {
       <th style="width:90px;cursor:pointer;white-space:nowrap" title="点击：最近在上；再点：无日期置顶" onclick="toggleBatchSort('lastOrderAt')">最近下单${batchSortArrow('lastOrderAt')}</th>
       <th style="width:84px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：最近在上；再点：无日期置顶" onclick="toggleBatchSort('lastVisitAt')">最近拜访${batchSortArrow('lastVisitAt')}</th>
       <th style="width:58px;text-align:center">详情</th>
-      <th style="width:42px;text-align:center">删除</th>
+      <th style="width:52px;text-align:center" title="客户备注（手机端业务员可见）">备注</th>
     </tr>`;
     renderBatchTbody(); // 分页渲染（2026-09-09 老板定：固定每页 20 条）
   } else {
@@ -4501,7 +4592,13 @@ async function loadCustomers(batchId, batchName) {
       : esc(batchName || '批次客户') + ' <span title="改批次名称/副标题" style="cursor:pointer;font-size:12px;color:#8A93A0;vertical-align:2px" onclick="openBatchRename(curBatchId)">✏️</span>';
     $('batchCustSub').textContent = unbatchMode ? '未归入任何批次的客户档案' : (b ? b.subtitle : '');
     $('batchCustStat').textContent = `共 ${list.length} 家`;
-    $('batchDetailOps').style.display = unbatchMode ? 'none' : '';
+    // 2026-09-24：未分批页也显示操作区（以前整体隐藏 → 勾选客户后无处可操作）
+    $('batchDetailOps').style.display = '';
+    // 未分批：隐藏「批次内专用」按钮（添加客户/追加导入/新建任务 都需要批次）
+    ['batchAddCustBtn', 'batchImportBtn', 'batchNewTaskBtn'].forEach(id => {
+      const b = $(id);
+      if (b) b.style.display = unbatchMode ? 'none' : '';
+    });
     syncBatchCheckedStat(list.length);
   }
 }
@@ -4612,7 +4709,14 @@ function syncBatchCheckedStat(total) {
   const num = $('batchSelNum');
   if (num) num.textContent = String(batchChecked.size);
   const btn = $('batchCopyBtn');
-  if (btn) btn.style.display = has ? '' : 'none';
+  if (btn) btn.style.display = (has && !unbatchMode) ? '' : 'none';
+  const dbtn = $('batchDelSelBtn'); // 2026-09-24：删除所选（与「复制到新批次」同一规则：勾选后才出现）
+  if (dbtn) dbtn.style.display = (has && !unbatchMode) ? '' : 'none';
+  // 未分批专用三个按钮（2026-09-24 老板定）：勾选后才出现
+  ['unbAddBtn', 'unbNewBtn', 'unbDelBtn'].forEach(id => {
+    const b = $(id);
+    if (b) b.style.display = (has && unbatchMode) ? '' : 'none';
+  });
 }
 
 // checkbox 单击/取消 → 同步勾选集、行底色与头部计数（事件委托，页面只绑一次）
@@ -4631,6 +4735,18 @@ function openCopyBatch() {
   $('copyBatchCount').textContent = String(batchChecked.size);
   $('copyBatchName').value = '';
   $('copyBatchSub').value = '';
+  // 2026-09-24：未分批页进来时把文案改成「建新批次并放入」
+  //（未分批客户本来没有批次，不存在"复制、原批次保持不变"这层语义，说"放入"才准确）
+  const isUnb = unbatchMode;
+  const n = batchChecked.size;
+  const tb = document.querySelector('#copyBatchOvl .mh b');
+  if (tb) tb.textContent = isUnb ? '➕ 建新批次并放入' : '📋 复制到新批次';
+  const hint = document.querySelector('#copyBatchOvl .hint');
+  if (hint) hint.innerHTML = isUnb
+    ? '把所选 <b id="copyBatchCount">' + n + '</b> 家客户放进一个<b>新批次</b>（他们会从「未分批」移入该批次）。'
+    : '将所选 <b id="copyBatchCount">' + n + '</b> 家客户复制进一个<b>新批次</b>（原批次保持不变，客户可同时属于多个批次）。';
+  const cbtn = $('copyBatchBtn');
+  if (cbtn) cbtn.textContent = isUnb ? '创建并放入' : '创建并复制';
   $('copyBatchOvl').style.display = 'flex';
 }
 
@@ -4657,8 +4773,45 @@ async function confirmCopyBatch() {
     if ($('page-batchDetail').style.display !== 'none') loadCustomers(curBatchId, curBatchName); // 刷新当前表（勾选清空）
   } finally {
     copyBatchBusy = false;
-    if (btn) { btn.disabled = false; btn.textContent = '创建并复制'; }
+    if (btn) { btn.disabled = false; btn.textContent = unbatchMode ? '创建并放入' : '创建并复制'; }
   }
+}
+
+// ===== 未分批页专用（2026-09-24 老板定）=====
+// 建新批次并放入所选：未分批客户本来没有批次，所以"放入新批次" == "建批次 + 加客户"，
+// 与「复制到新批次」完全同一套逻辑与后端（createManualBatch 带 customerIds），直接复用。
+function createBatchWithSelected() { openCopyBatch(); }
+
+// 彻底删除所选（不可恢复）：二次确认 + 输密码（复用通用密码弹层）→ 调 deleteCustomers。
+// 云函数会跳过"有订单或拜访记录"的客户，并把它们列在 blocked 里返回，这里逐条提示。
+function deleteSelectedCustomers() {
+  const ids = [...batchChecked];
+  if (!ids.length) return;
+  openPwdConfirm({
+    title: '🗑 彻底删除客户',
+    desc: `即将<b>彻底删除</b>所选的 <b>${ids.length}</b> 家客户 —— 删除的是客户档案本身，<b>不可恢复</b>。<br>`
+      + '有订单或拜访记录的客户会被自动跳过（不会删）。<br><br>请输入<b>当前操作员</b>的登录密码：',
+    onOk: async function () {
+      const btn = $('unbDelBtn');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await api('deleteCustomers', { customerIds: ids });
+        if (!res || !res.ok) { alert((res && res.msg) || '删除失败'); return; }
+        let msg = res.msg || '';
+        const blocked = res.blocked || [];
+        if (blocked.length) {
+          msg += '\n\n未能删除（有记录）：\n' + blocked.slice(0, 5).map(b => '· ' + (b.name || b.id) + '：' + b.reason).join('\n');
+          if (blocked.length > 5) msg += '\n…还有 ' + (blocked.length - 5) + ' 家';
+        }
+        alert(msg);
+        batchChecked.clear();
+        loadCustomers(curBatchId, curBatchName); // 刷新当前表
+        loadBatches();                           // 未分批计数会变，刷新批次列表
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+  });
 }
 
 // ===== 批次详情按「最近下单/最近拜访」列排序（2026-09-08 老板定） =====
@@ -4737,7 +4890,7 @@ function renderBatchTbody() {
       <td style="white-space:nowrap">${c.lastOrderAt ? esc(c.lastOrderAt) : '<span class="pill warn">未下单</span>'}</td>
       <td style="text-align:center;white-space:nowrap">${c.lastVisitAt ? esc(String(c.lastVisitAt).slice(5)) : '—'}</td>
       <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:24px;font-size:12px;padding:0 9px" onclick="showCustDetail('${c._id}')">详情</button></td>
-      <td style="text-align:center;white-space:nowrap">${unbatchMode ? '' : (c.lastVisitAt ? '<span style="color:#C3C9D2" title="有拜访记录，不能删除">—</span>' : `<span class="del-x" title="从本批次移除" onclick="event.stopPropagation();removeCustFromBatch('${c._id}', '${esc(c.name)}')">✕</span>`)}</td>
+      <td style="text-align:center;white-space:nowrap">${`<span class="rmk-btn${c.remark ? ' on' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">📝</span>`}</td>
     </tr>`;
   }).join('');
   // 2026-09-09 老板定：最后一页不足 20 条补空行，表格保持与前几页相同的固定高度（翻页不跳动）
@@ -4979,6 +5132,68 @@ async function saveManualBatch() {
   loadBatches();
 }
 
+// ===== 未分批页「📁 加入批次」（2026-09-24 老板定）=====
+// 方向与批次详情页的「＋ 添加客户」相反：这里**先勾客户、再选批次（可多选）**，一次加进多个批次。
+let batchPickSel = new Set();   // 勾选中的批次 id
+let batchPickCusts = [];        // 待加入的客户 id
+let batchPickBusy = 0;
+
+async function openBatchPick() {
+  const custs = [...batchChecked];
+  if (!custs.length) return;
+  batchPickCusts = custs;
+  batchPickSel = new Set();
+  $('batchPickCount').textContent = String(custs.length);
+  $('batchPickSelCount').textContent = '已勾选 0 个批次';
+  $('batchPickList').innerHTML = '<div class="loading">加载中…</div>';
+  $('batchPickOvl').style.display = 'flex';
+  const res = await api('listCustomerBatches');
+  const list = (res && res.ok) ? (res.batches || []) : [];
+  $('batchPickList').innerHTML = list.length ? list.map(b =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);cursor:pointer" onclick="toggleBatchPick('${b._id}', this)">
+      <input type="checkbox" style="width:16px;height:16px;pointer-events:none">
+      <b style="font-size:13px">📁 ${esc(b.name)}</b>
+      ${b.subtitle ? `<span style="font-size:12px;color:var(--sub)">${esc(b.subtitle)}</span>` : ''}
+    </div>`).join('') : '<div class="empty">还没有批次，请先在客户管理页建立批次</div>';
+}
+
+function toggleBatchPick(id, el) {
+  if (batchPickSel.has(id)) batchPickSel.delete(id); else batchPickSel.add(id);
+  if (el) {
+    const on = batchPickSel.has(id);
+    el.style.background = on ? 'var(--green-tint)' : '';
+    const cb = el.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = on;
+  }
+  $('batchPickSelCount').textContent = `已勾选 ${batchPickSel.size} 个批次`;
+}
+
+async function saveBatchPick() {
+  if (!batchPickSel.size) { alert('请至少勾选一个批次'); return; }
+  if (!batchPickCusts.length) return;
+  if (Date.now() - batchPickBusy < 15000) return; // 防连点
+  batchPickBusy = Date.now();
+  const btn = $('batchPickBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '加入中…'; }
+  let okCount = 0;
+  const fail = [];
+  try {
+    for (const bid of batchPickSel) {
+      try {
+        const res = await api('addCustomersToBatch', { batchId: bid, customerIds: batchPickCusts });
+        if (res && res.ok) okCount++; else fail.push((res && res.msg) || '加入失败');
+      } catch (e) { fail.push('请求失败'); }
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '加入所选批次'; }
+  }
+  $('batchPickOvl').style.display = 'none';
+  batchChecked.clear();
+  if (fail.length) alert(`已加入 ${okCount} 个批次；${fail.length} 个失败：\n` + [...new Set(fail)].slice(0, 3).join('\n'));
+  loadCustomers(curBatchId, curBatchName);
+  loadBatches(); // 未分批计数会变
+}
+
 // ＋ 添加客户到当前批次（2026-09-07 老板定：未分批客户可补入已有批次）
 let addCustAll = [];
 let addCustSelected = new Set();
@@ -5025,6 +5240,31 @@ async function removeCustFromBatch(customerId, name) {
   const res = await api('removeCustomerFromBatch', { batchId: curBatchId, customerId });
   if (!res.ok) { alert(res.msg || '移除失败'); return; }
   loadCustomers(curBatchId, curBatchName);
+}
+
+// 删除所选（2026-09-24 老板定）：把勾选的客户从本批次移除 → 回到「未分批」
+// 语义同 removeCustFromBatch（只移名单、档案保留；有拜访记录的客户云函数会拒绝）
+async function deleteSelectedFromBatch() {
+  const ids = [...batchChecked];
+  if (!ids.length) return;
+  if (!confirm(`将所选 ${ids.length} 家客户从「${curBatchName || '本批次'}」中移除？\n\n客户档案保留（回到未分批或留在其他批次）。`)) return;
+  const btn = $('batchDelSelBtn');
+  if (btn) btn.disabled = true; // 防连点（写操作统一加锁）
+  let okCount = 0;
+  const failed = [];
+  for (const id of ids) {
+    try {
+      const res = await api('removeCustomerFromBatch', { batchId: curBatchId, customerId: id });
+      if (res && res.ok) okCount++;
+      else failed.push((res && res.msg) || '移除失败');
+    } catch (e) { failed.push('请求失败'); }
+  }
+  batchChecked.clear();
+  if (btn) btn.disabled = false;
+  if (failed.length) {
+    alert(`已移除 ${okCount} 家；${failed.length} 家没能移除：\n` + [...new Set(failed)].slice(0, 3).join('\n'));
+  }
+  loadCustomers(curBatchId, curBatchName); // 刷新列表（勾选与按钮都会复位）
 }
 
 // 客户档案弹窗：所在批次列表 + 全局状态（两层状态模型：批次不持有状态）
@@ -5080,7 +5320,8 @@ function peopleTab(k) {
 }
 
 function toggleHtml(id, active) {
-  return `<span class="toggle-mini ${active ? 'on' : ''}" onclick="toggleUserActive('${id}', ${!!active})"></span> ${active ? '启用' : '停用'}`;
+  // 2026-09-24 老板定：不再显示「启用」二字（默认状态，满屏都是它反而噪）；只在停用时显示「停用」提示
+  return `<span class="toggle-mini ${active ? 'on' : ''}" onclick="toggleUserActive('${id}', ${!!active})"></span>${active ? '' : ' 停用'}`;
 }
 
 // 人员当前状态胶囊（2026-09-09 老板定：人员列表能看到业务员在线/离线/拜访中；数据同位置监控 latest）
@@ -5120,22 +5361,44 @@ function salesmanStatusHtml(s) {
 let opUnlocked = false;
 function opLockStyle() { return opUnlocked ? '' : ';opacity:.35;pointer-events:none'; }
 
-function toggleOpLock(checked) {
-  if (!checked) { opUnlocked = false; loadPeople(); return; }
-  openOpPwd();
-}
+// ===== 通用密码确认弹层（2026-09-24）=====
+// 用途：任何"危险操作"前要求输入**当前操作员登录密码**（走 login 云函数真实校验，不是本地比对）。
+// 用法：openPwdConfirm({ title, desc, onOk, onCancel })
+// 人员管理「操作」列解锁、未分批页「彻底删除」都走这一套，交互与文案风格保持一致。
+let pwdCtx = null; // { title, desc, onOk, onCancel }
 
+function openPwdConfirm(ctx) { pwdCtx = ctx || {}; openOpPwd(); }
 function closeOpPwd() {
   const o = document.getElementById('opPwdOvl');
   if (o) o.remove();
 }
 function opPwdCancel() {
   closeOpPwd();
-  const cb = document.getElementById('opUnlock');
-  if (cb) cb.checked = false; // 取消 → 勾选回退
+  const ctx = pwdCtx || {};
+  pwdCtx = null;
+  if (ctx.onCancel) ctx.onCancel();
+}
+
+function toggleOpLock(checked) {
+  if (!checked) { opUnlocked = false; loadPeople(); return; }
+  openPwdConfirm({
+    title: '解锁「操作」列',
+    desc: '请输入<b>当前操作员</b>的登录密码；验证通过后本列按钮才可用（防止误点解绑 / 删除）。',
+    onOk: function () {
+      opUnlocked = true;
+      const cb = document.getElementById('opUnlock');
+      if (cb) cb.checked = true;
+      loadPeople(); // 重渲染点亮按钮；checkbox 在表头、不受影响
+    },
+    onCancel: function () {
+      const cb = document.getElementById('opUnlock');
+      if (cb) cb.checked = false; // 取消 → 勾选回退
+    }
+  });
 }
 
 function openOpPwd() {
+  const ctx = pwdCtx || {};
   closeOpPwd();
   const div = document.createElement('div');
   div.id = 'opPwdOvl';
@@ -5143,8 +5406,8 @@ function openOpPwd() {
   div.style.display = 'flex';
   div.innerHTML = '<div class="modal" style="max-width:340px;position:relative">'
     + '<span style="position:absolute;right:16px;top:14px;cursor:pointer;color:#C4CAD1;font-size:17px;line-height:1" onclick="opPwdCancel()">✕</span>'
-    + '<div class="mt">解锁「操作」列</div>'
-    + '<p style="margin-top:0">请输入<b>当前操作员</b>的登录密码；验证通过后本列按钮才可用（防止误点解绑 / 删除）。</p>'
+    + '<div class="mt">' + (ctx.title || '请输入密码') + '</div>'
+    + '<p style="margin-top:0">' + (ctx.desc || '请输入<b>当前操作员</b>的登录密码。') + '</p>'
     + '<input id="opPwdInput" type="password" class="inp" style="width:100%;box-sizing:border-box;padding:9px 12px" placeholder="登录密码" onkeydown="if(event.key===\'Enter\')confirmOpPwd()">'
     + '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px">'
     + '<button class="btn primary btn-sm" onclick="confirmOpPwd()">确定</button>'
@@ -5164,11 +5427,10 @@ async function confirmOpPwd() {
     if (el) { el.value = ''; el.focus(); }
     return;
   }
-  opUnlocked = true;
+  const ctx = pwdCtx || {};
+  pwdCtx = null;
   closeOpPwd();
-  const cb = document.getElementById('opUnlock');
-  if (cb) cb.checked = true;
-  loadPeople(); // 重渲染点亮按钮；checkbox 在表头、不受影响
+  if (ctx.onOk) ctx.onOk(); // 校验通过 → 执行操作
 }
 
 function adminActiveHtml(a) {
@@ -5196,7 +5458,7 @@ async function loadPeople() {
         <td>${starCellHtml(s)}</td>
         <td>${esc(s.phone || '—')}</td>
         <td>${referrerCellHtml(s)}</td>
-        <td><button class="btn ghost" style="height:26px;font-size:12px;padding:0 10px" onclick="openUserDetail('${s._id}','${esc(s.name)}')">详情</button></td>
+        <td><button class="btn ghost" style="height:auto;padding:3px 8px;border-radius:99px;font-size:9px;line-height:1.2;background:#fff;color:var(--blue);border:1px solid var(--blue)" onclick="openUserDetail('${s._id}','${esc(s.name)}')">详情</button></td>
         <td>${s.bound ? '<span class="pill green">已绑定</span>' : '<span class="pill warn">待绑定</span>'}</td>
         <td>${s.mpBound
           ? `<span class="pill green" title="${esc(s.mpOpenidMask)}">已绑定</span>`
@@ -5677,6 +5939,16 @@ function openImport(append, batchId) {
   $('impTypeLabel').textContent = curMode === 'new'
     ? '🌱 新客户（新客开发工作台）'
     : (importAppendBatchId ? `🔥 回访客户 · 追加进「${curBatchName || '当前批次'}」` : '🔥 回访客户（将自动新建批次）');
+  // 2026-09-24 老板定：只有「追加导入」（有目标批次）时才显示"从未分批里挑客户"的入口
+  const impPb = $('impPickUnbatched');
+  if (impPb) impPb.style.display = importAppendBatchId ? '' : 'none';
+}
+
+// 「＋ 未分批」：从导入弹窗跳到"从未分批客户里勾选 → 加入本批次"（复用现成的 addCustOvl）
+// 2026-09-24 老板定：追加导入时不想弄文件，也可以直接挑未分批客户加进来
+function pickUnbatchedIntoBatch() {
+  closeImport();            // 先关导入弹窗，避免两层叠着
+  openAddCustToBatch();     // 它内部用的就是 curBatchId（= 当前追加的目标批次）
 }
 
 function closeImport() { $('importOvl').style.display = 'none'; }

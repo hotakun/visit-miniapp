@@ -69,7 +69,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -371,9 +371,11 @@ exports.main = async (event) => {
     if (action === 'archiveInitialBatch') return await archiveInitialBatch(event);
     if (action === 'removeCustomerFromBatch') return await removeCustomerFromBatch(event);
     if (action === 'addCustomersToBatch') return await addCustomersToBatch(event);
+    if (action === 'deleteCustomers') return await deleteCustomers(event);
     if (action === 'getTempFileURL') return await getTempFileURL(event);
     if (action === 'autoArchiveExpired') return await autoArchiveExpired(event);
     if (action === 'updateCustomerRemark') return await updateCustomerRemark(event);
+    if (action === 'listCustomerRemarks') return await listCustomerRemarks(event);
     if (action === 'purgeUnbatchedCustomers') return await purgeUnbatchedCustomers(event);
     if (action === 'saveVisitTrText') return await saveVisitTrText(event);
     if (action === 'usageStats') return await usageStats(event); // 2026-09-11 批 3：云调用用量查询
@@ -1263,9 +1265,13 @@ async function listCustomers(event) {
       lastVisitMap[v.customerId] = v.visitedAt || '';
     }
   });
-  const tAll = await fetchAll('tasks', {}, { customerIds: true, status: true });
+  const tAll = await fetchAll('tasks', {}, { customerIds: true, status: true, deadline: true });
   tAll.forEach(t => {
     if (t.status !== 'published' && t.status !== 'reviewing') return;
+    // 2026-09-24 修复（老板报障：任务已过期，客户详情/批次列表仍显示「任务中」+ 任务状态）：
+    // 原逻辑只看 status，没看截止日 —— 而"过期"是按 deadline **实时算**的，tasks.status 并不会被改，
+    // 所以过期任务的客户一直被当成"任务中"。这里与 expiredTaskTick 用同一口径：deadline <= today 即已过期。
+    if (t.deadline && String(t.deadline) <= today) return;
     (t.customerIds || []).forEach(id => { stateMap[id] = 'in_task'; if (!taskMap[id]) taskMap[id] = t._id; });
   });
   // 任务内状态：该客户当前任务内有完成记录→visited；否则今日 ongoing→ongoing；否则 pending
@@ -1929,15 +1935,30 @@ async function transcribeUsage() {
   };
 }
 
-// 客户备注（2026-09-08 老板定：后台客户详情弹窗编辑，业务员手机端「管理员备注」卡显示；≤500 字）
+// 客户备注（2026-09-24 老板定：**逐条保留历史**，不再覆盖）
+// · 每次保存 = 往 customer_remarks 插一条历史（内容 + 时间 + 操作人）
+// · customers.remark 始终同步为**最新一条** —— 业务员手机端只看这条，所以手机端不用改
 async function updateCustomerRemark(event) {
   const { customerId } = event;
   if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
   const remark = String(event.remark || '').trim().slice(0, 500);
   const c = await db.collection('customers').doc(customerId).get().catch(() => null);
   if (!c || !c.data) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const by = String(event.username || '').trim().slice(0, 30); // 操作人 = 当前登录的后台账号
+  if (remark) {
+    await db.collection('customer_remarks').add({ data: { customerId, text: remark, at: Date.now(), by } });
+  }
   await db.collection('customers').doc(customerId).update({ data: { remark } });
-  return { ok: true, remark, msg: remark ? '备注已保存，业务员手机端可见 ✓' : '备注已清空' };
+  return { ok: true, remark, msg: remark ? '已保存（后台逐条留存历史）· 业务员手机端可见最新一条 ✓' : '已清空最新备注（历史仍保留在后台）' };
+}
+
+// 某客户的历史备注（后台备注弹窗展示；新 → 旧）
+async function listCustomerRemarks(event) {
+  const { customerId } = event;
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const rows = await fetchAll('customer_remarks', { customerId }, {});
+  rows.sort((a, b) => (b.at || 0) - (a.at || 0));
+  return { ok: true, remarks: rows.map(r => ({ _id: r._id, text: r.text || '', at: r.at || 0, by: r.by || '' })) };
 }
 
 // 清空未分批客户（2026-09-08 老板定：彻底清除未分批档案+其拜访/报错记录+云存储照片录音文件）
@@ -3046,11 +3067,13 @@ async function listCustomerBatches(event) {
   await ensureBatchColls();
   const batches = await fetchAll('customer_batches', {}, {});
   const members = await fetchAll('batch_members', {}, { batchId: true, customerId: true });
-  // 全局任务中集合（published/reviewing 任务的客户）
+  // 全局任务中集合（published/reviewing 任务的客户；**已过期的不算**，2026-09-24 与 listCustomers 同口径）
   const inTaskSet = new Set();
-  const tAll = await fetchAll('tasks', {}, { customerIds: true, status: true });
+  const tAll = await fetchAll('tasks', {}, { customerIds: true, status: true, deadline: true });
+  const today0 = todayStr();
   tAll.forEach(t => {
     if (t.status !== 'published' && t.status !== 'reviewing') return;
+    if (t.deadline && String(t.deadline) <= today0) return; // 过期任务不再算「任务中」
     (t.customerIds || []).forEach(id => inTaskSet.add(id));
   });
   const stat = {};
@@ -3114,6 +3137,46 @@ async function removeCustomerFromBatch(event) {
     await db.collection('customers').doc(customerId).update({ data: { batchIds: c.data.batchIds.filter(x => x !== batchId) } });
   }
   return { ok: true, msg: '已从批次中移除（客户档案保留）' };
+}
+
+// 彻底删除所选客户（2026-09-24 老板定）：未分批详情页勾选后「彻底删除」，删除客户档案本身（不可恢复）
+// 规则（老板拍板）：**有订单或拜访记录的客户一律拒删**，返回 blocked 让前端逐条提示；
+// 只有"既没拜访、也没订单"的客户才真删。云存储文件不用管 —— 没拜访就不可能有照片/录音。
+// 注：orders 集合目前是空骨架（销售订单导入尚未落地），此校验面向未来；将来导入订单时须用 customerId 关联。
+async function deleteCustomers(event) {
+  const ids = Array.isArray(event.customerIds) ? event.customerIds.filter(Boolean) : [];
+  if (!ids.length) return { ok: false, code: 'BAD_ARG', msg: '没有选择客户' };
+  const deleted = [];
+  const blocked = [];
+  for (const id of ids) {
+    const c = await db.collection('customers').doc(id).get().catch(() => null);
+    if (!c || !c.data) { blocked.push({ id, name: '', reason: '客户不存在' }); continue; }
+    const name = c.data.name || '';
+    // ① 有拜访记录 → 拒删
+    const vis = await db.collection('visits').where({ customerId: id }).limit(1).get();
+    if (vis.data.length) { blocked.push({ id, name, reason: '有拜访记录' }); continue; }
+    // ② 有订单记录 → 拒删
+    const ord = await db.collection('orders').where({ customerId: id }).limit(1).get();
+    if (ord.data.length) { blocked.push({ id, name, reason: '有订单记录' }); continue; }
+    deleted.push(id);
+  }
+  if (!deleted.length) {
+    return { ok: true, deleted: 0, blocked, msg: `所选 ${ids.length} 家都有订单或拜访记录，未删除` };
+  }
+  // 顺带清掉批次成员（未分批的正常没有，保险起见）
+  const mem = await fetchAll('batch_members', { customerId: _.in(deleted) }, { customerId: true });
+  for (let i = 0; i < mem.length; i += 50) {
+    await Promise.all(mem.slice(i, i + 50).map(m => db.collection('batch_members').doc(m._id).remove()));
+  }
+  for (let i = 0; i < deleted.length; i += 50) {
+    await Promise.all(deleted.slice(i, i + 50).map(d => db.collection('customers').doc(d).remove()));
+  }
+  return {
+    ok: true,
+    deleted: deleted.length,
+    blocked,
+    msg: blocked.length ? `已彻底删除 ${deleted.length} 家；${blocked.length} 家有记录未能删除` : `已彻底删除 ${deleted.length} 家`
+  };
 }
 
 // 客户所在批次（档案弹窗用；两层状态模型：批次不持有状态，只列所在批次）
