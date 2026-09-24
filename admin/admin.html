@@ -307,11 +307,13 @@ tr.row-off td:not(.keep){opacity:.4}
 /* 批次详情表紧凑化（2026-09-08 老板定：列间距收紧、表头不换行） */
 #batchThead th{padding:10px 8px;white-space:nowrap}
 #batchTbody td{padding:11px 8px}
+/* 2026-09-25 老板定：「批次表**所有内容文字都不要加粗**」——
+   表头、单元格、以及单元格里的状态胶囊/按钮/店名等，一律 400（覆盖它们各自的 700，
+   原先只为"坐标列(7)与最近下单列(9)"单独设的 400 规则已删 —— 列序变了、也不再需要） */
+#batchThead th,#batchThead th *,#batchTbody td,#batchTbody td *{font-weight:400}
 #batchThead th:first-child,#batchTbody td:first-child{padding-left:10px}
 #batchThead th:last-child,#batchTbody td:last-child{padding-right:10px}
 #batchTbody .del-x{width:14px;height:14px;font-size:8px;border-radius:4px}
-/* 坐标列(7)与最近下单列(9)内容字重 400（2026-09-08 老板定） */
-#batchTbody td:nth-child(7),#batchTbody td:nth-child(9){font-weight:400}
 .del-x:hover{background:var(--danger);color:#fff}
 /* 备注按钮（2026-09-24 老板定：批次详情页最后一列，取代原「从本批次移除」的 ✕）
    有备注时高亮成蓝色 —— 一眼看出哪些客户已经有备注（老板长期重点：客户筛选与分辨） */
@@ -602,11 +604,35 @@ tr.row-off td:not(.keep){opacity:.4}
       <div class="title-bar"><span class="t">导入信息</span></div>
 
       <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid var(--primary)">
-        <div style="font-size:13.5px;font-weight:700;margin-bottom:6px">📋 怎么导（2026-09-25 更新：改喂「分片 JSON」）</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">📥 从表格导入（推荐 · 一步到位）</div>
         <div class="sb-d">
-          <b>① 点「选择分片…」</b> → 进到分片目录后 <b>Ctrl+A 全选</b>（已支持多选，不用一个个点）→ <b>② 点「开始导入」</b>。<br>
-          顺序不影响结果：<b>商城客户 → 销售订单 → 订单明细</b>（<b>大众点评这一栏现在不用导</b> —— 平台画像已由脚本并进客户档案的 <b>plat</b> 字段）。<br>
-          按 <b>客户编号 / 订单号 / 行号</b> 幂等 upsert：<b>同一片重复导不会翻倍</b>；中途失败会记断点，再点一次就能接着跑。
+          把新导出的表格放进 <b>TMP\拜访程序用表格\</b>（文件名沿用原样），点下面的按钮就行。<br>
+          后台会<b>自动</b>读表 → 按规则合并（同编号主副档 / 平台画像 / 坐标分层）→ 分片上传入库，全程不用你插手。<br>
+          <b>只补不删</b>：同一家重复导入算「更新」，不会翻倍；<b>也不动</b>你手工改过的坐标、客户备注、现场照片。
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn primary" onclick="startExcelImport()">📥 从表格重新导入</button>
+          <span class="sb-d" id="xlsImpMsg" style="flex:1;min-width:200px"></span>
+        </div>
+        <div id="xlsImpBarWrap" style="display:none;max-width:560px;margin-top:10px">
+          <div style="height:8px;background:#EEF1F6;border-radius:99px;overflow:hidden">
+            <div id="xlsImpBar" style="height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#7FB2F5,#2F80ED);transition:width .3s"></div>
+          </div>
+          <div class="sb-d" id="xlsImpText" style="margin-top:6px"></div>
+        </div>
+        <details style="margin-top:10px">
+          <summary class="sb-d" style="cursor:pointer">合并报告 / 报错详情（出问题时看这里）</summary>
+          <pre class="sb-d" id="xlsImpReport" style="max-height:240px;overflow:auto;white-space:pre-wrap;margin-top:6px;font-size:11.5px"></pre>
+        </details>
+      </div>
+
+      <details style="max-width:1040px;margin-bottom:14px">
+        <summary style="cursor:pointer;font-size:13px;color:var(--sub);padding:4px 0;user-select:none">▸ 手工分片导入（备用 · 一般不用，点开才显示）</summary>
+      <div class="card" style="max-width:1040px;padding:12px 20px;margin-bottom:14px">
+        <div class="sb-d">
+          <b>手工分片导入（备用）</b>：仅当上面的「从表格导入」不好用、或想单独重传某一类数据时才用 ——
+          <b>① 点「选择分片…」</b> → 进分片目录后 <b>Ctrl+A 全选</b> → <b>② 点「开始导入」</b>。
+          顺序不影响结果；按 <b>客户编号 / 订单号 / 行号</b> 幂等 upsert（同一片重复导不会翻倍，中途失败会记断点）。
         </div>
       </div>
 
@@ -684,6 +710,7 @@ tr.row-off td:not(.keep){opacity:.4}
           </div>
         </div>
       </div>
+      </details>
 
       <div class="card" id="impProgressBox" style="display:none;max-width:1040px;padding:14px 20px;margin-top:14px">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -970,6 +997,8 @@ tr.row-off td:not(.keep){opacity:.4}
             <span style="margin-left:auto"></span>
             <button class="btn ghost" id="matchBtn" style="display:none" onclick="openMallMatch()">🔎 比对认领</button>
             <button class="btn ghost" id="claimBtn" style="display:none" onclick="openClaims()">📋 待确认认领<span class="badge" id="claimBadge" style="display:none"></span></button>
+            <!-- 2026-09-25 老板定：从商城**更新**客户信息（可控：先预览将改哪些字段，确认后才写；只写白名单字段） -->
+            <button class="btn ghost" id="refreshMallBtn" style="display:none" onclick="refreshFromMallClick()">🔄 从商城更新</button>
             <button class="btn ghost" id="manualBatchBtn" onclick="openManualBatch()">＋ 手工建批</button>
             <button class="btn primary" id="impCustBtn" onclick="playTkClick();openImport()">📥 导入新批次</button>
           </div>
@@ -1557,17 +1586,93 @@ tr.row-off td:not(.keep){opacity:.4}
       </div>
     </div>
 
-    <!-- 客户详情弹窗（可扩展字段） -->
+    <!-- 客户详情弹窗（2026-09-25 老板定：照演示稿重排成「两栏卡片」；地图块先留位，等腾讯地图 key） -->
     <div class="ovl" id="custModal" style="display:none">
-      <div class="modal" style="max-width:460px">
-        <div class="mt" id="cmTitle">客户详情</div>
-        <div id="cmBody"></div>
-        <!-- 2026-09-24 老板定：备注块从这里搬走 —— 挪到「批次详情页最后一列的 📝 按钮」，
-             用下面那个独立的 custRemarkOvl 弹窗（客户详情弹窗只保留纯详情） -->
-        <!-- 底部信息栏（2026-09-08 老板定：拜访次数+全局状态胶囊+任务内状态胶囊｜关闭） -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px">
-          <div id="cmFooterInfo" style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--sub);font-weight:400;flex-wrap:wrap"></div>
-          <button class="btn ghost" onclick="$('custModal').style.display='none'">关闭</button>
+      <style>
+        /* 客户详情页样式（2026-09-25）：全部限定在 #custModal 内部，不影响后台其它页面 */
+        /* 2026-09-25 老板定：整个详情窗口再高一些（92vh → 96vh）；地图框加高见下面的 #cdMap 那条 */
+        #custModal .cd-modal{background:#fff;border-radius:16px;width:1180px;max-width:96vw;max-height:96vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden}
+        #custModal .cd-hd{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px;flex-wrap:wrap;flex:none}
+        #custModal .cd-hd .nm{font-size:19px;font-weight:800}
+        #custModal .cd-hd .ops{margin-left:auto;display:flex;gap:8px}
+        #custModal .cd-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 18px 18px;overflow-y:auto;flex:1}
+        #custModal .cd-col{display:flex;flex-direction:column;gap:14px}
+        #custModal .cd{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 10px rgba(31,36,48,.05);overflow:hidden}
+        #custModal .cd.hero{grid-column:1 / -1}
+        #custModal .cd-ch{display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--line);background:#FCFDFE}
+        #custModal .cd-ch .t{font-size:13.5px;font-weight:800}
+        #custModal .cd-ch .r{margin-left:auto;font-size:12px;color:var(--sub);font-weight:600}
+        #custModal .cd-b{padding:12px 15px}
+        #custModal .cd-row{display:flex;gap:8px;padding:5px 0;font-size:13px;align-items:baseline}
+        /* 标签 / 值的基础样式：商家信息卡的**四列网格**与其它卡的 **.cd-row（flex）** 两种结构共用（2026-09-25）
+           —— 标签统一 64px、值同样从 64+8 起，所以左列一条竖线、右列一条竖线、整行也从左列那条竖线起。 */
+        #custModal .k{color:var(--sub);font-size:12.5px;white-space:nowrap;padding:3px 0}
+        /* 值（.v）：**字号必须显式写 13px** —— 商家信息卡的值是 grid 里的裸 span，不再继承 .cd-row 的 13px，
+           不写就会退回浏览器默认 16px（2026-09-25 老板反馈"字号被改大了"，就是这里漏的）。 */
+        #custModal .v{font-size:13px;min-width:0;line-height:1.6;word-break:break-word;padding:3px 0}
+        #custModal .cd-row .k{width:64px;flex:none}
+        #custModal .cd-row .v{flex:1}
+        #custModal .cd-empty{border:1px dashed #E2E7ED;background:#FAFBFC;border-radius:10px;padding:14px;text-align:center;color:#A2ABB6;font-size:12.5px;line-height:1.7}
+        #custModal .cd-add{margin:2px 0;border:1px dashed #FBD9C4;background:#FFFBF7;border-radius:10px;padding:10px;text-align:center;color:#B45309;font-size:12.5px;cursor:pointer}
+        #custModal .cd-chip{font-size:11.5px;padding:3px 9px;border-radius:8px;background:#F4F6F9;color:#4A5560;border:1px solid #E9EDF2;margin:0 6px 6px 0;display:inline-block}
+        #custModal .cd-chip.dish{background:#FFF7ED;color:#B45309;border-color:#FBE3C9}
+        #custModal .cd-chip.on{background:#E7F6EC;color:#16A34A;border-color:#C9EBD6}
+        #custModal .cd-chip.off{background:#F4F6F9;color:#9AA3AE}
+        #custModal [data-cdfield]{border:1px solid transparent;padding:5px 9px;border-radius:8px;min-height:28px}
+        #custModal .editing [data-cdfield]{border:1px solid var(--primary) !important;background:#FFFBF8 !important}
+        #custModal .geo-line{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+        #custModal .geo-inp{width:88px;height:28px;border:1px solid var(--primary);border-radius:8px;padding:0 8px;background:#FFFBF8;font-family:ui-monospace,Consolas,monospace;font-size:12px;outline:none}
+        #custModal .geo-edit{display:none;align-items:center;gap:6px}
+        #custModal .editing .geo-edit{display:inline-flex}
+        #custModal .editing .geo-val{display:none}
+        #custModal .cd-note{display:none;font-size:11.5px;border-radius:7px;padding:3px 8px;margin-top:5px;line-height:1.6}
+        #custModal .cd-note.on{display:inline-block}
+        #custModal .cd-fmtag{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;background:#EEF1F4;color:var(--sub)}
+        #custModal .cd-rmk{padding:7px 0;border-bottom:1px dashed #EDF0F4;font-size:12.5px;line-height:1.65}
+        #custModal .cd-rmk:last-child{border-bottom:none}
+        #custModal .cd-rmk .d{color:#A6AEBC;font-size:11px;margin-right:7px}
+        #custModal .cd-vcard{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;background:#FCFDFE}
+        #custModal .cd-vcard:last-child{margin-bottom:0}
+        #custModal .cd-vh{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin-bottom:5px;flex-wrap:wrap}
+        /* 小地图（2026-09-25）：**只按 class 名隐藏腾讯地图的 logo / 版权 / 版本号**。
+           ⚠️ 千万别写 `#cdMap img,#cdMap svg{display:none}` —— 那会把地图自己的图形层一起干掉，
+              地图会退化成"一张不重绘的图片"（滚轮缩放时不加载新级别），这是踩过的坑。 */
+        #custModal #cdMap [class*="logo"],#custModal #cdMap [class*="copyright"],#custModal #cdMap [class*="version"],#custModal #cdMap [class*="attribution"]{display:none !important}
+        /* 2026-09-25 老板定：地图框**加高**（150 → 260px）—— 原先太矮，看不出周边环境（餐饮/超市等点位）。
+           用 !important 覆盖建图时写的那条内联 150px。 */
+        #custModal #cdMap{height:260px !important}
+      </style>
+      <div class="cd-modal">
+        <!-- 顶部：店名 + 状态胶囊 + 操作（✏️ 编辑 / 💾 保存 / 取消 / 关闭） -->
+        <div class="cd-hd">
+          <span class="nm" id="cmTitle">客户详情</span>
+          <span id="cdPills" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+          <span class="ops">
+            <button class="btn editbtn" id="cdBtnEdit" onclick="cdOpenEdit()" style="display:none">✏️ 编辑</button>
+            <button class="btn primary" id="cdBtnSave" onclick="cdSaveEdit()" style="display:none">💾 保存</button>
+            <button class="btn ghost" id="cdBtnCancel" onclick="cdCancelEdit()" style="display:none">取消</button>
+            <button class="btn ghost" onclick="cdClose()">关闭</button>
+          </span>
+        </div>
+        <!-- 两栏内容（由 showCustDetail 渲染） -->
+        <div class="cd-cols" id="cmBody"></div>
+      </div>
+    </div>
+
+    <!-- 经纬度「二次确认」弹窗（2026-09-25 老板定：后台管理员改坐标 = 确认即生效，不走审核） -->
+    <div class="ovl" id="cdGeoOvl" style="display:none;z-index:10001">
+      <div class="modal" style="width:420px;max-width:92vw">
+        <div class="mt">📍 确认修改经纬度</div>
+        <div style="font-size:12.5px;color:var(--sub);margin-bottom:5px">原坐标</div>
+        <div id="cdGeoOld" style="font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#A2ABB6;text-decoration:line-through">—</div>
+        <div style="font-size:12.5px;color:var(--sub);margin:14px 0 5px">改为</div>
+        <div id="cdGeoNew" style="font-family:ui-monospace,Consolas,monospace;font-size:15px;font-weight:800;color:var(--primary-deep)">—</div>
+        <div style="margin-top:14px;font-size:12px;color:var(--sub);line-height:1.7">
+          后台管理员自己改的坐标，<b>确认后立即生效</b>，不需要再走审核。
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+          <button class="btn ghost" onclick="cdCloseGeo()">取消</button>
+          <button class="btn primary" onclick="cdApplyGeo()">确认修改</button>
         </div>
       </div>
     </div>
@@ -1916,6 +2021,8 @@ function nav(p) {
     $('impCustBtn').textContent = isNew ? '📥 导入新客户' : '📥 导入新批次';
     $('matchBtn').style.display = 'none'; // 2026-09-08：比对/待确认下沉到批次卡，顶部按钮停用
     $('claimBtn').style.display = 'none';
+    // 2026-09-25 老板定：新增「🔄 从商城更新」—— 与商城库/比对同属**回访工作台**（新客工作台不显示）
+    $('refreshMallBtn').style.display = isNew ? 'none' : '';
     $('manualBatchBtn').style.display = isNew ? 'none' : ''; // 2026-09-08 恢复：手工建批仅在回访工作台显示
     $('batchListView').style.display = isNew ? 'none' : '';
     $('bsStats').style.display = isNew ? 'none' : ''; // 汇总统计区仅回访（批次）工作台显示（2026-09-09）
@@ -1982,6 +2089,52 @@ function pickImpFile(kind) {
 // 后台只负责「逐片喂给 importdata 云函数」+ 进度显示 + 断点续跑。
 // 幂等：云函数按幂等键 upsert，同一片重复导入不会翻倍 → 所以中断后重跑是安全的。
 const IMP_TYPE = { mall: 'customers', plat: 'customers', order: 'orders', item: 'order_items' };
+
+// ===== 从表格导入（2026-09-25 老板定：不再让人去找 .json 分片）=====
+// 后台跑 ① 本地合并脚本 → ② 分片 → ③ 逐片调云函数入库；这里只负责「启动 + 轮询进度 + 显示报告」。
+async function startExcelImport() {
+  const msg = $('xlsImpMsg'), bar = $('xlsImpBar'), wrap = $('xlsImpBarWrap'), txt = $('xlsImpText'), rep = $('xlsImpReport');
+  if (!confirm('将从 TMP\\拜访程序用表格\\ 里的表格重新导入客户数据。\n\n' +
+    '· 同一家重复导入 = 更新，不会翻倍\n' +
+    '· 不会动你手工改过的坐标、客户备注、现场照片\n' +
+    '· 表格文件名要沿用原样\n\n确定开始吗？')) return;
+  msg.textContent = '启动中…';
+  wrap.style.display = ''; bar.style.width = '0%';
+  bar.style.background = 'linear-gradient(90deg,#7FB2F5,#2F80ED)';
+  txt.textContent = ''; rep.textContent = '';
+  let r;
+  try {
+    const res = await fetch('/importExcel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    r = await res.json();
+  } catch (e) { msg.textContent = '启动失败（后台是否在运行？）：' + e.message; return; }
+  if (!r || !r.ok) { msg.textContent = '启动失败：' + ((r && r.msg) || '未知错误'); return; }
+  const job = r.job;
+  msg.textContent = '正在导入…（会跑几分钟，别关后台）';
+  const tick = async () => {
+    let p;
+    try {
+      const res = await fetch('/importExcel/progress?id=' + encodeURIComponent(job));
+      p = await res.json();
+    } catch (e) { return; }
+    if (!p || !p.ok) { msg.textContent = (p && p.msg) || '任务丢失'; return; }
+    bar.style.width = Math.max(0, Math.min(100, p.pct || 0)) + '%';
+    txt.textContent = p.text || '';
+    if (p.report) rep.textContent = p.report;
+    if (p.state === 'done') {
+      bar.style.background = 'linear-gradient(90deg,#7ED8A0,#16A34A)';
+      msg.textContent = '✅ ' + (p.text || '完成');
+      try { loadImportStats(); } catch (e) { /* 刷新计数失败无所谓 */ }
+      return;
+    }
+    if (p.state === 'fail') {
+      bar.style.background = 'linear-gradient(90deg,#F5A3A3,#E5484D)';
+      msg.textContent = '❌ ' + (p.text || '失败');
+      return;
+    }
+    setTimeout(tick, 800);
+  };
+  tick();
+}
 
 async function startImp(kind) {
   const m = IMP_META[kind];
@@ -2262,9 +2415,28 @@ function shortAddr(s) {
   return t;
 }
 
+// 2026-09-25 老板定：后台**显示层**统一把客户编号拼回店名（编号取 `mallKey`，如 `c347 早阳肉包(科创路店)`）。
+// ⚠️ 只动后台内存里的这份列表 —— 云端 `customers.name` 与手机端**都不改**（老板选的是"只改后台显示"）。
+// 幂等：店名已以编号开头就不再拼，避免重复叠加。
+function custWithCode(list) {
+  if (!Array.isArray(list)) return list;
+  return list.map(c => {
+    if (!c) return c;
+    // ① 首选 `nameRaw` —— 导入时保留的原值就是「编号 + 店名」（如 `a101 沙县小吃(市场路店)`）
+    const raw = String(c.nameRaw || '').trim();
+    if (raw) return Object.assign({}, c, { name: raw });
+    // ② 退路：用 `mallCode` 拼（没有 nameRaw 的老档案走这条）
+    const code = String(c.mallCode || '').trim();
+    if (!code) return c;
+    const nm = String(c.name || '');
+    if (nm.indexOf(code) === 0) return c;   // 已带编号，不重复拼
+    return Object.assign({}, c, { name: code + ' ' + nm });
+  });
+}
+
 function renderDetail(res) {
   const t = res.task;
-  detailCustCache = res.customers;
+  detailCustCache = custWithCode(res.customers);
   $('dtTitle').textContent = (t.taskNo ? t.taskNo + ' · ' : '') + t.name;
   $('dtPurpose').textContent = purpLabel(t.purpose);
   // 任务批次标签（2026-09-07 批次管理：任务详情显示所属批次）
@@ -3154,6 +3326,7 @@ function buildTrackMap(keep) {
   });
   refreshTrackPage();
   nudgeTrackResize(); // 2026-09-24 加固：地图创建即补 resize，兜住"容器宽高未就绪就创建"的竞态
+  jhMapBadge('trackMap');   // 2026-09-25 老板定：所有地图统一挂「聚火地图」标识（替换腾讯 logo）
 }
 
 
@@ -3219,6 +3392,7 @@ function buildTaskMap() {
   tmInfoWin.close();
   renderTmLegend();
   refreshTaskMap();
+  jhMapBadge('tmMap');   // 2026-09-25 老板定：所有地图统一挂「聚火地图」标识（替换腾讯 logo）
 }
 
 async function loadTaskMap() {
@@ -3921,6 +4095,7 @@ async function openVisitTrack(visitId) {
     // 控件定制（2026-09-08 老板定）：只留 3D 导航球；移除 +/− 缩放与比例尺
     try { visitTrackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 静默 */ }
     try { visitTrackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.SCALE); } catch (e) { /* 静默 */ }
+    jhMapBadge('visitTrackMap');   // 2026-09-25 老板定：所有地图统一挂「聚火地图」标识（替换腾讯 logo）
   }
   const paths = pts.map(p => ({ position: new TMap.LatLng(p.lat, p.lng) }));
   const geos = paths.length > 1 ? [{ id: 'v', styleId: 'line', paths }] : [];
@@ -4237,7 +4412,8 @@ async function onBatchChange() {
   if (nwBatchId) { try { localStorage.setItem('jh_last_batch', nwBatchId); } catch (e) { } }
   if (curMode === 'new') { return; }
   const cu = await api('listCustomers', nwBatchId ? { batchId: nwBatchId } : {});
-  custCache = (cu.ok ? cu.customers : []).filter(c => c.customerType === curMode)
+  // 2026-09-25 老板定：选客户列表的店名要带完整编号 → 统一过 custWithCode（只影响后台内存）
+  custCache = custWithCode(cu.ok ? cu.customers : []).filter(c => c.customerType === curMode)
     .map(c => ({ ...c, _day: null, _seq: null }));
   ntDayMeta = {};
   ntRoutes = {};
@@ -4462,53 +4638,620 @@ async function createTask(publish) {
 let custListCache = [];
 let detailCustCache = [];
 
-function showCustDetail(id) {
-  const c = detailCustCache.find(x => x._id === id) || custListCache.find(x => x._id === id);
-  if (!c) { alert('未找到客户数据'); return; }
-  curCustId = id;
-  // 2026-09-24：备注已搬到「批次详情页最后一列的 📝 按钮」（独立弹窗），此处不再回填备注
-  $('cmTitle').textContent = (c.customerType === 'new' ? '🌱 ' : '🏪 ') + (c.name || '客户详情');
-  const isNew = c.customerType === 'new';
-  // 两类型各自一套字段，互不混淆
-  const rows = isNew
-    ? [
-        ['类型', '新客户'],
-        ['开发状态', c.mallJoinedAt ? '✅ 已入商城' : '🟡 待开发'],
-        ['注册商城时间', c.mallJoinedAt || '—'],
-        ['最近下单', c.lastOrderAt || '—'],
-        ['最近浏览商城', c.lastBrowseAt || '—'],
-        ['电话', ((c.phone || '') + (c.phone2 ? ' / ' + c.phone2 : '')) || '—'],
-        ['地址', c.address || '—'],
-        ['经纬度', (c.lat || c.lng) ? `${c.lat}, ${c.lng}` : '—']
-      ]
-    : [
-        ['类型', '回访客户'],
-        ['签约业务员', c.mallSalesman || '—'],
-        ['注册商城时间', c.mallJoinedAt || '—'],
-        ['最近下单', c.lastOrderAt || '—'],
-        ['最近浏览商城', c.lastBrowseAt || '—'],
-        ['商城等级', c.mallLevel || '—'],
-        ['电话', ((c.phone || '') + (c.phone2 ? ' / ' + c.phone2 : '')) || '—'],
-        ['地址', c.address || '—'],
-        ['经纬度', (c.lat || c.lng) ? `${c.lat}, ${c.lng}` : '—']
-      ];
-  $('cmBody').innerHTML = rows.map(r => `
-    <div style="display:flex;gap:12px;padding:9px 2px;border-bottom:1px solid #F0F2F5">
-      <span style="width:96px;flex-shrink:0;font-size:12.5px;font-weight:400;color:var(--sub)">${r[0]}</span>
-      <span style="font-size:13.5px;font-weight:400">${esc(r[1])}</span>
-    </div>`).join('');
-  // 底部信息栏（2026-09-08 老板定）：固定=拜访次数+全局状态胶囊；任务内状态胶囊仅在任务中显示
-  const VIS_MAP = { visited: ['已回访', 'green'], ongoing: ['拜访中', 'blue'], pending: ['待回访', 'gray'] };
-  let fin = `<span>🕑 拜访 ${c.visitCount || 0} 次</span>`;
-  if (c.visitState === 'in_task') {
-    fin += '<span class="pill blue">任务中</span>';
-    const vs = VIS_MAP[c.visitStatus] || VIS_MAP.pending;
-    fin += `<span class="pill ${vs[1]}">${vs[0]}</span>`;
-  } else {
-    fin += '<span class="pill gray">无任务</span>';
+// ===== 客户详情页（2026-09-25 重写：两栏卡片 + ✏️ 编辑态 + 经纬度交互；地图块先留位）=====
+// 数据来源：getCustomerDetail 一次聚合（主档含 plat + 订单/明细汇总 + 拜访 + 备注）
+// 口径：① 经纬度**只认它自己的「✓ 确定」**（右上角保存不写它）；② 后台改坐标 = 直接生效（不走审核）；
+//      ③ 坐标来源四色标签；④ 改完显示一次「距上个坐标 X 米」；⑤ 不显示"正不正常"这类没依据的状态。
+let cdCur = null, cdCurId = null, cdEditing = false, cdGeoPending = null;
+const CD_GEO_SRC = {
+  '商城': { bg: '#E7F6EC', fg: '#16A34A' },
+  '平台': { bg: '#EEF1F4', fg: '#66707A' },
+  '业务员上传': { bg: '#E8F1FD', fg: '#2F80ED' },
+  '后台修改': { bg: '#FFEDE5', fg: '#D93E0E' }
+};
+function cdSrcName(c) {
+  return c.coordSource === 'platform' ? '平台' : c.coordSource === 'salesman' ? '业务员上传'
+    : c.coordSource === 'admin' ? '后台修改' : '商城';
+}
+function cdSrcStyleAttr(src) {
+  const s = CD_GEO_SRC[src] || CD_GEO_SRC['平台'];
+  return 'background:' + s.bg + ';color:' + s.fg;
+}
+function cdCode(c) { return (c && c.mallCode) ? c.mallCode : ''; }
+function cdClose() { $('custModal').style.display = 'none'; cdEditing = false; cdCur = null; }
+
+function cdRow(k, v, field) {
+  const val = (v === undefined || v === null || v === '') ? '<span style="color:#C3C9D2">—</span>' : esc(String(v));
+  const attr = field ? ' data-cdfield="' + field + '"' : '';
+  return '<div class="cd-row"><span class="k">' + k + '</span><span class="v"' + attr + '>' + val + '</span></div>';
+}
+function cdCard(title, right, body, hero) {
+  return '<div class="cd' + (hero ? ' hero' : '') + '"><div class="cd-ch"><span class="t">' + title + '</span>' +
+    (right ? '<span class="r">' + right + '</span>' : '') + '</div><div class="cd-b">' + body + '</div></div>';
+}
+// 经纬度那一行：显示值 ｜ 编辑态的两个输入框 + 「✓ 确定」 ｜ 来源标签 ｜ 一次性的「距上个坐标」
+function cdGeoRow(c) {
+  const has = (c.lat != null && c.lng != null);
+  const val = has ? (Number(c.lat).toFixed(6) + ', ' + Number(c.lng).toFixed(6)) : '<span style="color:#C3C9D2">—</span>';
+  const src = cdSrcName(c);
+  return '<div class="cd-row"><span class="k">经纬度</span><span class="v">' +
+    '<span class="geo-line" style="gap:6px">' +
+      '<span class="geo-val" data-geoval>' + val + '</span>' +
+      '<span class="geo-edit">' +
+        '<input class="geo-inp" id="cdGeoLat" placeholder="纬度" value="' + (has ? Number(c.lat).toFixed(6) : '') + '">' +
+        '<input class="geo-inp" id="cdGeoLng" placeholder="经度" value="' + (has ? Number(c.lng).toFixed(6) : '') + '">' +
+        '<button class="btn editbtn btn-sm" style="height:28px" onclick="cdGeoAsk()">✓ 确定</button>' +
+      '</span>' +
+      '<span class="cd-fmtag" style="' + cdSrcStyleAttr(src) + '" data-geosrc>' + src + '</span>' +
+      '<span class="cd-fmtag" data-geodist style="display:none"></span>' +
+    '</span>' +
+    '<div class="cd-note" data-geonote></div>' +
+  '</span></div>';
+}
+
+function cdRender() {
+  const d = cdCur; if (!d) return;
+  const c = d.customer || {};
+  const plat = c.plat || {};
+  const hasPlat = !!c.platMatched && Object.keys(plat).length > 0;
+  const goods = d.topGoods || [];
+  const orders = d.orders || [];
+  const visits = d.visits || [];
+  const remarks = d.remarks || [];
+  const L = [];
+
+  // —— 左栏 ——
+  L.push('<div class="cd-col">');
+
+  // ① 🏪 商家信息卡（2026-09-25 老板定：原来的"跨两栏 Hero 卡"改成**和商城信息一样的普通卡片**，
+  //    放左栏最上面；展示商家自身的**电话/地址/联系人** + **门店照片位**）
+  const cat = [plat.cat1, plat.cat2, plat.cat3].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
+  const hours = c.businessHours || plat.hours || '';
+  const area = c.businessArea || plat.regionName || '';
+  const phoneTxt = (c.phone || '') + (c.phone2 ? ' / ' + c.phone2 : '');
+  const hRow = (k, v, field, span) => '<div class="cd-row"' + (span ? ' style="grid-column:1/-1"' : '') + '>' +
+    '<span class="k">' + k + '</span><span class="v"' + (field ? ' data-cdfield="' + field + '"' : '') + '>' +
+    ((v === undefined || v === null || v === '') ? '<span style="color:#C3C9D2">—</span>' : v) + '</span></div>';
+  const photoBox = '<div style="margin-top:10px">' +
+    '<div style="font-size:12.5px;color:var(--sub);margin-bottom:6px">门店照片</div>' +
+    '<div style="display:flex;gap:8px">' +
+      [0, 1, 2].map(() => '<div style="width:88px;height:66px;border-radius:8px;border:1px dashed #E2E7ED;background:#FAFBFC;display:flex;align-items:center;justify-content:center;color:#C3C9D2;font-size:18px">📷</div>').join('') +
+    '</div>' +
+    '<div style="font-size:11.5px;color:#B7BEC7;margin-top:5px">还没有现场照片（业务员拍照后自动显示）</div>' +
+  '</div>';
+  // 2026-09-25 老板定（第五版·定稿）：改用**真正的 <table>** ——
+  //   grid 的 `1fr` 列会被不同长度的内容撑得参差（老板反复反馈"列头和内容错位"），
+  //   表格是浏览器**原生列对齐** + `table-layout:fixed` + `colgroup` 把标签列钉死 64px → 绝不可能跑偏。
+  //   按老板要求**去掉「最近下单」**；空值也占位（空 td 照样占列），后面不会前移。
+  const kTd = (k) => '<td style="padding:3px 0;color:var(--sub);font-size:12.5px;white-space:nowrap;vertical-align:baseline">' + k + '</td>';
+  const vTd = (v, field, span) => '<td' + (span ? ' colspan="' + span + '"' : '') + (field ? ' data-cdfield="' + field + '"' : '') +
+    ' style="padding:3px 0;vertical-align:baseline">' +
+    ((v === undefined || v === null || v === '') ? '<span style="color:#C3C9D2">—</span>' : v) + '</td>';
+  const tr2 = (k1, v1, f1, k2, v2, f2) => '<tr>' + kTd(k1) + vTd(v1, f1) + kTd(k2) + vTd(v2, f2) + '</tr>';
+  const trW = (k, v, f) => '<tr>' + kTd(k) + vTd(v, f, 3) + '</tr>';
+  const trLine = '<tr><td colspan="4" style="padding:0"><div style="border-top:1px dashed #EEF1F6;margin:6px 0 4px"></div></td></tr>';
+  L.push(cdCard('🏪 商家信息', c.lastVisitAt ? ('最近拜访 ' + String(c.lastVisitAt).slice(5)) : '',
+    '<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px">' +
+      '<colgroup><col style="width:64px"><col><col style="width:64px"><col></colgroup>' +
+      '<tbody>' +
+        tr2('联系人', esc(c.contactName || ''), 'contactName', '电话', esc(phoneTxt), 'phone') +
+        tr2('业务员', esc(c.salesman || ''), '', '注册时间', esc(c.mallJoinedAt || ''), '') +
+        tr2('商城等级', esc(c.level || ''), '', '营业时间', esc(hours), '') +
+        trW('地址', esc(c.address || ''), 'address') +
+        trLine +
+        tr2('品类', esc(cat) + (plat.rank ? ' <span style="color:#C79A16;font-size:11.5px;margin-left:6px">🏆 ' + esc(plat.rank) + '</span>' : ''), '', '商圈', esc(area), '') +
+      '</tbody>' +
+    '</table>' +
+    photoBox));
+
+  const facs = plat.facilities || plat.services || plat.features || '';
+  const sBody = (hasPlat ? '<div style="margin-bottom:8px">' +
+      '<span class="cd-chip ' + (plat.groupon ? 'on' : 'off') + '">团购 ' + (plat.groupon ? '已开' : '未开') + '</span>' +
+      '<span class="cd-chip ' + (plat.takeout ? 'on' : 'off') + '">外卖 ' + (plat.takeout ? '已开' : '未开') + '</span>' +
+    '</div>' : '') +
+    // 设施是**平台抓来的**（不是我们录的）：有值列 chips；**平台没收录就整块不显示**（2026-09-25 老板定：别用空态占位置）；
+    // **不放任何「＋ 补录」入口**（2026-09-25 老板定：后台不录这个，录入口只在手机端）
+    (facs ? '<div>' + String(facs).split(',').filter(Boolean).map(x => '<span class="cd-chip">' + esc(x.trim()) + '</span>').join('') + '</div>' : '') +
+    cdGeoRow(c) +
+    // 地图外面包一层 position:relative —— 把「聚火地图」艺术字压在左下角（同时**盖住**腾讯 logo 的位置）
+    '<div style="position:relative;margin-top:8px">' +
+      '<div id="cdMap" style="height:260px;border-radius:12px;background:#F7FAFC;overflow:hidden"></div>' +
+      // 2026-09-25 老板定：地图偶发不显示（TMap 在弹窗里建图有时不成功）→ 右上角给个手动刷新按钮兜底
+      '<div onclick="cdRebuildMap()" title="刷新地图" style="position:absolute;right:8px;top:8px;width:26px;height:26px;' +
+        'border-radius:50%;background:rgba(255,255,255,.92);box-shadow:0 1px 4px rgba(0,0,0,.2);display:flex;align-items:center;' +
+        'justify-content:center;cursor:pointer;color:#5A6472;font-size:15px;line-height:1;user-select:none">↻</div>' +
+      // 2026-09-25 三次调整（老板定）：卡片里的地图标志**改由统一的 jhMapBadge('cdMap') 挂**
+      //（见 cdBuildMap 末尾；后台 4 张地图共用同一套标识、同一个右下角位置，改一处四处生效）。
+    '</div>';
+  L.push(cdCard('🛎 服务与设施', plat.groupon ? '团购 有' : '', sBody));
+  L.push('</div>');
+
+  // —— 右栏 ——
+  L.push('<div class="cd-col">');
+
+  // ① 📊 平台口碑（2026-09-25 老板定：从右栏顶部开始）—— 大分数 + 口味/环境/服务三条进度条
+  const bar = (lb, v) => {
+    const n = parseFloat(v);
+    const w = isFinite(n) ? Math.max(0, Math.min(100, n / 5 * 100)) : 0;
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px">' +
+      '<span style="width:30px;color:var(--sub);flex:none">' + lb + '</span>' +
+      '<span style="flex:1;height:7px;border-radius:99px;background:#EFF2F6;overflow:hidden">' +
+      '<i style="display:block;height:100%;border-radius:99px;background:var(--primary);width:' + w + '%"></i></span>' +
+      '<span style="width:26px;text-align:right;font-weight:700">' + esc(String(v || '—')) + '</span></div>';
+  };
+  const scoreBody = (hasPlat && (plat.rating || plat.taste || plat.env || plat.service))
+    ? '<div style="display:flex;gap:16px;align-items:flex-start">' +
+        '<div style="font-size:36px;font-weight:800;color:var(--primary);line-height:1;letter-spacing:-1px">' + esc(String(plat.rating || '—')) +
+          '<span style="font-size:12px;color:var(--sub);font-weight:600">/5</span></div>' +
+        '<div style="flex:1;min-width:0">' + bar('口味', plat.taste) + bar('环境', plat.env) + bar('服务', plat.service) + '</div>' +
+      '</div>' +
+      '<div class="cd-row"><span class="k">人均 / 评论</span><span class="v">' + esc(String(plat.avgPriceText || '—')) + ' · ' +
+        esc(String(plat.reviewCount || '0')) + ' 条' +
+        (plat.reviewCount2025 ? '（2025 年 ' + esc(String(plat.reviewCount2025)) + ' 条）' : '') + '</span></div>'
+    : '';
+  const dishChips = plat.dishes ? String(plat.dishes).split(',').filter(Boolean).slice(0, 10)
+    .map(x => '<span class="cd-chip dish">' + esc(x.trim()) + '</span>').join('') : '';
+  L.push(cdCard('📊 平台口碑', hasPlat ? (esc(String(plat.cat1 || '')) + (plat.rating ? ' · ' + esc(String(plat.rating)) + ' 分' : '')) : '',
+    (scoreBody || '<div class="cd-empty">平台没有收录这家的评分</div>') + dishChips));
+
+  const buyTop = goods.length
+    ? '<div class="cd-row"><span class="k">常买</span><span class="v">' +
+      goods.map(g => '<span class="cd-chip">' + esc(g.name) + (g.qty ? ' ×' + g.qty : '') + '</span>').join('') + '</span></div>'
+    : '';
+  const o0 = orders[0];
+  const buyBody = (buyTop || o0)
+    ? buyTop + (o0 ? '<div class="cd-row"><span class="k">最近一单</span><span class="v">' + esc(String(o0.orderedAt || '')) +
+        (o0.actualAmount != null ? ' · ¥' + esc(String(o0.actualAmount)) : '') +
+        (o0.lines ? ' · ' + o0.lines + ' 件商品' : '') + '</span></div>' : '') +
+      ((d.orderTotal || 0) > orders.length ? '<div class="cd-row"><span class="k"></span><span class="v" style="color:var(--sub);font-size:12px">仅列最近 ' + orders.length + ' 单，共 ' + d.orderTotal + ' 单</span></div>' : '')
+    : '<div class="cd-empty">这家还没下过单</div>';
+  L.push(cdCard('📦 购买记录', d.orderTotal ? ('累计 ' + d.orderTotal + ' 单' + (d.orderAmountSum ? ' · ¥' + Math.round(d.orderAmountSum) : '')) : '', buyBody));
+
+  const vBody = visits.length ? visits.slice(0, 10).map(v => {
+    const st = v.status === 'ongoing' ? '<span class="pill blue">拜访中</span>'
+      : (v.status === 'cancelled' ? '<span class="pill gray">已取消</span>' : '<span class="pill green">已回访</span>');
+    return '<div class="cd-vcard"><div class="cd-vh">' + st + ' ' + esc(String(v.visitedAt || '')) +
+      (v.duration ? ' · 时长 ' + Math.round(v.duration / 60) + ' 分钟' : '') +
+      (v.result ? ' · ' + esc(v.result) : '') + '</div>' +
+      (v.remark ? '<div style="font-size:12.5px;line-height:1.65;white-space:pre-wrap">' + esc(v.remark) + '</div>' : '') +
+      (v.trText ? '<div style="font-size:12px;color:var(--sub);margin-top:5px;white-space:pre-wrap">🎙 ' + esc(v.trText) + '</div>' : '') +
+      '<div style="margin-top:6px;color:var(--sub);font-size:11.5px">' +
+        (v.audioCount ? '🎙 录音 ' + v.audioCount + ' 段　' : '') +
+        (v.thumbs && v.thumbs.length ? '📷 照片 ' + v.thumbs.length + ' 张' : '') + '</div></div>';
+  }).join('') : '<div class="cd-empty">还没有拜访记录</div>';
+  L.push(cdCard('🕑 拜访历史', visits.length ? ('拜访 ' + visits.length + ' 次') : '', vBody));
+
+  const p2 = n => String(n).padStart(2, '0');
+  const rBody = (remarks.length ? remarks.slice(0, 12).map(r => {
+    const dt = r.at ? new Date(Number(r.at)) : null;
+    const when = dt ? (p2(dt.getMonth() + 1) + '-' + p2(dt.getDate()) + ' ' + p2(dt.getHours()) + ':' + p2(dt.getMinutes())) : '';
+    return '<div class="cd-rmk"><span class="d">' + when + (r.by ? ' · ' + esc(r.by) : '') + '</span>' + esc(r.text) + '</div>';
+  }).join('') : '<div class="cd-empty">还没有备注</div>') +
+    '<div style="margin-top:10px"><button class="btn ghost btn-sm" onclick="cdGotoRemark()">＋ 新增一条备注</button></div>';
+  L.push(cdCard('📝 备注历史', remarks.length ? (remarks.length + ' 条 · 手机端只显示最新一条') : '', rBody));
+  L.push('</div>');
+
+  $('cmBody').innerHTML = L.join('');
+  cdLoadMapLib();   // 2026-09-25：DOM 渲染完再建地图（用后台已有的 mapKey 接腾讯地图）
+}
+
+// ===== 客户详情页的小地图（2026-09-25 新增）=====
+// KEY **复用后台早就有的 mapKey**（= 设置项 `mpKey`，默认 SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D；
+//   实时路况图 / 任务地图 / 拜访轨迹图一直在用它）—— 不用另外申请。
+// 口径照 09-13 定稿：**不可拖动** + 可双指缩放 10~20 级 + **以客户坐标为中心**（不用定位、不要权限）
+//   + 初始 16 级 + 高 150px / 圆角 12px + 打一个 pin。
+let cdMapObj = null, cdMapMarker = null, cdMapLibLoading = false;
+
+function cdLoadMapLib() {
+  if (!cdCur) return;
+  const c = cdCur.customer || {};
+  if (!isFinite(Number(c.lat)) || !isFinite(Number(c.lng))) return; // 没坐标就不去加载 SDK
+  if (window.TMap) { cdBuildMapSoon(); return; }
+  if (cdMapLibLoading) return;
+  cdMapLibLoading = true;
+  const s = document.createElement('script');
+  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.onload = () => { cdMapLibLoading = false; cdBuildMapSoon(); };
+  s.onerror = () => { cdMapLibLoading = false; };
+  document.head.appendChild(s);
+}
+
+// 2026-09-25 修（老板报"刷新后什么都不显示""滚轮缩放像一张不重绘的图片"）：
+// **必须等弹窗布局稳定后再建图** —— 弹窗刚 display:flex 的那一瞬，容器尺寸还是 0，
+// TMap 在 0 尺寸容器上建图会白掉、且之后不再重绘。做法：延迟 80ms 并检查容器真实尺寸，没尺寸就再等一轮。
+function cdBuildMapSoon() {
+  let tries = 0;
+  const tick = () => {
+    const el = document.getElementById('cdMap');
+    if (!el) return;
+    if (el.clientWidth > 0 && el.clientHeight > 0) { cdBuildMap(); cdVerifyMap(); return; }
+    if (++tries <= 20) setTimeout(tick, 60);   // 最多等 ~1.2s
+  };
+  setTimeout(tick, 80);
+}
+
+// ===== 地图"建得成不成"的兜底 + 诊断（2026-09-25）=====
+// 老板报"有的店家有地图，有的不显示，**没规律**" → 不再靠猜：**失败时把具体原因直接写在地图框里**，
+// 老板截图给我即可定位（能看到 canvas 有没有、容器多大、**是否在视口外**、TMap 是否加载）。
+// 重试间隔也拉长 —— TMap 释放 WebGL 上下文较慢，60ms 那种短间隔重建往往是白建。
+// ===== 统一地图标识（2026-09-25 老板定：**前后台所有地图**都换掉腾讯 logo、改挂「聚火地图」）=====
+// 后台 4 处地图（实时路况 trackMap / 任务地图 tmMap / 拜访轨迹 visitTrackMap / 客户详情 cdMap）共用这套。
+// 手机端是小程序 <map> 原生组件、普通 view 盖不住，另用 <cover-view> 实现（见 pages/*/wxml）。
+const JH_BADGE_HTML =
+  '<svg width="20" height="20" viewBox="0 0 24 24" style="flex:none;overflow:visible">' +
+    '<circle cx="12" cy="12" r="8.6" fill="none" stroke="#fff" stroke-width="6.6"/>' +
+    '<path d="M15.4 8.6l-2.4 5.2-5.2 2.4 2.4-5.2z" fill="#fff" stroke="#fff" stroke-width="5"/>' +
+    '<circle cx="12" cy="12" r="8.6" fill="none" stroke="#F5531C" stroke-width="2.6"/>' +
+    '<path d="M15.4 8.6l-2.4 5.2-5.2 2.4 2.4-5.2z" fill="#F5531C"/>' +
+  '</svg>' +
+  '<span style="font-size:13px;font-weight:800;letter-spacing:-0.2px;line-height:1;color:#F5531C;' +
+    '-webkit-text-stroke:2.8px #fff;paint-order:stroke fill">聚火地图</span>';
+
+// 藏掉腾讯地图的 logo / 版权 / 版本号（通用版：任意地图容器都能用）
+// ⚠️⚠️ 2026-09-25 踩坑记录（现象：后台每张地图**都看不到聚火 logo、腾讯 logo 却全在**）：
+//   社区通用的 `canvas + div:last-child` 是找"canvas 之后**最后一个** div"= logo 层。但我们自己挂的
+//   .jh-badge 也会成为最后一个 div → **badge 把自己藏了，真正的 logo 层反倒没选中**；
+//   遍历兄弟层时的 `!!sib.querySelector('img,svg')` 又会命中 badge 里的 SVG，二次误伤。
+//   ⇒ 修法：① badge 一律跳过（isBadge）；② **先藏 logo、后加 badge**；③ badge 的 z-index 顶到最高。
+function jhHideMapLogo(box) {
+  if (!box) return;
+  const isBadge = (n) => !!(n && n.classList && n.classList.contains('jh-badge'));
+
+  // ① 社区通用做法：canvas 之后**最后那层 div** = 腾讯 logo / 版权层（跳过自己的 badge）
+  try {
+    const divs = box.querySelectorAll('canvas ~ div');
+    for (let i = divs.length - 1; i >= 0; i--) {
+      const n = divs[i];
+      if (isBadge(n)) continue;
+      const t = n.textContent || '';
+      if (/腾讯|©|copyright|logo|GS\(|审图|版本|版权/i.test(t) || n.querySelector('img,svg')) {
+        n.style.display = 'none';
+      }
+      break;   // 只看最后一层
+    }
+  } catch (e) { /* 静默 */ }
+
+  // ② 兜底：canvas 之后的兄弟层里，"小块 且（含腾讯/版权/审图号字样 或 含图片）"的全部藏掉
+  const cv = box.querySelector('canvas');
+  if (!cv) return;
+  let sib = cv.nextElementSibling;
+  while (sib) {
+    if (!isBadge(sib)) {
+      const txt = sib.textContent || '';
+      const small = sib.offsetHeight > 0 && sib.offsetHeight <= 90 && sib.offsetWidth <= 420;
+      const looks = /腾讯|©|copyright|logo|GS\(|审图|版本|版权/i.test(txt) || !!sib.querySelector('img,svg');
+      if (small && looks) sib.style.display = 'none';
+    }
+    sib = sib.nextElementSibling;
   }
-  $('cmFooterInfo').innerHTML = fin;
+}
+
+// 给任意地图容器挂「聚火地图」标识 —— **左下角**（腾讯地图的 logo 本来就在左下，放这儿才能盖住它）
+function jhMapBadge(id) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  if (box.querySelector('.jh-badge')) return;
+  if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+  // ① **先藏腾讯 logo**：此刻容器里还没有 badge，`canvas + div:last-child` 不会打偏
+  jhHideMapLogo(box);
+  // ② 再挂 badge
+  const d = document.createElement('div');
+  d.className = 'jh-badge';
+  // ⚠️ z-index 必须压过 TMap 自己的图层（它们常用很大的 z-index），否则 badge 会被地图盖住、看不见
+  d.setAttribute('style', 'position:absolute;left:8px;bottom:8px;z-index:99999;pointer-events:none;' +
+    'display:flex;align-items:flex-end;gap:3px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))');
+  d.innerHTML = JH_BADGE_HTML;
+  box.appendChild(d);
+  // ③ TMap 的 logo 是**异步**插进 DOM 的 → 建图后立刻查往往还没生成，必须隔一会多补藏几次
+  //    （每次都跳过 .jh-badge，不会误伤；也不受"先加后藏"的顺序问题影响）
+  setTimeout(() => jhHideMapLogo(box), 400);
+  setTimeout(() => jhHideMapLogo(box), 1500);
+  setTimeout(() => jhHideMapLogo(box), 3000);
+}
+
+let cdMountRetry = 0;
+function cdMountMap() { cdMountRetry = 0; cdBuildMap(); cdVerifyMap(); }
+function cdRebuildMap() { cdMountRetry = 0; cdBuildMap(); cdVerifyMap(); }
+function cdVerifyMap() {
+  const myId = cdCur && cdCur.customer && cdCur.customer._id;
+  const delay = 800 + cdMountRetry * 500;   // 首次查 0.8s，重试后 1.3s / 1.8s / 2.3s
+  setTimeout(() => {
+    if (!cdCur || !cdCur.customer || cdCur.customer._id !== myId) return;  // 换客户了 → 不管
+    const el = document.getElementById('cdMap');
+    if (!el) return;
+    const cv = el.querySelector('canvas');
+    if (cv && cv.width > 10 && cv.height > 10) { cdMountRetry = 0; return; }   // ✅ 真的渲染出来了
+    if (cdMountRetry < 3) {                                                    // ❌ 自动重建（间隔递增）
+      cdMountRetry++;
+      setTimeout(() => { cdBuildMap(); cdVerifyMap(); }, 300 + cdMountRetry * 300);
+      return;
+    }
+    // ❌❌ 连续 4 次都没成 → 把诊断写进框里（老板看到就能直接告诉我卡在哪一步）
+    const r = el.getBoundingClientRect();
+    const bits = [
+      '地图未能加载',
+      'canvas：' + (cv ? (cv.width + '×' + cv.height) : '无'),
+      '容器：' + el.clientWidth + '×' + el.clientHeight,
+      '位置：top=' + Math.round(r.top) + ' bottom=' + Math.round(r.bottom) + ' 视口高=' + window.innerHeight,
+      'TMap：' + (window.TMap ? '已加载' : '未加载'),
+      '尝试：4 次'
+    ];
+    el.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;padding:0 14px;' +
+      'text-align:center;color:#C1502E;font-size:11.5px;line-height:1.8">' + esc(bits.join('｜')) + '</div>';
+  }, delay);
+}
+
+function cdDestroyMap() {
+  try { if (cdMapMarker) { cdMapMarker.setMap(null); cdMapMarker = null; } } catch (e) { /* 静默 */ }
+  try { if (cdMapObj) { cdMapObj.destroy(); cdMapObj = null; } } catch (e) { /* 静默 */ }
+}
+
+function cdBuildMap() {
+  const d = cdCur;
+  const cur = document.getElementById('cdMap');
+  if (!cur || !d || !window.TMap) return;
+  const c = d.customer || {};
+  const lat = Number(c.lat), lng = Number(c.lng);
+  if (!isFinite(lat) || !isFinite(lng)) {
+    cur.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#A2ABB6;font-size:12px">这家没有坐标，地图无法显示</div>';
+    return;
+  }
+  // ⚠️⚠️ 2026-09-25 修（老板报"**只有第一家李记美食能显示地图，之后全是一片灰白**"）：
+  //   TMap 有两个坑，官方 FAQ 与社区实践完全一致 ——
+  //   ① **实例 destroy 之后必须【异步】才能再创建**（`new TMap.Map` 要用 setTimeout 包），同步创建必白屏；
+  //      这是「Modal 弹窗里反复建图」的经典坑，现象正是"地图挂上了却回显不出来"。
+  //   ② **必须重建容器**：只在旧容器上重复初始化无效，社区结论是"外层包 div、重新生成内层容器"。
+  //   所以这里：每次都换一个**全新容器** + **延迟 250ms** 建实例（见下方 setTimeout）。也正因如此，下面不能再复用旧实例。
+  cdDestroyMap();
+  const styleAttr = cur.getAttribute('style') || 'height:260px;border-radius:12px;background:#F7FAFC;overflow:hidden';
+  const el = document.createElement('div');
+  el.id = 'cdMap';
+  el.setAttribute('style', styleAttr);
+  const box = cur.parentElement;
+  if (box) { box.insertBefore(el, cur); box.removeChild(cur); }
+  const myId = d.customer._id;
+
+  setTimeout(() => {
+    if (!cdCur || !cdCur.customer || cdCur.customer._id !== myId) return;   // 期间换客户了 → 放弃这一次
+    try {
+      cdMapObj = new TMap.Map(el, {
+        center: new TMap.LatLng(lat, lng),
+        zoom: 16, minZoom: 10, maxZoom: 20,
+        pitch: 0, rotation: 0,
+        draggable: false,
+        // 官方文档：vector 的 features 可选 —— base=道路及底面 / building3d=3D楼块 / building2d=2D楼块 /
+        //   point=POI文字 / label=**道路文字（道路名称）**。
+        // 2026-09-25 老板定：① 要看到**道路名**（label）与餐饮/超市等**点位**（point）；
+        //   ② 用 **building2d 而不是 building3d** —— 3D 楼块有高度会**遮住道路名和 POI 标注**，而且数据重、加载慢。
+        baseMap: [{ type: 'vector', features: ['base', 'building2d', 'point', 'label'] }]
+      });
+      cdMapObj._for = myId;
+      // 2026-09-25 老板定：**不要任何控件** —— 缩放 ＋/－、比例尺、3D 导航球全部移除
+      ['ZOOM', 'SCALE', 'ROTATION'].forEach(k => {
+        try { cdMapObj.removeControl(TMap.constants.DEFAULT_CONTROL_ID[k]); } catch (e) { /* 静默 */ }
+      });
+      cdMapMarker = new TMap.MultiMarker({
+        map: cdMapObj,
+        geometries: [{ id: 'cust', position: new TMap.LatLng(lat, lng) }]
+      });
+      // 2026-09-25 老板定（第 2 版）：**滚轮必须"以客户点为中心"缩放**。
+      // TMap 默认是"以鼠标位置为中心"缩放 —— 在边缘滚轮会把客户点挤出画面；光靠事件回中来不及（缩放有动画）。
+      // 做法：在 #cdMap 上**捕获阶段**吃掉 wheel 事件（passive:false 才能 preventDefault），
+      //   改由自己调 `setZoom()` —— 它以**地图当前中心**（= 客户点）为锚点缩放，天然不偏移。
+      if (el._cdWheel) el.removeEventListener('wheel', el._cdWheel, true);
+      el._cdWheel = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!cdMapObj) return;
+        const z = cdMapObj.getZoom();
+        const nz = Math.max(10, Math.min(20, z + (ev.deltaY > 0 ? -1 : 1)));
+        if (nz !== z) { try { cdMapObj.setZoom(nz); } catch (e) { /* 静默 */ } }
+      };
+      el.addEventListener('wheel', el._cdWheel, { passive: false, capture: true });
+
+      // 兜底：万一还是被拖走了 → 靠 bounds_changed 拉回（拖动没有"锚点"问题，不会抖）。
+      //（`bounds_changed` 在地图移动与缩放时都会触发，后台现有地图用的就是它；_recentering 防止自触发死循环）
+      cdMapObj.on('bounds_changed', () => {
+        if (!cdMapObj || cdMapObj._recentering) return;
+        const cc = (cdCur && cdCur.customer) || {};
+        const la = Number(cc.lat), ln = Number(cc.lng);
+        if (!isFinite(la) || !isFinite(ln)) return;
+        const cur2 = cdMapObj.getCenter && cdMapObj.getCenter();
+        if (cur2 && Math.abs(cur2.getLat() - la) < 1e-9 && Math.abs(cur2.getLng() - ln) < 1e-9) return;
+        cdMapObj._recentering = true;
+        try { cdMapObj.setCenter(new TMap.LatLng(la, ln)); } catch (e) { /* 静默 */ }
+        setTimeout(() => { if (cdMapObj) cdMapObj._recentering = false; }, 80);
+      });
+      // 2026-09-25 老板定：**改用统一标识 jhMapBadge** —— 后台 4 张地图长得一模一样、同一位置，
+      // 且它内部会一并藏掉腾讯的 logo / 版权 / 审图号（版本号）。改一处、四处生效。
+      jhMapBadge('cdMap');
+    } catch (e) {
+      el.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#A2ABB6;font-size:12px">地图加载失败：' + esc(String((e && e.message) || e)) + '</div>';
+    }
+  }, 250);   // 250ms（原 60ms）：TMap 释放上一实例的 WebGL 上下文较慢，2026-09-25 加长
+}
+
+// （原 cdHideLogo 已废弃删除：2026-09-25 后台 4 张地图统一改用 jhMapBadge / jhHideMapLogo，功能相同且覆盖面更全）
+
+// 2026-09-25 老板定：**提前把 TMap SDK 下载好**（老板反馈"打开详情时地图出得太慢"）。
+// 页面加载完 +1.5s 后台静默拉一次（避开首屏请求高峰）；等真打开详情时 SDK 已就绪 → 地图秒出。
+function cdPreloadMapLib() {
+  if (window.TMap || cdMapLibLoading) return;
+  cdMapLibLoading = true;
+  const s = document.createElement('script');
+  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.onload = () => { cdMapLibLoading = false; cdBuildMap(); };
+  s.onerror = () => { cdMapLibLoading = false; };
+  document.head.appendChild(s);
+}
+window.addEventListener('load', () => setTimeout(cdPreloadMapLib, 1500));
+
+// 状态胶囊（顶部）
+function cdStatusPills(c) {
+  const out = [];
+  out.push((c.mallJoinedAt || c.mallKey) ? '<span class="pill green">已入商城</span>' : '<span class="pill orange">未入商城</span>');
+  if (c.visitState === 'in_task') {
+    out.push('<span class="pill blue">任务中</span>');
+    const m = { visited: ['已回访', 'green'], ongoing: ['拜访中', 'blue'], pending: ['待回访', 'orange'] };
+    const v = m[c.visitStatus] || m.pending;
+    out.push('<span class="pill ' + v[1] + '">' + v[0] + '</span>');
+  } else {
+    out.push('<span class="pill gray">无任务</span>');
+  }
+  return out.join('');
+}
+
+async function showCustDetail(id) {
+  cdCurId = id; cdEditing = false; cdGeoPending = null;
+  const c0 = detailCustCache.find(x => x._id === id) || custListCache.find(x => x._id === id) || null;
+  // 2026-09-25 老板定：详情页标题栏显示**完整编号**。
+  // ⚠️ 编号已在缓存层由 `custWithCode()` 拼进 `name`（detailCustCache / custListCache 都过了一遍），
+  //    这里**不要再拼一次**，否则会出现「c347 c347 早阳肉包」。
+  $('cmTitle').textContent = '🏪 ' + ((c0 && c0.name) || '客户详情');
+  $('cdPills').innerHTML = c0 ? cdStatusPills(c0) : '';
+  $('cdBtnEdit').style.display = 'none';
+  $('cdBtnSave').style.display = 'none';
+  $('cdBtnCancel').style.display = 'none';
+  const mdl = $('custModal').querySelector('.cd-modal');
+  if (mdl) mdl.classList.remove('editing');
+  $('cmBody').innerHTML = '<div class="cd" style="grid-column:1/-1"><div class="cd-b"><div class="loading">加载详情…</div></div></div>';
   $('custModal').style.display = 'flex';
+
+  const res = await api('getCustomerDetail', { customerId: id });
+  if (!res || !res.ok) {
+    $('cmBody').innerHTML = '<div class="cd" style="grid-column:1/-1"><div class="cd-b" style="color:var(--danger)">加载失败：' + esc((res && res.msg) || '未知错误') + '</div></div>';
+    return;
+  }
+  cdCur = res;
+  if (res.customer) {
+    const i = detailCustCache.findIndex(x => x._id === id);
+    if (i >= 0) detailCustCache[i] = Object.assign({}, detailCustCache[i], res.customer);
+  }
+  cdRender();
+  $('cdBtnEdit').style.display = '';
+}
+
+// —— ✏️ 编辑态（可编辑字段 = cdRow 里带 data-cdfield 的）——
+function cdOpenEdit() {
+  cdEditing = true;
+  const mdl = $('custModal').querySelector('.cd-modal');
+  if (mdl) mdl.classList.add('editing');
+  document.querySelectorAll('#custModal [data-cdfield]').forEach(el => {
+    if (el.querySelector('input')) return;
+    const raw = (el.textContent || '').trim();
+    el.dataset.raw = (raw === '—') ? '' : raw;
+    el.innerHTML = '<input value="' + esc(el.dataset.raw).replace(/"/g, '&quot;') + '" style="width:100%;border:none;background:transparent;font:inherit;color:inherit;outline:none">';
+  });
+  $('cdBtnEdit').style.display = 'none';
+  $('cdBtnSave').style.display = '';
+  $('cdBtnCancel').style.display = '';
+}
+function cdExitEdit() {
+  cdEditing = false;
+  const mdl = $('custModal').querySelector('.cd-modal');
+  if (mdl) mdl.classList.remove('editing');
+  $('cdBtnEdit').style.display = '';
+  $('cdBtnSave').style.display = 'none';
+  $('cdBtnCancel').style.display = 'none';
+}
+// 经纬度有没有「改了但没点确定」（右上角保存时要拦）
+function cdGeoDirty() {
+  const la = parseFloat(($('cdGeoLat') || {}).value), ln = parseFloat(($('cdGeoLng') || {}).value);
+  if (!isFinite(la) || !isFinite(ln)) return true;
+  const c = (cdCur && cdCur.customer) || {};
+  if (c.lat == null || c.lng == null) return true;
+  return Math.abs(la - Number(c.lat)) > 1e-9 || Math.abs(ln - Number(c.lng)) > 1e-9;
+}
+function cdSaveEdit() {
+  if (cdGeoDirty()) {
+    alert('⚠️ 经纬度已经改动，但还没点它旁边的「✓ 确定」。\n\n右上角「保存」不会更新经纬度 —— 请先点「✓ 确定」，或把经纬度改回原值再保存。');
+    return;
+  }
+  const fields = {};
+  document.querySelectorAll('#custModal [data-cdfield]').forEach(el => {
+    const inp = el.querySelector('input');
+    fields[el.dataset.cdfield] = inp ? inp.value : (el.textContent || '').trim();
+  });
+  api('updateCustomerFields', { customerId: cdCurId, fields: fields }).then(r => {
+    if (!r || !r.ok) { alert((r && r.msg) || '保存失败'); return; }
+    [detailCustCache, custListCache].forEach(cache => {
+      const c = cache && cache.find(x => x._id === cdCurId);
+      if (c) Object.keys(fields).forEach(k => { c[k] = fields[k]; });
+    });
+    if (typeof renderBatchTbody === 'function' && $('page-batchDetail') && $('page-batchDetail').style.display !== 'none') {
+      try { renderBatchTbody(); } catch (e) { }
+    }
+    showCustDetail(cdCurId);
+  });
+}
+function cdCancelEdit() { cdExitEdit(); showCustDetail(cdCurId); }
+
+// —— 经纬度：✓ 确定 → 二次确认 → 直接生效（老板 2026-09-24 定：后台管理员改 = 自动通过）——
+function cdGeoNoteSet(msg, isErr) {
+  const n = $('custModal').querySelector('[data-geonote]');
+  if (!n) return;
+  n.textContent = msg || '';
+  n.className = 'cd-note' + (msg ? ' on' : '');
+  n.style.color = isErr ? '#C93A40' : '';
+  n.style.background = isErr ? '#FCEBEC' : '';
+}
+function cdGeoAsk() {
+  const c = (cdCur && cdCur.customer) || {};
+  const la = parseFloat(($('cdGeoLat') || {}).value), ln = parseFloat(($('cdGeoLng') || {}).value);
+  if (!isFinite(la) || !isFinite(ln)) { cdGeoNoteSet('纬度 / 经度都要填数字（例：28.917784）', true); return; }
+  if (la < -90 || la > 90 || ln < -180 || ln > 180) { cdGeoNoteSet('坐标超出范围：纬度 -90 ~ 90、经度 -180 ~ 180', true); return; }
+  if (c.lat != null && c.lng != null && Math.abs(la - Number(c.lat)) < 1e-9 && Math.abs(ln - Number(c.lng)) < 1e-9) return; // 没改动：静默
+  cdGeoPending = { lat: la, lng: ln };
+  $('cdGeoOld').textContent = (c.lat != null && c.lng != null) ? (Number(c.lat).toFixed(6) + ', ' + Number(c.lng).toFixed(6)) : '—';
+  $('cdGeoNew').textContent = la.toFixed(6) + ', ' + ln.toFixed(6);
+  $('cdGeoOvl').style.display = 'flex';
+}
+function cdCloseGeo() { cdGeoPending = null; $('cdGeoOvl').style.display = 'none'; }
+function cdApplyGeo() {
+  const p = cdGeoPending; cdCloseGeo();
+  if (!p) return;
+  const c = (cdCur && cdCur.customer) || {};
+  const moved = (c.lat != null && c.lng != null) ? cdMeters(Number(c.lat), Number(c.lng), p.lat, p.lng) : null;
+  api('updateCustomerCoords', { customerId: cdCurId, lat: p.lat, lng: p.lng }).then(r => {
+    if (!r || !r.ok) { cdGeoNoteSet((r && r.msg) || '保存失败', true); return; }
+    c.lat = p.lat; c.lng = p.lng; c.coordSource = 'admin';
+    // 2026-09-25 老板定：**只有"编辑态确认了新坐标"这一种情况，地图才跟着动**。
+    // 这里 c 就是 cdCur.customer，已经先改过，所以紧跟着的 setCenter 不会再被 bounds_changed 拉回旧位置。
+    if (cdMapObj) {
+      try { cdMapObj.setCenter(new TMap.LatLng(p.lat, p.lng)); } catch (e) { /* 静默 */ }
+      try { if (cdMapMarker) cdMapMarker.setGeometries([{ id: 'cust', position: new TMap.LatLng(p.lat, p.lng) }]); } catch (e) { /* 静默 */ }
+    }
+    const vEl = $('custModal').querySelector('[data-geoval]');
+    if (vEl) vEl.textContent = p.lat.toFixed(6) + ', ' + p.lng.toFixed(6);
+    const sEl = $('custModal').querySelector('[data-geosrc]');
+    if (sEl) { sEl.textContent = '后台修改'; sEl.setAttribute('style', cdSrcStyleAttr('后台修改')); }
+    if (moved != null) {
+      const dEl = $('custModal').querySelector('[data-geodist]');
+      if (dEl) { dEl.textContent = '距上个坐标 ' + cdDistText(moved); dEl.style.display = ''; }
+    }
+    cdGeoNoteSet('');
+    [detailCustCache, custListCache].forEach(cache => {
+      const x = cache && cache.find(y => y._id === cdCurId);
+      if (x) { x.lat = p.lat; x.lng = p.lng; x.coordSource = 'admin'; }
+    });
+  });
+}
+function cdMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371008.8, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+function cdDistText(m) {
+  if (m < 1) return '不到 1 米';
+  if (m < 1000) return Math.round(m) + ' 米';
+  if (m < 10000) return (m / 1000).toFixed(1) + ' 公里';
+  return Math.round(m / 1000) + ' 公里';
+}
+function cdGotoRemark() {
+  const nm = (cdCur && cdCur.customer) ? cdCur.customer.name : '';
+  cdClose();
+  openCustRemark(cdCurId, nm);
 }
 
 // 客户备注保存（2026-09-24 老板定：从「客户详情」搬到批次详情页最后一列的 📝 按钮）
@@ -4600,24 +5343,29 @@ async function loadCustomers(batchId, batchName) {
   if (!res.ok) { tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="empty">${res.msg || '加载失败'}</td></tr>`; return; }
   let list = res.customers.filter(c => c.customerType === curMode);
   if (unbatchMode) list = list.filter(c => !(c.batchIds || []).length);
+  // 2026-09-25 老板定：后台**显示层**统一把「客户编号」拼回店名（`mallKey`，如 `c347 早阳肉包(科创路店)`）。
+  // ⚠️ 只加工后台这一份内存缓存 —— **云端数据与手机端都不动**；于是列表 / 弹窗 / 搜索候选等
+  //    **所有**显示店名的地方会自动一致地带编号（老板原话："店名中的编号还是显示出来吧"）。
+  list = custWithCode(list);
   custListCache = list;
   // 两工作台各自一套列，互不混淆（两工作台均带最左序号列）：
   // 回访工作台：最近下单（未下单标注）；新客开发工作台：开发状态（待开发 / 已入商城）
   if (batchMode) {
-    // 批次详情表（2026-09-08 老板定列序）：☑ # 店名 全局态 任务状态 手机号 坐标 地址 最近下单 最近拜访 详情 删除；单行不换行；地址列伸缩
+    // 批次详情表（2026-09-25 老板定**新列序**；「手机号」与「最近拜访」两列去掉）：
+    // # 详情 备注 ☑ 店名 全局态 任务状态 最近下单 坐标 地址；单行不换行；地址列伸缩
+    // ⚠️ 表头与数据行的列顺序必须**严格一致**，对不上整表就会错位
     theadEl.innerHTML = `<tr>
-      <th class="no" style="width:34px;text-align:center" title="勾选">☑</th>
       <th class="no" style="width:30px">#</th>
+      <th style="width:58px;text-align:center">详情</th>
+      <th style="width:52px;text-align:center" title="客户备注（手机端业务员可见）">备注</th>
+      <th class="no" style="width:34px;text-align:center"><input type="checkbox" class="batchChkAll" id="batchChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle"></th>
       <th style="width:15%">店名</th>
       <th style="width:86px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：任务中在前；再点：无任务在前" onclick="toggleBatchSort('visitState')">全局态${batchSortArrow('visitState')}</th>
       <th style="width:96px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：待回访→拜访中→已回访（无任务沉底）；再点：无任务置顶倒序" onclick="toggleBatchSort('visitStatus')">任务状态${batchSortArrow('visitStatus')}</th>
-      <th style="width:124px">手机号</th>
-      <th style="width:76px;cursor:pointer;white-space:nowrap" title="点击：按 正常→审核→待定→补标 排列（距离数字恢复原显示）；再点：倒序" onclick="toggleBatchSort('coord')">坐标${batchSortArrow('coord')}</th>
-      <th style="cursor:pointer;white-space:nowrap" title="点击：按仓库距离由近到远；再点：由远到近（无坐标沉底/置顶）" onclick="toggleBatchSort('dist')">地址${batchSortArrow('dist')}</th>
       <th style="width:90px;cursor:pointer;white-space:nowrap" title="点击：最近在上；再点：无日期置顶" onclick="toggleBatchSort('lastOrderAt')">最近下单${batchSortArrow('lastOrderAt')}</th>
       <th style="width:84px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：最近在上；再点：无日期置顶" onclick="toggleBatchSort('lastVisitAt')">最近拜访${batchSortArrow('lastVisitAt')}</th>
-      <th style="width:58px;text-align:center">详情</th>
-      <th style="width:52px;text-align:center" title="客户备注（手机端业务员可见）">备注</th>
+      <th style="width:76px;cursor:pointer;white-space:nowrap" title="点击：按 正常→审核→待定→补标 排列（距离数字恢复原显示）；再点：倒序" onclick="toggleBatchSort('coord')">坐标${batchSortArrow('coord')}</th>
+      <th style="cursor:pointer;white-space:nowrap" title="点击：按仓库距离由近到远；再点：由远到近（无坐标沉底/置顶）" onclick="toggleBatchSort('dist')">地址${batchSortArrow('dist')}</th>
     </tr>`;
     renderBatchTbody(); // 分页渲染（2026-09-09 老板定：固定每页 20 条）
   } else {
@@ -4783,12 +5531,40 @@ function syncBatchCheckedStat(total) {
 // checkbox 单击/取消 → 同步勾选集、行底色与头部计数（事件委托，页面只绑一次）
 document.addEventListener('change', e => {
   const cb = e.target;
-  if (!cb || !cb.classList || !cb.classList.contains('rowchk')) return;
+  if (!cb || !cb.classList) return;
+  // 2026-09-25 老板定：表头那个方框 = 「全选 / 取消本页」—— 勾上/取消，当页客户跟着全部勾上/取消
+  if (cb.classList.contains('batchChkAll')) { toggleBatchCheckAll(cb); return; }
+  if (!cb.classList.contains('rowchk')) return;
   if (cb.checked) batchChecked.add(cb.dataset.id); else batchChecked.delete(cb.dataset.id);
   const tr = cb.closest('tr');
   if (tr) tr.classList.toggle('row-sel', cb.checked);
   syncBatchCheckedStat();
+  syncBatchChkAll();   // 反向回写表头（全选 / 半选 / 未选）
 });
+
+// 表头「全选」：**只作用于当页可见的那 20 条**（老板 2026-09-25 定，不是整个批次）
+function toggleBatchCheckAll(box) {
+  const on = !!(box && box.checked);
+  document.querySelectorAll('#batchTbody input.rowchk').forEach(cb => {
+    const id = cb.dataset.id;
+    cb.checked = on;
+    if (on) batchChecked.add(id); else batchChecked.delete(id);
+    const tr = cb.closest('tr');
+    if (tr) tr.classList.toggle('row-sel', on);
+  });
+  syncBatchCheckedStat();
+  syncBatchChkAll();
+}
+
+// 把单行勾选情况回写到表头方框：全是勾=选中；全没勾=未选；勾了一部分=半选（中间的横线）
+function syncBatchChkAll() {
+  const box = $('batchChkAll');
+  if (!box) return;
+  const all = [...document.querySelectorAll('#batchTbody input.rowchk')];
+  const n = all.filter(cb => cb.checked).length;
+  box.checked = all.length > 0 && n === all.length;
+  box.indeterminate = n > 0 && n < all.length;
+}
 
 // ===== 复制到新批次（2026-09-08 老板定：勾选客户 → 顶部按钮 → 建新批次入批，原批次保留） =====
 function openCopyBatch() {
@@ -4929,7 +5705,9 @@ function renderBatchTbody() {
       const st = ST_MAP[c.visitStatus];
       if (st) taskSt = `<span class="pill ${st[1]}">${st[0]}</span>`;
     }
-    const phTitle = c.phone2 ? ` title="${esc(c.phone)} / ${esc(c.phone2)}"` : '';
+    // 2026-09-25 老板定：批次表**去掉手机号列**（手机号仍留在 data-search 里，搜索照旧可用）；
+    //            店名带完整编号 —— ⚠️ 编号已由 `custWithCode()` 拼进 `c.name`（custListCache 过了一遍），
+    //            这里**直接用 c.name 即可，不要再拼一次**，否则会变成「c347 c347 早阳肉包」。
     const rowSel = batchChecked.has(c._id) ? ' class="row-sel"' : '';
     const distActive = !!(batchSort && batchSort.key === 'dist');
     let coordCell = '补标';
@@ -4939,30 +5717,44 @@ function renderBatchTbody() {
       const dm = distToWareM(c);
       coordCell = (distActive && dm >= 0) ? `<span style="font-size:11px" title="距仓库直线距离">${fmtDistText(dm)}</span>` : '正常';
     }
+    const fullName = c.name || '';
+    // 2026-09-25 老板定：批次列表「店名」列按「**编号 + 分隔符 + 店名**」显示，分隔符（空格）固定在**同一列**。
+    // ⚠️ 不能用"编号后面补空格"来对齐 —— 比例字体下 c/a/1/9 宽度不同，补了照样参差；
+    //    所以把编号放成**定宽内联块**（inline-block + width），这样任何字体下店名都从同一列开始。
+    //    `c.name` 此时已是「编号 + 空格 + 店名」（custWithCode 拼过），这里按第一个空格拆开用。
+    const _raw = String(fullName);
+    const _sp = _raw.indexOf(' ');
+    const _hasCode = _sp > 0 && /^[a-z]\d+$/i.test(_raw.slice(0, _sp));
+    const nameCell = _hasCode
+      ? '<span style="display:inline-block;width:44px">' + esc(_raw.slice(0, _sp)) + '</span>' + esc(_raw.slice(_sp + 1))
+      : esc(_raw);
+    // 列序必须与表头**完全一致**：# 详情 备注 ☑ 店名 全局态 任务状态 最近下单 最近拜访 坐标 地址
+    // 2026-09-25：店名不再用 <b>（老板定"内容文字都不要加粗"）
     return `<tr data-id="${c._id}" data-search="${esc(((c.name || '') + ' ' + (c.phone || '') + ' ' + (c.phone2 || '') + ' ' + shortAddr(c.address || '')).toLowerCase())}"${rowSel}>
-      <td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}" ${batchChecked.has(c._id) ? 'checked' : ''}></td>
       <td class="no">${i + 1}</td>
-      <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name)}"><b style="cursor:pointer" onclick="openCustProfile('${c._id}')">${esc(c.name)}</b></td>
-      <td style="white-space:nowrap;text-align:center">${globalSt}</td>
-      <td style="white-space:nowrap;text-align:center">${taskSt}</td>
-      <td class="light" style="white-space:nowrap"${phTitle}>${esc(c.phone || '—')}</td>
-      <td style="white-space:nowrap">${coordCell}</td>
-      <td class="light" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address || '—')}">${esc(shortAddr(c.address) || '—')}</td>
-      <td style="white-space:nowrap">${c.lastOrderAt ? esc(c.lastOrderAt) : '<span class="pill warn">未下单</span>'}</td>
-      <td style="text-align:center;white-space:nowrap">${c.lastVisitAt ? esc(String(c.lastVisitAt).slice(5)) : '—'}</td>
       <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:24px;font-size:12px;padding:0 9px" onclick="showCustDetail('${c._id}')">详情</button></td>
       <td style="text-align:center;white-space:nowrap">${`<span class="rmk-btn${c.remark ? ' on' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">📝</span>`}</td>
+      <td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}" ${batchChecked.has(c._id) ? 'checked' : ''}></td>
+      <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(fullName)}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${nameCell}</span></td>
+      <td style="white-space:nowrap;text-align:center">${globalSt}</td>
+      <td style="white-space:nowrap;text-align:center">${taskSt}</td>
+      <td style="white-space:nowrap">${c.lastOrderAt ? esc(c.lastOrderAt) : '<span class="pill warn">未下单</span>'}</td>
+      <td style="text-align:center;white-space:nowrap">${c.lastVisitAt ? esc(String(c.lastVisitAt).slice(5)) : '—'}</td>
+      <td style="white-space:nowrap">${coordCell}</td>
+      <td class="light" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address || '—')}">${esc(shortAddr(c.address) || '—')}</td>
     </tr>`;
   }).join('');
   // 2026-09-09 老板定：最后一页不足 20 条补空行，表格保持与前几页相同的固定高度（翻页不跳动）
+  // ⚠️ colspan 跟着列数走 —— 2026-09-25 定稿后共 **11 列**（去掉手机号；列序见上方表头），两处都要同步
   let rowsHtml = rows;
   if (pageList.length < batchPageSize && total > 0) {
     for (let k = pageList.length; k < batchPageSize; k++) {
-      rowsHtml += '<tr class="row-fill"><td colspan="12" style="height:36px">&nbsp;</td></tr>';
+      rowsHtml += '<tr class="row-fill"><td colspan="11" style="height:36px">&nbsp;</td></tr>';
     }
   }
-  box.innerHTML = rowsHtml || `<tr><td colspan="12" class="empty">${q ? '没有匹配的客户' : '暂无客户，需要导入客户表'}</td></tr>`;
+  box.innerHTML = rowsHtml || `<tr><td colspan="11" class="empty">${q ? '没有匹配的客户' : '暂无客户，需要导入客户表'}</td></tr>`;
   renderBatchPageBar(total, pages, q);
+  syncBatchChkAll();   // 2026-09-25：每页重绘后回写表头「全选」方框状态（翻页/搜索/排序后不会残留上一页的勾选态）
 }
 
 function renderBatchPageBar(total, pages, q) {
@@ -5150,7 +5942,8 @@ async function openManualBatch() {
   $('mbSearch').value = '';
   $('mbList').innerHTML = '<div class="loading">加载中…</div>';
   const res = await api('listCustomers');
-  mbCusts = res.ok ? res.customers.filter(c => c.customerType === 'mall') : [];
+  // 2026-09-25 老板定：列表显示的店名要带完整编号 → 统一过 custWithCode（只影响后台内存）
+  mbCusts = res.ok ? custWithCode(res.customers).filter(c => c.customerType === 'mall') : [];
   const br = await api('listCustomerBatches');
   mbBatches = br.ok ? (br.batches || []) : [];
   mbSelected = new Set();
@@ -5263,7 +6056,8 @@ async function openAddCustToBatch() {
   $('addCustSearch').value = '';
   $('addCustList').innerHTML = '<div class="loading">加载中…</div>';
   const res = await api('listCustomers');
-  addCustAll = res.ok ? res.customers.filter(c => c.customerType === 'mall' && !(c.batchIds || []).length) : [];
+  // 2026-09-25 老板定：列表显示的店名要带完整编号 → 统一过 custWithCode（只影响后台内存）
+  addCustAll = res.ok ? custWithCode(res.customers).filter(c => c.customerType === 'mall' && !(c.batchIds || []).length) : [];
   addCustSelected = new Set();
   renderAddCustList();
 }
@@ -6772,6 +7566,44 @@ async function resolveClaim(id, decision) {
   renderClaimList();
   updateClaimBadge();
   loadCustomers();
+}
+
+// ===== 从商城更新客户信息（2026-09-25 老板定）=====
+// 老板要的是**可控**：点一下先看"将更新哪几家、改哪几个字段（原值 → 新值）"，确认后**才**写。
+// 云端 refreshFromMall 只写**白名单字段**（最近下单 / 最近浏览 / 地址 / 电话 / 区域 / 商城等级 /
+// 签约业务员 / 商城来源 / 标签 / 品类）；客户自己的资料（店名、坐标、客户备注、现场照片、所属批次）**一概不碰**。
+async function refreshFromMallClick() {
+  const btn = $('refreshMallBtn');
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 对比中…'; }
+  try {
+    const r = await api('refreshFromMall', {});   // 不传 apply = 只预览，不写库
+    if (!r || !r.ok) { alert('对比失败：' + ((r && r.msg) || '未知错误')); return; }
+    if (!r.customers) { alert('✅ 已是最新 —— 没有需要从商城更新的字段。'); return; }
+    const FIELD_CN = {
+      lastOrderAt: '最近下单', lastBrowseAt: '最近浏览', address: '地址', phone: '电话', region: '区域',
+      mallLevel: '商城等级', mallSalesman: '签约业务员', mallSource: '商城来源', mallTags: '标签', mallCategory: '品类'
+    };
+    // 明细最多列 15 家、每家最多 4 项 —— 全量列出来太长，反而没人看
+    const lines = (r.items || []).slice(0, 15).map(it => {
+      const ch = it.changes.slice(0, 4).map(x => '      ' + (FIELD_CN[x.field] || x.field) + '：' + (x.from || '（空）') + ' → ' + x.to).join('\n');
+      const moreCh = it.changes.length > 4 ? '\n      …还有 ' + (it.changes.length - 4) + ' 项' : '';
+      return '  · ' + (it.name || '') + '\n' + ch + moreCh;
+    }).join('\n');
+    const more = r.customers > 15 ? `\n\n  …还有 ${r.customers - 15} 家未列出` : '';
+    if (!confirm(
+      `将从商城更新客户信息：\n\n  共 ${r.customers} 家客户、${r.fields} 个字段\n\n${lines}${more}\n\n` +
+      `⚠️ 只改上面这些字段（最近下单 / 最近浏览 / 地址 / 电话 / 区域 / 商城等级 / 签约业务员 / 标签 / 品类）。\n` +
+      `   客户自己的资料（店名、坐标、客户备注、现场照片、所属批次）一概不动。\n\n` +
+      `确定写入吗？`
+    )) return;
+    if (btn) btn.textContent = '🔄 写入中…';
+    const w = await api('refreshFromMall', { apply: true });
+    alert((w && w.ok) ? ('✅ ' + (w.msg || '完成')) : ('更新失败：' + ((w && w.msg) || '未知错误')));
+    if (w && w.ok) loadCustomers();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = old || '🔄 从商城更新'; }
+  }
 }
 
 // ===== 比对认领（独立按钮；2026-09-08 起本地比对：浏览器拉库→本地算→结果传云端写） =====

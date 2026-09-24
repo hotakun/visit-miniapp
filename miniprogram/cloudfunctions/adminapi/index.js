@@ -69,7 +69,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'ping'];
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -329,6 +329,7 @@ exports.main = async (event) => {
     if (action === 'runMallMatch') return await runMallMatch(event);
     if (action === 'listMallLibrary') return await listMallLibrary(event);
     if (action === 'applyMallMatch') return await applyMallMatch(event);
+    if (action === 'refreshFromMall') return await refreshFromMall(event);   // 2026-09-25：从商城更新客户信息（白名单字段 + 先预览）
     if (action === 'listMallClaims') return await listMallClaims(event);
     if (action === 'resolveMallClaim') return await resolveMallClaim(event);
     if (action === 'listCustomerVisits') return await listCustomerVisits(event);
@@ -1406,9 +1407,16 @@ async function listCustomers(event) {
     customers: rows.map(c => ({
       _id: c._id, name: c.name, customerType: c.customerType, address: c.address,
       phone: c.phone, phone2: c.phone2 || '', lat: c.lat, lng: c.lng, coord_status: c.coord_status,
+      // ⚠️ 2026-09-25 补 4 个字段（此处是**手工逐个组装**，不补前端就拿不到）：
+      //   nameRaw  = 导入时保留的原值「编号 + 店名」（如 `a101 沙县小吃(市场路店)`）→ 前端"店名带编号"就用它
+      //   mallCode = **客户编号**（`a101` / `c350`）—— ⚠️ 别和 mallKey 搞混：那是 22 位商城内部系统 Key
+      //   salesman / level = 业务负责人（原值）与商城等级 —— 新数据的字段名是这两个，
+      //                      原先只返回 mallSalesman/mallLevel → 与数据对不上，详情页那两行一直是空的（本次一并修）
+      nameRaw: c.nameRaw || '', mallCode: c.mallCode || '',
+      salesman: c.salesman || '', level: c.level || '',
       mallJoinedAt: c.mallJoinedAt || null,
       lastOrderAt: c.lastOrderAt || '', lastBrowseAt: c.lastBrowseAt || '',
-      mallSalesman: c.mallSalesman || '', mallLevel: c.mallLevel || '',
+      mallSalesman: c.mallSalesman || c.salesman || '', mallLevel: c.mallLevel || c.level || '',
       status: c.status,
       region: c.region || '',
       batchIds: Array.isArray(c.batchIds) ? c.batchIds : [],
@@ -1829,6 +1837,83 @@ async function applyMallMatch(event) {
     }
   });
   return { ok: true, autoMatched, dynamicRefreshed, staticChangedCnt, pending: pendingList.length, msg: `已应用：自动认领 ${autoMatched} 家、待确认 ${pendingList.length} 条、忽略 ${Number(ignored) || 0} 条` };
+}
+
+// ===== 从商城更新客户信息（2026-09-25 老板定：做成按钮 —— 先预览、确认后才写、且只写白名单字段）=====
+// 背景：原先的「商城比对认领」（runMallMatch / applyMallMatch）是**自动**跑的，老板要的是**可控**：
+//   点一下先看"将更新 N 家 / 共 M 个字段（逐字段 from → to）"，确认后**才**写。
+// 白名单（老板 2026-09-25 选定"最全"档）—— 左侧是商城库 mall_customers 的字段名，右侧是客户档案 customers 的字段名：
+const REFRESH_MAP = [
+  ['lastOrderAt', 'lastOrderAt'],   // 最近下单时间
+  ['lastBrowseAt', 'lastBrowseAt'], // 最近浏览时间
+  ['address', 'address'],           // 地址
+  ['phone', 'phone'],               // 电话
+  ['region', 'region'],             // 区域
+  ['level', 'mallLevel'],           // 商城等级（两边字段名不同）
+  ['salesman', 'mallSalesman'],     // 签约业务员（商城侧）
+  ['source', 'mallSource'],
+  ['tags', 'mallTags'],
+  ['category', 'mallCategory']
+];
+// ⚠️ 刻意**不在白名单里**（客户自己的资料，绝不能被商城覆盖）：
+//   name（店名）、lat/lng（坐标）、coord_status / coordSource（坐标状态与来源）、remark（客户备注）、
+//   photos（现场照片）、batchIds（批次归属）、status、customerType、以及 plat 里**人工录入**的内容。
+// ⚠️ `plat`（平台画像：评分/口味环境服务/菜品/设施/图片…）**不在商城库里** —— 它来自大众点评，
+//   只在导入 customers 分片时写入，所以本入口拿不到、也不动它（要更新 plat 走分片导入）。
+async function refreshFromMall(event) {
+  const doApply = !!(event && event.apply);   // 不传 apply = 只预览，绝不写库
+  const custs = await fetchAll('customers', {}, {
+    _id: true, mallKey: true, name: true,
+    address: true, phone: true, phone2: true, region: true,
+    lastOrderAt: true, lastBrowseAt: true, mallLevel: true, mallSalesman: true,
+    mallSource: true, mallTags: true, mallCategory: true
+  });
+  const malls = await fetchAll('mall_customers', {}, {});
+  const byKey = {};
+  malls.forEach(m => { const k = String(m.mallKey || '').trim(); if (k) byKey[k] = m; });
+
+  const items = [];   // 预览明细
+  const writes = [];  // 待写
+  custs.forEach(c => {
+    const k = String(c.mallKey || '').trim();
+    if (!k) return;                       // 没认领过商城的，跳过（认领走比对那条链路）
+    const m = byKey[k];
+    if (!m) return;
+    const diff = [];
+    const upd = {};
+    REFRESH_MAP.forEach(([mf, cf]) => {
+      const nv = String(m[mf] == null ? '' : m[mf]).trim();
+      const ov = String(c[cf] == null ? '' : c[cf]).trim();
+      if (!nv || nv === ov) return;       // 商城值为空 → 视为"没这项"，不覆盖（防止把已有值清空）
+      diff.push({ field: cf, from: ov, to: nv });
+      upd[cf] = m[mf];
+    });
+    if (diff.length) {
+      items.push({ customerId: c._id, name: c.name, mallName: m.name || '', changes: diff });
+      writes.push({ id: c._id, upd });
+    }
+  });
+  const fieldCount = items.reduce((s, x) => s + x.changes.length, 0);
+
+  if (!doApply) {
+    return {
+      ok: true, preview: true, customers: items.length, fields: fieldCount,
+      items: items.slice(0, 300),   // 明细最多回 300 家，避免返回值过大
+      msg: `将更新 ${items.length} 家、共 ${fieldCount} 个字段（尚未写入）`
+    };
+  }
+
+  const t0 = Date.now();
+  let updated = 0, failed = 0;
+  for (let i = 0; i < writes.length; i += 20) {
+    await Promise.all(writes.slice(i, i + 20).map(async w => {
+      try {
+        await db.collection('customers').doc(w.id).update({ data: Object.assign({}, w.upd, { mallRefreshedAt: Date.now() }) });
+        updated++;
+      } catch (e) { failed++; }   // 单条失败不影响其他
+    }));
+  }
+  return { ok: true, preview: false, customers: writes.length, fields: fieldCount, updated, failed, ms: Date.now() - t0, msg: `已更新 ${updated} 家（共 ${fieldCount} 个字段）${failed ? '，失败 ' + failed + ' 家' : ''}` };
 }
 
 // ===== 待确认认领清单（mall_claims 人工确认/拒绝；2026-09-08 批次化：batchId 过滤本批） =====

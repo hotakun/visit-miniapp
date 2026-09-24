@@ -4,6 +4,15 @@
     <map class="m" id="mp" show-location="{{true}}" markers="{{markers}}" polyline="{{polyline}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="{{mapScale}}"
          bindmarkertap="onMarkerTap" bindcallouttap="onCalloutTap"></map>
+    <!-- 2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成「聚火地图」。
+         去 logo 用**裁剪法**：.m-wrap 加 overflow:hidden，.m 高度多出 40px → 最底部那块（腾讯 logo + 版权/审图号）
+         正好落在被裁掉的范围里。（官方无隐藏接口，"裁剪"是社区通用做法，视觉上等于去掉。）
+         因为不再需要"盖住"，badge 改用**普通 view + z-index** —— 小程序 map 自基础库 2.7.0 起支持同层渲染，
+         官方已推荐用 view 替代 cover-view（cover-view 的 CSS 支持太有限，是上一版没生效的原因之一）。 -->
+    <view class="jh-badge">
+      <view class="jh-compass"><view class="jh-needle"></view></view>
+      <view class="jh-word">聚火地图</view>
+    </view>
     <!-- 仓库开关（2026-09-09 老板定：横幅下方左侧小开关；开=显示仓库星+重排以仓库为起点；默认关） -->
     <view class="wh-switch {{whStarOn ? 'on' : ''}}" bindtap="toggleWhStar">⭐ 仓库</view>
     <!-- 地图小圆钮（2026-09-09 老板定：横幅条下方靠右横排——我的位置/刷新；路况按钮已按老板要求移除） -->

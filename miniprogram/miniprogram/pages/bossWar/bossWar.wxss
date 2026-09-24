@@ -24,8 +24,11 @@
 .c-red { color: #E5484D; }
 
 /* 地图 */
-.wmap-wrap { position: relative; margin: 0 28rpx; }
-.wmap { width: 100%; height: 55vh; border-radius: 20rpx; box-shadow: 0 2rpx 14rpx rgba(31,36,48,.10); }
+.wmap-wrap { position: relative; margin: 0 28rpx; overflow: hidden; border-radius: 20rpx; }
+/* ⚠️ 2026-09-25：高度**多出 40rpx** —— 多出来的底部被 .wmap-wrap 的 overflow:hidden 裁掉，
+   而腾讯地图的 logo + 版权/审图号就在那一块（官方无隐藏接口，"裁剪"是社区通用做法）。
+   圆角/阴影从地图挪到 wrapper 上，否则裁完底部两个角会变方。 */
+.wmap { width: 100%; height: calc(55vh + 40rpx); }
 .wlegend { position: absolute; left: 16rpx; bottom: 16rpx; background: rgba(255,255,255,.95); border-radius: 14rpx; padding: 12rpx 16rpx; display: flex; gap: 16rpx; font-size: 20rpx; color: #333A44; }
 .wlegend .lg { display: flex; align-items: center; gap: 6rpx; }
 .wlegend .dot { width: 16rpx; height: 16rpx; border-radius: 50%; }
@@ -76,3 +79,17 @@
 .tb .tic { font-size: 38rpx; line-height: 1; }
 .tb.on { color: var(--primary-deep); }
 .tb.on .pill { color: #fff; background: linear-gradient(180deg, #FF8A50, #F5531C); box-shadow: 0 20rpx 40rpx -14rpx rgba(245,83,28,.75), inset 0 1rpx 0 rgba(255,255,255,.5); }
+
+/* ===== 「聚火地图」地图标识（2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成这个） =====
+   logo 已被 .wmap-wrap 的"裁剪法"裁掉 → badge 不需要不透明底（原 cover-view 胶囊版已作废），
+   用「橙字白描边」，指南针用「圆环 + 旋转 45° 的小方块」拼，白边靠多层 text-shadow。
+   ⚠️ 位置（2026-09-25 老板定，最终版）：**贴住地图卡片的右下角**（right:0 / bottom:0）——
+     腾讯地图的 logo + 版权/审图号就在**右下角**，白底 badge 直接把它们**压住**（与 .wmap-wrap 的裁剪法双保险）。
+     因为贴角，只保留**左上圆角**；右下两角跟着卡片走（卡片本身 border-radius:20rpx + overflow:hidden）。 */
+.jh-badge { position: absolute; right: 0; bottom: 0; z-index: 99; pointer-events: none;
+  display: flex; align-items: flex-end; gap: 6rpx;
+  background: rgba(255,255,255,.94); border-radius: 16rpx 0 0 0; padding: 5rpx 12rpx 6rpx 10rpx; }
+.jh-compass { width: 13px; height: 13px; border: 2px solid #F5531C; border-radius: 50%; margin-right: 3px;
+  display: flex; align-items: center; justify-content: center; }
+.jh-needle { width: 5px; height: 5px; background: #F5531C; transform: rotate(45deg); }
+.jh-word { font-size: 12px; font-weight: 800; letter-spacing: -0.2px; line-height: 1; color: #F5531C; }

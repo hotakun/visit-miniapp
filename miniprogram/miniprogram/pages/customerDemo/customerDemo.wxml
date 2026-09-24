@@ -149,13 +149,22 @@
       <view class="r" wx:if="{{d.region}}"><text class="k">商圈</text><text class="v">{{d.region}}</text></view>
       <!-- 小地图（2026-09-13 老板要求加上）：以客户坐标为中心、不可拖、可缩 10~20 级、初始 16 级
            ⚠️ <map> 是原生组件，卡片折叠用的 CSS display:none 压不住它 → 必须用 wx:if 跟展开状态走 -->
-      <map class="cmap" wx:if="{{open.serv}}"
-           latitude="{{d.lat}}" longitude="{{d.lng}}"
-           scale="16" min-scale="10" max-scale="20"
-           enable-scroll="{{false}}" enable-zoom="{{true}}"
-           enable-rotate="{{false}}" enable-overlooking="{{false}}"
-           show-location="{{false}}" enable-poi="{{false}}" markers="{{markers}}"
-           polyline="{{polyline}}"></map>
+      <view class="cmap-wrap" wx:if="{{open.serv}}">
+        <map class="cmap"
+             latitude="{{d.lat}}" longitude="{{d.lng}}"
+             scale="16" min-scale="10" max-scale="20"
+             enable-scroll="{{false}}" enable-zoom="{{true}}"
+             enable-rotate="{{false}}" enable-overlooking="{{false}}"
+             show-location="{{false}}" enable-poi="{{false}}" markers="{{markers}}"
+             polyline="{{polyline}}"></map>
+        <!-- 2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成「聚火地图」。
+             去 logo 用**裁剪法**：.cmap-wrap 加 overflow:hidden，.cmap 高度多出 40px → 底部 logo 区被裁掉。
+             ⚠️ wx:if 必须留在**外层 wrapper** 上（卡片折叠靠它控制显隐，原生组件用 CSS 隐藏压不住）。 -->
+        <view class="jh-badge">
+          <view class="jh-compass"><view class="jh-needle"></view></view>
+          <view class="jh-word">聚火地图</view>
+        </view>
+      </view>
       <!-- ↑ enable-poi 关掉地图上的其他店铺 POI（2.14.0+）；必须写 Mustache 绑定，"false" 会被当字符串真值 -->
       <view class="coords" wx:if="{{d.lat}}">
         <text class="cdot"></text>我的位置（离店约 80 米） · <text class="cwalk"></text>步行路线 · 📍 纬度 {{d.lat}} · 经度 {{d.lng}}

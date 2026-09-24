@@ -20,6 +20,14 @@
     <map class="wmap" id="wmp" show-location="{{true}}" markers="{{markers}}" polyline="{{trackPolyline}}"
          latitude="{{centerLat}}" longitude="{{centerLng}}" scale="{{mapScale}}"
          bindmarkertap="onMarkerTap" bindcallouttap="onMarkerTap" bindtap="clearTrack"></map>
+    <!-- 2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成「聚火地图」（同任务地图页口径）。
+         去 logo 用**裁剪法**：.wmap-wrap 加 overflow:hidden，.wmap 高度多出 40rpx → 底部 logo 区被裁掉。
+         badge 用普通 view（map 自基础库 2.7.0 起同层渲染，官方推荐 view 替代 cover-view）。
+         位置放**右下**，避开左下角已有的图例 .wlegend（logo 已被裁掉，不需要再盖它）。 -->
+    <view class="jh-badge">
+      <view class="jh-compass"><view class="jh-needle"></view></view>
+      <view class="jh-word">聚火地图</view>
+    </view>
     <!-- 小圆钮（同任务地图）：📍我的位置 / ↻刷新 -->
     <view class="wctrl">
       <view class="wfab" bindtap="backToMe">📍</view>

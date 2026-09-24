@@ -193,9 +193,12 @@
 .hshot { flex: 1; height: 68px; border-radius: 9px; overflow: hidden; background: #F0F2F5; border: 1px solid #EFF1F5; }
 .hshot-img { width: 100%; height: 100%; display: block; }
 
-/* 商圈与位置的小地图（2026-09-13）：高 150px / 圆角 12px / 宽占满 */
-.cmap { width: 100%; height: 150px; margin-top: 9px; border-radius: 12px; overflow: hidden;
+/* 商圈与位置的小地图（2026-09-13）：高 150px / 圆角 12px / 宽占满
+   2026-09-25：外面包一层 .cmap-wrap 专门做**裁剪**（overflow:hidden；高度比 map 少 40px），
+   被裁掉的正好是腾讯地图 logo/版权那一块。圆角/边框/阴影都挪到 wrapper 上，否则裁完底部两角会变方。 */
+.cmap-wrap { position: relative; width: 100%; height: 150px; margin-top: 9px; border-radius: 12px; overflow: hidden;
   border: 1px solid #EFF1F5; box-shadow: 0 2px 8px rgba(31,36,48,.05); }
+.cmap { width: 100%; height: calc(100% + 40px); }
 .coords { margin-top: 6px; font-size: 11px; color: #99A2AE; text-align: right; }
 /* 图例小蓝点（跟地图上那个 marker 同色） */
 .cdot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%;
@@ -203,3 +206,15 @@
 /* 图例绿色短线（= 地图上那条步行路线） */
 .cwalk { display: inline-block; width: 12px; height: 3px; margin-right: 4px; border-radius: 2px;
   background: #16A34A; vertical-align: middle; }
+
+/* ===== 「聚火地图」地图标识（2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成这个） =====
+   logo 已被上面的"裁剪法"裁掉，所以 badge **不再需要不透明底** → 改成和**后台一致**的「橙字白描边」。
+   指南针用「圆环 + 旋转 45° 的小方块」拼（view 支持 border-radius / transform），白边靠多层 text-shadow。 */
+.jh-badge { position: absolute; right: 8px; bottom: 8px; z-index: 99; pointer-events: none;
+  display: flex; align-items: flex-end; gap: 3px; }
+.jh-compass { width: 13px; height: 13px; border: 2px solid #F5531C; border-radius: 50%; margin-right: 3px;
+  box-shadow: 0 0 0 2px #fff;   /* 白圈 = 图标的白边 */
+  display: flex; align-items: center; justify-content: center; }
+.jh-needle { width: 5px; height: 5px; background: #F5531C; transform: rotate(45deg); }
+.jh-word { font-size: 12px; font-weight: 800; letter-spacing: -0.2px; line-height: 1; color: #F5531C;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 3px #fff; }

@@ -1,7 +1,9 @@
 /* 地图页（2026-09-08 二期核心） */
 .page { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-.m-wrap { position: relative; width: 100%; height: 100%; }
-.m { width: 100%; height: 100%; }
+.m-wrap { position: relative; width: 100%; height: 100%; overflow: hidden; }
+/* ⚠️ 2026-09-25：高度**多出 40px** —— 多出来的底部会被 .m-wrap 的 overflow:hidden 裁掉，
+   而腾讯地图的 logo + 版权/审图号就在那一块。这是"去掉"它们的手段（官方无隐藏接口）。 */
+.m { width: 100%; height: calc(100% + 40px); }
 .center-box { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--sub); font-size: 14px; font-weight: 400; text-align: center; white-space: pre-line; }
 
 /* 地图小圆钮（2026-09-09 老板定：横幅条下方靠右横排——📍我的位置/↻刷新，纯图标无文字；路况已移除） */
@@ -69,3 +71,17 @@
 .tabbar-slim { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: #fff; border-top: 1rpx solid var(--line); display: flex; z-index: 20; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; }
 .ts { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 400; color: var(--sub); }
 .ts.on { color: var(--primary); font-weight: 700; }
+
+/* ===== 「聚火地图」地图标识（2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成这个） =====
+   logo 已被 .m-wrap 的"裁剪法"裁掉，所以 badge 不需要不透明底 → 用和**后台一致**的「橙字白描边」。
+   指南针用「圆环 + 旋转 45° 的小方块」拼（view 支持 border-radius / transform），白边靠多层 text-shadow。
+   ⚠️ 位置（2026-09-25 老板定）：**靠左 + 抬到导航栏上方** —— 本页底部 .tabbar 是 fixed、离底 14px、高 64px
+      （占 14~78px），贴底会被它挡住；bottom 由 100px 下调到 **92px**（老板看过效果后要求再往下 8px）。 */
+.jh-badge { position: absolute; left: 14px; bottom: 92px; z-index: 99; pointer-events: none;
+  display: flex; align-items: flex-end; gap: 3px; }
+.jh-compass { width: 13px; height: 13px; border: 2px solid #F5531C; border-radius: 50%; margin-right: 3px;
+  box-shadow: 0 0 0 2px #fff;   /* 白圈 = 图标的白边 */
+  display: flex; align-items: center; justify-content: center; }
+.jh-needle { width: 5px; height: 5px; background: #F5531C; transform: rotate(45deg); }
+.jh-word { font-size: 12px; font-weight: 800; letter-spacing: -0.2px; line-height: 1; color: #F5531C;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 3px #fff; }
