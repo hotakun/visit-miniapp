@@ -69,7 +69,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'ping'];
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -381,11 +381,124 @@ exports.main = async (event) => {
     if (action === 'usageStats') return await usageStats(event); // 2026-09-11 批 3：云调用用量查询
     if (action === 'testMpAlert') return await testMpAlert(event); // 2026-09-12：用量告警测试发送
     if (action === 'ping') return { ok: true, pong: Date.now() };
+    if (action === 'getCustomerDetail') return await getCustomerDetail(event);        // 2026-09-25：客户详情页聚合查询
+    if (action === 'updateCustomerCoords') return await updateCustomerCoords(event);  // 2026-09-25：后台改坐标（直接生效）
+    if (action === 'updateCustomerFields') return await updateCustomerFields(event);  // 2026-09-25：后台改客户资料
     return { ok: true, pong: Date.now() };
   } catch (e) {
     return { ok: false, code: 'ERROR', msg: e.message || '服务异常' };
   }
 };
+
+// ===== 客户详情页（2026-09-25 新增）=====
+// `getCustomerDetail` —— 一次把详情页要的数据全取回来：客户主档（含 plat）+ 订单（按业务键 customerCode，
+//   同编号主副两家都算）+ 明细汇总（常买商品）+ 全部拜访（跨任务）+ 备注历史。
+// `updateCustomerCoords` —— 后台管理员改坐标 **直接生效**（老板 09-24 定：不搞"待审核"那套），
+//   同时写 coordSource='admin' 与 coordUpdatedAt，供详情页显示来源标签 / 距上个坐标。
+// `updateCustomerFields` —— 编辑态保存客户资料（**白名单字段**，防止误改 mallKey 这类关联键）。
+const EDITABLE_CUST_FIELDS = ['name', 'phone', 'phone2', 'address', 'businessArea', 'businessHours', 'category', 'contactName'];
+
+async function getCustomerDetail(event) {
+  const { customerId } = event;
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
+  if (!cDoc || !cDoc.data) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const c = cDoc.data;
+  const code = c.mallCode || '';
+
+  // —— ① 订单（按业务键 customerCode；同编号的主副两家都会命中）——
+  let orders = [];
+  if (code) {
+    const r = await db.collection('orders').where({ customerCode: code })
+      .orderBy('orderedAt', 'desc').limit(50).get().catch(() => ({ data: [] }));
+    orders = r.data || [];
+  }
+  const orderNoList = orders.map(o => o.orderNo).filter(Boolean);
+
+  // —— ② 明细（这些订单的商品行）→ 汇总「常买」+ 每单行数 ——
+  let items = [];
+  for (let i = 0; i < orderNoList.length; i += 20) {
+    const part = await db.collection('order_items')
+      .where({ orderNo: _.in(orderNoList.slice(i, i + 20)) }).limit(500).get().catch(() => ({ data: [] }));
+    items = items.concat(part.data || []);
+  }
+  const linesOf = {};
+  const byGoods = {};
+  items.forEach(it => {
+    linesOf[it.orderNo] = (linesOf[it.orderNo] || 0) + 1;
+    const k = it.goodsName || it.goodsCode || '';
+    if (!k) return;
+    if (!byGoods[k]) byGoods[k] = { name: k, spec: it.spec || '', unit: it.unit || '', qty: 0, amount: 0, times: 0 };
+    byGoods[k].qty += Number(it.orderQty) || 0;
+    byGoods[k].amount += Number(it.amount) || 0;
+    byGoods[k].times += 1;
+  });
+  const topGoods = Object.keys(byGoods).map(k => byGoods[k]).sort((a, b) => b.qty - a.qty).slice(0, 8);
+
+  // —— ③ 拜访（该客户全部，跨任务；带转写文字与现场照片缩略图 fileID）——
+  const vRes = await db.collection('visits').where({ customerId })
+    .orderBy('createdAt', 'desc').limit(30).get().catch(() => ({ data: [] }));
+  const visits = (vRes.data || []).map(v => ({
+    _id: v._id,
+    taskId: v.taskId || '',
+    status: v.status || '',
+    visitedAt: v.visitedAt || '',
+    result: v.result || '',
+    duration: Number(v.duration) || 0,
+    remark: v.remark || v.text || '',
+    audioCount: (Array.isArray(v.audios) && v.audios.length) || (v.audio && v.audio.fileID ? 1 : 0),
+    trText: (v.trEdited && v.trEdited.text) || '',
+    thumbs: (v.photos || []).map(p => (p && (p.thumbID || p.fileID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 3)
+  }));
+
+  // —— ④ 备注历史（新 → 旧）——
+  const rmk = await fetchAll('customer_remarks', { customerId }, {});
+  rmk.sort((a, b) => (b.at || 0) - (a.at || 0));
+
+  return {
+    ok: true,
+    customer: c,
+    orders: orders.slice(0, 20).map(o => ({
+      orderNo: o.orderNo, orderedAt: o.orderedAt, actualAmount: o.actualAmount,
+      orderStatus: o.orderStatus, payMethod: o.payMethod, lines: linesOf[o.orderNo] || 0
+    })),
+    orderTotal: orders.length,
+    orderAmountSum: orders.reduce((a, o) => a + (Number(o.actualAmount) || 0), 0),
+    topGoods,
+    visits,
+    remarks: rmk.slice(0, 30).map(r => ({ text: r.text || '', at: r.at || 0, by: r.by || '' }))
+  };
+}
+
+// 后台管理员改坐标 —— **直接生效**（这是后台管理员本人操作，不走业务员报错那条审核路）
+async function updateCustomerCoords(event) {
+  const { customerId } = event;
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const la = Number(event.lat), ln = Number(event.lng);
+  if (!isFinite(la) || !isFinite(ln)) return { ok: false, code: 'BAD_ARG', msg: '经纬度必须是数字' };
+  if (la < -90 || la > 90 || ln < -180 || ln > 180) {
+    return { ok: false, code: 'BAD_ARG', msg: '坐标超出范围（纬度 ±90 / 经度 ±180）' };
+  }
+  await db.collection('customers').doc(customerId).update({
+    data: { lat: la, lng: ln, coord_status: 'ok', coordSource: 'admin', coordUpdatedAt: Date.now() }
+  });
+  return { ok: true, lat: la, lng: ln, coordSource: 'admin' };
+}
+
+// 编辑态保存客户资料（白名单）
+async function updateCustomerFields(event) {
+  const { customerId, fields } = event;
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  if (!fields || typeof fields !== 'object') return { ok: false, code: 'BAD_ARG', msg: '没有要保存的字段' };
+  const data = {};
+  EDITABLE_CUST_FIELDS.forEach(k => {
+    if (fields[k] !== undefined) data[k] = String(fields[k] == null ? '' : fields[k]).trim().slice(0, 200);
+  });
+  if (!Object.keys(data).length) return { ok: false, code: 'BAD_ARG', msg: '没有可保存的字段' };
+  data.updatedAt = Date.now();
+  await db.collection('customers').doc(customerId).update({ data });
+  return { ok: true, saved: Object.keys(data) };
+}
 
 async function verifyAdmin(event) {
   // Web 后台账号密码校验（管理员唯一入口）
