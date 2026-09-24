@@ -249,6 +249,27 @@ public class ShellForm : Form
         }
     }
 
+    // ===== 窗口圆角（2026-09-24 老板定：只给 Win11 做）=====
+    // 用 DWM 的「窗口圆角偏好」属性：
+    //   · Windows 11 → 系统级圆角：连 WebView2 内容一起裁、边缘有抗锯齿，最大化时系统**自动变直角**
+    //   · Windows 10 → 该属性不存在，调用只会返回非 0 失败码，**不会抛异常、不影响窗口**（所以无需判断系统版本）
+    // 圆角只有两档：DWMWCP_ROUND(2) = 标准（约 8px）／ DWMWCP_ROUNDSMALL(3) = 小（约 4px）
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWCP_ROUND = 2;
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        try
+        {
+            int pref = DWMWCP_ROUND;
+            DwmSetWindowAttribute(this.Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, 4);
+        }
+        catch { /* 旧系统 / 任何异常：忽略，窗口保持直角 */ }
+    }
+
     // 加载胶囊字体：阿里巴巴普惠体 55 Regular（内嵌 TTF 随包分发）；缺失回退微软雅黑
     private void LoadBadgeFont()
     {

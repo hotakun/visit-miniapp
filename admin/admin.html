@@ -61,6 +61,9 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .staro.half{color:#F5A623;opacity:.5}
 .staro.none{color:#D5DAE0}
 .staro:hover{transform:scale(1.25)}
+/* 推荐人列的小铅笔（2026-09-24 老板定：只留一个灰色铅笔，不要文字按钮；**左右镜像** = 笔尖朝向反过来） */
+.ref-pen{display:inline-block;margin-left:6px;color:#C4CAD1;cursor:pointer;font-size:13px;line-height:1;vertical-align:middle;transform:scaleX(-1)}
+.ref-pen:hover{color:var(--primary)}
 .badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--primary);color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;margin-left:5px}
 /* 注册审核角标（2026-09-09 老板定：左侧栏菜单+待审核 Tab 右上角计数） */
 .nav-badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;margin-left:auto}
@@ -181,6 +184,13 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .no-tag.c6{background:#F0FAF9;color:#7FD0C9}
 .no-tag.c7{background:#FDF1F2;color:#EF9EA5}
 .pill{font-size:11px;font-weight:800;padding:4px 10px;border-radius:99px}
+/* 已停用的业务员：整行信息半透明，便于一眼区分（2026-09-24 老板定）
+   ⚠️ 带 .keep 的那一格（状态开关）保持清晰 —— 否则看不出"是停用状态"本身 */
+tr.row-off td:not(.keep){opacity:.4}
+/* 业务员列表里的文字一律正常粗细（2026-09-24 老板定：这个列表内容不要加粗）
+   —— 一条规则覆盖姓名标签、各胶囊 .pill(font-weight:800)、星级符号等全部后代元素
+   ⚠️ 用 !important 是因为 .tbl td 的基础字重是 600；这是整个项目表格的底子，别处不改 */
+#ptable0 tbody td,#ptable0 tbody td *{font-weight:400!important}
 /* 审批按钮悬停放大：一次性切换，几乎零资源 */
 .btn-zoom{transition:transform .15s ease}
 .btn-zoom:hover{transform:scale(1.18)}
@@ -1429,7 +1439,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
         </div>
         <div class="task-shell-body" style="overflow-y:auto">
         <table class="tbl" id="ptable0">
-          <thead><tr><th>姓名</th><th style="width:76px">星级</th><th>手机号</th><th>推荐人</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:110px">操作</th></tr></thead>
+          <thead><tr><th>姓名</th><th style="width:76px">星级</th><th>手机号</th><th>推荐人</th><th style="width:72px;white-space:nowrap">个人详情</th><th>微信绑定</th><th>服务号绑定</th><th>当前状态</th><th>状态</th><th style="width:104px;white-space:nowrap">操作 <input type="checkbox" id="opUnlock" style="vertical-align:middle;cursor:pointer;margin-left:2px" title="勾选并输入当前操作员密码后，本列按钮才可用（防误操作）" onchange="toggleOpLock(this.checked)"></th></tr></thead>
           <tbody id="smTbody"></tbody>
         </table>
         <table class="tbl" id="ptable1" style="display:none">
@@ -1824,7 +1834,10 @@ function enterWb(m) {
     $(id).style.display = purpIds.indexOf(id) >= 0 ? '' : 'none';
     $(id).classList.toggle('on', id === purpIds[0]);
   });
-  nav('tasks');
+  // 2026-09-24 老板定：**首次进入系统**默认落到「战况监控」（手动切换工作台时仍回任务管理）
+  // 理由：壳里"直接进战况"地图必出图；把默认页设成战况，最省事也最稳
+  if (!enterWb._first) { enterWb._first = true; nav('track'); }
+  else nav('tasks');
 }
 
 // 点击选择拜访目的（同一时刻仅一项选中）
@@ -1845,7 +1858,6 @@ function nav(p) {
   if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台')); }
   // 顶部导航：仅回访工作台的客户管理页显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
   $('topActions').style.display = (p === 'customers' && curMode === 'mall') ? 'flex' : 'none';
-  if (p === 'track') { loadTrackMapLib(); }
   if (p === 'customers') {
     // 两工作台各自文案与按钮（2026-09-07 批次化：回访=批次卡片列表；新客=原客户表格）
     const isNew = curMode === 'new';
@@ -1860,6 +1872,19 @@ function nav(p) {
     if (!isNew) { loadLastMallImport(); loadClaims(); }
   }
   $('page-' + p).style.display = (p === 'tasks' || p === 'customers' || p === 'track') ? 'flex' : 'block';
+  if (p === 'track') {
+    // 2026-09-24 修（老板发现的规律："先去别的页、再回战况就看不到地图"）：
+    // 地图一旦在「容器宽高还没算好」时创建过，腾讯 GL 就渲染成空白、且**不会自愈**（补 resize 也救不回）。
+    // 对策：每次进战况页都干净重建一次，但**复用项目现成的 rebuildTrackMap()** ——
+    // 它会把挂在旧地图上的图层（custLayer / 仓库星 / 轨迹 / 搜索层…）一并清理干净，比自己重写可靠。
+    requestAnimationFrame(() => {
+      trackIntroPlayed = true; // 跳过入场动画，避免又卡雷达
+      revealTrackMap();        // 关键顺序：先让容器可见，建图那一刻它才有宽高
+      if (!window.TMap) { loadTrackMapLib(); return; } // SDK 还没加载 → 去加载（加载完会建图）
+      if (trackMap) rebuildTrackMap();                 // 已有地图 → 走现成的销毁+重建（保留视野）
+      else buildTrackMap();                            // 首次进入 → 直接建
+    });
+  }
   if (p === 'tasks') {
     // 2026-09-09 修复：taskListTitle 元素已随任务大卡重构删除，此前这里对 null 赋值抛错导致 loadTasks() 永不执行
     //（首屏任务卡片只能等第一轮轮询填充——老板报障 10 多秒才出的代码级根因）
@@ -2941,12 +2966,52 @@ let trafficOn = false, trafficOpacity = 1;
 // 地图拾取器（2026-09-08 老板定，官方示例口径）：开关开启后点击地图显示坐标（后台口径：经度在前）
 let pickOn = false;
 
+// 确保地图可见 + 雷达退场（2026-09-24 加固：数据请求失败时也必须走，否则会卡在雷达界面）
+function revealTrackMap() {
+  const el = $('trackMap');
+  if (el) el.style.opacity = '1';
+  const tl = $('trackLoading');
+  if (tl) tl.style.display = 'none';
+  nudgeTrackResize();
+}
+
+// 2026-09-24 加固（专治"有时好有时坏"）：地图在「容器宽高还没算好」时创建，腾讯 GL 会渲染成空白
+// 且**不会自己恢复** —— 启动慢/布局慢时命中（就空白），快时赶得上（就正常）→ 这正是"同样的操作
+// 重启后结果不同"的来源。对策：亮相后补 resize 让它重新测量，并错开三拍多试几次，覆盖布局晚到。
+function nudgeTrackResize() {
+  const kick = () => { try { window.dispatchEvent(new Event('resize')); } catch (e) { /* 静默 */ } };
+  setTimeout(kick, 150);
+  setTimeout(kick, 600);
+  setTimeout(kick, 1500);
+}
+
+// 地图 SDK 加载失败（2026-09-24 加固）：**不再把 trackLibLoaded 永久锁死**（原逻辑失败一次，本次会话就再也不重试），
+// 失败后 5 秒自动重试 —— 腾讯/网络偶发抽风时能自愈，不用重启壳
+let trackLibRetryTimer = null;
+function trackLibFailed(why) {
+  trackLibLoaded = false;
+  const tl = $('trackLoading');
+  if (tl) tl.style.display = 'none';
+  const st = $('trackStat');
+  if (st) st.textContent = '地图组件加载失败（' + why + '），5 秒后自动重试';
+  if (trackLibRetryTimer) clearTimeout(trackLibRetryTimer);
+  trackLibRetryTimer = setTimeout(() => {
+    trackLibRetryTimer = null;
+    const pg = $('page-track');
+    if (!trackMap && pg && pg.style.display !== 'none') loadTrackMapLib();
+  }, 5000);
+}
+
 function loadTrackMapLib() {
   if (trackMap || trackLibLoaded) return;
   trackLibLoaded = true;
   const s = document.createElement('script');
   s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
-  s.onload = () => buildTrackMap();
+  s.onload = () => {
+    if (!window.TMap) { trackLibFailed('TMap 未就绪'); return; } // 下载成功但 SDK 没挂上（key 失效等）
+    buildTrackMap();
+  };
+  s.onerror = () => trackLibFailed('下载失败');
   document.head.appendChild(s);
 }
 
@@ -2959,6 +3024,8 @@ function buildTrackMap(keep) {
     const tl = $('trackLoading');
     if (tl) tl.style.display = 'flex'; // 准备期显示旋转雷达加载动画
   }
+  // 矢量底图要素：base=道路及底面 / building3d=3D建筑 / label=道路文字
+  // ⚠️ 2026-09-24 实测：这个组合别动 —— 去掉 building3d（只留 base+label）会让底图连浏览器里都渲染不出来
   const baseMap = [{ type: 'vector', features: ['base', 'building3d', 'label'] }];
   if (trafficOn) baseMap.push({ type: 'traffic', opacity: trafficOpacity }); // 实时路况（2026-09-08 老板定）
   trackMap = new TMap.Map($('trackMap'), {
@@ -2976,7 +3043,9 @@ function buildTrackMap(keep) {
     showPickCoord(evt.latLng.getLat().toFixed(6), evt.latLng.getLng().toFixed(6));
   });
   refreshTrackPage();
+  nudgeTrackResize(); // 2026-09-24 加固：地图创建即补 resize，兜住"容器宽高未就绪就创建"的竞态
 }
+
 
 // ===== 任务地图标签（2026-09-09 老板定：手机老板任务地图移植——天页签+业务员下拉+数字圆标+绿线+仓库星+店名气泡）=====
 let tmMapObj = null, tmLibLoaded = false, tmTaskList = [], tmCurTask = null, tmCustomers = [];
@@ -3395,8 +3464,19 @@ function fmtClock(ts) {
 }
 
 async function refreshTrackPage() {
-  const res = await api('listLatestLocations');
-  if (!res.ok) { $('trackStat').textContent = res.msg || '加载失败'; return; }
+  let res;
+  try {
+    res = await api('listLatestLocations');
+  } catch (e) {
+    res = { ok: false, msg: '位置数据请求失败' };
+  }
+  if (!res || !res.ok) {
+    $('trackStat').textContent = (res && res.msg) || '加载失败';
+    // 2026-09-24 加固：原来这里直接 return，会让「雷达加载动画」永远不消失（playTrackIntro 不会被调用，
+    // 它里面的兜底隐藏代码也就走不到）→ 表现为"卡在雷达界面转圈不出图"。失败也必须让地图亮相、雷达退场。
+    revealTrackMap();
+    return;
+  }
   trackLocsCache = res.locations || [];
   $('trackChips').innerHTML = trackLocsCache.map(l => {
     const stale = l.t && Date.now() - l.t > 10 * 60 * 1000; // 超 10 分钟=下班/静止（挑毛病 1 预期管理）
@@ -5023,13 +5103,72 @@ function salesmanStatusHtml(s) {
     const ageMin = (Date.now() - loc.t) / 60000;
     if (loc.visitOngoing && ageMin <= 15) pill = '<span class="pill" style="background:#E8F1FD;color:#2F80ED">🔵 拜访中</span>';
     else if (ageMin <= 10) pill = '<span class="pill" style="background:#DCFCE7;color:#16A34A">🟢 在线</span>';
-    else pill = `<span class="pill" style="background:#F1F3F5;color:#8A939C">⚫ 离线</span>`;
+    // 2026-09-24 老板定：**不写"离线"二字**，胶囊里直接显示"多久前"
+    // （看到"3 小时前 / 2 天前"自然就明白他没在线）
+    else pill = `<span class="pill" style="background:#F1F3F5;color:#8A939C">⚫ ${agoTxt(loc.t)}</span>`;
   }
+  // 时间已进胶囊 → 下面只留"今日 N 家"，不再重复显示时间
   const sub = [
-    loc && loc.t ? agoTxt(loc.t) : '',
     s.todayCount > 0 ? '今日 ' + s.todayCount + ' 家' : ''
   ].filter(Boolean).join(' · ');
   return pill + (sub ? `<div style="font-size:11px;color:var(--sub);margin-top:2px">${sub}</div>` : '');
+}
+
+// ===== 「操作」列防误操作开关（2026-09-24 老板定）=====
+// 列头勾选框 → 要求输入**当前操作员密码**（调 login 云函数**真实校验**，不是本地比对）→ 通过后本列按钮才可用。
+// ⚠️ 只存在内存变量里、**不写 storage** —— 每次进系统 / 刷新都回到未勾选（老板明确要求）
+let opUnlocked = false;
+function opLockStyle() { return opUnlocked ? '' : ';opacity:.35;pointer-events:none'; }
+
+function toggleOpLock(checked) {
+  if (!checked) { opUnlocked = false; loadPeople(); return; }
+  openOpPwd();
+}
+
+function closeOpPwd() {
+  const o = document.getElementById('opPwdOvl');
+  if (o) o.remove();
+}
+function opPwdCancel() {
+  closeOpPwd();
+  const cb = document.getElementById('opUnlock');
+  if (cb) cb.checked = false; // 取消 → 勾选回退
+}
+
+function openOpPwd() {
+  closeOpPwd();
+  const div = document.createElement('div');
+  div.id = 'opPwdOvl';
+  div.className = 'ovl';
+  div.style.display = 'flex';
+  div.innerHTML = '<div class="modal" style="max-width:340px;position:relative">'
+    + '<span style="position:absolute;right:16px;top:14px;cursor:pointer;color:#C4CAD1;font-size:17px;line-height:1" onclick="opPwdCancel()">✕</span>'
+    + '<div class="mt">解锁「操作」列</div>'
+    + '<p style="margin-top:0">请输入<b>当前操作员</b>的登录密码；验证通过后本列按钮才可用（防止误点解绑 / 删除）。</p>'
+    + '<input id="opPwdInput" type="password" class="inp" style="width:100%;box-sizing:border-box;padding:9px 12px" placeholder="登录密码" onkeydown="if(event.key===\'Enter\')confirmOpPwd()">'
+    + '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px">'
+    + '<button class="btn primary btn-sm" onclick="confirmOpPwd()">确定</button>'
+    + '<button class="btn ghost btn-sm" onclick="opPwdCancel()">取消</button>'
+    + '</div></div>';
+  document.body.appendChild(div);
+  setTimeout(function () { const i = document.getElementById('opPwdInput'); if (i) i.focus(); }, 50);
+}
+
+async function confirmOpPwd() {
+  const el = document.getElementById('opPwdInput');
+  const pwd = el ? String(el.value || '') : '';
+  if (!pwd) { alert('请输入密码'); return; }
+  const res = await api('login', { username: (admin && admin.username) || '', password: pwd });
+  if (!(res && res.ok)) {
+    alert((res && res.msg) || '密码不正确');
+    if (el) { el.value = ''; el.focus(); }
+    return;
+  }
+  opUnlocked = true;
+  closeOpPwd();
+  const cb = document.getElementById('opUnlock');
+  if (cb) cb.checked = true;
+  loadPeople(); // 重渲染点亮按钮；checkbox 在表头、不受影响
 }
 
 function adminActiveHtml(a) {
@@ -5052,20 +5191,21 @@ async function loadPeople() {
     peopleCache.admins = (ad0.ok ? ad0.admins : []) || [];
   } catch (e) { /* 缓存失败不影响列表渲染 */ }
   $('smTbody').innerHTML = sm.ok
-    ? sm.salesmen.map(s => `<tr>
-        <td><b>${esc(s.name)}</b>${s.trial ? '<span class="pill blue" style="margin-left:6px" title="游客体验：任意微信可绑定登录">🖐 游客</span>' : ''}${s.hasTask ? '<span class="pill blue" style="margin-left:6px">任务中</span>' : ''}</td>
+    ? sm.salesmen.map(s => `<tr${s.active ? '' : ' class="row-off"'}>
+        <td>${esc(s.name)}${s.trial ? '<span class="pill blue" style="margin-left:6px" title="游客体验：任意微信可绑定登录">🖐 游客</span>' : ''}${s.hasTask ? '<span class="pill blue" style="margin-left:6px">任务中</span>' : ''}</td>
         <td>${starCellHtml(s)}</td>
         <td>${esc(s.phone || '—')}</td>
         <td>${referrerCellHtml(s)}</td>
+        <td><button class="btn ghost" style="height:26px;font-size:12px;padding:0 10px" onclick="openUserDetail('${s._id}','${esc(s.name)}')">详情</button></td>
         <td>${s.bound ? '<span class="pill green">已绑定</span>' : '<span class="pill warn">待绑定</span>'}</td>
         <td>${s.mpBound
-          ? `<span class="pill green" title="${esc(s.mpOpenidMask)}">已绑定</span> <button class="btn ghost" style="height:24px;font-size:11px" onclick="openMpBind('${s._id}','${esc(s.name)}','${esc(s.mpOpenidMask)}')">更换</button>`
-          : `<button class="btn ghost" style="height:24px;font-size:11px;color:var(--primary-deep)" onclick="openMpBind('${s._id}','${esc(s.name)}','')">＋ 绑定</button>`}</td>
+          ? `<span class="pill green" title="${esc(s.mpOpenidMask)}">已绑定</span>`
+          : `<button class="btn ghost" style="height:auto;padding:4px 10px;border-radius:99px;font-size:11px;line-height:1.2;color:var(--primary-deep)" onclick="openMpBind('${s._id}','${esc(s.name)}','')">＋ 绑定</button>`}</td>
         <td>${salesmanStatusHtml(s)}</td>
-        <td>${toggleHtml(s._id, s.active)}</td>
-        <td>${s.bound ? `<button class="btn ghost" style="height:28px;font-size:12px;color:#B45309;margin-right:8px" onclick="unbindUser('${s._id}','${esc(s.name)}')">解绑</button>` : ''}<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${s._id}','${esc(s.name)}')">删除</button></td>
+        <td class="keep">${toggleHtml(s._id, s.active)}</td>
+        <td style="white-space:nowrap">${s.bound ? `<button class="btn ghost" style="height:26px;font-size:12px;color:#B45309;padding:0 8px;margin-right:4px${opLockStyle()}" title="解绑微信（该微信下次打开会回到注册页）" onclick="unbindUser('${s._id}','${esc(s.name)}')">解</button>` : ''}<button class="btn ghost" style="height:26px;font-size:12px;color:var(--danger);padding:0 8px${opLockStyle()}" title="删除该业务员" onclick="deleteUser('${s._id}','${esc(s.name)}')">删</button></td>
       </tr>`).join('')
-    : '<tr><td colspan="9" class="empty">加载失败</td></tr>';
+    : '<tr><td colspan="10" class="empty">加载失败</td></tr>';
   const ad = await api('listAdmins');
   $('adTbody').innerHTML = ad.ok
     ? ad.admins.map(a => {
@@ -5196,13 +5336,12 @@ async function clickStar(userId, i) {
 }
 
 // ===== 推荐人（2026-09-24 老板定：谁分享的链接 / 谁拉的，就记谁为推荐人）=====
-// 人员列表的「推荐人」单元格：姓名 + 来源标记（🔗 链接自动带 / ✏️ 后台手工补录）+ 拉了几人，点「设置」可改
+// 人员列表的「推荐人」单元格（2026-09-24 老板定：**只显示人名 + 一个灰色铅笔**）
+// ——不显示来源标记（链接/手工）、也不显示"拉了 N 人"；那类统计一律去「📊 推荐排行」看
 function referrerCellHtml(s) {
-  const ref = s.referrerName
-    ? `${esc(s.referrerName)} <span style="font-size:11px;color:var(--sub)">${s.referrerSource === 'manual' ? '✏️ 手工' : '🔗 链接'}</span>`
-    : '<span style="color:#C4CAD1">—</span>';
-  const cnt = s.refCount ? ` <span class="pill" style="background:#EEF3FF;color:#3B5BDB;font-size:11px">拉了 ${s.refCount} 人</span>` : '';
-  return `<div style="white-space:nowrap">${ref}${cnt}<button class="btn ghost" style="height:22px;font-size:11px;margin-left:6px;padding:0 8px" onclick="openSetRef('${s._id}','${esc(s.name)}','${s.referrerId || ''}')">设置</button></div>`;
+  const ref = s.referrerName ? esc(s.referrerName) : '<span style="color:#C4CAD1">—</span>';
+  return `<div style="white-space:nowrap">${ref}`
+    + `<span class="ref-pen" title="设置推荐人" onclick="openSetRef('${s._id}','${esc(s.name)}','${s.referrerId || ''}')">✎</span></div>`;
 }
 
 // 打开「设置推荐人」弹窗（候选＝系统内的业务员 + 管理员，排除他自己）
@@ -5217,6 +5356,54 @@ function openSetRef(userId, name, curId) {
   $('refSelect').innerHTML = '<option value="">（不设置 / 清除推荐人）</option>' +
     opts.map(o => `<option value="${o.id}"${o.id === curId ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
   $('refModal').style.display = 'flex';
+}
+
+// ===== 个人详情（2026-09-24 老板定：人员管理「个人详情」列点开看这个人）=====
+// 三组：① 个人资料（业务员自填）② 入职与推荐 ③ 工作数据
+// 弹窗**动态生成**：只读展示、字段少，不必在 HTML 里预置；点遮罩 / ✕ 关闭即移除
+function closeUserDetail() {
+  const o = document.getElementById('userDetailOvl');
+  if (o) o.remove();
+}
+async function openUserDetail(userId, name) {
+  const res = await api('getUserDetail', { userId });
+  if (!res || !res.ok) { alert((res && res.msg) || '读取失败'); return; }
+  const u = res.user || {};
+  const fmtD = ts => ts ? (function () {
+    const d = new Date(Number(ts)), p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  })() : '—';
+  const grey = v => '<span style="color:#C4CAD1">' + v + '</span>';
+  const row = (k, v) => '<div style="display:flex;padding:5px 0;font-size:13px"><span style="width:86px;color:var(--sub);flex:none">' + k + '</span><span style="font-weight:600">' + v + '</span></div>';
+  const grp = (t, inner) => '<div style="margin-top:12px;border-top:1px solid #F0F2F5;padding-top:8px"><div style="font-size:12.5px;font-weight:800;color:var(--sub);margin-bottom:2px">' + t + '</div>' + inner + '</div>';
+  const body =
+    grp('👤 个人资料（业务员自填）',
+      row('性别', u.gender ? esc(u.gender) : grey('未填')) +
+      row('年龄', u.age ? esc(u.age) + ' 岁' : grey('未填')) +
+      row('籍贯', u.hometown ? esc(u.hometown) : grey('未填')) +
+      row('现住址', u.address ? esc(u.address) : grey('未填'))) +
+    grp('🧭 入职与推荐',
+      row('加入时间', fmtD(u.createdAt)) +
+      row('推荐人', u.referrerName ? esc(u.referrerName) : grey('—')) +
+      row('他推荐了', u.refCount ? '<b style="color:#3B5BDB">' + u.refCount + ' 人</b>' : grey('0 人')) +
+      row('星级', '<span style="color:#F5A623">' + esc(starTextOf(u.star)) + '</span>')) +
+    grp('📊 工作数据',
+      row('拜访客户', '<b>' + u.visitCustomers + '</b> 家（共 ' + u.visitTimes + ' 次）') +
+      row('本月拜访', u.monthVisits + ' 次') +
+      row('客户入商城', u.mallCustomers ? '<b style="color:#16A34A">' + u.mallCustomers + ' 家</b>' : '0 家') +
+      row('任务完成率', u.taskTotal ? u.taskRate + '%（' + u.taskDone + '/' + u.taskTotal + '）' : grey('无任务')));
+  const old = document.getElementById('userDetailOvl');
+  if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'userDetailOvl';
+  div.className = 'ovl';
+  div.style.display = 'flex';
+  div.innerHTML = '<div class="modal" style="max-width:420px;position:relative">'
+    + '<span style="position:absolute;right:16px;top:14px;cursor:pointer;color:#C4CAD1;font-size:17px;line-height:1" onclick="closeUserDetail()">✕</span>'
+    + '<div class="mt">' + esc(name || u.name || '个人详情') + ' <span style="font-size:13px;color:#F5A623;margin-left:4px">' + esc(starTextOf(u.star)) + '</span></div>'
+    + body + '</div>';
+  div.onclick = function (e) { if (e.target === div) closeUserDetail(); }; // 点遮罩关闭
+  document.body.appendChild(div);
 }
 
 let refBusy = 0;
@@ -5360,8 +5547,8 @@ let mpBindUserId = '';
 // 2026-09-10 老板定：管理员（老板）也要绑服务号收注册通知——管理员表「服务号」列单元格
 function mpBindCell(a) {
   return a.mpOpenidMask
-    ? `<span class="pill green" title="${esc(a.mpOpenidMask)}">已绑定</span> <button class="btn ghost" style="height:24px;font-size:11px" onclick="openMpBind('${a._id}','${esc(a.name)}','${esc(a.mpOpenidMask)}')">更换</button>`
-    : `<button class="btn ghost" style="height:24px;font-size:11px;color:var(--primary-deep)" onclick="openMpBind('${a._id}','${esc(a.name)}','')">＋ 绑定</button>`;
+    ? `<span class="pill green" title="${esc(a.mpOpenidMask)}">已绑定</span> <button class="btn ghost" style="height:auto;padding:4px 10px;border-radius:99px;font-size:11px;line-height:1.2" onclick="openMpBind('${a._id}','${esc(a.name)}','${esc(a.mpOpenidMask)}')">更换</button>`
+    : `<button class="btn ghost" style="height:auto;padding:4px 10px;border-radius:99px;font-size:11px;line-height:1.2;color:var(--primary-deep)" onclick="openMpBind('${a._id}','${esc(a.name)}','')">＋ 绑定</button>`;
 }
 
 function openMpBind(id, name, mask) {
