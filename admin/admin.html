@@ -602,10 +602,11 @@ tr.row-off td:not(.keep){opacity:.4}
       <div class="title-bar"><span class="t">导入信息</span></div>
 
       <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid var(--primary)">
-        <div style="font-size:13.5px;font-weight:700;margin-bottom:6px">📋 建议按这个顺序导入</div>
+        <div style="font-size:13.5px;font-weight:700;margin-bottom:6px">📋 怎么导（2026-09-25 更新：改喂「分片 JSON」）</div>
         <div class="sb-d">
-          ① <b>商城客户</b>（打底：建客户档案） → ② <b>大众点评客户</b>（补平台画像，靠 shopuuid 对齐） → ③ <b>销售订单</b>（挂到客户） → ④ <b>订单明细</b>（挂到订单）<br>
-          每一步都能<b>分批反复导入</b>：按<b>客户编号 / 订单号</b>自动合并，同一份文件重复导不会产生重复数据。
+          <b>① 点「选择分片…」</b> → 进到分片目录后 <b>Ctrl+A 全选</b>（已支持多选，不用一个个点）→ <b>② 点「开始导入」</b>。<br>
+          顺序不影响结果：<b>商城客户 → 销售订单 → 订单明细</b>（<b>大众点评这一栏现在不用导</b> —— 平台画像已由脚本并进客户档案的 <b>plat</b> 字段）。<br>
+          按 <b>客户编号 / 订单号 / 行号</b> 幂等 upsert：<b>同一片重复导不会翻倍</b>；中途失败会记断点，再点一次就能接着跑。
         </div>
       </div>
 
@@ -618,12 +619,12 @@ tr.row-off td:not(.keep){opacity:.4}
             <span class="sb-d" id="st-mall" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            商城导出的客户表（48 列 + 末列 <b>shopuuid</b>）。<br>
-            按<b>客户编号</b>入库；同一编号多条档案自动并成一家（购买次数多者为主，其余为副）。
+            选分片 <b>customers_*.json</b>（脚本产出，已含商城 48 列 + 平台画像）。<br>
+            按 <b>mallKey / 客户编号</b> 幂等入库；同编号多条已并成一家（购买次数多者为主，其余标副档）。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-mall" accept=".xlsx,.xls" style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('mall')">选择文件…</button>
+            <input type="file" id="f-mall" accept=".json" multiple style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('mall')">选择分片…</button>
             <button class="btn ghost btn-sm" onclick="startImp('mall')">开始导入</button>
             <span class="sb-d" id="m-mall" style="flex:1;min-width:110px"></span>
           </div>
@@ -633,15 +634,15 @@ tr.row-off td:not(.keep){opacity:.4}
           <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
             <span style="font-size:19px">📍</span>
             <span style="font-size:15px;font-weight:700">大众点评客户导入</span>
-            <span class="sb-d" id="st-plat" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
+            <span class="sb-d" id="st-plat" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">暂不需要</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            大众点评抓取的店铺表（45 列）。<br>
-            按 <b>shopuuid</b> 与商城客户对齐；点评侧重复记录自动合并（信息更丰富 → 评分更高 → 随机）。
+            <b>现在不用导</b>：平台画像（评分 / 菜品 / 设施 / 营业时间…）已由脚本按 shopuuid 并进客户的 <b>plat</b> 字段。<br>
+            此入口保留，将来单独导点评数据时再用。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-plat" accept=".xlsx,.xls" style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('plat')">选择文件…</button>
+            <input type="file" id="f-plat" accept=".json" multiple style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('plat')">选择分片…</button>
             <button class="btn ghost btn-sm" onclick="startImp('plat')">开始导入</button>
             <span class="sb-d" id="m-plat" style="flex:1;min-width:110px"></span>
           </div>
@@ -654,12 +655,12 @@ tr.row-off td:not(.keep){opacity:.4}
             <span class="sb-d" id="st-order" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            销售订单表（36 列，含<b>订单号 / 客户单位</b>）。<br>
-            按订单号去重；自动挂到对应客户的<b>主档案</b>（同编号主副两家的订单都要）。
+            选分片 <b>orders_*.json</b>（36 列 + 关联键 <b>customerCode</b>）。<br>
+            按 <b>订单号</b> 幂等入库；同编号主副两家的订单都在。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-order" accept=".csv,.xlsx,.xls" style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('order')">选择文件…</button>
+            <input type="file" id="f-order" accept=".json" multiple style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('order')">选择分片…</button>
             <button class="btn ghost btn-sm" onclick="startImp('order')">开始导入</button>
             <span class="sb-d" id="m-order" style="flex:1;min-width:110px"></span>
           </div>
@@ -672,12 +673,12 @@ tr.row-off td:not(.keep){opacity:.4}
             <span class="sb-d" id="st-item" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            订单明细<b>目录</b>（每个订单一个 CSV，文件名含订单号）。<br>
-            支持<b>多选 / 整个目录</b>，按订单号挂到对应订单；<b>19 列全字段</b>入库，不做汇总。
+            选分片 <b>order_items_*.json</b>（19 列全字段，不做汇总）。<br>
+            按 <b>订单号 + 行号</b> 幂等入库，重复导不会翻倍。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-item" accept=".csv" multiple style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('item')">选择文件/目录…</button>
+            <input type="file" id="f-item" accept=".json" multiple style="display:none">
+            <button class="btn primary btn-sm" onclick="pickImpFile('item')">选择分片…</button>
             <button class="btn ghost btn-sm" onclick="startImp('item')">开始导入</button>
             <span class="sb-d" id="m-item" style="flex:1;min-width:110px"></span>
           </div>
@@ -688,7 +689,8 @@ tr.row-off td:not(.keep){opacity:.4}
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span style="font-size:13.5px;font-weight:700" id="impProgressTitle">导入中…</span>
           <span style="flex:1;min-width:200px;height:8px;background:#EEF1F6;border-radius:99px;overflow:hidden">
-            <span id="impProgressBar" style="display:block;height:100%;width:0%;background:linear-gradient(90deg,#FFB27A,var(--primary));border-radius:99px"></span>
+            <!-- 2026-09-25 老板定：进行中=蓝色渐变 → 完成=绿色 / 中断失败=红色（由 showImpProgress 按状态切） -->
+            <span id="impProgressBar" style="display:block;height:100%;width:0%;background:linear-gradient(90deg,#8FC0FF,var(--blue));border-radius:99px;transition:background .25s"></span>
           </span>
           <span class="sb-d" id="impProgressText"></span>
         </div>
@@ -2007,22 +2009,22 @@ async function startImp(kind) {
   for (let i = from; i < files.length; i++) {
     const f = files[i];
     const pct = Math.round(i / files.length * 100);
-    showImpProgress(m.label + '：第 ' + (i + 1) + '/' + files.length + ' 片', pct, '读取 ' + f.name + '…');
+    showImpProgress(m.label + '：第 ' + (i + 1) + '/' + files.length + ' 片', pct, '读取 ' + f.name + '…', 'run');
     let pack = null;
     try {
       pack = JSON.parse(await f.text());
     } catch (e) {
-      showImpProgress(m.label + '：已中止', pct, '文件解析失败');
+      showImpProgress(m.label + '：已中止', pct, '文件解析失败', 'fail');
       $(m.msg).textContent = '❌ 第 ' + (i + 1) + ' 片不是合法 JSON：' + f.name;
       return;
     }
     const rows = (pack && (pack.rows || (Array.isArray(pack) ? pack : []))) || [];
-    if (!rows.length) { showImpProgress(m.label + '：第 ' + (i + 1) + ' 片', pct, '本片无数据，跳过'); save(i + 1); continue; }
+    if (!rows.length) { showImpProgress(m.label + '：第 ' + (i + 1) + ' 片', pct, '本片无数据，跳过', 'run'); save(i + 1); continue; }
 
-    showImpProgress(m.label + '：第 ' + (i + 1) + '/' + files.length + ' 片', pct, '导入 ' + rows.length + ' 行…');
+    showImpProgress(m.label + '：第 ' + (i + 1) + '/' + files.length + ' 片', pct, '导入 ' + rows.length + ' 行…', 'run');
     const r = await api('import', { _cfn: 'importdata', type: type, rows: rows });
     if (!r || !r.ok) {
-      showImpProgress(m.label + '：已中断', pct, '第 ' + (i + 1) + ' 片失败');
+      showImpProgress(m.label + '：已中断', pct, '第 ' + (i + 1) + ' 片失败', 'fail');
       $(m.msg).textContent = '⚠️ 第 ' + (i + 1) + ' 片失败：' + ((r && r.msg) || '未知错误') + ' —— 断点已记录，修好后可从这里继续';
       return;
     }
@@ -2032,19 +2034,26 @@ async function startImp(kind) {
 
   try { localStorage.removeItem(rk); } catch (e) { }
   const sec = ((Date.now() - t0) / 1000).toFixed(1);
-  showImpProgress(m.label + '：完成', 100, files.length + ' 片 · 用时 ' + sec + 's');
+  showImpProgress(m.label + '：完成', 100, files.length + ' 片 · 用时 ' + sec + 's', 'done');
   $(m.msg).textContent = '✅ 完成：新增 ' + ins + ' / 更新 ' + upd + (bad ? ' / 失败 ' + bad : '') + '（' + files.length + ' 片，' + sec + 's）';
   loadImportStats();
 }
 
-// 进度条
-function showImpProgress(title, pct, text) {
+// 进度条（2026-09-25 老板定：进行中 = 蓝色渐变 ｜ 完成 = 绿色 ｜ 中断/失败 = 红色）
+function showImpProgress(title, pct, text, state) {
   const box = $('impProgressBox');
   if (!box) return;
   if (title === null) { box.style.display = 'none'; return; }
   box.style.display = '';
   $('impProgressTitle').textContent = title || '';
-  $('impProgressBar').style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+  const bar = $('impProgressBar');
+  bar.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+  const st = state || 'run';
+  bar.style.background = st === 'done'
+    ? 'linear-gradient(90deg,#6EE7A8,#16A34A)'      // 完成：绿
+    : st === 'fail'
+      ? 'linear-gradient(90deg,#FCA5A5,#DC2626)'    // 中断/失败：红
+      : 'linear-gradient(90deg,#8FC0FF,var(--blue))'; // 进行中：蓝
   $('impProgressText').textContent = text || '';
 }
 
