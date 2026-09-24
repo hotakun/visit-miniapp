@@ -1975,17 +1975,66 @@ function pickImpFile(kind) {
   el.click();
 }
 
-// 开始导入（真正的导入逻辑待接：解析 → 分片调云函数 → 断点续跑）
+// ===== 真·导入（2026-09-24 接通）=====
+// 分片 JSON 由本地脚本产出（阶段 3：463 行 → 460 家 / 2135 单 / 明细，每片 60~70KB）。
+// 后台只负责「逐片喂给 importdata 云函数」+ 进度显示 + 断点续跑。
+// 幂等：云函数按幂等键 upsert，同一片重复导入不会翻倍 → 所以中断后重跑是安全的。
+const IMP_TYPE = { mall: 'customers', plat: 'customers', order: 'orders', item: 'order_items' };
+
 async function startImp(kind) {
   const m = IMP_META[kind];
-  const fs = impPicked[kind];
-  if (!fs || !fs.length) { alert('请先「选择文件…」'); return; }
-  showImpProgress(m.label + '：解析中…', 0, '');
-  $(m.msg).textContent = '⏳ ' + fs.length + ' 个文件已就绪，导入逻辑待接入';
-  setTimeout(() => {
-    showImpProgress(m.label + '：导入逻辑待接入', 0, '');
-    $(m.msg).textContent = '⚠️ 导入逻辑尚未接入（栏目已就绪）';
-  }, 300);
+  const files = (impPicked[kind] || []).slice()
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); // 按文件名自然序（脚本产出时编号）
+  if (!files.length) { alert('请先「选择文件…」'); return; }
+  const type = IMP_TYPE[kind];
+  const rk = 'jh_imp_resume_' + kind;
+
+  // 断点续跑：同一批 = 文件数 + 首个文件名都一致才算，避免拿旧断点错跑新文件
+  let from = 0;
+  try {
+    const s = JSON.parse(localStorage.getItem(rk) || 'null');
+    if (s && s.count === files.length && s.first === files[0].name && s.done > 0 && s.done < files.length) {
+      if (confirm('上次导到第 ' + s.done + '/' + files.length + ' 片中断了。\n\n「确定」= 从第 ' + (s.done + 1) + ' 片继续；「取消」= 从头重导（幂等，重复导不会翻倍）。')) {
+        from = s.done;
+      }
+    }
+  } catch (e) { }
+  const save = (done) => { try { localStorage.setItem(rk, JSON.stringify({ count: files.length, first: files[0].name, done })); } catch (e) { } };
+  save(from);
+
+  let ins = 0, upd = 0, bad = 0;
+  const t0 = Date.now();
+  for (let i = from; i < files.length; i++) {
+    const f = files[i];
+    const pct = Math.round(i / files.length * 100);
+    showImpProgress(m.label + '：第 ' + (i + 1) + '/' + files.length + ' 片', pct, '读取 ' + f.name + '…');
+    let pack = null;
+    try {
+      pack = JSON.parse(await f.text());
+    } catch (e) {
+      showImpProgress(m.label + '：已中止', pct, '文件解析失败');
+      $(m.msg).textContent = '❌ 第 ' + (i + 1) + ' 片不是合法 JSON：' + f.name;
+      return;
+    }
+    const rows = (pack && (pack.rows || (Array.isArray(pack) ? pack : []))) || [];
+    if (!rows.length) { showImpProgress(m.label + '：第 ' + (i + 1) + ' 片', pct, '本片无数据，跳过'); save(i + 1); continue; }
+
+    showImpProgress(m.label + '：第 ' + (i + 1) + '/' + files.length + ' 片', pct, '导入 ' + rows.length + ' 行…');
+    const r = await api('import', { _cfn: 'importdata', type: type, rows: rows });
+    if (!r || !r.ok) {
+      showImpProgress(m.label + '：已中断', pct, '第 ' + (i + 1) + ' 片失败');
+      $(m.msg).textContent = '⚠️ 第 ' + (i + 1) + ' 片失败：' + ((r && r.msg) || '未知错误') + ' —— 断点已记录，修好后可从这里继续';
+      return;
+    }
+    ins += r.inserted || 0; upd += r.updated || 0; bad += r.failedCount || 0;
+    save(i + 1);
+  }
+
+  try { localStorage.removeItem(rk); } catch (e) { }
+  const sec = ((Date.now() - t0) / 1000).toFixed(1);
+  showImpProgress(m.label + '：完成', 100, files.length + ' 片 · 用时 ' + sec + 's');
+  $(m.msg).textContent = '✅ 完成：新增 ' + ins + ' / 更新 ' + upd + (bad ? ' / 失败 ' + bad : '') + '（' + files.length + ' 片，' + sec + 's）';
+  loadImportStats();
 }
 
 // 进度条
@@ -1999,20 +2048,23 @@ function showImpProgress(title, pct, text) {
   $('impProgressText').textContent = text || '';
 }
 
-// 库内数据统计（客户数走 listCustomers；订单/明细待云函数统计接口）
+// 库内数据统计（2026-09-24 接通：改走 importdata 的 stats —— 一次拿全部计数，不再拉全量 listCustomers）
 async function loadImportStats() {
-  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = (v === undefined || v === null || v === '') ? '—' : v; };
   set('cnt-cust', '…'); set('cnt-cust-mall', '…'); set('cnt-order', '…'); set('cnt-item', '…');
   try {
-    const res = await api('listCustomers');
-    if (res && res.ok) {
-      const list = res.customers || [];
-      set('cnt-cust', list.length);
-      set('cnt-cust-mall', list.filter(c => c.mallKey || c.mallJoinedAt).length);
-    } else { set('cnt-cust', '—'); set('cnt-cust-mall', '—'); }
-  } catch (e) { set('cnt-cust', '—'); set('cnt-cust-mall', '—'); }
-  set('cnt-order', '待接入');
-  set('cnt-item', '待接入');
+    const res = await api('stats', { _cfn: 'importdata' });
+    if (res && res.ok && res.counts) {
+      set('cnt-cust', res.counts.customers);
+      set('cnt-cust-mall', res.counts.customersMall);
+      set('cnt-order', res.counts.orders);
+      set('cnt-item', res.counts.order_items);
+    } else {
+      set('cnt-cust', '—'); set('cnt-cust-mall', '—'); set('cnt-order', '—'); set('cnt-item', '—');
+    }
+  } catch (e) {
+    set('cnt-cust', '—'); set('cnt-cust-mall', '—'); set('cnt-order', '—'); set('cnt-item', '—');
+  }
 }
 
 // ===== 任务 =====

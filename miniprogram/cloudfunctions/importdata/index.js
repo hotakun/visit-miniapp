@@ -136,10 +136,16 @@ async function stats(event) {
   const admin = await verifyAdmin(event);
   if (!admin) return { ok: false, code: 'NO_AUTH', msg: '未授权' };
   const one = async (c) => { try { const r = await db.collection(c).count(); return r.total; } catch (e) { return -1; } };
+  // 条件计数（阶段 5 导入后校验用：已加入商城的家数 / 没坐标的家数）
+  const cond = async (where) => {
+    try { const r = await db.collection('customers').where(where).count(); return r.total; } catch (e) { return -1; }
+  };
   return {
     ok: true,
     counts: {
       customers: await one('customers'),
+      customersMall: await cond({ mallKey: _.exists(true) }), // 其中「已加入商城」
+      customersNoCoord: await cond({ lat: _.eq(null) }),      // 其中没坐标的（导入后应为 0）
       orders: await one('orders'),
       order_items: await one('order_items'),
       mall_customers: await one('mall_customers'),

@@ -48,9 +48,12 @@ async function getToken() {
 async function callApi(body) {
   const t0 = Date.now();
   const action = (body && body.action) || '?';
+  // 2026-09-24：body._cfn 可指定云函数名（默认 adminapi）—— 客户数据导入走独立的 importdata
+  //（导入是重活，要独立超时预算）。只在本机后台用，不影响其它调用。
+  const fnName = (body && body._cfn) || 'adminapi';
   const token = await getToken();
   // 官方格式：POST body 整体直接作为云函数入参（不要包裹 {data:...}）
-  const url = `https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=${token}&env=${encodeURIComponent(cfg.envId)}&name=adminapi`;
+  const url = `https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=${token}&env=${encodeURIComponent(cfg.envId)}&name=${encodeURIComponent(fnName)}`;
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -65,7 +68,7 @@ async function callApi(body) {
     try { out = JSON.parse(out); } catch (e) { /* 非 JSON 则原样透传 */ }
   }
   // 每次云函数调用打耗时日志（2026-09-09：老板报障重启后首屏 10 多秒，用日志定位慢的 action）
-  console.log(`[api] ${action} ${Date.now() - t0}ms`);
+  console.log(`[api] ${fnName}/${action} ${Date.now() - t0}ms`);
   return JSON.stringify(out);
 }
 
