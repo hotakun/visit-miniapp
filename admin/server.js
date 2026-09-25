@@ -329,6 +329,29 @@ const server = http.createServer(async (req, res) => {
     });
     return;
   }
+  // ===== 弹 Windows 文件夹选择框（2026-09-25）=====
+  // 「销售订单 / 订单明细」的"选目录"用 —— 后台和浏览器在同一台机器，所以能弹出**真正的**系统选目录框。
+  // 为什么必须这样：浏览器出于安全**拿不到目录的硬盘路径**，而 2135 个明细文件也不可能逐个上传。
+  // 所以由后台弹框拿到路径，再**直接读盘**，完全不经过浏览器。
+  if (req.method === 'POST' && req.url === '/pickFolder') {
+    execFile('powershell', ['-NoProfile', '-STA', '-Command',
+      "Add-Type -AssemblyName System.Windows.Forms;" +
+      "$d=New-Object System.Windows.Forms.FolderBrowserDialog;" +
+      "$d.Description='请选择文件夹';" +
+      "$d.ShowNewFolderButton=$false;" +
+      "if($d.ShowDialog() -eq 'OK'){[Console]::Out.Write($d.SelectedPath)}"
+    ], { timeout: 10 * 60 * 1000, windowsHide: true }, (err, stdout) => {
+      if (err) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, msg: '选目录失败：' + err.message }));
+        return;
+      }
+      const p = String(stdout || '').trim();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, path: p }));
+    });
+    return;
+  }
   // ===== 从表格导入（2026-09-25 老板定：「导入信息」页不再要求你去找 .json 分片）=====
   // 流程：跑本地合并脚本（admin/tools/import_excel.py，与之前那套**完全同一份已验证规则**）
   //       → 生成分片 JSON → 逐片调云函数 importdata 入库 → 回报进度。
@@ -354,6 +377,33 @@ const server = http.createServer(async (req, res) => {
     const id = decodeURIComponent((q.split('id=')[1] || '').split('&')[0]);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(excelImportProgress(id)));
+    return;
+  }
+  // ===== 收前端选好的表格文件（base64）→ 落成临时文件 → 交给同一个任务跑（2026-09-25）=====
+  // 「商城客户 / 大众点评」这类单个表格走这里；目录类的走 /pickFolder + 直接读盘。
+  if (req.method === 'POST' && req.url === '/importExcel/upload') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const opt = JSON.parse(body || '{}');
+        if (opt.fileBase64 && opt.fileName) {
+          const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'jh-src-'));
+          const p = path.join(dir, path.basename(String(opt.fileName)));
+          fs.writeFileSync(p, Buffer.from(String(opt.fileBase64), 'base64'));
+          if (opt.task === 'mall') opt.fMall = p;
+          else if (opt.task === 'plat') opt.fPlat = p;
+          else if (opt.task === 'order') opt.fOrder = p;
+          delete opt.fileBase64; delete opt.fileName;
+        }
+        const id = excelImportStart(opt || {});
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, job: id }));
+      } catch (e) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, msg: '启动失败：' + e.message }));
+      }
+    });
     return;
   }
   if (req.method === 'POST' && req.url === '/parseXls') {
@@ -458,7 +508,92 @@ const server = http.createServer(async (req, res) => {
     res.end(data);
   });
 });
-// 打开后台：优先 Edge/Chrome --app 无边框应用窗口（2026-09-06 老板定，打开即最大化），
+
+// ===== 从表格导入的实现（2026-09-25 老板定）=====
+// ⚠️ 这三个函数必须在**模块级**（不能放进 startServer）—— 路由写在 createServer 的回调里，
+//    属模块作用域；若把函数放在 startServer() 内，路由执行时看不到它们，
+//    会报 `excelImportStart is not defined`（2026-09-25 老板试导订单时踩到过）。
+// 老板的操作只剩一步：选好表格/目录 → 点导入。后台做三件事：
+//   ① 跑本地合并脚本（与之前那份**完全同一套已验证规则**，不重写、零映射风险）
+//   ② 拿到分片 JSON  ③ 逐片调云函数 importdata 入库（复用 callApi 通道）
+// 用「任务表 + 轮询」回报进度，避免一个 HTTP 请求干等几分钟被超时掐断。
+function excelImportProgress(id) {
+  const j = excelJobs[String(id || '')];
+  if (!j) return { ok: false, msg: '任务不存在（后台可能重启过）' };
+  return { ok: true, pct: j.pct, text: j.text, state: j.state, report: j.report || '' };
+}
+
+function excelImportStart(opt) {
+  if (excelRunning) throw new Error('已有一个导入任务在跑，请等它结束再点');
+  const id = 'imp' + Date.now().toString(36);
+  excelJobs[id] = { pct: 0, text: '准备中…', state: 'run', report: '' };
+  excelRunning = true;
+  runExcelImport(excelJobs[id], opt || {})
+    .catch(e => { excelJobs[id].state = 'fail'; excelJobs[id].text = '失败：' + ((e && e.message) || e); })
+    .finally(() => { excelRunning = false; });
+  return id;
+}
+
+async function runExcelImport(job, opt) {
+  const py = process.platform === 'win32' ? 'python' : 'python3';
+  const script = path.join(__dirname, 'tools', 'import_excel.py');
+  if (!fs.existsSync(script)) throw new Error('找不到合并脚本：' + script + '（需要 Python 环境）');
+
+  // ① 跑 Python 合并脚本
+  const TASK_CN = { mall: '商城客户', plat: '大众点评画像', order: '销售订单', item: '订单明细', all: '全部' };
+  const task = String(opt.task || 'all');
+  job.pct = 3; job.text = '正在读取' + (TASK_CN[task] || task) + '表格并合并…（几千行，要等一会）';
+  const partDir = opt.out || fs.mkdtempSync(path.join(require('os').tmpdir(), 'jh-imp-'));
+  try { fs.mkdirSync(partDir, { recursive: true }); } catch (e) { /* 已存在 */ }
+
+  // 2026-09-25：把「跑哪一类 + 各自的源路径」通过环境变量交给脚本（脚本只跑这一类）
+  const env = Object.assign({}, process.env, {
+    JH_SRC: opt.src || '', JH_OUT: partDir, JH_TASK: task, PYTHONIOENCODING: 'utf-8'
+  });
+  if (opt.fMall) env.JH_F_MALL = opt.fMall;      // 商城客户表
+  if (opt.fPlat) env.JH_F_PLAT = opt.fPlat;      // 大众点评表
+  if (opt.fOrder) env.JH_F_ORDER = opt.fOrder;   // 销售订单表
+  if (opt.dItems) env.JH_D_ITEMS = opt.dItems;   // 订单明细目录
+
+  await new Promise((resolve, reject) => {
+    const child = execFile(py, [script], {
+      env: env,
+      maxBuffer: 64 * 1024 * 1024
+    }, (err, stdout, stderr) => {
+      if (stdout) job.report = (job.report + String(stdout)).slice(-6000);
+      if (err) return reject(new Error(String(stderr || err.message || '').slice(-900)));
+      resolve();
+    });
+    if (child.stdout) child.stdout.on('data', d => {
+      const last = String(d).trim().split('\n').filter(Boolean).pop();
+      if (last) { job.pct = 12; job.text = '解析中：' + last; }
+    });
+    if (child.stderr) child.stderr.on('data', d => { job.report = (job.report + String(d)).slice(-6000); });
+  });
+
+  // ② 读分片，逐片调 importdata 入库
+  const files = fs.readdirSync(partDir).filter(f => /\.json$/i.test(f) && f.charAt(0) !== '_').sort();
+  if (!files.length) throw new Error('脚本没产出分片（表格目录或文件名可能不对，见下方报告）');
+  let done = 0, ins = 0, upd = 0;
+  for (const f of files) {
+    const obj = JSON.parse(fs.readFileSync(path.join(partDir, f), 'utf8'));
+    // ⚠️ 2026-09-25 关键修复：importdata 的 verifyAdmin 要求**入参里带账号密码**，
+    //    否则返回 NO_AUTH、一片都写不进去（"脚本成功却导不进去"的真因）。
+    //    凭据由前端启动任务时传进来（见 admin.html 的 startOneImport），这里原样转发。
+    const text = await callApi({
+      action: 'import', _cfn: 'importdata', type: obj.type || 'customers', rows: obj.rows || [],
+      username: opt.username || '', password: opt.password || ''
+    });
+    const r = JSON.parse(text || '{}');
+    if (!r || !r.ok) throw new Error('第 ' + (done + 1) + ' 片（' + f + '）入库失败：' + String((r && r.msg) || text || '').slice(0, 200));
+    ins += r.inserted || 0; upd += r.updated || 0;
+    done++;
+    job.pct = 12 + Math.round(done / files.length * 86);
+    job.text = '入库中 ' + done + '/' + files.length + '：' + f + '（新增 ' + ins + '、更新 ' + upd + '）';
+  }
+  job.pct = 100; job.state = 'done';
+  job.text = '✅ 完成：' + files.length + ' 片入库，新增 ' + ins + ' 条、更新 ' + upd + ' 条';
+}
 // 都没有才退回系统默认浏览器
 function openBrowser(port) {
   const url = `http://localhost:${port}`;
@@ -488,73 +623,9 @@ function startServer(port, attempts) {
       process.exit(1);
     }
   });
-  // ===== 从表格导入的实现（2026-09-25 老板定）=====
-  // 老板的操作只剩一步：把新表格放进 TMP/拜访程序用表格/ → 点「📥 从表格重新导入」。
-  // 后台做三件事：① 跑本地合并脚本（与之前那份**完全同一套已验证规则**，不重写、零映射风险）
-  //              ② 拿到分片 JSON  ③ 逐片调云函数 importdata 入库（复用 callApi 通道）
-  // 用「任务表 + 轮询」回报进度，避免一个 HTTP 请求干等几分钟被超时掐断。
-  // ⚠️ excelJobs / excelRunning 已提到**模块级**（见文件上方）—— 放这里会在端口冲突重试时被重建。
-
-  function excelImportProgress(id) {
-    const j = excelJobs[String(id || '')];
-    if (!j) return { ok: false, msg: '任务不存在（后台可能重启过）' };
-    return { ok: true, pct: j.pct, text: j.text, state: j.state, report: j.report || '' };
-  }
-
-  function excelImportStart(opt) {
-    if (excelRunning) throw new Error('已有一个导入任务在跑，请等它结束再点');
-    const id = 'imp' + Date.now().toString(36);
-    excelJobs[id] = { pct: 0, text: '准备中…', state: 'run', report: '' };
-    excelRunning = true;
-    runExcelImport(excelJobs[id], opt || {})
-      .catch(e => { excelJobs[id].state = 'fail'; excelJobs[id].text = '失败：' + ((e && e.message) || e); })
-      .finally(() => { excelRunning = false; });
-    return id;
-  }
-
-  async function runExcelImport(job, opt) {
-    const py = process.platform === 'win32' ? 'python' : 'python3';
-    const script = path.join(__dirname, 'tools', 'import_excel.py');
-    if (!fs.existsSync(script)) throw new Error('找不到合并脚本：' + script + '（需要 Python 环境）');
-
-    // ① 跑 Python 合并脚本
-    job.pct = 3; job.text = '正在读取表格并合并…（几千行，要等一会）';
-    const partDir = opt.out || fs.mkdtempSync(path.join(require('os').tmpdir(), 'jh-imp-'));
-    try { fs.mkdirSync(partDir, { recursive: true }); } catch (e) { /* 已存在 */ }
-
-    await new Promise((resolve, reject) => {
-      const child = execFile(py, [script], {
-        env: Object.assign({}, process.env, { JH_SRC: opt.src || '', JH_OUT: partDir, PYTHONIOENCODING: 'utf-8' }),
-        maxBuffer: 64 * 1024 * 1024
-      }, (err, stdout, stderr) => {
-        if (stdout) job.report = (job.report + String(stdout)).slice(-6000);
-        if (err) return reject(new Error(String(stderr || err.message || '').slice(-900)));
-        resolve();
-      });
-      if (child.stdout) child.stdout.on('data', d => {
-        const last = String(d).trim().split('\n').filter(Boolean).pop();
-        if (last) { job.pct = 12; job.text = '解析中：' + last; }
-      });
-      if (child.stderr) child.stderr.on('data', d => { job.report = (job.report + String(d)).slice(-6000); });
-    });
-
-    // ② 读分片，逐片调 importdata 入库
-    const files = fs.readdirSync(partDir).filter(f => /\.json$/i.test(f) && f.charAt(0) !== '_').sort();
-    if (!files.length) throw new Error('脚本没产出分片（表格目录或文件名可能不对，见下方报告）');
-    let done = 0, ins = 0, upd = 0;
-    for (const f of files) {
-      const obj = JSON.parse(fs.readFileSync(path.join(partDir, f), 'utf8'));
-      const text = await callApi({ action: 'import', _cfn: 'importdata', type: obj.type || 'customers', rows: obj.rows || [] });
-      const r = JSON.parse(text || '{}');
-      if (!r || !r.ok) throw new Error('第 ' + (done + 1) + ' 片（' + f + '）入库失败：' + String((r && r.msg) || text || '').slice(0, 200));
-      ins += r.inserted || 0; upd += r.updated || 0;
-      done++;
-      job.pct = 12 + Math.round(done / files.length * 86);
-      job.text = '入库中 ' + done + '/' + files.length + '：' + f + '（新增 ' + ins + '、更新 ' + upd + '）';
-    }
-    job.pct = 100; job.state = 'done';
-    job.text = '✅ 完成：' + files.length + ' 片入库，新增 ' + ins + ' 条、更新 ' + upd + ' 条';
-  }
+  // ===== 从表格导入的实现已移到**模块级**（见文件上方，紧跟 createServer 之后）=====
+  // ⚠️ 不能在 startServer 里定义：路由写在 createServer 回调中（属模块作用域），看不到这里的局部函数，
+  //    会报 `excelImportStart is not defined`（2026-09-25 试导订单时踩到）。excelJobs / excelRunning 也在模块级。
 
   server.listen(port, () => {
     // 只认实际监听端口：先前失败端口遗留的 listening 回调会随第二次 listen 成功一起触发，必须忽略

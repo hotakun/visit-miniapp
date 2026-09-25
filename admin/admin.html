@@ -113,6 +113,10 @@ input,textarea{-webkit-user-select:text;user-select:text}
 /* 2026-09-09 老板定：所有内容页面不出上下滚动条——页面高度跟随窗口自适应 */
 #page-tasks,#page-customers,#page-track{display:flex;flex-direction:column;flex:1;min-height:0}
 #page-taskDetail,#page-newTask,#page-people,#page-settings,#page-batchDetail{flex:1;min-height:0;overflow-y:auto}
+/* 2026-09-25 补 #page-import（老板报障：导入信息页内容超出却滚不动）——
+   .main 是 overflow:hidden，里面的页面必须**自己** overflow-y:auto；
+   这一行原来漏了导入页，所以它从来不能滚，以前内容短没暴露出来。 */
+#page-import{flex:1;min-height:0;overflow-y:auto;padding-bottom:6px}
 .topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;position:relative}
 .topbar .pt{font-size:20px;font-weight:800}
 .topbar .pt small{display:block;font-size:12px;color:var(--sub);font-weight:500;margin-top:3px}
@@ -626,11 +630,13 @@ tr.row-off td:not(.keep){opacity:.4}
         </details>
       </div>
 
-      <details style="max-width:1040px;margin-bottom:14px">
-        <summary style="cursor:pointer;font-size:13px;color:var(--sub);padding:4px 0;user-select:none">▸ 手工分片导入（备用 · 一般不用，点开才显示）</summary>
+      <!-- 2026-09-25 老板定：四个入口**各自吃表格 / 目录**（不再要求找 .json 分片）→ 默认展开、标题改成实际用途 -->
+      <details open style="max-width:1040px;margin-bottom:14px">
+        <summary style="cursor:pointer;font-size:14px;font-weight:700;padding:6px 0;user-select:none">📥 分项导入（商城客户 / 大众点评 / 销售订单 / 订单明细）</summary>
       <div class="card" style="max-width:1040px;padding:12px 20px;margin-bottom:14px">
         <div class="sb-d">
-          <b>手工分片导入（备用）</b>：仅当上面的「从表格导入」不好用、或想单独重传某一类数据时才用 ——
+          <b>四个入口各自独立</b>：只想补某一类数据时，选对应的表格/目录单独跑就行（顺序不影响结果）。
+          也可以直接用最上面的「📥 从表格重新导入」一把全跑。
           <b>① 点「选择分片…」</b> → 进分片目录后 <b>Ctrl+A 全选</b> → <b>② 点「开始导入」</b>。
           顺序不影响结果；按 <b>客户编号 / 订单号 / 行号</b> 幂等 upsert（同一片重复导不会翻倍，中途失败会记断点）。
         </div>
@@ -644,15 +650,16 @@ tr.row-off td:not(.keep){opacity:.4}
             <span style="font-size:15px;font-weight:700">商城客户导入</span>
             <span class="sb-d" id="st-mall" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
           </div>
+          <!-- 2026-09-25 老板定：四个入口各自吃「表格 / 目录」，**不再要求你去找 .json 分片** -->
           <div class="sb-d" style="margin-top:6px">
-            选分片 <b>customers_*.json</b>（脚本产出，已含商城 48 列 + 平台画像）。<br>
+            选<b>商城客户表</b>（.xlsx，如「商城客户列表002-已匹配大众点评-带shopuuid.xlsx」，含商城 48 列 + 平台画像）。<br>
             按 <b>mallKey / 客户编号</b> 幂等入库；同编号多条已并成一家（购买次数多者为主，其余标副档）。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-mall" accept=".json" multiple style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('mall')">选择分片…</button>
-            <button class="btn ghost btn-sm" onclick="startImp('mall')">开始导入</button>
-            <span class="sb-d" id="m-mall" style="flex:1;min-width:110px"></span>
+            <input type="file" id="fx-mall" accept=".xlsx,.xls" style="display:none" onchange="onExcelPicked('mall', this)">
+            <button class="btn primary btn-sm" onclick="$('fx-mall').click()">选择表格…</button>
+            <button class="btn ghost btn-sm" onclick="startOneImport('mall')">开始导入</button>
+            <span class="sb-d" id="lbl-mall" style="flex:1;min-width:110px"></span>
           </div>
         </div>
 
@@ -663,14 +670,16 @@ tr.row-off td:not(.keep){opacity:.4}
             <span class="sb-d" id="st-plat" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">暂不需要</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            <b>现在不用导</b>：平台画像（评分 / 菜品 / 设施 / 营业时间…）已由脚本按 shopuuid 并进客户的 <b>plat</b> 字段。<br>
-            此入口保留，将来单独导点评数据时再用。
+            选<b>大众点评表</b>（.xlsx，如「金华-永康-已匹配商城-带商城客户名-补齐同店.xlsx」）。<br>
+            按 <b>shopuuid</b> 匹配，<b>只更新客户的「平台画像 plat」</b>（评分 / 菜品 / 设施 / 营业时间…）。
+            ⚠️ <b>客户其它资料一条都不会动</b>（店名、地址、电话、坐标、备注、现场照片都不碰）。<br>
+            <b>一般不用单独导</b>：导商城客户表时已按 shopuuid 把画像并进 plat；此入口用于将来只更新点评数据。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-plat" accept=".json" multiple style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('plat')">选择分片…</button>
-            <button class="btn ghost btn-sm" onclick="startImp('plat')">开始导入</button>
-            <span class="sb-d" id="m-plat" style="flex:1;min-width:110px"></span>
+            <input type="file" id="fx-plat" accept=".xlsx,.xls" style="display:none" onchange="onExcelPicked('plat', this)">
+            <button class="btn primary btn-sm" onclick="$('fx-plat').click()">选择表格…</button>
+            <button class="btn ghost btn-sm" onclick="startOneImport('plat')">开始导入</button>
+            <span class="sb-d" id="lbl-plat" style="flex:1;min-width:110px"></span>
           </div>
         </div>
 
@@ -681,14 +690,16 @@ tr.row-off td:not(.keep){opacity:.4}
             <span class="sb-d" id="st-order" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            选分片 <b>orders_*.json</b>（36 列 + 关联键 <b>customerCode</b>）。<br>
+            选<b>销售订单表</b>（.csv，含 36 列 + 关联键 <b>customerCode</b>）——
+            可<b>直接选文件</b>，也可<b>选整个目录</b>（后台自己找里面的订单表）。<br>
             按 <b>订单号</b> 幂等入库；同编号主副两家的订单都在。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-order" accept=".json" multiple style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('order')">选择分片…</button>
-            <button class="btn ghost btn-sm" onclick="startImp('order')">开始导入</button>
-            <span class="sb-d" id="m-order" style="flex:1;min-width:110px"></span>
+            <input type="file" id="fx-order" accept=".csv,.xlsx,.xls" style="display:none" onchange="onExcelPicked('order', this)">
+            <button class="btn primary btn-sm" onclick="$('fx-order').click()">选择文件…</button>
+            <button class="btn ghost btn-sm" onclick="pickDir('order')">选择目录…</button>
+            <button class="btn ghost btn-sm" onclick="startOneImport('order')">开始导入</button>
+            <span class="sb-d" id="lbl-order" style="flex:1;min-width:110px"></span>
           </div>
         </div>
 
@@ -699,14 +710,16 @@ tr.row-off td:not(.keep){opacity:.4}
             <span class="sb-d" id="st-item" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">未导入</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            选分片 <b>order_items_*.json</b>（19 列全字段，不做汇总）。<br>
+            选<b>订单明细</b>（每单一个文件「销售订单详细 - &lt;订单号&gt;.csv」，表头在第 2 行）——
+            ⚠️ <b>建议用「选择目录…」</b>：明细有几千个文件，选目录后由<b>后台直接读盘</b>，不用一个个选、也不走上传。<br>
             按 <b>订单号 + 行号</b> 幂等入库，重复导不会翻倍。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
-            <input type="file" id="f-item" accept=".json" multiple style="display:none">
-            <button class="btn primary btn-sm" onclick="pickImpFile('item')">选择分片…</button>
-            <button class="btn ghost btn-sm" onclick="startImp('item')">开始导入</button>
-            <span class="sb-d" id="m-item" style="flex:1;min-width:110px"></span>
+            <input type="file" id="fx-item" accept=".csv,.xls,.xlsx" style="display:none" onchange="onExcelPicked('item', this)">
+            <button class="btn ghost btn-sm" onclick="$('fx-item').click()">选择文件…</button>
+            <button class="btn primary btn-sm" onclick="pickDir('item')">选择目录…</button>
+            <button class="btn ghost btn-sm" onclick="startOneImport('item')">开始导入</button>
+            <span class="sb-d" id="lbl-item" style="flex:1;min-width:110px"></span>
           </div>
         </div>
       </div>
@@ -1618,6 +1631,30 @@ tr.row-off td:not(.keep){opacity:.4}
         #custModal .cd-chip.dish{background:#FFF7ED;color:#B45309;border-color:#FBE3C9}
         #custModal .cd-chip.on{background:#E7F6EC;color:#16A34A;border-color:#C9EBD6}
         #custModal .cd-chip.off{background:#F4F6F9;color:#9AA3AE}
+        /* 2026-09-25 老板定：购买记录里的「最近 20 单」列表 —— 点某一行弹出该单的商品明细小窗 */
+        #custModal .cd-ord{display:flex;align-items:center;gap:10px;padding:7px 10px;margin-bottom:5px;border:1px solid #EDF1F6;border-radius:9px;cursor:pointer;font-size:12.5px;background:#fff}
+        #custModal .cd-ord:hover{border-color:var(--primary);background:#FFFBF7}
+        #custModal .cd-ord .dt{flex:none;color:#4A5560}
+        #custModal .cd-ord .am{flex:none;font-weight:700;color:var(--primary);min-width:64px;text-align:right}
+        #custModal .cd-ord .ln{flex:1;color:var(--sub);font-size:11.5px}
+        #custModal .cd-ord .go{flex:none;color:var(--primary);font-size:11.5px}
+        /* 订单小窗：**照手机端的形态**（2026-09-25 老板定）—— 不用表格、不要表头。
+           订单 = 一行文字（**日期在最左** + 品种数/状态 + 金额 + ›）+ 底部细分割线；
+           点 › → **在这一行下面滑出明细**（不是另开一屏，也不是换个视图）。 */
+        #ordOvl .ord{display:flex;align-items:center;gap:9px;padding:10px 2px;border-bottom:1px solid #EFF1F5;font-size:12.5px;cursor:pointer}
+        #ordOvl .ord:hover{background:#FFFBF7}
+        #ordOvl .ord .d{flex:0 0 76px;color:var(--sub);font-weight:700}     /* 日期：固定宽 → 整列对齐 */
+        #ordOvl .ord .s{flex:1;min-width:0;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        #ordOvl .ord .a{flex:0 0 auto;font-weight:800;font-size:13px}
+        #ordOvl .ord .v{flex:0 0 auto;color:#C3C9D2;font-size:12px;transition:transform .15s}
+        #ordOvl .ord.open .v{transform:rotate(90deg)}                        /* 展开时箭头转 90°（朝下） */
+        /* 行内展开的明细：紧跟在那一行**下面**（左边留 76px 与日期列对齐，一眼看出属于这一单） */
+        #ordOvl .odet{background:#F8F9FC;border-radius:10px;padding:10px 12px;margin:2px 0 10px 76px}
+        #ordOvl .oitm{padding:6px 0;font-size:12.5px}
+        #ordOvl .oitm .top{display:flex;align-items:baseline;gap:10px}
+        #ordOvl .oitm .nm{flex:1;min-width:0;word-break:break-all}
+        #ordOvl .oitm .am{flex:0 0 auto;font-weight:700}
+        #ordOvl .oitm .sub{color:var(--sub);font-size:11.5px;margin-top:2px}
         #custModal [data-cdfield]{border:1px solid transparent;padding:5px 9px;border-radius:8px;min-height:28px}
         #custModal .editing [data-cdfield]{border:1px solid var(--primary) !important;background:#FFFBF8 !important}
         #custModal .geo-line{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
@@ -1673,6 +1710,26 @@ tr.row-off td:not(.keep){opacity:.4}
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
           <button class="btn ghost" onclick="cdCloseGeo()">取消</button>
           <button class="btn primary" onclick="cdApplyGeo()">确认修改</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 订单小窗（2026-09-25 老板定）：**第 1 态 = 列订单**（最近 20 单）；
+         **点某一单 → 在同一个窗里**换成该单商品明细（第 2 态），带「‹ 返回订单列表」。-->
+    <div class="ovl" id="ordOvl" style="display:none;z-index:10001">
+      <div class="modal" style="width:620px;max-width:94vw">
+        <div class="mt" id="ordTitle">📦 订单记录</div>
+        <div class="sb-d" id="ordMeta" style="margin-bottom:10px"></div>
+        <div id="ordListView">
+          <div id="ordListBody" style="max-height:56vh;overflow-y:auto"></div>
+        </div>
+        <div id="ordDetailView" style="display:none">
+          <div id="ordBody" style="max-height:52vh;overflow-y:auto"></div>
+          <div class="sb-d" id="ordSum" style="margin-top:10px;text-align:right;font-weight:700"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+          <button class="btn ghost" id="ordBackBtn" style="display:none" onclick="ordBackToList()">‹ 返回订单列表</button>
+          <button class="btn ghost" onclick="closeOrderDetail()">关闭</button>
         </div>
       </div>
     </div>
@@ -2056,17 +2113,128 @@ function nav(p) {
 
 // ===== 导入信息栏目（2026-09-13 新增；规划见 _scratch/客户数据导入规范.md）=====
 // 四个入口：mall=商城客户 / plat=大众点评客户 / order=销售订单 / item=订单明细
+// 2026-09-25 老板定：四个入口各自吃「表格 / 目录」，**不再要求你去找 .json 分片** → id 换成新的 fx-* / lbl-*
 const IMP_META = {
-  mall:  { label: '商城客户',     file: 'f-mall',  msg: 'm-mall',  state: 'st-mall'  },
-  plat:  { label: '大众点评客户', file: 'f-plat',  msg: 'm-plat',  state: 'st-plat'  },
-  order: { label: '销售订单',     file: 'f-order', msg: 'm-order', state: 'st-order' },
-  item:  { label: '订单明细',     file: 'f-item',  msg: 'm-item',  state: 'st-item'  }
+  mall:  { label: '商城客户',     file: 'fx-mall',  msg: 'lbl-mall',  state: 'st-mall'  },
+  plat:  { label: '大众点评客户', file: 'fx-plat',  msg: 'lbl-plat',  state: 'st-plat'  },
+  order: { label: '销售订单',     file: 'fx-order', msg: 'lbl-order', state: 'st-order' },
+  item:  { label: '订单明细',     file: 'fx-item',  msg: 'lbl-item',  state: 'st-item'  }
 };
 const impPicked = { mall: null, plat: null, order: null, item: null };  // 用户已选的文件
 
 function initImportPage() { loadImportStats(); }
 
-// 选文件（明细支持多选/整目录）
+// ===== 四个入口：各自选「表格 / 目录」→ 直接交给后台跑（2026-09-25 老板定）=====
+// 后台负责：读表 → 按规则合并（同编号主副 / 平台画像 / 坐标分层）→ 分片 → 逐片调 importdata 入库。
+const IMP_KIND_CN = { mall: '商城客户表', plat: '大众点评表', order: '销售订单表', item: '订单明细' };
+const impSel = {};   // kind → { file: File } 或 { path: 'D:\\...' }
+
+// ① 选表格文件（商城客户 / 大众点评 用；订单也支持）
+function onExcelPicked(kind, input) {
+  const f = (input.files || [])[0];
+  if (!f) return;
+  impSel[kind] = { file: f };
+  const lbl = $('lbl-' + kind);
+  if (lbl) lbl.textContent = '已选文件：' + f.name + '（' + Math.max(1, Math.round(f.size / 1024)) + ' KB）';
+}
+
+// ② 选目录（销售订单 / 订单明细 用）
+// 关键：由**后台**弹 Windows 选目录框拿硬盘路径，然后**直接读盘** —— 浏览器出于安全拿不到目录路径，
+// 而明细几千个文件也不可能逐个上传。所以这条路径完全不经过浏览器。
+async function pickDir(kind) {
+  const lbl = $('lbl-' + kind);
+  if (lbl) lbl.textContent = '请在弹出的窗口里选择目录…';
+  try {
+    const r = await (await fetch('/pickFolder', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+    })).json();
+    if (!r || !r.ok) { if (lbl) lbl.textContent = '选目录失败：' + ((r && r.msg) || '未知错误'); return; }
+    if (!r.path) { if (lbl) lbl.textContent = '已取消'; return; }
+    impSel[kind] = { path: r.path };
+    if (lbl) lbl.textContent = '已选目录：' + r.path;
+  } catch (e) {
+    if (lbl) lbl.textContent = '选目录失败（后台是否在运行？）：' + e.message;
+  }
+}
+
+// ③ 开始导入：把选中的「文件（base64）」或「目录路径」交给后台
+async function startOneImport(kind) {
+  const sel = impSel[kind];
+  const lbl = $('lbl-' + kind);
+  const cn = IMP_KIND_CN[kind] || kind;
+  if (!sel) {
+    alert('请先选择' + ((kind === 'order' || kind === 'item') ? '文件或目录' : '表格文件'));
+    return;
+  }
+  // ⚠️ 2026-09-25 关键修复：云函数 importdata 的 verifyAdmin 要求**入参里带账号密码**。
+  //    原来那套能用，是因为 api() 每次都自动带上（见 api() 里 body 的组装）；
+  //    而这里走 fetch('/importExcel')，**绕开了 api()** → 必须自己带，否则云函数返回 NO_AUTH、
+  //    一片都传不上去（这正是"脚本跑成功、却一条也导不进去"的真因）。
+  const body = {
+    task: kind,
+    username: (admin && admin.username) || '',
+    password: (admin && admin.pwd) || ''
+  };
+  let url = '/importExcel';
+  if (sel.path) {
+    if (kind === 'order') body.fOrder = sel.path;
+    else if (kind === 'item') body.dItems = sel.path;
+    else { alert('这一项只能选表格文件'); return; }
+  } else {
+    let b64;
+    try {
+      b64 = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result).split(',')[1] || '');
+        fr.onerror = rej;
+        fr.readAsDataURL(sel.file);
+      });
+    } catch (e) { alert('读取文件失败：' + e.message); return; }
+    if (!b64) { alert('读取文件失败（内容为空）'); return; }
+    body.fileBase64 = b64;
+    body.fileName = sel.file.name;
+    url = '/importExcel/upload';
+  }
+  if (!confirm('开始导入【' + cn + '】？\n\n· 同一家重复导入 = 更新，不会翻倍\n' +
+    '· 只覆盖该表格带的字段，不会动你手工改过的坐标 / 客户备注 / 现场照片\n\n确定吗？')) return;
+  if (lbl) lbl.textContent = '正在导入…';
+  let r;
+  try {
+    r = await (await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    })).json();
+  } catch (e) { if (lbl) lbl.textContent = '启动失败（后台是否在运行？）：' + e.message; return; }
+  if (!r || !r.ok) { if (lbl) lbl.textContent = '启动失败：' + ((r && r.msg) || '未知错误'); return; }
+  showImpProgress('正在导入【' + cn + '】…', 0, '', 'run');
+  pollImpJob(r.job, lbl, cn);
+}
+
+// ④ 轮询后台任务进度（复用导入页那条总进度条）
+function pollImpJob(job, lbl, cn) {
+  const tick = async () => {
+    let p;
+    try { p = await (await fetch('/importExcel/progress?id=' + encodeURIComponent(job))).json(); }
+    catch (e) { setTimeout(tick, 1500); return; }   // 后台短暂忙 → 稍后重试
+    if (!p || !p.ok) { showImpProgress(null); if (lbl) lbl.textContent = (p && p.msg) || '任务丢失（后台可能重启过）'; return; }
+    if (p.state === 'done') {
+      showImpProgress('✅ 【' + cn + '】' + (p.text || '完成'), 100, '', 'done');
+      if (lbl) lbl.textContent = '✅ 完成';
+      try { loadImportStats(); } catch (e) { /* 刷新计数失败无所谓 */ }
+      return;
+    }
+    if (p.state === 'fail') {
+      showImpProgress('❌ 【' + cn + '】导入失败', p.pct || 0, p.report || '', 'fail');
+      if (lbl) lbl.textContent = '❌ ' + (p.text || '失败');
+      return;
+    }
+    showImpProgress('正在导入【' + cn + '】…', p.pct || 0, p.text || '（详见下方报告）', 'run');
+    if (lbl) lbl.textContent = (p.pct || 0) + '% ' + (p.text || '');
+    setTimeout(tick, 800);
+  };
+  tick();
+}
+
+// 选文件（明细支持多选/整目录）—— 旧的"分片"通道，已被上面三条新函数取代，保留仅为兼容
 function pickImpFile(kind) {
   const m = IMP_META[kind];
   const el = $(m.file);
@@ -2104,7 +2272,11 @@ async function startExcelImport() {
   txt.textContent = ''; rep.textContent = '';
   let r;
   try {
-    const res = await fetch('/importExcel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const res = await fetch('/importExcel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      // 同 startOneImport：必须带上账号密码，否则云函数 importdata 会返回 NO_AUTH、一片都写不进去
+      body: JSON.stringify({ username: (admin && admin.username) || '', password: (admin && admin.pwd) || '' })
+    });
     r = await res.json();
   } catch (e) { msg.textContent = '启动失败（后台是否在运行？）：' + e.message; return; }
   if (!r || !r.ok) { msg.textContent = '启动失败：' + ((r && r.msg) || '未知错误'); return; }
@@ -4643,6 +4815,10 @@ let detailCustCache = [];
 // 口径：① 经纬度**只认它自己的「✓ 确定」**（右上角保存不写它）；② 后台改坐标 = 直接生效（不走审核）；
 //      ③ 坐标来源四色标签；④ 改完显示一次「距上个坐标 X 米」；⑤ 不显示"正不正常"这类没依据的状态。
 let cdCur = null, cdCurId = null, cdEditing = false, cdGeoPending = null;
+// 2026-09-25 老板定：客户详情「购买记录」里点某一单 → 弹出小窗看该单商品明细。
+// 云函数返回的 orderItems（单号 → 商品行数组）暂存在这里，供弹窗按单号取。
+let cdOrderItems = {};
+let cdOrders = [];   // 同上：当前客户的订单头（最近 20 单，含日期/状态/支付方式），弹窗头部显示用
 const CD_GEO_SRC = {
   '商城': { bg: '#E7F6EC', fg: '#16A34A' },
   '平台': { bg: '#EEF1F4', fg: '#66707A' },
@@ -4798,12 +4974,19 @@ function cdRender() {
     ? '<div class="cd-row"><span class="k">常买</span><span class="v">' +
       goods.map(g => '<span class="cd-chip">' + esc(g.name) + (g.qty ? ' ×' + g.qty : '') + '</span>').join('') + '</span></div>'
     : '';
-  const o0 = orders[0];
-  const buyBody = (buyTop || o0)
-    ? buyTop + (o0 ? '<div class="cd-row"><span class="k">最近一单</span><span class="v">' + esc(String(o0.orderedAt || '')) +
-        (o0.actualAmount != null ? ' · ¥' + esc(String(o0.actualAmount)) : '') +
-        (o0.lines ? ' · ' + o0.lines + ' 件商品' : '') + '</span></div>' : '') +
-      ((d.orderTotal || 0) > orders.length ? '<div class="cd-row"><span class="k"></span><span class="v" style="color:var(--sub);font-size:12px">仅列最近 ' + orders.length + ' 单，共 ' + d.orderTotal + ' 单</span></div>' : '')
+  // 2026-09-25 老板定：订单**不摊在客户详情大窗口里**（会把窗口撑得很长、很乱）。
+  // 这里只在卡片里留一行入口 → 点「查看订单」弹出**小窗**；小窗里先列订单，点某一单再**在同一个窗里**看该单明细。
+  cdOrderItems = d.orderItems || {};
+  cdOrders = orders.slice(0, 20);          // 小窗列表用
+  const ordCnt = orders.slice(0, 20).length;
+  const buyBody = (buyTop || ordCnt)
+    ? buyTop +
+      (ordCnt
+        ? '<div class="cd-row"><span class="k">订单</span><span class="v">' +
+          '<span style="color:var(--sub);font-size:12px">最近 ' + ordCnt + ' 单</span>' +
+          '<span class="cd-ord-go" onclick="openOrderList()">查看订单 ›</span></span></div>'
+        : '') +
+      ((d.orderTotal || 0) > orders.length ? '<div class="cd-row"><span class="k"></span><span class="v" style="color:var(--sub);font-size:12px">共 ' + d.orderTotal + ' 单（小窗里列最近 ' + orders.length + ' 单）</span></div>' : '')
     : '<div class="cd-empty">这家还没下过单</div>';
   L.push(cdCard('📦 购买记录', d.orderTotal ? ('累计 ' + d.orderTotal + ' 单' + (d.orderAmountSum ? ' · ¥' + Math.round(d.orderAmountSum) : '')) : '', buyBody));
 
@@ -4841,6 +5024,9 @@ function cdRender() {
 // 口径照 09-13 定稿：**不可拖动** + 可双指缩放 10~20 级 + **以客户坐标为中心**（不用定位、不要权限）
 //   + 初始 16 级 + 高 150px / 圆角 12px + 打一个 pin。
 let cdMapObj = null, cdMapMarker = null, cdMapLibLoading = false;
+// 2026-09-25：滚轮缩放用的**目标级别（整数）**。不能读 `getZoom()` —— setZoom 带动画，
+// 读到的是中间小数，连续滚动会越滚越乱、到某级卡住（老板报障"缩放到一定程度就不刷新"）。
+let cdZoomTarget = 16;
 
 function cdLoadMapLib() {
   if (!cdCur) return;
@@ -5043,16 +5229,28 @@ function cdBuildMap() {
         ev.preventDefault();
         ev.stopPropagation();
         if (!cdMapObj) return;
-        const z = cdMapObj.getZoom();
-        const nz = Math.max(10, Math.min(20, z + (ev.deltaY > 0 ? -1 : 1)));
-        if (nz !== z) { try { cdMapObj.setZoom(nz); } catch (e) { /* 静默 */ } }
+        // ⚠️⚠️ 2026-09-25 修（老板报"缩放到一定程度就不刷新、很不流畅"）：
+        //   原写法用 `cdMapObj.getZoom()` 当基准 —— 但 **setZoom 是带动画的**，
+        //   连续滚动时 getZoom() 读到的是**动画中间值（小数，如 16.3）**，
+        //   于是 nz 变成 17.3 / 18.1 这种小数，越滚越乱、到某个级数就**卡住不动**。
+        //   ⇒ 改成**独立记录"目标级别"（整数）**、自己累加，**不读 getZoom()**。
+        const step = ev.deltaY > 0 ? -1 : 1;
+        cdZoomTarget = Math.max(10, Math.min(20, (cdZoomTarget || 16) + step));
+        cdMapObj._zooming = true;   // 缩放期间让 bounds_changed 跳过回中（打断动画就是"不流畅"的元凶）
+        try { cdMapObj.setZoom(cdZoomTarget, { duration: 100 }); }
+        catch (e) { try { cdMapObj.setZoom(cdZoomTarget); } catch (e2) { /* 静默 */ } }
+        clearTimeout(cdMapObj._zTimer);
+        cdMapObj._zTimer = setTimeout(() => { if (cdMapObj) cdMapObj._zooming = false; }, 220);
       };
       el.addEventListener('wheel', el._cdWheel, { passive: false, capture: true });
 
-      // 兜底：万一还是被拖走了 → 靠 bounds_changed 拉回（拖动没有"锚点"问题，不会抖）。
-      //（`bounds_changed` 在地图移动与缩放时都会触发，后台现有地图用的就是它；_recentering 防止自触发死循环）
+      // 兜底：万一还是被拖走了 → 靠 bounds_changed 拉回。
+      // ⚠️ 2026-09-25 修（老板报"缩放到一定程度就不刷新、很不流畅"）：
+      //   `bounds_changed` **在缩放时也会触发**，原先每次都 setCenter → **把刚开始的缩放动画打断**，
+      //   表现就是"每滚一下卡一下、到某级就不动"。现在：**缩放中（_zooming）直接跳过回中**，
+      //   只在真被拖走时才拉回。（地图是 draggable:false，本来就拖不动，这层纯属保险。）
       cdMapObj.on('bounds_changed', () => {
-        if (!cdMapObj || cdMapObj._recentering) return;
+        if (!cdMapObj || cdMapObj._recentering || cdMapObj._zooming) return;
         const cc = (cdCur && cdCur.customer) || {};
         const la = Number(cc.lat), ln = Number(cc.lng);
         if (!isFinite(la) || !isFinite(ln)) return;
@@ -5207,6 +5405,122 @@ function cdGeoAsk() {
   $('cdGeoOvl').style.display = 'flex';
 }
 function cdCloseGeo() { cdGeoPending = null; $('cdGeoOvl').style.display = 'none'; }
+
+// ===== 订单小窗（2026-09-25 老板定）=====
+// 客户详情「📦 购买记录」里点「查看订单 ›」→ 弹出小窗：
+//   **第 1 态**：列订单（最近 20 单，来自 cdOrders）
+//   **第 2 态**：点某一单 → 在同一个窗里换成该单商品明细（来自 cdOrderItems），可「‹ 返回订单列表」
+// ⚠️ 订单**不摊在客户详情大窗口里** —— 那会把窗口撑得很长很乱（老板明确纠正过一次）。
+function openOrderList() {
+  const list = $('ordListBody');
+  $('ordTitle').textContent = '📦 订单记录';
+  $('ordMeta').innerHTML = cdOrders.length
+    ? '这家最近 ' + cdOrders.length + ' 单 —— <b>点某一单看商品明细</b>'
+    : '';
+  list.innerHTML = cdOrders.length
+    ? cdOrders.map(o => {
+        const rows = cdOrderItems[o.orderNo] || [];
+        const n = rows.length || o.lines || 0;
+        const no = esc(String(o.orderNo || ''));
+        // 手机端形态：一行文字（**日期在最左** | 品种数/状态 | 金额 | ›），底部细分割线；
+        // 点 › → **就在这一行下面滑出明细**（明细块紧跟在它下面，左边与日期列对齐）
+        return '<div class="ord" data-no="' + no + '" onclick="toggleOrderDetail(this,\'' + no + '\')">' +
+          '<span class="d">' + esc(String(o.orderedAt || '—')) + '</span>' +
+          '<span class="s">' + n + ' 品种' + (o.orderStatus ? ' · ' + esc(o.orderStatus) : '') + '</span>' +
+          '<span class="a">' + (o.actualAmount != null ? '¥' + esc(String(o.actualAmount)) : '—') + '</span>' +
+          '<span class="v">›</span></div>' +
+          '<div class="odet" id="odet-' + no + '" style="display:none"></div>';
+      }).join('')
+    : '<div class="cd-empty">这家还没下过单</div>';
+  // 单态：只有列表；每一单的明细**挂在它自己下面、默认收起**
+  $('ordListView').style.display = '';
+  $('ordDetailView').style.display = 'none';
+  $('ordBackBtn').style.display = 'none';
+  $('ordOvl').style.display = 'flex';
+}
+
+// 明细块的内容（浅灰块里的小字行；上=商品名…金额，下=规格·数量·单价·分类）
+function orderDetailHtml(rows) {
+  if (!rows || !rows.length) {
+    return '<div style="color:#A2ABB6;font-size:12px">这一单在明细表里没查到商品行</div>';
+  }
+  return rows.map(r => {
+    const qty = Number(r.qty) || 0;
+    const sub = [r.spec || '', (qty ? qty + (r.unit ? ' ' + r.unit : '') : ''),
+                 (r.price != null ? '单价 ¥' + r.price : ''), r.category || '']
+                .filter(Boolean).join(' · ');
+    return '<div class="oitm"><div class="top">' +
+      '<span class="nm">' + esc(r.name || '（未命名商品）') + '</span>' +
+      '<span class="am">' + (r.amount != null ? '¥' + r.amount : '—') + '</span></div>' +
+      (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
+  }).join('');
+}
+
+// 点 › → 在**该行下面**滑出/收起该单明细（同时只展开一单，免得列表被刷得很长）
+function toggleOrderDetail(el, orderNo) {
+  const no = String(orderNo || '');
+  const box = $('odet-' + no);
+  if (!box || !el) return;
+  const willOpen = box.style.display === 'none';
+  // 先收起其它已展开的
+  document.querySelectorAll('#ordListBody .ord.open').forEach(x => {
+    if (x === el) return;
+    x.classList.remove('open');
+    const b = $('odet-' + String(x.dataset.no || ''));
+    if (b) b.style.display = 'none';
+  });
+  if (willOpen) {
+    const rows = cdOrderItems[no] || [];
+    const sum = rows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+    box.innerHTML = orderDetailHtml(rows) + (rows.length
+      ? '<div style="text-align:right;font-weight:700;font-size:12px;margin-top:4px;padding-top:6px;border-top:1px dashed #E4E9F0">共 ' +
+        rows.length + ' 个品种 · 合计 ¥' + (Math.round(sum * 100) / 100) + '</div>'
+      : '');
+  }
+  box.style.display = willOpen ? '' : 'none';
+  el.classList.toggle('open', willOpen);
+}
+
+// 旧的「切视图」方式保留（已不使用，仅防旧调用报错）
+function openOrderDetail(orderNo) {
+  const no = String(orderNo || '');
+  const rows = cdOrderItems[no] || [];
+  const o = cdOrders.find(x => String(x.orderNo) === no) || null;
+  $('ordTitle').textContent = '📦 订单明细';
+  $('ordMeta').innerHTML = '<b>' + esc(no) + '</b>' +
+    (o ? ' · 下单 ' + esc(String(o.orderedAt || '—')) +
+      (o.orderStatus ? ' · ' + esc(o.orderStatus) : '') +
+      (o.payMethod ? ' · ' + esc(o.payMethod) : '') : '');
+  $('ordBody').innerHTML = '<div class="odet" style="margin-left:0">' + orderDetailHtml(rows) + '</div>';
+  // 手机端形态：一整块浅灰底圆角，里面每项 = 上面「商品名 … 金额」，下面一行小字「规格 · 数量 · 单价」
+  $('ordBody').innerHTML = rows.length
+    ? '<div class="odet">' + rows.map(r => {
+        const qty = Number(r.qty) || 0;
+        const sub = [r.spec || '', (qty ? qty + (r.unit ? ' ' + r.unit : ' 件') : ''),
+                     (r.price != null ? '单价 ¥' + r.price : ''), r.category || '']
+                    .filter(Boolean).join(' · ');
+        return '<div class="oitm">' +
+          '<div class="top">' +
+          '<span class="nm">' + esc(r.name || '（未命名商品）') + '</span>' +
+          '<span class="am">' + (r.amount != null ? '¥' + r.amount : '—') + '</span>' +
+          '</div>' +
+          (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') +
+          '</div>';
+      }).join('') + '</div>'
+    : '<div class="cd-empty">这一单在明细表里没查到商品行</div>';
+  const sum = rows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  $('ordSum').textContent = rows.length
+    ? ('共 ' + rows.length + ' 项 · 合计 ¥' + (Math.round(sum * 100) / 100) +
+       (o && o.actualAmount != null ? '（整单 ¥' + esc(String(o.actualAmount)) + '）' : ''))
+    : '';
+  // 切到「明细态」，并露出返回按钮
+  $('ordListView').style.display = 'none';
+  $('ordDetailView').style.display = '';
+  $('ordBackBtn').style.display = '';
+  $('ordOvl').style.display = 'flex';
+}
+function ordBackToList() { openOrderList(); }
+function closeOrderDetail() { $('ordOvl').style.display = 'none'; }
 function cdApplyGeo() {
   const p = cdGeoPending; cdCloseGeo();
   if (!p) return;

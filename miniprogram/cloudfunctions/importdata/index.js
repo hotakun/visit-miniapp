@@ -113,7 +113,9 @@ async function doImport(event) {
   const t0 = Date.now();
   let inserted = 0, updated = 0;
   const failed = [];
-  await runPool(rows, 15, async (row, i) => {
+  // 并发：2026-09-25 由 15 提到 30 —— 云函数 30s 超时（-601008）是导入最大的坑，
+  // 并发翻倍能把单片耗时砍掉一半（157 行/片从 ~25s 降到 ~12s）。若云端报"连接数超限"，退回 20。
+  await runPool(rows, 30, async (row, i) => {
     try {
       const act = await upsertOne(type, row);
       if (act === 'inserted') inserted++; else updated++;

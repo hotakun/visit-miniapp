@@ -33,3 +33,4 @@ miniprogram/i18n/
 miniprogram/miniapp/
 miniprogram/project.miniapp.json
 miniprogram/miniprogram/app.miniapp.json
+__pycache__/

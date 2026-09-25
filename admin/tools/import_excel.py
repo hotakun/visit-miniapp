@@ -22,6 +22,19 @@ ORDERS_DIR = os.path.join(BASE, '已经匹配客户的销售数据')
 OUTDIR = os.environ.get('JH_OUT') or r'D:\WFR\visit-miniapp\_scratch\import_out'
 PART_LIMIT = 68 * 1024  # 每片字节上限（云函数入参 100KB，留余量）
 
+# ===== 任务与源文件路径（2026-09-25：后台「导入信息」页改成四个入口各自吃表格/目录）=====
+# TASK 决定**只跑哪一类**（原来是 all 一把全跑）：
+#   mall  = 商城客户（生成 customers，含平台画像）
+#   plat  = 大众点评（**只更新 customers.plat**：分片里只带关联键 + plat，不动其它字段）
+#   order = 销售订单（orders）
+#   item  = 订单明细（order_items）
+#   all   = 三类全跑（保持兼容）
+TASK = (os.environ.get('JH_TASK') or 'all').strip().lower()
+F_MALL = os.environ.get('JH_F_MALL') or ''    # 商城客户表（.xlsx）
+F_PLAT = os.environ.get('JH_F_PLAT') or ''    # 大众点评表（.xlsx）
+F_ORDER = os.environ.get('JH_F_ORDER') or ''  # 销售订单表（.csv）
+D_ITEMS = os.environ.get('JH_D_ITEMS') or ''  # 订单明细目录
+
 REPORT = []
 def R(s=''):
     line = str(s)
@@ -64,7 +77,20 @@ def date_only(v):
     return m.group(1) if m else ''
 
 def excel_date(v):
-    """Excel 序列号（46273.529…）→ '2026-09-15'"""
+    """下单 / 预计发货 / 业务 / 送达 时间 → 'YYYY-MM-DD'
+    ⚠️ 2026-09-25 修（老板报障："订单都有日期，为什么显示不出来"）：
+       原先**只认 Excel 序列号**（46273.529…），而新导入的订单表里「下单时间」是**文本**
+       （'2026-09-08 10:49:56.477000'）→ num() 解析失败 → 整列 orderedAt 落成空串
+       （云端抽样 96.7% 为空，而日期其实都躺在 orderedAtRaw 里）。
+       现在**两种格式都认**：先看是不是日期字符串，是就直接取日期部分；不是再按序列号换算。"""
+    t = s(v)
+    if t:
+        m = re.match(r'^(\d{4})-(\d{2})-(\d{2})', t)
+        if m:
+            return m.group(0)
+        m2 = re.match(r'^(\d{4})/(\d{1,2})/(\d{1,2})', t)   # 2026/09/08 这种也认
+        if m2:
+            return '%s-%02d-%02d' % (m2.group(1), int(m2.group(2)), int(m2.group(3)))
     f = num(v)
     if f is None or f <= 0:
         return ''
@@ -140,16 +166,28 @@ def write_parts(prefix, docs):
 
 # ============ ① 读源表 ============
 def load_sources():
-    mall = pd.read_excel(os.path.join(BASE, '商城客户列表002-已匹配大众点评-带shopuuid.xlsx'))
-    plat = pd.read_excel(os.path.join(BASE, '金华-永康-已匹配商城-带商城客户名-补齐同店.xlsx'))
-    dup = pd.read_excel(os.path.join(BASE, '客户列表0912-同店重复注册.xlsx'), header=1)
-    R('① 商城侧 %d 行 × %d 列' % (len(mall), len(mall.columns)))
-    R('② 点评侧 %d 行 × %d 列' % (len(plat), len(plat.columns)))
-    R('③ 同店重复登记 %d 行 × %d 列' % (len(dup), len(dup.columns)))
+    p_mall = F_MALL or os.path.join(BASE, '商城客户列表002-已匹配大众点评-带shopuuid.xlsx')
+    p_plat = F_PLAT or os.path.join(BASE, '金华-永康-已匹配商城-带商城客户名-补齐同店.xlsx')
+    p_dup = os.path.join(BASE, '客户列表0912-同店重复注册.xlsx')
+    if not os.path.exists(p_mall):
+        raise SystemExit('找不到商城客户表：' + p_mall)
+    mall = pd.read_excel(p_mall)
+    R('① 商城侧 %s → %d 行 × %d 列' % (os.path.basename(p_mall), len(mall), len(mall.columns)))
+    if TASK in ('mall', 'all'):
+        if not os.path.exists(p_plat):
+            raise SystemExit('找不到大众点评表：' + p_plat)
+        plat = pd.read_excel(p_plat)
+        R('② 点评侧 %s → %d 行 × %d 列' % (os.path.basename(p_plat), len(plat), len(plat.columns)))
+    else:
+        plat = None          # 只导订单/明细时不需要点评表
+    dup = pd.read_excel(p_dup, header=1) if os.path.exists(p_dup) else None
+    R('③ 同店重复登记 %s' % ('%d 行' % len(dup) if dup is not None else '（无此文件，跳过）'))
     return mall, plat, dup
 
 def plat_index(plat):
     """shopuuid → 点评行（同一 shopuuid 多条时按 §1.3 方案 A：字段级合并，收录时间取更早）"""
+    if plat is None:
+        return {}
     idx = {}
     for _, r in plat.iterrows():
         u = s(r.get('shopuuid'))
@@ -336,10 +374,35 @@ def build_customers(mall, plat_map):
 
 # ============ ③ 组 orders 文档 ============
 def build_orders(cust_docs):
-    path = os.path.join(ORDERS_DIR, '销售订单-已匹配客户.csv')
-    df = pd.read_csv(path, dtype=str, keep_default_na=False)
-    R('')
-    R('④ 订单主表 %d 行 × %d 列' % (len(df), len(df.columns)))
+    # 2026-09-25 老板定：订单源既支持**单个文件**，也支持**一个目录**
+    # （老板的订单是「销售订单1~5.xls」5 个分开的文件 → 选目录后自动逐个读、合并成一张表）。
+    path = F_ORDER or os.path.join(ORDERS_DIR, '销售订单-已匹配客户.csv')
+    frames = []
+    if os.path.isdir(path):
+        fs = sorted([x for x in os.listdir(path) if x.lower().endswith(('.xls', '.xlsx', '.csv'))])
+        if not fs:
+            raise SystemExit('目录里没有订单表（.xls/.xlsx/.csv）：' + path)
+        R('')
+        R('④ 订单源目录 %s —— 共 %d 个文件，逐个读后合并：' % (path, len(fs)))
+        for fn in fs:
+            fp = os.path.join(path, fn)
+            try:
+                if fn.lower().endswith('.csv'):
+                    frames.append(pd.read_csv(fp, dtype=str, keep_default_na=False, encoding='utf-8-sig'))
+                else:
+                    frames.append(pd.read_excel(fp, dtype=str))
+                R('     · %s → %d 行' % (fn, len(frames[-1])))
+            except Exception as e:
+                R('     [X] 读取失败：%s（%s）' % (fn, e))
+        if not frames:
+            raise SystemExit('目录里的订单表一个都没读成功：' + path)
+        df = pd.concat(frames, ignore_index=True)
+    else:
+        if not os.path.exists(path):
+            raise SystemExit('找不到销售订单表：' + path)
+        df = pd.read_csv(path, dtype=str, keep_default_na=False)
+        R('')
+    R('   合并后 %d 行 × %d 列' % (len(df), len(df.columns)))
 
     # 客户编码 → 客户名（用于回填与核对）
     code2name = {}
@@ -399,8 +462,13 @@ def build_orders(cust_docs):
 ITEM_FILE = re.compile(r'销售订单详细\s*-\s*(\d+)\.(csv|xls)$', re.I)
 
 def build_items():
-    d = os.path.join(ORDERS_DIR, '订单明细')
+    # 2026-09-25：明细目录可传（后台「订单明细导入」选目录后由 server.js 传进来）
+    d = D_ITEMS or os.path.join(ORDERS_DIR, '订单明细')
+    if not os.path.isdir(d):
+        raise SystemExit('找不到订单明细目录：' + d)
     files = sorted(os.listdir(d))
+    R('')
+    R('⑤ 明细目录 %s（%d 个文件）' % (d, len(files)))
     docs, nofile, rowsum, xls_ok = [], 0, 0, 0
     for fn in files:
         m = ITEM_FILE.search(fn)
@@ -458,25 +526,34 @@ def build_items():
 
 # ============ 主流程 ============
 def main():
-    R('=== 阶段 3b 合并报告（%s）===' % datetime.datetime.now().strftime('%Y-%m-%d %H:%M'))
+    R('=== 客户数据合并报告（%s）｜任务：%s ===' % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M'), TASK))
     R('')
-    mall, plat, dup = load_sources()
-    pidx = plat_index(plat)
-    R('点评侧按 shopuuid 去重后：%d 个 shopuuid' % len(pidx))
+    cust, ords, items = [], [], []
 
-    cust, stat = build_customers(mall, pidx)
-    R('')
-    R('customers：%d 条文档' % len(cust))
-    R('  其中：有平台画像 %d 家 ｜ 无坐标 %d 家 ｜ 商城日期全空 %d 家' % (stat['plat'], stat['nocoord'], stat['nodate']))
-
-    ords = build_orders(cust)
-    items = build_items()
+    if TASK in ('mall', 'plat', 'all'):
+        mall, plat, dup = load_sources()
+        pidx = plat_index(plat)
+        R('点评侧按 shopuuid 去重后：%d 个 shopuuid' % len(pidx))
+        cust, stat = build_customers(mall, pidx)
+        R('')
+        R('customers：%d 条文档' % len(cust))
+        R('  其中：有平台画像 %d 家 ｜ 无坐标 %d 家 ｜ 商城日期全空 %d 家' % (stat['plat'], stat['nocoord'], stat['nodate']))
+        if TASK == 'plat':
+            # 大众点评导入：**只更新 customers.plat** —— 分片里只保留"关联键 + plat"，
+            # importdata 的 update 是**字段级**的（只覆盖带过来的字段），所以客户其它字段一条都不会动。
+            keep = ('mallKey', 'mallCode', 'platShopUuid', 'name', 'phone', 'plat', 'platMatched')
+            cust = [{k: v for k, v in d.items() if k in keep} for d in cust]
+            R('  → 已裁剪为「关联键 + plat」，入库时不动客户其它字段')
+    if TASK in ('order', 'all'):
+        ords = build_orders(cust)
+    if TASK in ('item', 'all'):
+        items = build_items()
 
     R('')
     R('=== 写分片 ===')
-    pc = write_parts('customers', cust)
-    po = write_parts('orders', ords)
-    pi = write_parts('order_items', items)
+    pc = write_parts('customers', cust) if cust else 0
+    po = write_parts('orders', ords) if ords else 0
+    pi = write_parts('order_items', items) if items else 0
     R('')
     R('=== 汇总 ===')
     R('  customers   %5d 条 → %d 片' % (len(cust), pc))

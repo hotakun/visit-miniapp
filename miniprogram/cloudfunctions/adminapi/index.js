@@ -463,6 +463,23 @@ async function getCustomerDetail(event) {
       orderNo: o.orderNo, orderedAt: o.orderedAt, actualAmount: o.actualAmount,
       orderStatus: o.orderStatus, payMethod: o.payMethod, lines: linesOf[o.orderNo] || 0
     })),
+    // 2026-09-25 老板定：后台「购买记录」里点某一单 → **弹出小窗看该单的商品明细**（商品名/规格/数量/单价/金额）。
+    // 只带上上面返回的那 20 单的明细（orders.slice(0,20)），避免返回体过大。
+    // ⚠️ 前端拿不到明细就没法弹窗 —— 所以必须在这里带上（原先只返回了汇总 topGoods + 每单行数）。
+    orderItems: (() => {
+      const keep = {};
+      orders.slice(0, 20).forEach(o => { if (o.orderNo) keep[o.orderNo] = true; });
+      const by = {};
+      items.forEach(it => {
+        if (!it.orderNo || !keep[it.orderNo]) return;
+        (by[it.orderNo] = by[it.orderNo] || []).push({
+          name: it.goodsName || '', spec: it.spec || '', unit: it.unit || '',
+          qty: Number(it.orderQty) || 0, price: it.salePrice != null ? Number(it.salePrice) : null,
+          amount: Number(it.amount) || 0, category: it.category || '', barcode: it.barcode || ''
+        });
+      });
+      return by;
+    })(),
     orderTotal: orders.length,
     orderAmountSum: orders.reduce((a, o) => a + (Number(o.actualAmount) || 0), 0),
     topGoods,
@@ -1370,6 +1387,18 @@ async function listCustomers(event) {
   const taskMap = {};     // customerId -> 当前任务 taskId（published/reviewing 中任选一个）
   const lastVisitMap = {};
   const countMap = {};
+  // 2026-09-25 老板定（报障：c26 实际最新订单是 9-24，客户列表却显示 8-12）：
+  // 「最近下单」**必须以实际订单为准**，不能再取商城客户表里的 lastOrderAt
+  //（那是商城系统记账的值，与后来导入的销售订单不同步，有时还差一天）。
+  // 做法：拉一遍 orders 的 customerCode + orderedAt，按店号取最大值；完全没订单的客户再回落到商城字段。
+  const oAll = await fetchAll('orders', {}, { customerCode: true, orderedAt: true });
+  const lastOrderMap = {};
+  oAll.forEach(o => {
+    const code = String(o.customerCode || '').trim();
+    const d = String(o.orderedAt || '').slice(0, 10);
+    if (!code || !d) return;
+    if (!lastOrderMap[code] || d > lastOrderMap[code]) lastOrderMap[code] = d;
+  });
   const today = todayStr();
   const vAll = await fetchAll('visits', {}, { customerId: true, taskId: true, status: true, visitedAt: true });
   vAll.forEach(v => {
@@ -1415,7 +1444,10 @@ async function listCustomers(event) {
       nameRaw: c.nameRaw || '', mallCode: c.mallCode || '',
       salesman: c.salesman || '', level: c.level || '',
       mallJoinedAt: c.mallJoinedAt || null,
-      lastOrderAt: c.lastOrderAt || '', lastBrowseAt: c.lastBrowseAt || '',
+      // ⚠️ 2026-09-25 老板定：「最近下单」**以实际订单为准**（lastOrderMap 是 orders 聚合出的每个店号最新下单日）；
+      //    完全没订单的客户，才回落到商城客户表带来的 lastOrderAt 兜底。
+      lastOrderAt: lastOrderMap[String(c.mallCode || '').trim()] || c.lastOrderAt || '',
+      lastBrowseAt: c.lastBrowseAt || '',
       mallSalesman: c.mallSalesman || c.salesman || '', mallLevel: c.mallLevel || c.level || '',
       status: c.status,
       region: c.region || '',
