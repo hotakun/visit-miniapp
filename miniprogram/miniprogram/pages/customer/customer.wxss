@@ -1,106 +1,248 @@
-.page { padding: 18px 18px 120px; }
-.hero { display: flex; align-items: center; gap: 10px; }
-.nm { font-size: 22px; font-weight: 800; }
-.tag { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
-.addr { margin-top: 6px; font-size: 12.5px; color: var(--sub); }
-.phoneRow { display: flex; align-items: center; gap: 11px; margin-top: 14px; }
-.call { width: 50px; height: 50px; border-radius: 50%; background: var(--green); color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px rgba(22,163,74,.35); }
-.call.none { background: #E7E9ED; box-shadow: none; }
+/* 客户详情（2026-09-25 改造：**真数据页**）
+   数据来自云函数 tasks 的 custDetail；界面骨架照 _scratch/客户详情页-A-手机演示.html
+   （暖白底 + 纯白卡 + 品牌橙点缀）；尺寸沿用项目习惯（px，与其它页面一致） */
+
+/* 加载中（d 为空时显示）：真数据要等云端一拍，给个明确反馈，别白屏 */
+.page-loading { padding: 120px 30px 0; text-align: center; }
+.pl-t { display: block; font-size: 15px; color: var(--sub); font-weight: 600; }
+.pl-s { display: block; margin-top: 8px; font-size: 12.5px; color: #B6BEC8; }
+
+.page { padding: 18px 18px 130px; background: var(--bg); min-height: 100vh; box-sizing: border-box; }
+
+/* ===================== 店名卡 ===================== */
+.head { position: relative; background: #fff; border-radius: 16px; padding: 16px 15px 13px; overflow: hidden;
+  box-shadow: 0 2px 6px rgba(31,36,48,.06), 0 18px 34px -20px rgba(31,36,48,.22); }
+.head::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: linear-gradient(90deg, var(--primary), #FF9A6C 55%, transparent); }
+.hrow1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nm { font-size: 21px; font-weight: 800; line-height: 1.3; color: var(--ink); }
+.tag.old { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 999px; background: #FDECEC; color: #C0392B; }
+.meta { margin-top: 9px; }
+.mline { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; color: var(--sub); padding: 3px 0; }
+.mline .ic { flex: 0 0 auto; }
+.mline .tx { flex: 1; min-width: 0; }
+.mline .tx .strong { color: var(--ink); font-weight: 700; }
+/* 2026-09-25 老板定：营业时间这行**允许自然换行**。
+   （中间曾强制一行 + 末尾省略号，后来发现根因是**数据里自带真换行符 `\n`**，
+     已在 buildD 的 flatHours() 里折成空格；折完还剩极少数几家特别长，让它折两行无伤大雅 ——
+     而且营业状态已经提到最前面，不会被挤掉。） */
+.mline.cat .tx { font-size: 11px; }
+.mline.cat .rk { flex: 0 0 auto; margin-left: 8px; font-size: 10.5px; font-weight: 700; color: #B8860B; }
+.telrow { display: flex; align-items: center; gap: 11px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.call { width: 46px; height: 46px; border-radius: 50%; background: var(--green); color: #fff; font-size: 19px;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(22,163,74,.32); }
 .pwrap { flex: 1; min-width: 0; }
-.ph { font-size: 17px; font-weight: 800; }
-.ph.none { color: var(--sub); }
-.lb { margin-top: 2px; font-size: 11px; color: var(--sub); font-weight: 600; }
-.card { margin-top: 14px; padding: 15px 16px; background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(31,36,48,.06); }
-.ct { font-size: 13px; font-weight: 800; }
-.rows { margin-top: 8px; }
-.r { display: flex; justify-content: space-between; padding: 8.5px 0; font-size: 13.5px; border-bottom: 1px dashed var(--line); }
+.ph { font-size: 16.5px; font-weight: 800; }
+.lb { margin-top: 1px; font-size: 11px; color: var(--sub); font-weight: 600; }
+.fixbtn { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px; background: #EAF2FE; color: var(--blue);
+  font-size: 9.5px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.25; }
+.fixbtn .fi { font-size: 14px; }
+
+/* ===================== 通用卡 ===================== */
+.card { margin-top: 11px; background: #fff; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(31,36,48,.04), 0 10px 24px -14px rgba(31,36,48,.16); }
+.ch { display: flex; align-items: center; gap: 7px; padding: 10px 15px; border-bottom: 2px solid #EDF1F7; }
+.ci { flex: 0 0 auto; }
+.ch .t { font-size: 13.5px; font-weight: 800; flex: 0 0 auto; }
+.ch .sub { flex: 1; text-align: right; font-size: 11px; color: var(--sub); font-weight: 600; margin-left: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch .chev { flex: 0 0 auto; margin-left: 6px; color: #B9C0CC; font-size: 13px; transition: transform .18s; }
+.card.collapsed .ch { border-bottom-width: 0; }
+.card.collapsed .cb { display: none; }
+.card.collapsed .chev { transform: rotate(-90deg); }
+.cb { padding: 12px 15px; }
+
+/* 备注 / 历史：带色标题栏 */
+.card.remark { border: 1px solid #F7E4D8; }
+.card.remark .ch { background: #FFF8F3; border-bottom-color: #F7E4D8; }
+.card.remark .ch .t { color: #B4441B; }
+.card.hist { border: 1px solid #DEE8F8; }
+.card.hist .ch { background: #F5F9FF; border-bottom-color: #E4EDFA; }
+.card.hist .ch .t { color: #2C6BB5; }
+
+/* 2026-09-25 老板定：商城信息 / 购买记录 / 平台口碑 / 服务与设施 这 4 张卡的标题栏底色，
+   取「管理员备注」那张的 #FFF8F3 **降一半色彩浓度** = #FFFCF9
+   （算法：与白色对半分 → 255-(255-v)/2，即 R255 G252 B249）。
+   只改背景色，文字色沿用默认（深色），不加别的装饰。 */
+.card.k-mall > .ch,
+.card.k-purchase > .ch,
+.card.k-rate > .ch,
+.card.k-serv > .ch { background: #FFFCF9; }
+
+/* ===================== 内容行 ===================== */
+.r { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 9px 0;
+  font-size: 13.5px; border-bottom: 1px solid #EFF1F5; }
 .r:last-child { border-bottom: none; }
-.k { color: var(--sub); font-weight: 600; }
-.v { font-weight: 700; }
-.v.warn { color: var(--primary-deep); }
-.v.blue { color: var(--blue); }
-.remark { margin-top: 8px; font-size: 13px; color: #4A5360; line-height: 1.7; }
-.tl { margin-top: 18px; }
-.tl-t { font-size: 15px; font-weight: 800; margin-bottom: 10px; }
-.tl-item { background: #fff; border-radius: 16px; padding: 13px 15px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(31,36,48,.06); opacity: .85; }
-/* 最新一次拜访：浅橙边框全饱和，其余卡片弱化，注意力一眼落在最新卡片上 */
-.tl-item.latest { background: #fff; border: 1.5px solid #FFC9A8; opacity: 1; }
-/* 拜访中：蓝色辉光边缘（放 latest 之后，拜访中且最新的记录蓝框优先），与任务页拜访中卡片统一（老板 2026-09-06 定） */
-.tl-item.ongoing { border: 1.5px solid var(--blue); box-shadow: 0 2px 12px rgba(47,128,237,.16); opacity: 1; }
+.r .k { color: var(--sub); font-weight: 600; flex: 0 0 auto; }
+.r .v { font-weight: 700; text-align: right; word-break: break-all; }
+.r .v.warn { color: var(--primary-deep); }
+.r .v.mut { color: var(--sub); font-weight: 600; }
+.r .v.gold { color: #B8860B; }
+.subsec { font-size: 12px; color: var(--sub); font-weight: 700; margin: 13px 0 8px; padding-top: 11px; border-top: 1px solid #F4F6F9; }
+
+/* ===================== 门店照片三格 ===================== */
+.shotrow { display: flex; gap: 8px; margin-top: 2px; }
+.shot3 { flex: 1; height: 80px; border-radius: 10px; overflow: hidden; background: #F0F2F5;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.shot3.empty { background: #FAFBFD; border: 1px dashed #D6DEEA; }
+.shot-img { width: 100%; height: 100%; display: block; }
+.cam3 { font-size: 19px; line-height: 1; opacity: .7; }
+.t3 { font-size: 10px; color: #94A0B2; font-weight: 700; margin-top: 3px; }
+
+/* ===================== 标签 ===================== */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 11.5px; padding: 4px 9px; border-radius: 8px; background: #F5F7FB; color: #5B6472; border: 1px solid #EDF1F7; }
+.empty3 { display: flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 11px;
+  background: #FBFCFF; border: 1px dashed #DFE4EC; }
+.addtap { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #FF7A3D, var(--primary));
+  color: #fff; font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; line-height: 1; }
+
+/* ===================== 购买记录 ===================== */
+.subfold { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+.fold-t { font-size: 13.5px; color: var(--sub); font-weight: 700; flex: 0 0 auto; }
+.fold-mini { font-size: 10.5px; padding: 2px 7px; border-radius: 6px; background: #F5F7FB; color: #5B6472; border: 1px solid #EDF1F7; }
+.btn-all { width: 100%; margin-top: 11px; height: 38px; border-radius: 11px; border: 1px solid #E4E9F1; background: #fff;
+  font-size: 13px; font-weight: 700; color: var(--ink); display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.warnbox { margin-top: 9px; padding: 9px 11px; border-radius: 11px; background: #FFF8E8; border: 1px solid #F3E3BA;
+  font-size: 12px; color: #8A6412; line-height: 1.6; }
+
+/* ===================== 平台口碑 ===================== */
+.rate { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 9px; }
+.rate .num { font-size: 27px; font-weight: 800; color: var(--primary-deep); line-height: 1; }
+.rate .of { font-size: 11px; color: var(--sub); }
+.rate .txt { font-size: 11.5px; color: var(--sub); }
+.bars { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
+.bline { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--sub); }
+.bline .bk { min-width: 30px; }
+.bar { flex: 1; height: 5px; background: #EEF1F6; border-radius: 99px; overflow: hidden; }
+.bar-i { height: 100%; background: linear-gradient(90deg, #FFB08A, var(--primary)); border-radius: 99px; }
+.bline .bn { min-width: 24px; text-align: right; font-weight: 700; }
+
+/* ===================== 服务与设施 ===================== */
+.kvrow { display: flex; align-items: center; gap: 8px; }
+.kv { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 7px; }
+.flag { font-size: 11.5px; padding: 4px 10px; border-radius: 8px; font-weight: 700; }
+.flag.y { background: #EEF9F3; color: #16694A; border: 1px solid #CFEEDD; }
+.flag.n { background: #F6F7F9; color: #A6AEBC; border: 1px solid #EDF0F5; }
+.plusbar { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #FF7A3D, var(--primary));
+  color: #fff; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 8px rgba(245,83,28,.28); }
+.facsec { padding: 9px 0; }
+.fack { font-size: 11px; color: var(--sub); font-weight: 700; margin-bottom: 6px; }
+
+/* ===================== 管理员备注 ===================== */
+.rkrow { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #F4F6F9; }
+.rkrow:last-child { border-bottom: none; padding-bottom: 0; }
+.rkd { flex: 0 0 auto; font-size: 11px; color: #A6AEBC; font-weight: 500; }
+.rkt { flex: 1; min-width: 0; font-size: 12.5px; color: #4A5360; line-height: 1.65; }
+
+/* ===================== 拜访历史 ===================== */
+.tl-item { background: #fff; border-radius: 14px; padding: 13px 15px; margin-bottom: 10px; opacity: .85;
+  border: 1px solid #EFF1F5; }
+.tl-item:last-child { margin-bottom: 0; }
+.tl-item.latest { border: 1.5px solid #FFC9A8; opacity: 1; }
 .hrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; }
-.hr-tag { padding: 3px 9px; border-radius: 999px; background: var(--primary-tint); color: var(--primary-deep); }
-.hr-tag.ong { background: var(--blue-tint); color: var(--blue); }
-.hm { flex: 1; }
+.hr-tag { padding: 3px 9px; border-radius: 999px; background: #FFF1EC; color: var(--primary-deep); font-size: 11px; }
+.hm { flex: 1; min-width: 0; }
 .hd { color: var(--sub); font-size: 11px; font-weight: 600; }
 .htxt { margin-top: 7px; font-size: 13px; color: #4A5360; line-height: 1.6; }
-.hsamp { margin-top: 5px; font-size: 12px; color: var(--sub); font-weight: 600; }
-/* 现场证据（2026-09-07）：照片缩略行 + 录音播放控件（2026-09-08 加进度条） */
-.hev { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.hev-pic { width: 84px; height: 63px; border-radius: 9px; background: #F0F2F5; }
-/* 2026-09-11：照片多于 3 张时的提示行（点击进全屏左右滑看全部）*/
-.hev-more { margin-top: 5px; font-size: 11.5px; color: var(--sub); font-weight: 700; }
-.hev-audio { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 5px 10px; border-radius: 12px; background: var(--blue-tint); }
-.ha-play { width: 30px; height: 30px; border-radius: 50%; background: #fff; color: var(--blue); display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(31,36,48,.14); }
-.hev-audio.on { background: #DDEBFD; }
-.hev-audio.on .ha-play { background: var(--blue); color: #fff; }
-.ha-slider { flex: 1; min-width: 0; margin: 0 2px; }
-.ha-time { font-size: 10.5px; color: var(--sub); font-weight: 700; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.empty { text-align: center; color: var(--sub); font-size: 13px; margin-top: 16px; }
-/* ===== 语音转写（2026-09-11 M2b 小步）===== */
-.tr-row { display: flex; align-items: center; gap: 7px; margin-top: 8px; flex-wrap: wrap; }
-.tr-pill { font-size: 11.5px; font-weight: 800; padding: 4px 11px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;
-           box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 1px 2px rgba(23,30,44,.08); }
-.tr-pill.processing { background: linear-gradient(180deg,#FFF1E4,#FFE0CC); color: #C2360A; }
-.tr-pill.done { background: linear-gradient(180deg,#E9F8EF,#D8F0E2); color: #117A38; }
-.tr-pill.partial { background: linear-gradient(180deg,#FDF3E2,#FBE9CE); color: #B97A0B; }
-.tr-pill.failed { background: linear-gradient(180deg,#FCEBEC,#FADCDE); color: #C93A40; }
-.tr-n { font-size: 11px; color: var(--sub); font-weight: 700; }
-.tr-prev { margin-top: 6px; font-size: 12.5px; color: #4A5360; line-height: 1.65;
-           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-/* 全文弹层（复用 .c-mask / .c-box）*/
-.tr-sub { margin-top: 5px; font-size: 12.5px; color: var(--sub); font-weight: 600; text-align: center; }
-/* 2026-09-11 老板定：弹窗更宽（遮罩左右内边距 34px → 14px）+ 高度收一点（430 → 300px，别太占屏） */
-.c-mask.tr-mask { padding-left: 14px; padding-right: 14px; }
-.tr-box { max-width: none; }
-.tr-body { margin-top: 11px; max-height: 300px; overflow: auto; background: #F7F8FA; border: 1px solid var(--line);
-           border-radius: 12px; padding: 13px 16px; font-size: 15.5px; line-height: 1.8; color: #333A44; white-space: pre-wrap; }
-/* 编辑态文本框（键盘弹起会挡住 → 高度随屏幕自适应，配合弹层靠上）*/
-.tr-edit { width: 100%; box-sizing: border-box; margin-top: 11px; height: 32vh; min-height: 130px; max-height: 270px;
-           background: #F7F8FA; border: 1px solid var(--line);
-           border-radius: 12px; padding: 13px 16px; font-size: 15.5px; line-height: 1.8; color: #333A44; }
-/* 编辑态：弹层顶对齐（否则键盘弹起时，垂直居中的弹层下半部分会被键盘挡住）*/
-.c-mask.edit-mode { align-items: flex-start; padding-top: 22px; }
-.tr-btns { display: flex; gap: 10px; margin-top: 12px; }
-.tr-btn { flex: 1; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
-.tr-btn.ghost { background: #F0F2F5; color: #4A5360; }
-.tr-btn.main { background: linear-gradient(135deg,#FF7A3D,#F5531C); color: #fff; }
-.foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; display: flex; align-items: center; gap: 10px; background: linear-gradient(180deg, rgba(246,247,249,0), #F6F7F9 30%); }
-.posfix { width: 42px; height: 42px; border-radius: 11px; background: var(--blue-tint); color: var(--blue); font-size: 9px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
-.posfix.off { background: #F0F1F4; color: var(--sub); }
-.cfa { margin-left: 8px; font-size: 11px; font-weight: 700; color: #B97A0B; background: #FCF3E0; border-radius: 999px; padding: 3px 9px; flex-shrink: 0; }
-/* 坐标报错确认弹窗 */
-.c-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(31,36,48,.5); display: flex; align-items: center; justify-content: center; z-index: 99; padding: 0 34px; }
-.c-box { width: 100%; max-width: 320px; background: #fff; border-radius: 18px; padding: 20px 18px 16px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
-.c-box .ct { font-size: 16px; font-weight: 800; text-align: center; margin-bottom: 14px; }
-.crow { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
-.cic { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-.cic.loc { background: var(--blue-tint); }
-.cic.loc.used { background: #E5E8EC; color: #9AA1AB; }
-.clb { flex: 1; font-size: 13px; font-weight: 700; word-break: break-all; }
-.csl { font-size: 12px; color: var(--sub); font-weight: 600; }
-.c-note { width: 100%; box-sizing: border-box; background: #F7F8FA; border: 1px solid var(--line); border-radius: 11px; height: 84px; line-height: 1.6; padding: 11px 12px; font-size: 13px; margin-top: 6px; }
-/* 照片区演示占位（二期替换为真拍照） */
-.c-photos { display: flex; gap: 10px; margin-top: 4px; justify-content: space-between; }
-/* 全固定像素（2026-09-08 老板定）：弹窗内容宽 284px，三格 88×66px 写死（88*3+10*2=284 正好一行） */
-.c-ph { position: relative; width: 88px; height: 66px; flex: none; border-radius: 11px; background: #F7F8FA; overflow: hidden; box-sizing: border-box; }
-.c-ph.has { background: #EDEFF2; }
-.c-ph-img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
-.c-ph-empty { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border: 1.5px dashed #D5DAE0; border-radius: 11px; box-sizing: border-box; color: #B7BEC7; }
-.c-ph-empty.busy { opacity: .6; }
-.c-ph-ic { font-size: 20px; opacity: .45; }
-.c-ph-del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; line-height: 19px; text-align: center; background: rgba(0,0,0,.55); color: #fff; border-radius: 50%; font-size: 10px; font-weight: 700; }
-.c-ph-tip { margin-top: 8px; font-size: 11.5px; color: var(--sub); font-weight: 600; text-align: center; }
-.c-box .btn-primary { height: 46px; margin-top: 10px; }
-/* 拜访中：开始拜访按钮变蓝（老板 2026-09-06 定），取消/提交后恢复主色 */
-.btn-primary.visiting { background: var(--blue); }
-.again { text-align: center; font-size: 13px; color: var(--sub); font-weight: 600; padding: 10px 0 0; }
+.htxt.samp { color: #8A93A1; font-size: 12px; font-weight: 600; }
+
+/* ===================== 底部悬浮按钮 ===================== */
+.fab-wrap { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 14px 22px;
+  display: flex; justify-content: center; pointer-events: none; }
+.fab { height: 48px; padding: 0 32px; border-radius: 24px; background: linear-gradient(135deg, var(--primary), #FF7A45);
+  color: #fff; font-size: 15px; font-weight: 800; letter-spacing: .5px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 24px rgba(245,83,28,.45); pointer-events: auto; }
+/* 2026-09-25 老板定：这家**正在拜访中**时，橙色按钮变**蓝色**（文案也由 wxml 同步改成「拜访中」）。
+   配色与项目里的蓝一致（#2B7FF3，同地图蓝点/新店胶囊那套），阴影跟着改成蓝的。 */
+.fab-on { background: linear-gradient(135deg, #2B7FF3, #4E9BFF); box-shadow: 0 8px 24px rgba(43,127,243,.42); }
+
+/* ===================== 弹层 / 抽屉 / 大图 ===================== */
+.mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(31,36,48,.5); z-index: 90;
+  display: flex; align-items: center; justify-content: center; padding: 0 34px; }
+.box { width: 100%; max-width: 300px; background: #fff; border-radius: 18px; padding: 18px 16px 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+.box-t { font-size: 15.5px; font-weight: 800; text-align: center; }
+.box-s { margin-top: 7px; font-size: 12.5px; color: var(--sub); text-align: center; line-height: 1.6; }
+.box-i { margin-top: 12px; height: 44px; border: 1px solid var(--line); border-radius: 12px; background: #F7F8FA;
+  padding: 0 13px; font-size: 14px; }
+.box-btns { display: flex; gap: 10px; margin-top: 15px; }
+.bbtn { flex: 1; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; }
+.bbtn.ghost { background: #F0F2F5; color: #4A5360; }
+.bbtn.main { background: linear-gradient(135deg, #FF7A3D, var(--primary)); color: #fff; }
+
+.sheet { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(31,36,48,.5); z-index: 80;
+  display: flex; align-items: flex-end; }
+/* 2026-09-25 老板定：这个「查看全部订单」抽屉**两边收窄** —— 原来是 width:100% 满屏贴边，
+   内容一长（长商品名）就把左右两端的日期/金额挤出屏幕。改成左右各留 12px 留白、四角全圆角。 */
+.sheet-box { width: calc(100% - 24px); margin: 0 12px; max-height: 84%; background: #fff;
+  border-radius: 20px 20px 0 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
+.sheet-h { display: flex; align-items: center; padding: 15px 16px 12px; border-bottom: 1px solid #F2F4F8; }
+.sheet-t { font-size: 14.5px; font-weight: 800; flex: 1; min-width: 0; }
+.sheet-x { color: var(--sub); font-size: 16px; padding: 0 4px; }
+/* 2026-09-25 老板定：内容左右留白 16 → **12px**（原来太宽，右边的金额被顶到框外） */
+.sheet-b { overflow: auto; padding: 8px 12px 24px; flex: 1; box-sizing: border-box; }
+.sheet-note { font-size: 11.5px; color: var(--sub); padding: 8px 0 4px; }
+/* 间距 8 → 6px（老板要求减小间距，给右边金额腾位置） */
+.ord { display: flex; align-items: center; gap: 6px; padding: 9px 0; border-bottom: 1px solid #EFF1F5; }
+.ord-d { flex: 0 0 52px; color: var(--sub); font-weight: 700; font-size: 12px; white-space: nowrap; }
+.ord-s { flex: 1; min-width: 0; color: var(--sub); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 金额按内容宽度（原来是固定值，数字一长就溢出到右边框外）*/
+.ord-a { flex: 0 0 auto; font-weight: 800; font-size: 13px; white-space: nowrap; }
+.ord-v { flex: 0 0 auto; color: #C3C9D2; font-size: 12px; }
+/* ⚠️ 明细区是「两边字看不见」的真凶：.oi-n（商品名）原来只有 min-width:0 **没有省略号**，
+   长商品名会一路撑破 flex 容器，把整行顶出屏幕。这里补齐省略号 + 给容器兜住溢出。 */
+.ord-det { background: #F8F9FC; border-radius: 10px; padding: 8px 10px; margin: 2px 0 8px; overflow: hidden; }
+.ord-item { display: flex; gap: 6px; font-size: 12px; color: var(--sub); padding: 3px 0; overflow: hidden; }
+.oi-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 规格：不参与伸缩、不换行（否则会被商品名压得串行） */
+.oi-q { flex: 0 0 auto; color: var(--sub); white-space: nowrap; }
+/* 金额：**按内容宽度自适应**（2026-09-25 改）—— 原 `flex: 0 0 42px` 写死 42px，
+   `¥1234` 这种就已经超宽 → 直接顶出右边框。改成 auto 后多长的数字都能完整显示。 */
+.oi-m { flex: 0 0 auto; font-weight: 700; color: var(--ink); text-align: right; white-space: nowrap; }
+
+.viewer { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(14,17,22,.94); z-index: 95;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; }
+.viewer-img { width: 100%; height: 70%; }
+.viewer-x { color: #fff; font-size: 13px; font-weight: 700; border: 1px solid rgba(255,255,255,.4);
+  border-radius: 999px; padding: 6px 18px; }
+
+/* ===================== 拜访历史里的现场证据（录音 / 转写 / 照片） ===================== */
+.hrec { display: flex; align-items: center; gap: 9px; margin-top: 9px; padding: 8px 10px; border-radius: 10px;
+  background: #FFF8F3; border: 1px solid #F7E4D8; }
+.hplay { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #FF7A3D, var(--primary)); box-shadow: 0 3px 8px rgba(245,83,28,.3); }
+.hrec-t { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--primary-deep); }
+.hrec-bar { flex: 1; min-width: 0; height: 4px; border-radius: 99px; background: #F4E4DB; overflow: hidden; }
+.hrec-i { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #FFB08A, var(--primary)); }
+.htrans { margin-top: 8px; padding: 9px 10px; border-radius: 10px; background: #FBFAF9; border: 1px dashed #E6E9EF; }
+.htrans-h { font-size: 11px; font-weight: 700; color: var(--primary-deep); margin-bottom: 4px; }
+.htrans-b { font-size: 12.5px; color: #4A5360; line-height: 1.65; }
+.hshots { display: flex; gap: 6px; margin-top: 9px; }
+.hshot { flex: 1; height: 68px; border-radius: 9px; overflow: hidden; background: #F0F2F5; border: 1px solid #EFF1F5; }
+.hshot-img { width: 100%; height: 100%; display: block; }
+
+/* 商圈与位置的小地图（2026-09-13）：高 150px / 圆角 12px / 宽占满
+   2026-09-25：外面包一层 .cmap-wrap 专门做**裁剪**（overflow:hidden；高度比 map 少 40px），
+   被裁掉的正好是腾讯地图 logo/版权那一块。圆角/边框/阴影都挪到 wrapper 上，否则裁完底部两角会变方。 */
+.cmap-wrap { position: relative; width: 100%; height: 150px; margin-top: 9px; border-radius: 12px; overflow: hidden;
+  border: 1px solid #EFF1F5; box-shadow: 0 2px 8px rgba(31,36,48,.05); }
+.cmap { width: 100%; height: calc(100% + 40px); }
+/* 经纬度（2026-09-25 老板定）：**单独一行、不许换行**（原来那句太长了会折行）。
+   图例小蓝点 / 绿短线（.cdot / .cwalk）已随「我的位置 / 步行路线」一起去掉，样式不再需要。 */
+.coords { margin-top: 6px; font-size: 11px; color: #99A2AE; text-align: right; white-space: nowrap; }
+
+/* ===== 「聚火地图」地图标识（2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成这个） =====
+   logo 已被上面的"裁剪法"裁掉，所以 badge **不再需要不透明底** → 改成和**后台一致**的「橙字白描边」。
+   指南针用「圆环 + 旋转 45° 的小方块」拼（view 支持 border-radius / transform），白边靠多层 text-shadow。 */
+.jh-badge { position: absolute; right: 8px; bottom: 8px; z-index: 99; pointer-events: none;
+  display: flex; align-items: flex-end; gap: 3px; }
+.jh-compass { width: 13px; height: 13px; border: 2px solid #F5531C; border-radius: 50%; margin-right: 3px;
+  box-shadow: 0 0 0 2px #fff;   /* 白圈 = 图标的白边 */
+  display: flex; align-items: center; justify-content: center; }
+.jh-needle { width: 5px; height: 5px; background: #F5531C; transform: rotate(45deg); }
+.jh-word { font-size: 12px; font-weight: 800; letter-spacing: -0.2px; line-height: 1; color: #F5531C;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 3px #fff; }

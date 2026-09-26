@@ -55,6 +55,11 @@ exports.main = async (event) => {
   if (action === 'bossBoard') return await bossBoard(salesmanId, isBoss);
   if (action === 'bossWar') return await bossWar(isBoss);
   if (action === 'bossTrack') return await bossTrack(isBoss, event); // 老板手机端：业务员今日轨迹
+  // 2026-09-25 新增（老板定：「客户详情页」改造成 A 演示稿那套 7 卡骨架，要能看真数据）：
+  //   一次返回一家客户在详情页要显示的全部内容（档案 + 订单摘要 + 最近20单明细 + 备注 + 拜访历史）。
+  //   权限：**登录的业务员即可读** —— 客户档案本来就全公司共享（大家都要上门拜访）；
+  //   写入类动作不在本次范围（后续再开）。
+  if (action === 'custDetail') return await custDetail(salesmanId, event, isBoss);
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
 
@@ -784,4 +789,139 @@ function haversine(lat1, lng1, lat2, lng2) {
   const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ================= 客户详情（2026-09-25：手机端「客户详情页」的数据出口）=================
+// 老板定的改造方向：手机端套用 `_scratch/客户详情页-A-手机演示.html` 那套 **7 卡固定骨架**
+//（店名卡 + 🏪商城信息 / 📦购买记录 / 📊平台口碑 / 🛎服务与设施 / 📝管理员备注 / 🕑拜访历史），
+// 数据全部来自云端真数据。本函数一次给全，减少手机端来回请求。
+// 逻辑与 adminapi.getCustomerDetail 一致（后台那版已上线验证过），差别只在权限：
+// **登录的业务员即可读**（客户档案本来就全公司共享，大家都要上门拜访）。
+async function custDetail(salesmanId, event, isBoss) {
+  const customerId = (event && event.customerId) || '';
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
+  if (!cDoc || !cDoc.data) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const c = cDoc.data;
+  const code = c.mallCode || '';
+
+  // —— ① 订单：**全部拉下来**（"累计 N 单 / 金额合计"要真数；云开发单页上限 1000，分页取）——
+  let orders = [];
+  if (code) {
+    orders = await fetchAllPaged('orders', { customerCode: code },
+      { orderNo: true, orderedAt: true, actualAmount: true, orderStatus: true, payMethod: true });
+    orders.sort((a, b) => String(b.orderedAt || '').localeCompare(String(a.orderedAt || '')));
+  }
+
+  // —— ② 明细：只查**最近 20 单**（与后台口径一致；上百单的明细全拉会拖慢甚至超时）——
+  const orderNoList = orders.slice(0, 20).map(o => o.orderNo).filter(Boolean);
+  let items = [];
+  for (let i = 0; i < orderNoList.length; i += 20) {
+    const r = await db.collection('order_items')
+      .where({ orderNo: _.in(orderNoList.slice(i, i + 20)) }).limit(500).get().catch(() => ({ data: [] }));
+    items = items.concat(r.data || []);
+  }
+  const linesOf = {};   // 单号 → 商品行数
+  const byGoods = {};   // 同一商品累计（常买）
+  items.forEach(it => {
+    if (it.orderNo) linesOf[it.orderNo] = (linesOf[it.orderNo] || 0) + 1;
+    const k = it.goodsName || it.goodsCode || '';
+    if (!k) return;
+    if (!byGoods[k]) byGoods[k] = { name: k, spec: it.spec || '', unit: it.unit || '', qty: 0, amount: 0, times: 0 };
+    byGoods[k].qty += Number(it.orderQty) || 0;
+    byGoods[k].amount += Number(it.amount) || 0;
+    byGoods[k].times += 1;
+  });
+  const topGoods = Object.keys(byGoods).map(k => byGoods[k]).sort((a, b) => b.qty - a.qty).slice(0, 8);
+
+  // —— ③ 拜访历史（该客户全部，跨任务；带转写文字与现场照片缩略图 fileID）——
+  const vRes = await db.collection('visits').where({ customerId })
+    .orderBy('createdAt', 'desc').limit(30).get().catch(() => ({ data: [] }));
+  const visits = (vRes.data || []).map(v => ({
+    _id: v._id,
+    taskId: v.taskId || '',
+    status: v.status || '',
+    visitedAt: v.visitedAt || '',
+    result: v.result || '',
+    duration: Number(v.duration) || 0,
+    remark: v.remark || v.text || '',
+    salesmanName: v.salesmanName || '',
+    audioCount: (Array.isArray(v.audios) && v.audios.length) || (v.audio && v.audio.fileID ? 1 : 0),
+    trText: (v.trEdited && v.trEdited.text) || '',
+    thumbs: (v.photos || []).map(p => (p && (p.thumbID || p.fileID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 3)
+  }));
+
+  // —— ③b 这家客户**是否正处于拜访中** ——
+  //   2026-09-25 老板定：详情页底部的「开始拜访」按钮，如果这家正在拜访中 → 变成**蓝色「拜访中」**。
+  //   单独查一次（不复用上面那 30 条：ongoing 是"当前状态"，不该受历史条数限制）。
+  const ongRes = await db.collection('visits')
+    .where({ customerId, status: 'ongoing' }).limit(1).get().catch(() => ({ data: [] }));
+  const visitOngoing = !!(ongRes.data && ongRes.data.length);
+
+  // —— ④ 管理员备注（新 → 旧）——
+  const rmk = await fetchAllPaged('customer_remarks', { customerId }, {});
+  rmk.sort((a, b) => (b.at || 0) - (a.at || 0));
+
+  return {
+    ok: true,
+    // 这家客户是否正在拜访中（前端据此把底部按钮变成蓝色「拜访中」）
+    visitOngoing: visitOngoing,
+    // ⚠️ 2026-09-25 检查时加固：**不能把整个文档原样返回给业务员** ——
+    //   customers 里混着财务/工商字段（bank/bankAccount/creditLimit/invoiceType/legalPerson/regCapital…）。
+    //   虽然**本批 463 家这些字段全是空的**（已扫过全部分片确认），但换批更全的数据就可能有值。
+    //   这里按**白名单**挑手机端 7 卡要用的字段（顺带把返回体压小，手机端更快）。
+    customer: (() => {
+      const KEEP = ['_id', 'name', 'nameRaw', 'mallCode', 'mallKey', 'region', 'address', 'phone', 'phone2',
+        'contactName', 'lat', 'lng', 'coord_status', 'coordSource',
+        'mallJoinedAt', 'lastOrderAt', 'lastBrowseAt', 'mallSalesman', 'mallLevel', 'mallSource',
+        'salesman', 'level', 'orderCount', 'buyFreq', 'avgPrice', 'source', 'mallTags', 'mallCategory', 'mallType',
+        'customerType', 'batchIds', 'remark', 'platShopUuid', 'platMatched', 'lastVisitAt', 'createdAt',
+        'plat', 'platManual', 'photos', 'remarks'];
+      const o = {};
+      KEEP.forEach(k => { if (c[k] !== undefined) o[k] = c[k]; });
+      return o;
+    })(),
+    // 订单摘要 + 最近 20 单（每单带 lines=商品行数，列表里显示"N 品种"）
+    orders: orders.slice(0, 20).map(o => ({
+      orderNo: o.orderNo, orderedAt: o.orderedAt, actualAmount: o.actualAmount,
+      orderStatus: o.orderStatus, payMethod: o.payMethod, lines: linesOf[o.orderNo] || 0
+    })),
+    // 这 20 单的商品明细（单号 → 商品行）—— 手机端点某一单展开明细要用
+    orderItems: (() => {
+      const keep = {};
+      orders.slice(0, 20).forEach(o => { if (o.orderNo) keep[o.orderNo] = true; });
+      const by = {};
+      items.forEach(it => {
+        if (!it.orderNo || !keep[it.orderNo]) return;
+        (by[it.orderNo] = by[it.orderNo] || []).push({
+          name: it.goodsName || '', spec: it.spec || '', unit: it.unit || '',
+          qty: Number(it.orderQty) || 0, price: it.salePrice != null ? Number(it.salePrice) : null,
+          amount: Number(it.amount) || 0, category: it.category || ''
+        });
+      });
+      return by;
+    })(),
+    orderTotal: orders.length,
+    orderAmountSum: orders.reduce((a, o) => a + (Number(o.actualAmount) || 0), 0),
+    topGoods,
+    visits,
+    remarks: rmk.slice(0, 30).map(r => ({ text: r.text || '', at: r.at || 0, by: r.by || '' }))
+  };
+}
+
+// 分页拉全量（云开发单次 limit 上限 1000）
+async function fetchAllPaged(coll, where, field) {
+  const out = [];
+  let skip = 0;
+  while (true) {
+    let q = db.collection(coll);
+    if (where && typeof where === 'object' && Object.keys(where).length) q = q.where(where);
+    if (field && typeof field === 'object' && Object.keys(field).length) q = q.field(field);
+    const r = await q.skip(skip).limit(1000).get().catch(() => ({ data: [] }));
+    out.push(...(r.data || []));
+    if (!r.data || r.data.length < 1000) break;
+    skip += 1000;
+    if (skip > 20000) break;   // 保险：最多 2 万条
+  }
+  return out;
 }

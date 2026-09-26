@@ -317,6 +317,10 @@ tr.row-off td:not(.keep){opacity:.4}
 #batchThead th,#batchThead th *,#batchTbody td,#batchTbody td *{font-weight:400}
 #batchThead th:first-child,#batchTbody td:first-child{padding-left:10px}
 #batchThead th:last-child,#batchTbody td:last-child{padding-right:10px}
+/* 2026-09-25 老板定：批次表**前四列（# / 详情 / 备注 / ☑）的左右留白一并收紧** ——
+   光改 width 不够，td 自带的 padding:11px 8px 也在吃横向空间（老板原话："搞这么大太浪费空间"）。
+   ⚠️ nth-child 按**当前列序**算：1=# 2=详情 3=备注 4=☑（列序见 renderBatchTbody 的表头）。 */
+#batchThead th:nth-child(-n+4),#batchTbody td:nth-child(-n+4){padding-left:3px;padding-right:3px}
 #batchTbody .del-x{width:14px;height:14px;font-size:8px;border-radius:4px}
 .del-x:hover{background:var(--danger);color:#fff}
 /* 备注按钮（2026-09-24 老板定：批次详情页最后一列，取代原「从本批次移除」的 ✕）
@@ -433,6 +437,8 @@ tr.row-off td:not(.keep){opacity:.4}
 .tk-card:hover{box-shadow:0 8px 20px rgba(31,36,48,.12);transform:translateY(-1px)}
 .tkc-top{display:flex;align-items:center;gap:10px}
 .tkc-name{font-size:16px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 2026-09-25 老板定：**业务员姓名**上到任务卡标题栏（任务名后面）+ 字体放大 —— 一眼看见这任务归谁 */
+.tkc-sm{font-size:17px;font-weight:700;color:var(--primary-deep);white-space:nowrap;flex:none}
 .tkc-no{font-size:11px;color:var(--sub);font-weight:700}
 .tkc-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--sub);font-weight:600;margin-top:4px}
 .tkc-date{font-size:11.5px;color:#9AA3AE;font-weight:600;margin-top:4px}
@@ -1678,6 +1684,13 @@ tr.row-off td:not(.keep){opacity:.4}
         /* 2026-09-25 老板定：地图框**加高**（150 → 260px）—— 原先太矮，看不出周边环境（餐饮/超市等点位）。
            用 !important 覆盖建图时写的那条内联 150px。 */
         #custModal #cdMap{height:260px !important}
+        /* ===== 备注表情面板（2026-09-25 老板定：像微信那样点开挑表情）=====
+           emoji 就是普通字符，存进 text 字段即可 —— 不动数据结构。 */
+        #crEmoTabs .etab{font-size:12.5px;padding:5px 11px;border-radius:8px 8px 0 0;cursor:pointer;color:var(--sub);border:1px solid transparent;border-bottom:none;user-select:none}
+        #crEmoTabs .etab:hover{color:var(--ink)}
+        #crEmoTabs .etab.on{background:#fff;color:var(--primary-deep);font-weight:700;border-color:var(--line)}
+        #crEmoGrid .ecell{font-size:19px;line-height:1;text-align:center;padding:5px 0;border-radius:7px;cursor:pointer;user-select:none}
+        #crEmoGrid .ecell:hover{background:#FFF3E9}
       </style>
       <div class="cd-modal">
         <!-- 顶部：店名 + 状态胶囊 + 操作（✏️ 编辑 / 💾 保存 / 取消 / 关闭） -->
@@ -1751,7 +1764,18 @@ tr.row-off td:not(.keep){opacity:.4}
         <!-- 新增一条 -->
         <div style="margin-top:14px">
           <div style="font-size:12.5px;font-weight:700;color:var(--sub);margin-bottom:6px">新增一条备注</div>
-          <textarea id="crRemark" class="inp" style="height:76px;width:100%;box-sizing:border-box;padding:9px 12px;font-size:13px;line-height:1.6;font-weight:400;resize:vertical" placeholder="输入备注内容…"></textarea>
+          <textarea id="crRemark" class="inp" style="height:76px;width:100%;box-sizing:border-box;padding:9px 12px;font-size:13px;line-height:1.6;font-weight:400;resize:vertical" placeholder="输入备注内容…（可点下面的 😊 挑选表情）" onkeyup="crTrackPos(this)" onclick="crTrackPos(this)" onblur="crTrackPos(this)"></textarea>
+          <!-- 2026-09-25 老板定：**表情选择框**（像微信那样点开挑选）。
+               ⚠️ 纯前端：emoji 本身就是普通字符，直接存进 text 字段 —— 数据结构/云函数/集合都不动。
+               光标位置在 textarea 失焦前记到 crPos，插完再放回去，可以连着点多个表情。 -->
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <button type="button" class="btn ghost" id="crEmoBtn" onclick="crEmoToggle()" title="选择表情" style="height:28px;font-size:15px;padding:0 9px;line-height:1">😊</button>
+            <span style="font-size:11.5px;color:var(--sub)">点表情按钮挑选，点一下插到光标处</span>
+          </div>
+          <div id="crEmoPanel" style="display:none;margin-top:8px;border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden">
+            <div id="crEmoTabs" style="display:flex;gap:2px;padding:6px 8px 0;background:#F7F9FB;border-bottom:1px solid var(--line)"></div>
+            <div id="crEmoGrid" style="display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:8px;max-height:152px;overflow-y:auto"></div>
+          </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
           <button class="btn ghost" onclick="$('custRemarkOvl').style.display='none'">关闭</button>
@@ -2471,8 +2495,10 @@ function histCardHtml(t) {
     <div class="tkc-top">
       <b class="tkc-name">${esc(t.name)}</b>
       ${badge}
+      <!-- 2026-09-25 老板定：业务员姓名上标题栏（与任务管理页的主任务卡保持一致） -->
+      ${t.salesmanName ? `<span class="tkc-sm">${esc(t.salesmanName)}</span>` : ''}
     </div>
-    <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')} · ${t.plannedDays || 1} 天排期</span></div>
+    <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${t.plannedDays || 1} 天排期</span></div>
     <div class="tkc-date">${done ? '✅' : '⏰'} ${endDesc} · 结束于 ${t.endedAt ? fmtD8(t.endedAt) : '—'}</div>
     <div class="tkc-bars"><div class="tkc-bar"><span class="k">完成进度</span><span class="tr"><i class="${done ? 'g' : 'exp'}"></i></span><span class="p">${t.visited}/${t.total} 家 · ${per}%</span></div></div>
     <div class="tkc-ops" onclick="event.stopPropagation()"><button class="btn-clear" onclick="showDetail('${t._id}')">查看档案 →</button></div>
@@ -2658,7 +2684,7 @@ function renderDetail(res) {
     const list = (p.customerIds || []).map(id => cmap[id]).filter(Boolean);
     const dDone = list.length > 0 && list.every(c => c.visitStatus === 'visited');
     const chips = list.map(c => `<div class="cchip ${c.visitStatus === 'visited' ? 'done' : ''}" title="${esc(c.name)}">${c.visitStatus === 'visited' ? '✓ ' : ''}${esc(c.name)}</div>`).join('');
-    return `<div class="day-col${td === p.day ? ' today' : ''}"><div class="dh">第 ${p.day} 天 <b>${list.length} 家${dDone ? ' ✓' : ''}</b></div>${chips}</div>`;
+    return `<div class="day-col${td === p.day ? ' today' : ''}"><div class="dh">第 ${p.day} 页 <b>${list.length} 家${dDone ? ' ✓' : ''}</b></div>${chips}</div>`;
   }).join('');
   $('dtPlan').style.gridTemplateColumns = `repeat(${Math.min(Math.max((t.dayPlan || []).length, 1), 4)},1fr)`;
   $('dtPlan').innerHTML = planCols;
@@ -2814,8 +2840,10 @@ function taskCardHtml(t) {
       <div class="tk-left">
         <div class="tkc-top">
           <b class="tkc-name">${esc(t.name)}</b>
+          <!-- 2026-09-25 老板定：**业务员姓名挪到标题栏**（任务名后面）+ 放大 —— 一眼看见这任务归谁 -->
+          ${t.salesmanName ? `<span class="tkc-sm">${esc(t.salesmanName)}</span>` : ''}
         </div>
-        <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span><span>${esc(t.salesmanName || '—')}</span></div>
+        <div class="tkc-sub">${t.taskNo ? `<span class="tkc-no">${esc(t.taskNo)}</span>` : ''}<span class="pill ${purpCls(t.purpose)}">${purpLabel(t.purpose)}</span></div>
         <div class="tkc-date">截止 ${esc(t.deadline || '—')}</div>
         ${t.status === 'reviewing' && t.finishReq ? `<div class="tkc-req">提前结束申请 · 剩 ${t.finishReq.left} 家</div>` : ''}
       </div>
@@ -3602,7 +3630,7 @@ async function renderTmTask(idx) {
   tmDays = (d.task.dayPlan || []).map(p => p.day);
   const todayD = d.task.todayDay;
   tmDay = (todayD && tmDays.includes(todayD)) ? todayD : (tmDays[0] || null);
-  $('tmDays').innerHTML = tmDays.map(day => `<span class="tm-day ${day === tmDay ? 'on' : ''}" data-day="${day}" onclick="switchTmDay(${day})">第 ${day} 天</span>`).join('');
+  $('tmDays').innerHTML = tmDays.map(day => `<span class="tm-day ${day === tmDay ? 'on' : ''}" data-day="${day}" onclick="switchTmDay(${day})">第 ${day} 页</span>`).join('');
   // 进入/切业务员自动检测仓库开关（2026-09-09 老板定：与手机端同口径）
   {
     const plan0 = (d.task.dayPlan || []).find(p => p.day === tmDay);
@@ -4982,11 +5010,17 @@ function cdRender() {
   const buyBody = (buyTop || ordCnt)
     ? buyTop +
       (ordCnt
-        ? '<div class="cd-row"><span class="k">订单</span><span class="v">' +
-          '<span style="color:var(--sub);font-size:12px">最近 ' + ordCnt + ' 单</span>' +
-          '<span class="cd-ord-go" onclick="openOrderList()">查看订单 ›</span></span></div>'
-        : '') +
-      ((d.orderTotal || 0) > orders.length ? '<div class="cd-row"><span class="k"></span><span class="v" style="color:var(--sub);font-size:12px">共 ' + d.orderTotal + ' 单（小窗里列最近 ' + orders.length + ' 单）</span></div>' : '')
+        // 2026-09-25 老板定：「共 XX 单（小窗里列最近 20 单）」**并到这一行的右边**，
+        // 不再单独占一行。做法：给「查看订单 ›」加 margin-right:auto → 把后面的说明挤到行尾靠右。
+        ? '<div class="cd-row"><span class="k">订单</span>' +
+          '<span class="v" style="display:flex;align-items:baseline;gap:10px;min-width:0">' +
+          '<span style="color:var(--sub);font-size:12px;flex:none">最近 ' + ordCnt + ' 单</span>' +
+          '<span class="cd-ord-go" onclick="openOrderList()" style="margin-right:auto">查看订单 ›</span>' +
+          ((d.orderTotal || 0) > orders.length
+            ? '<span style="color:#B6BEC8;font-size:11.5px;flex:none">共 ' + d.orderTotal + ' 单（小窗里列最近 ' + orders.length + ' 单）</span>'
+            : '') +
+          '</span></div>'
+        : '')
     : '<div class="cd-empty">这家还没下过单</div>';
   L.push(cdCard('📦 购买记录', d.orderTotal ? ('累计 ' + d.orderTotal + ' 单' + (d.orderAmountSum ? ' · ¥' + Math.round(d.orderAmountSum) : '')) : '', buyBody));
 
@@ -5570,12 +5604,61 @@ function cdGotoRemark() {
 
 // 客户备注保存（2026-09-24 老板定：从「客户详情」搬到批次详情页最后一列的 📝 按钮）
 let curCustId = null;
+// ===== 备注表情面板（2026-09-25 老板定：像微信那样点开挑选）=====
+// ⚠️ emoji 本身就是普通字符，直接存进备注的 text 字段 —— **数据结构、云函数、集合一律不动**。
+// 表情库（5 类，够日常用；以后想加就往数组里加字符）
+const EMO_CATS = [
+  { name: '常用', list: '👍😊🔥✅⭐❌📌💰🚚📞🙏😄😃😁🥰😍🤝💪🎉💡⚠️📅💬❤️👌🆗❗❓✨🚀📈📉🕐📝🎯🧾📦🍽️🏪🚩'.match(/[\s\S]/gu) },
+  { name: '笑脸', list: '😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🥳😏😒😞😔😟😕🙁☹️😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🤔🤭🤫🤥😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠😈👿👹👺🤡💩👻💀☠️👽👾🤖🎃'.match(/[\s\S]/gu) },
+  { name: '手势', list: '👋🤚🖐️✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏💪🦾✍️💅🤳💃🕺👯'.match(/[\s\S]/gu) },
+  { name: '标记', list: '✅❌❗❓⚠️⛔🚫💯🔴🟠🟡🟢🔵🟣⚫⚪⭐🌟✨⚡🔥💥💫📍📌🎯🚩🏁🔔🔕🔒🔓🔑✂️📎🖇️📐📏📊📈📉💰💳🧾'.match(/[\s\S]/gu) },
+  { name: '食物', list: '🍚🍜🍲🍛🍝🍞🥖🥐🍕🍔🍟🌭🥪🥙🌮🌯🥗🥘🍱🍣🍤🍗🍖🥩🥓🥚🍳🥞🧇🥯🧈🍰🎂🧁🍮🍩🍪🍫🍬🍭🍯🍵☕🥤🧋🍺🍶🥢🍽️🥄'.match(/[\s\S]/gu) }
+];
+let crEmoCat = 0;
+let crPos = null;   // textarea 光标位置（点表情面板会让输入框失焦 → 先记下，插完放回去）
+
+function crTrackPos(ta) {
+  if (!ta) return;
+  try { crPos = { s: ta.selectionStart, e: ta.selectionEnd }; } catch (e) { /* 静默 */ }
+}
+function crEmoToggle() {
+  const p = $('crEmoPanel');
+  if (!p) return;
+  const willShow = p.style.display === 'none';
+  p.style.display = willShow ? '' : 'none';
+  const btn = $('crEmoBtn');
+  if (btn) btn.style.borderColor = willShow ? 'var(--primary)' : '';
+  if (willShow) crEmoRender();
+}
+function crEmoCatPick(i) { crEmoCat = i; crEmoRender(); }
+function crEmoRender() {
+  const tabs = $('crEmoTabs'), grid = $('crEmoGrid');
+  if (!tabs || !grid) return;
+  tabs.innerHTML = EMO_CATS.map((c, i) =>
+    '<div class="etab' + (i === crEmoCat ? ' on' : '') + '" onclick="crEmoCatPick(' + i + ')">' + esc(c.name) + '</div>').join('');
+  grid.innerHTML = (EMO_CATS[crEmoCat].list || []).map(ch =>
+    '<div class="ecell" onclick="crEmoInsert(\'' + ch + '\')">' + ch + '</div>').join('');
+}
+// 在**光标处**插入一个表情；插完光标停在它后面、面板不关（可以连着点好几个）
+function crEmoInsert(ch) {
+  const ta = $('crRemark');
+  if (!ta) return;
+  const v = ta.value || '';
+  const s = (crPos && isFinite(crPos.s)) ? Math.min(crPos.s, v.length) : v.length;
+  const e = (crPos && isFinite(crPos.e)) ? Math.min(crPos.e, v.length) : s;
+  ta.value = v.slice(0, s) + ch + v.slice(e);
+  const np = s + ch.length;
+  try { ta.focus(); ta.setSelectionRange(np, np); } catch (err) { /* 静默 */ }
+  crPos = { s: np, e: np };
+}
+
 let remarkBusy = 0; // 2026-09-09 防连点
 async function saveCustRemark() {
   if (Date.now() - remarkBusy < 15000) return;
   remarkBusy = Date.now();
   if (!curCustId) { remarkBusy = 0; return; }
-  const remark = ($('crRemark').value || '').trim().slice(0, 500);
+  // ⚠️ 2026-09-25：用 Array.from 按**字符**截断 —— 直接 .slice() 会把 emoji 的代理对切成半个，变成乱码方块
+  const remark = [...($('crRemark').value || '').trim()].slice(0, 500).join('');
   if (!remark) { remarkBusy = 0; alert('请输入备注内容'); return; }
   const res = await api('updateCustomerRemark', { customerId: curCustId, remark });
   if (!res.ok) { alert(res.msg || '保存失败'); return; }
@@ -5600,6 +5683,10 @@ function openCustRemark(id, name) {
   curCustId = id;
   $('crTitle').textContent = '📝 ' + (name || (c && c.name) || '客户') + ' · 备注';
   $('crRemark').value = ''; // 新增框留空；已有内容看下面的历史列表
+  // 2026-09-25：开窗时把表情面板收起 + 清掉光标记忆（免得上一个客户的光标位置串到这次）
+  const _ep = $('crEmoPanel'); if (_ep) _ep.style.display = 'none';
+  const _eb = $('crEmoBtn'); if (_eb) _eb.style.borderColor = '';
+  crPos = null;
   $('crHistory').innerHTML = '<div class="loading">加载中…</div>';
   $('custRemarkOvl').style.display = 'flex';
   setTimeout(function () { const t = $('crRemark'); if (t) t.focus(); }, 50);
@@ -5669,13 +5756,17 @@ async function loadCustomers(batchId, batchName) {
     // # 详情 备注 ☑ 店名 全局态 任务状态 最近下单 坐标 地址；单行不换行；地址列伸缩
     // ⚠️ 表头与数据行的列顺序必须**严格一致**，对不上整表就会错位
     theadEl.innerHTML = `<tr>
-      <th class="no" style="width:30px">#</th>
-      <th style="width:58px;text-align:center">详情</th>
-      <th style="width:52px;text-align:center" title="客户备注（手机端业务员可见）">备注</th>
-      <th class="no" style="width:34px;text-align:center"><input type="checkbox" class="batchChkAll" id="batchChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle"></th>
+      <th class="no" style="width:24px">#</th>
+      <!-- 2026-09-25 老板定：前四列（# / 详情 / 备注 / ☑）**间距收紧**，别浪费横向空间；
+           详情/备注两列的**列头不写字**，只放按钮（按钮同款、字号小一号）。 -->
+      <th style="width:46px"></th>
+      <th style="width:46px"></th>
+      <th class="no" style="width:26px;text-align:center"><input type="checkbox" class="batchChkAll" id="batchChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle"></th>
       <th style="width:15%">店名</th>
       <th style="width:86px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：任务中在前；再点：无任务在前" onclick="toggleBatchSort('visitState')">全局态${batchSortArrow('visitState')}</th>
       <th style="width:96px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：待回访→拜访中→已回访（无任务沉底）；再点：无任务置顶倒序" onclick="toggleBatchSort('visitStatus')">任务状态${batchSortArrow('visitStatus')}</th>
+      <!-- 2026-09-25 老板定：在「最近下单」左边加「**订单总数**」（实际订单条数，可点排序） -->
+      <th style="width:76px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：订单多的在前；再点：订单少的在前（0 单沉底/置顶）" onclick="toggleBatchSort('orderCount')">订单总数${batchSortArrow('orderCount')}</th>
       <th style="width:90px;cursor:pointer;white-space:nowrap" title="点击：最近在上；再点：无日期置顶" onclick="toggleBatchSort('lastOrderAt')">最近下单${batchSortArrow('lastOrderAt')}</th>
       <th style="width:84px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：最近在上；再点：无日期置顶" onclick="toggleBatchSort('lastVisitAt')">最近拜访${batchSortArrow('lastVisitAt')}</th>
       <th style="width:76px;cursor:pointer;white-space:nowrap" title="点击：按 正常→审核→待定→补标 排列（距离数字恢复原显示）；再点：倒序" onclick="toggleBatchSort('coord')">坐标${batchSortArrow('coord')}</th>
@@ -6046,12 +6137,13 @@ function renderBatchTbody() {
     // 2026-09-25：店名不再用 <b>（老板定"内容文字都不要加粗"）
     return `<tr data-id="${c._id}" data-search="${esc(((c.name || '') + ' ' + (c.phone || '') + ' ' + (c.phone2 || '') + ' ' + shortAddr(c.address || '')).toLowerCase())}"${rowSel}>
       <td class="no">${i + 1}</td>
-      <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:24px;font-size:12px;padding:0 9px" onclick="showCustDetail('${c._id}')">详情</button></td>
-      <td style="text-align:center;white-space:nowrap">${`<span class="rmk-btn${c.remark ? ' on' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">📝</span>`}</td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 8px" onclick="showCustDetail('${c._id}')">详情</button></td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 8px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>
       <td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}" ${batchChecked.has(c._id) ? 'checked' : ''}></td>
       <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(fullName)}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${nameCell}</span></td>
       <td style="white-space:nowrap;text-align:center">${globalSt}</td>
       <td style="white-space:nowrap;text-align:center">${taskSt}</td>
+      <td style="text-align:center;white-space:nowrap">${c.orderCount ? c.orderCount : '<span style="color:#C3C9D2">0</span>'}</td>
       <td style="white-space:nowrap">${c.lastOrderAt ? esc(c.lastOrderAt) : '<span class="pill warn">未下单</span>'}</td>
       <td style="text-align:center;white-space:nowrap">${c.lastVisitAt ? esc(String(c.lastVisitAt).slice(5)) : '—'}</td>
       <td style="white-space:nowrap">${coordCell}</td>
@@ -6059,14 +6151,14 @@ function renderBatchTbody() {
     </tr>`;
   }).join('');
   // 2026-09-09 老板定：最后一页不足 20 条补空行，表格保持与前几页相同的固定高度（翻页不跳动）
-  // ⚠️ colspan 跟着列数走 —— 2026-09-25 定稿后共 **11 列**（去掉手机号；列序见上方表头），两处都要同步
+  // ⚠️ colspan 跟着列数走 —— 2026-09-25 加了「订单总数」后共 **12 列**（列序见上方表头），两处都要同步
   let rowsHtml = rows;
   if (pageList.length < batchPageSize && total > 0) {
     for (let k = pageList.length; k < batchPageSize; k++) {
-      rowsHtml += '<tr class="row-fill"><td colspan="11" style="height:36px">&nbsp;</td></tr>';
+      rowsHtml += '<tr class="row-fill"><td colspan="12" style="height:36px">&nbsp;</td></tr>';
     }
   }
-  box.innerHTML = rowsHtml || `<tr><td colspan="11" class="empty">${q ? '没有匹配的客户' : '暂无客户，需要导入客户表'}</td></tr>`;
+  box.innerHTML = rowsHtml || `<tr><td colspan="12" class="empty">${q ? '没有匹配的客户' : '暂无客户，需要导入客户表'}</td></tr>`;
   renderBatchPageBar(total, pages, q);
   syncBatchChkAll();   // 2026-09-25：每页重绘后回写表头「全选」方框状态（翻页/搜索/排序后不会残留上一页的勾选态）
 }
@@ -6138,6 +6230,14 @@ function sortBatchList(list) {
     const rank = c => (c.visitState === 'in_task' ? 1 : 0);
     const arr = list.slice();
     arr.sort((a, b) => (batchSort.dir === 'desc' ? rank(b) - rank(a) : rank(a) - rank(b)));
+    return arr;
+  }
+  // 订单总数列（2026-09-25 老板定，加在「最近下单」左边）：desc=订单多的在前；asc=订单少的在前；
+  // 0 单的客户自然落在末尾（倒序时）/ 开头（正序时）；同数保持原相对顺序
+  if (key === 'orderCount') {
+    const n = c => Number(c.orderCount) || 0;
+    const arr = list.slice();
+    arr.sort((a, b) => (batchSort.dir === 'desc' ? n(b) - n(a) : n(a) - n(b)));
     return arr;
   }
   // 任务状态列：三态进度待回访→拜访中→已回访；

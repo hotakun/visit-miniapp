@@ -27,10 +27,11 @@
   <view class="center-box" wx:if="{{!loading && empty}}">{{empty}}</view>
 
   <block wx:if="{{!loading && !empty}}">
-    <!-- 天页签（任务 ≤5 天=「第N天」胶囊；≥6 天整排变纯数字圆标整齐排列，2026-09-08 老板定） -->
+    <!-- 天页签（任务 ≤5 天=「第N页」胶囊；≥6 天整排变纯数字圆标整齐排列，2026-09-08 老板定）
+         2026-09-25 老板定：文案由「第N天」改成「**第N页**」（天数卡叫"页"更贴合"一页一批客户"的读法） -->
     <view class="daybar" wx:if="{{days.length > 1}}">
       <view class="dtag {{days.length > 5 ? 'dot' : ''}} {{curDay === item ? 'on' : ''}}" wx:for="{{days}}" wx:key="*this"
-            bindtap="switchDay" data-d="{{item}}">{{days.length > 5 ? item : '第' + item + '天'}}</view>
+            bindtap="switchDay" data-d="{{item}}">{{days.length > 5 ? item : '第' + item + '页'}}</view>
     </view>
 
     <!-- 下一家引导条（顺序引导：当天顺序中第一家未完成；右侧重排按钮=以我的位置重排）

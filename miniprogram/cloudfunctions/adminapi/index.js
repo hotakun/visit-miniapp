@@ -410,11 +410,17 @@ async function getCustomerDetail(event) {
   // —— ① 订单（按业务键 customerCode；同编号的主副两家都会命中）——
   let orders = [];
   if (code) {
-    const r = await db.collection('orders').where({ customerCode: code })
-      .orderBy('orderedAt', 'desc').limit(50).get().catch(() => ({ data: [] }));
-    orders = r.data || [];
+    // ⚠️⚠️ 2026-09-25 修（老板报障：c490「订单总数」列显示 112 单，进详情却是"累计 50 单"）：
+    //   原先这里 `.limit(50)` —— **只拉了 50 单**，于是"累计 N 单"和"金额合计"都被截断在 50。
+    //   改成：**订单全部拉下来**（用 fetchAll 分页，只为真实计数与金额合计）；
+    //   云端 orderBy 与分页不能同时用，所以拉回来后在内存里按日期倒序排。
+    orders = await fetchAll('orders', { customerCode: code }, {
+      orderNo: true, orderedAt: true, actualAmount: true, orderStatus: true, payMethod: true
+    }).catch(() => []);
+    orders.sort((a, b) => String(b.orderedAt || '').localeCompare(String(a.orderedAt || '')));
   }
-  const orderNoList = orders.map(o => o.orderNo).filter(Boolean);
+  // 明细只查**最近 20 单** —— 小窗里就是展示这 20 单，没必要把上百单的明细全拉回来（会拖慢甚至超时）
+  const orderNoList = orders.slice(0, 20).map(o => o.orderNo).filter(Boolean);
 
   // —— ② 明细（这些订单的商品行）→ 汇总「常买」+ 每单行数 ——
   let items = [];
@@ -1393,8 +1399,12 @@ async function listCustomers(event) {
   // 做法：拉一遍 orders 的 customerCode + orderedAt，按店号取最大值；完全没订单的客户再回落到商城字段。
   const oAll = await fetchAll('orders', {}, { customerCode: true, orderedAt: true });
   const lastOrderMap = {};
+  // 2026-09-25 老板定：批次详情页要加「**订单总数**」列（同样可排序）→ 顺手在同一个循环里按店号计数。
+  // ⚠️ 注意：这里算的是**实际订单条数**，跟客户档案里的 `orderCount`（商城表的「购买次数」）是两码事。
+  const orderCountMap = {};
   oAll.forEach(o => {
     const code = String(o.customerCode || '').trim();
+    if (code) orderCountMap[code] = (orderCountMap[code] || 0) + 1;
     const d = String(o.orderedAt || '').slice(0, 10);
     if (!code || !d) return;
     if (!lastOrderMap[code] || d > lastOrderMap[code]) lastOrderMap[code] = d;
@@ -1444,6 +1454,8 @@ async function listCustomers(event) {
       nameRaw: c.nameRaw || '', mallCode: c.mallCode || '',
       salesman: c.salesman || '', level: c.level || '',
       mallJoinedAt: c.mallJoinedAt || null,
+      // 2026-09-25 新增：**订单总数**（实际订单条数；批次详情页的新列，可排序）
+      orderCount: orderCountMap[String(c.mallCode || '').trim()] || 0,
       // ⚠️ 2026-09-25 老板定：「最近下单」**以实际订单为准**（lastOrderMap 是 orders 聚合出的每个店号最新下单日）；
       //    完全没订单的客户，才回落到商城客户表带来的 lastOrderAt 兜底。
       lastOrderAt: lastOrderMap[String(c.mallCode || '').trim()] || c.lastOrderAt || '',
