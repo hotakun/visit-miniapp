@@ -13,9 +13,11 @@
 <view class="page" wx:else>
 
   <!-- ===================== 店名卡（不折叠） ===================== -->
-  <view class="head">
+  <!-- ⭐ 2026-09-27：入商城辉光（已入=淡橙一圈 / 未入=天蓝一圈）+「新店」蓝胶囊（设计文档 §二 0） -->
+  <view class="head {{d.hasMall ? 'is-mall' : 'is-new'}}">
     <view class="hrow1">
       <text class="nm">{{d.name}}</text>
+      <text class="tag new" wx:if="{{d.newShop}}">新店</text>
       <text class="tag old" wx:if="{{d.listedYears >= 3}}">收录 {{d.listedYears}} 年</text>
     </view>
     <view class="meta">
@@ -40,7 +42,8 @@
         <view class="ph">{{d.tel}}</view>
         <view class="lb">联系人：{{d.contact}}</view>
       </view>
-      <view class="fixbtn" bindtap="tip" data-t="真机：这里提交坐标报错，等管理员审核">
+      <!-- ⭐ 2026-09-27：接真提交（弹层 → 精确定位 → 传照片 → coordfix 云函数 → 后台审核） -->
+      <view class="fixbtn" bindtap="openFix">
         <text class="fi">📍</text><text>报错</text>
       </view>
     </view>
@@ -50,14 +53,22 @@
   <view class="card k-mall {{open.mall ? '' : 'collapsed'}}">
     <view class="ch" data-k="mall" bindtap="toggle">
       <text class="ci">🏪</text><text class="t">商城信息</text>
-      <text class="sub">最近购买 8月24日</text>
+      <text class="sub">{{d.mallSub}}</text>
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
-      <view class="r" wx:for="{{d.mallRows}}" wx:key="*this">
-        <text class="k">{{item[0]}}</text>
-        <text class="v {{item[0] === '最近下单' ? 'warn' : ''}}">{{item[1]}}</text>
+      <!-- ⭐ 2026-09-27：未入商城 → 淡灰空态（📷 门店照片三格照常在，见下） -->
+      <view class="empty4" wx:if="{{!d.hasMall}}">
+        <text class="e4i">🏪</text>
+        <text class="e4t">这家还没加入商城</text>
+        <text class="e4s">到店可以推动加入（拜访结果里选「加入商城」）</text>
       </view>
+      <block wx:else>
+        <view class="r" wx:for="{{d.mallRows}}" wx:key="*this">
+          <text class="k">{{item[0]}}</text>
+          <text class="v {{item[0] === '最近下单' ? 'warn' : ''}}">{{item[1]}}</text>
+        </view>
+      </block>
       <view class="subsec">📷 门店照片</view>
       <view class="shotrow">
         <view class="shot3 {{d.photos[index] ? '' : 'empty'}}"
@@ -77,10 +88,17 @@
   <view class="card k-purchase {{open.purchase ? '' : 'collapsed'}}">
     <view class="ch" data-k="purchase" bindtap="toggle">
       <text class="ci">📦</text><text class="t">购买记录</text>
-      <text class="sub">累计 {{d.purchase.total}} · {{d.purchase.amount}}</text>
+      <text class="sub">{{d.orders.length ? ('累计 ' + d.purchase.total + ' · ' + d.purchase.amount) : '暂无订单'}}</text>
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
+      <!-- ⭐ 2026-09-27：没下过单 → 淡灰空态（设计文档 §三） -->
+      <view class="empty4" wx:if="{{!d.orders.length}}">
+        <text class="e4i">📦</text>
+        <text class="e4t">还没有下过单</text>
+        <text class="e4s">我们这边没有这家的下单记录 —— 到店先聊供货</text>
+      </view>
+      <block wx:else>
       <view class="r">
         <text class="k">最近下单</text><text class="v warn">{{d.purchase.last}}</text>
       </view>
@@ -96,6 +114,7 @@
       </view>
       <view class="btn-all" bindtap="openSheet">查看全部 {{d.orders.length}} 单 ›</view>
       <view class="warnbox" wx:if="{{d.purchase.note}}">💡 {{d.purchase.note}}</view>
+      </block>
     </view>
   </view>
 
@@ -103,25 +122,33 @@
   <view class="card k-rate {{open.rate ? '' : 'collapsed'}}">
     <view class="ch" data-k="rate" bindtap="toggle">
       <text class="ci">📊</text><text class="t">平台口碑</text>
-      <text class="sub">{{d.rate}} 分 · 人均 ¥46/人</text>
+      <text class="sub">{{d.rateSub}}</text>
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
-      <view class="rate">
-        <text class="num">{{d.rate}}</text><text class="of">/5</text>
-        <text class="txt">{{d.rateTxt}}</text>
+      <!-- ⭐ 2026-09-27：平台没收录评分 → 淡灰空态（招牌菜照常可录，见下） -->
+      <view class="empty4" wx:if="{{!d.rate}}">
+        <text class="e4i">📊</text>
+        <text class="e4t">平台没有收录这家的评分</text>
+        <text class="e4s">到店主要聊供货和推广，别把"没评分"当缺点</text>
       </view>
-      <view class="bars">
-        <view class="bline" wx:for="{{d.bars}}" wx:key="*this">
-          <text class="bk">{{item[0]}}</text>
-          <view class="bar"><view class="bar-i" style="width:{{item[2]}}%"></view></view>
-          <text class="bn">{{item[1]}}</text>
+      <block wx:else>
+        <view class="rate">
+          <text class="num">{{d.rate}}</text><text class="of">/5</text>
+          <text class="txt">{{d.rateTxt}}</text>
         </view>
-      </view>
-      <view class="r" wx:for="{{d.extra}}" wx:key="*this">
-        <text class="k">{{item[0]}}</text><text class="v">{{item[1]}}</text>
-      </view>
-      <view class="r"><text class="k">榜单</text><text class="v gold">{{d.rank}}</text></view>
+        <view class="bars">
+          <view class="bline" wx:for="{{d.bars}}" wx:key="*this">
+            <text class="bk">{{item[0]}}</text>
+            <view class="bar"><view class="bar-i" style="width:{{item[2]}}%"></view></view>
+            <text class="bn">{{item[1]}}</text>
+          </view>
+        </view>
+        <view class="r" wx:for="{{d.extra}}" wx:key="*this">
+          <text class="k">{{item[0]}}</text><text class="v">{{item[1]}}</text>
+        </view>
+        <view class="r"><text class="k">榜单</text><text class="v gold">{{d.rank}}</text></view>
+      </block>
       <view class="subsec">🍜 招牌菜</view>
       <view class="chips">
         <text class="chip" wx:for="{{d.dishes}}" wx:key="*this">{{item}}</text>
@@ -145,7 +172,7 @@
           <text class="flag {{item[1] ? 'y' : 'n'}}"
                 wx:for="{{d.flags}}" wx:key="*this"
                 data-name="{{item[0]}}" data-on="{{item[1]}}"
-                bindtap="openFlag">{{item[0]}} {{item[1] ? '已开' : '未开'}}</text>
+                bindtap="openFlag">{{item[0]}} {{item[1] ? '已开' : '未开'}}{{d.flagPending[item[0]] ? ' · 待审核' : ''}}</text>
         </view>
         <view class="plusbar" bindtap="openAdd" data-kind="fac">＋</view>
       </view>
@@ -190,13 +217,21 @@
   <view class="card remark {{open.remark ? '' : 'collapsed'}}">
     <view class="ch" data-k="remark" bindtap="toggle">
       <text class="ci">📝</text><text class="t">管理员备注</text>
-      <text class="sub">{{d.remarks.length}} 条</text>
+      <text class="sub">{{d.remarks.length ? (d.remarks.length + ' 条') : '暂无'}}</text>
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
-      <view class="rkrow" wx:for="{{d.remarks}}" wx:key="d">
-        <text class="rkd">{{item.d}}</text><text class="rkt">{{item.t}}</text>
+      <!-- ⭐ 2026-09-27：没备注 → 淡灰空态 -->
+      <view class="empty4" wx:if="{{!d.remarks.length}}">
+        <text class="e4i">📝</text>
+        <text class="e4t">还没有备注</text>
+        <text class="e4s">管理员在后台加备注，这里就能看到</text>
       </view>
+      <block wx:else>
+        <view class="rkrow" wx:for="{{d.remarks}}" wx:key="d">
+          <text class="rkd">{{item.d}}</text><text class="rkt">{{item.t}}</text>
+        </view>
+      </block>
     </view>
   </view>
 
@@ -204,10 +239,16 @@
   <view class="card hist {{open.hist ? '' : 'collapsed'}}">
     <view class="ch" data-k="hist" bindtap="toggle">
       <text class="ci">🕑</text><text class="t">拜访历史</text>
-      <text class="sub">{{d.history.length}} 次</text>
+      <text class="sub">{{d.history.length ? (d.history.length + ' 次') : '暂无'}}</text>
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
+      <!-- ⭐ 2026-09-27：没拜访过 → 淡灰空态 -->
+      <view class="empty4" wx:if="{{!d.history.length}}">
+        <text class="e4i">🕑</text>
+        <text class="e4t">暂无拜访记录</text>
+        <text class="e4s">第一次上门后，这里会留下记录</text>
+      </view>
       <view class="tl-item {{item.latest ? 'latest' : ''}}" wx:for="{{d.history}}" wx:key="md">
         <view class="hrow">
           <text class="hr-tag">{{item.tag}}</text>
@@ -217,14 +258,14 @@
         <view class="htxt" wx:if="{{item.txt}}">{{item.txt}}</view>
         <view class="htxt samp" wx:if="{{item.samp}}">📦 样品：{{item.samp}}</view>
 
-        <!-- 现场证据（演示）：① 拜访录音（点播放键，进度条走一遍） -->
+        <!-- ① 拜访录音（⭐ 2026-09-27：**真音频播放**；没有录音 → 这一块不出现） -->
         <view class="hrec" wx:if="{{item.rec}}">
           <view class="hplay" data-i="{{index}}" bindtap="playRec">{{item.rec.playing ? '❚❚' : '▶'}}</view>
           <text class="hrec-t">拜访录音 {{item.rec.dur}}</text>
           <view class="hrec-bar"><view class="hrec-i" style="width:{{item.rec.pct}}%"></view></view>
         </view>
         <!-- ② 录音转文字 -->
-        <view class="htrans" wx:if="{{item.rec}}">
+        <view class="htrans" wx:if="{{item.rec && item.rec.txt}}">
           <view class="htrans-h">🎙 录音转文字</view>
           <view class="htrans-b">{{item.rec.txt}}</view>
         </view>
@@ -266,6 +307,28 @@
       <view class="box-btns">
         <view class="bbtn ghost" bindtap="flagNo">取消</view>
         <view class="bbtn main" bindtap="flagYes">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===================== 📍 坐标报错弹层（2026-09-27 新增）===================== -->
+  <view class="mask" wx:if="{{fixShow}}" bindtap="fixClose">
+    <view class="box" catchtap="noop">
+      <view class="box-t">📍 报告坐标不准</view>
+      <view class="box-s">走到店门口再提交 —— 管理员审核后会把坐标改准</view>
+      <input class="box-i" placeholder="哪里不准？（可不填，如：这家搬走了 / 定位差很远）"
+             value="{{fixNote}}" bindinput="fixNoteIn" maxlength="100" />
+      <view class="fixshotrow">
+        <view class="fixshot" wx:for="{{fixShots}}" wx:key="index" data-i="{{index}}" bindtap="fixShot">
+          <image class="fixshot-img" wx:if="{{item}}" src="{{item}}" mode="aspectFill"></image>
+          <block wx:else>
+            <text class="cam3">📷</text><text class="t3">拍照</text>
+          </block>
+        </view>
+      </view>
+      <view class="box-btns">
+        <view class="bbtn ghost" bindtap="fixClose">取消</view>
+        <view class="bbtn main" bindtap="submitFix">提交报错</view>
       </view>
     </view>
   </view>

@@ -112,7 +112,18 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .main{flex:1;height:100vh;overflow:hidden;padding:18px 28px 22px;max-width:1200px;display:flex;flex-direction:column;min-width:0}
 /* 2026-09-09 老板定：所有内容页面不出上下滚动条——页面高度跟随窗口自适应 */
 #page-tasks,#page-customers,#page-track{display:flex;flex-direction:column;flex:1;min-height:0}
-#page-taskDetail,#page-newTask,#page-people,#page-settings,#page-batchDetail{flex:1;min-height:0;overflow-y:auto}
+#page-taskDetail,#page-newTask,#page-people,#page-settings{flex:1;min-height:0;overflow-y:auto}
+/* ⭐ 2026-09-27 老板定：批次详情页改为**固定高度、框内滚动、右侧滚动条**（与客户管理页同一口径）。
+   做法：页面本身不滚（overflow:hidden + 列布局），由表格容器 .bw 撑满剩余高度并自己滚；
+   头部工具条与底部分页条留在容器外，不跟着滚。 */
+#page-batchDetail{flex:1;min-height:0;overflow:hidden}
+#page-batchDetail .bcard{display:block}
+/* ⚠️ 2026-09-27 实测教训：这里**不能用 flex 链**（`#page-batchDetail` 的 display 被页面切换逻辑
+   用内联 style 写成 block，会盖掉 CSS 的 flex → 子元素变成"按内容撑高"，表格 3532px 一页到底、根本不滚）。
+   改用**视口高度计算**：容器限高 = 100vh − 顶部/工具条/分页条占位，超出即在框内滚动。 */
+#page-batchDetail .bw{max-height:calc(100vh - 268px);overflow:auto;scrollbar-width:thin;scrollbar-color:#AEB8C4 #F1F3F6}
+/* 滚动时表头固定（客户管理页同款做法） */
+#batchThead th{position:sticky;top:0;z-index:2;background:#F8F9FB}
 /* 2026-09-25 补 #page-import（老板报障：导入信息页内容超出却滚不动）——
    .main 是 overflow:hidden，里面的页面必须**自己** overflow-y:auto；
    这一行原来漏了导入页，所以它从来不能滚，以前内容短没暴露出来。 */
@@ -131,7 +142,10 @@ input,textarea{-webkit-user-select:text;user-select:text}
    所以这里**整套删掉自定义滚动条样式**，回到**系统原生滚动条**（老板已把 Win 设成"始终显示"）。
    宽度、颜色、常显/淡出全由系统控制，不再由我们插手。 */
 #page-geo .ct{width:100%;border-collapse:collapse;font-size:12.5px}
-#page-geo .ct th,#page-geo .ct td{border-bottom:1px solid var(--line);padding:8px 9px;text-align:left;vertical-align:middle;font-weight:400;color:#333A44}
+/* ⭐ 2026-09-27 老板定：客户管理总表**除"店名 / 最近下单 / 地址"三列外一律居中**（订单总额靠右，见行内 text-align:right）。
+   （商圈列曾试过左对齐 + table-layout:fixed，老板看后觉得难看 → 已全部退回；商圈维持居中，表格维持 auto 自适应列宽。） */
+#page-geo .ct th,#page-geo .ct td{border-bottom:1px solid var(--line);padding:8px 9px;text-align:center;vertical-align:middle;font-weight:400;color:#333A44}
+#page-geo .ct .lft{text-align:left}
 /* ⭐ 2026-09-26 老板定：① **表格内容尽量不换行**（地址/店名超长时用省略号，悬停看全）
    ② **编号 / 详情 / 备注 / 勾选 四列收紧**，别占太多地方（左右内边距压到 4px，列宽已在JS里改小） */
 #page-geo .ct th,#page-geo .ct td{white-space:nowrap}
@@ -140,6 +154,11 @@ input,textarea{-webkit-user-select:text;user-select:text}
 #page-geo .ct th:nth-child(3),#page-geo .ct td:nth-child(3),
 #page-geo .ct th:nth-child(4),#page-geo .ct td:nth-child(4){padding-left:4px;padding-right:4px}
 #page-geo .ct th{background:#F7F9FC;font-weight:700;color:#374151;white-space:nowrap;position:sticky;top:0;z-index:2}
+/* ⭐ 2026-09-27 老板定：这几列表头可点击排序（默认降序，再点切升序），当前排序列加箭头 + 淡橙高亮 */
+#page-geo .ct th.sortable{cursor:pointer;user-select:none}
+#page-geo .ct th.sortable:hover{background:#EDF1F7}
+#page-geo .ct th.sorted{color:var(--primary-deep);background:#FDF1EC}
+#page-geo .ct .sarr{font-size:10px;margin-left:2px;opacity:.9}
 #page-geo .ct .addr{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #page-geo .ct tbody tr:hover{background:#FAFBFC}
 #page-geo .ct tr.picked{background:#FFF7F2}
@@ -172,7 +191,17 @@ input,textarea{-webkit-user-select:text;user-select:text}
 #page-geo{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
 #page-geo > .card{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0}
 #page-geo .tw{flex:1;min-height:0;overflow:auto;padding:0 12px;scrollbar-width:thin;scrollbar-color:#AEB8C4 #F1F3F6}   /* thin = 系统细档（≈8px，比 auto 的≈15px 细一半）；嫌粗细再说 */
-.topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;position:relative}
+/* ⭐ 2026-09-27 老板定：「回访工作台」标签与铃铛**在任何页面都要在同一位置**。
+   ⚠️ 实测根因：`.topbar` 原先是"按内容自适应宽度"，而客户管理页的内容较宽（实测把 topbar 撑到 1414px，
+   其它页面只有 1144px = 1200 − padding），于是右对齐的这两个控件被推走 270px。
+   修法：① 顶栏恒定满宽；② 卡住 `.main` 的子元素宽度，不让某一个页面撑破 `.main` 的 max-width。 */
+/* ⭐ 2026-09-27 老板定：「」回访工作台」标签与铃铛在任何页面都必须在同一位置。
+   ⚠️ 根因：.topbar 原为自适应宽度，客户管理页的内容把 .main 撑宽（实测 1200→1470），
+   右对齐的这两个控件被推走 270px。这里把顶栏宽度固定为「正常页面下的实际值」
+   （.main 的 max-width 1200 − 左右 padding 28*2 = 1144），从而与其它页面完全对齐；
+   max-width:100% 兜住窄屏。 */
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;position:relative;width:1144px;max-width:100%;box-sizing:border-box}
+.main > *{max-width:100%;box-sizing:border-box}
 .topbar .pt{font-size:20px;font-weight:800}
 .topbar .pt small{display:block;font-size:12px;color:var(--sub);font-weight:500;margin-top:3px}
 .topbar .top-actions{margin-left:30px;display:flex;align-items:center;gap:10px}
@@ -1118,7 +1147,7 @@ tr.row-off td:not(.keep){opacity:.4}
           <div id="newCustView" style="display:none">
             <div class="card" style="box-shadow:0 3px 10px rgba(31,36,48,.06)"><table class="tbl">
               <thead id="custThead"></thead>
-              <tbody id="custTbody"><tr><td colspan="7" class="loading">加载中…</td></tr></tbody>
+              <tbody id="custTbody"><tr><td colspan="8" class="loading">加载中…</td></tr></tbody>
             </table></div>
           </div>
         </div>
@@ -1159,7 +1188,7 @@ tr.row-off td:not(.keep){opacity:.4}
         </div>
         <div style="display:flex;align-items:center;gap:12px;padding:9px 12px;font-size:12.5px;color:var(--sub);position:relative">
           <span>每页显示：<select id="gfSize" onchange="geoSizeChange(this.value)" class="gsel" style="min-width:78px">
-            <option value="50">50</option><option value="100">100</option><option value="200">200</option>
+            <option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="500">500</option>
           </select> 条</span>
           <!-- 2026-09-26 老板定：分页控件居中 —— 最前 « ｜ ‹ 上一页 ｜ 第 [可输入] / N 页 [跳] ｜ 下一页 › ｜ 最后 »
                最前/最后只用符号（« »），上一页/下一页保留文字；页码可输入后回车或点「跳」跳转。 -->
@@ -1205,7 +1234,7 @@ tr.row-off td:not(.keep){opacity:.4}
           <button class="btn ghost" id="unbDelBtn" style="display:none;height:34px;font-size:13px;color:var(--danger);font-weight:700;border:1px solid var(--danger)" onclick="deleteSelectedCustomers()">🗑 彻底删除</button>
         </span>
       </div>
-      <div class="card" style="box-shadow:0 3px 10px rgba(31,36,48,.06);padding:0;overflow:hidden">
+      <div class="card bcard" style="box-shadow:0 3px 10px rgba(31,36,48,.06);padding:0;overflow:hidden">
         <div class="batch-head" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);padding:10px 18px">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="font-size:16px;font-weight:700" id="batchCustTitle">批次</span>
@@ -1221,14 +1250,36 @@ tr.row-off td:not(.keep){opacity:.4}
             <span style="font-size:13px;color:var(--primary-deep);font-weight:700" id="batchCustStat"></span>
           </div>
         </div>
-        <table class="tbl" style="table-layout:fixed">
-          <thead id="batchThead"></thead>
-          <tbody id="batchTbody"><tr><td colspan="7" class="loading">加载中…</td></tr></tbody>
-        </table>
+        <!-- ⭐ 2026-09-27：表格放进 .bw 滚动容器（固定高度、框内滚动、右侧滚动条），表头 sticky -->
+        <div class="bw">
+          <table class="tbl" style="table-layout:fixed">
+            <thead id="batchThead"></thead>
+            <tbody id="batchTbody"><tr><td colspan="13" class="loading">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <!-- ⭐ 2026-09-27 老板定：分页条**照客户管理页的摆设**（« 最前 ｜ ‹ 上一页 ｜ 第[可输入]/N 页[跳] ｜ 下一页 › ｜ » 最后） -->
         <div class="batch-pagebar" id="batchPagebar" style="display:none">
-          <button class="btn ghost" id="batchPrevBtn" onclick="batchGotoPage(batchPage - 1)">‹ 上一页</button>
-          <span class="pg-info">第 <span class="pg-num" id="batchPageNum">1</span> / <span class="pg-num" id="batchPageTotal">1</span> 页</span>
-          <button class="btn ghost" id="batchNextBtn" onclick="batchGotoPage(batchPage + 1)">下一页 ›</button>
+          <button class="btn ghost btn-sm" id="batchFirstBtn" onclick="batchGotoPage(1)" title="第一页">«</button>
+          <button class="btn ghost btn-sm" id="batchPrevBtn" onclick="batchGotoPage(batchPage - 1)">‹ 上一页</button>
+          <span style="display:flex;align-items:center;gap:4px">第
+            <input id="batchPageInput" type="number" min="1" title="输入页码后回车跳转"
+              onkeydown="if(event.key==='Enter'){batchPageJump();}"
+              style="width:54px;height:26px;text-align:center;border:1px solid var(--line);border-radius:6px;font-size:12.5px;font-family:inherit;outline:0;background:#fff">
+            / <span id="batchPageTotal">1</span> 页
+            <button class="btn ghost btn-sm" onclick="batchPageJump()" style="padding:0 8px">跳</button>
+          </span>
+          <button class="btn ghost btn-sm" id="batchNextBtn" onclick="batchGotoPage(batchPage + 1)">下一页 ›</button>
+          <button class="btn ghost btn-sm" id="batchLastBtn" onclick="batchGotoPage(batchLastPages || 1)" title="最后一页">»</button>
+          <!-- ⭐ 2026-09-27 老板定：每页数量可选（与客户管理页同档位） -->
+          <span style="margin-left:14px;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)">
+            每页
+            <select id="batchPageSizeSel" onchange="batchSizeChange(this.value)"
+              style="height:26px;border:1px solid var(--line);border-radius:6px;padding:0 6px;font-size:12.5px;font-family:inherit;background:#fff;cursor:pointer">
+              <option value="20">20</option><option value="50">50</option>
+              <option value="100">100</option><option value="200">200</option><option value="500">500</option>
+            </select>
+            条
+          </span>
         </div>
       </div>
     </div>
@@ -3680,7 +3731,7 @@ function loadTrackMapLib() {
   if (trackMap || trackLibLoaded) return;
   trackLibLoaded = true;
   const s = document.createElement('script');
-  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.src = 'https://map.qq.com/api/gljs?v=1&key=' + encodeURIComponent(mapKey);
   s.onload = () => {
     if (!window.TMap) { trackLibFailed('TMap 未就绪'); return; } // 下载成功但 SDK 没挂上（key 失效等）
     buildTrackMap();
@@ -3794,7 +3845,7 @@ function loadTaskMapLib() {
   if (tmMapObj || tmLibLoaded) return;
   tmLibLoaded = true;
   const s = document.createElement('script');
-  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.src = 'https://map.qq.com/api/gljs?v=1&key=' + encodeURIComponent(mapKey);
   s.onload = () => buildTaskMap();
   document.head.appendChild(s);
 }
@@ -4704,8 +4755,11 @@ async function loadCustData(force) {
     if (t.salesmanId) tSet.add(t.salesmanId);
   });
   trackTaskSalesmen = tSet;
-  // 缓存字段是缩写（i/n/la/ln/c/d/b + M2a 的 ad/cs/cst/mc/mk/u）→ 在这里还原成原来代码用的名字
-  trackCustCache = pts.filter(p => p && p.la && p.ln).map(p => ({
+  // ⭐ 2026-09-27 老板定（6 万点把地图画卡死后改口径）：战况监控**只画「任务中的客户」** ——
+  //   无任务的客户**一个都不画**（业务员实时位置 / 仓库星这些图层不受影响）。
+  //   判据：该客户出现在**进行中任务**的 customerIds / dayPlan 里 —— 上面的 taskMap 已经算好了 ✓
+  //   → 数据量从 6 万降到几十~几百，地图秒开。
+  trackCustCache = pts.filter(p => p && p.la && p.ln && taskMap[p.i]).map(p => ({
     _id: p.i, name: p.n, lat: p.la, lng: p.ln,
     city: p.c || '', district: p.d || '', bizCircle: p.b || '',
     // ⭐ 2026-09-27 M2a：列表层新字段（客户管理页表格要用）
@@ -4743,11 +4797,14 @@ async function refreshMapData() {
 function updateMapDataLabel() {
   const el = $('mapDataStat');
   if (!el) return;
-  if (trackStoreMeta.warming) { el.textContent = '⏳ 正在准备地图数据…'; return; }
+  if (trackStoreMeta.warming) { el.textContent = custWarmText(); return; }   // ⭐ 带进度
   if (!trackStoreMeta.syncedAt) { el.textContent = ''; return; }
   const d = new Date(trackStoreMeta.syncedAt);
   const p2 = n => String(n).padStart(2, '0');
-  el.textContent = '数据截至 ' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ' · ' + trackStoreMeta.count + ' 家';
+  // ⭐ 2026-09-27：地图只画「任务中的客户」→ 文案要把这件事说清楚（否则看着"库内 6 万家"却只有几十个点，以为又出问题了）
+  const shown = (trackCustCache || []).length;
+  el.textContent = '数据截至 ' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes())
+    + ' · 库内 ' + trackStoreMeta.count + ' 家 · 本图只画任务中 ' + shown + ' 家';
 }
 
 async function drawCustLayer() {
@@ -5222,8 +5279,8 @@ let ntBatchCache = [];
 async function loadBatchSelect() {
   $('ntBatchRow').style.display = curMode === 'mall' ? '' : 'none';
   if (curMode === 'new') { nwBatchId = ''; return; }
-  const res = await api('listCustomerBatches');
-  ntBatchCache = res.ok ? (res.batches || []) : [];
+  const res = await getBatches();                 // ⭐ 共用缓存（原每次真发请求）
+  ntBatchCache = (res && res.ok) ? (res.batches || []) : [];
   const opts = ntBatchCache.map(b => `<option value="${b._id}">${esc(b.name)}${b.subtitle ? ' · ' + esc(b.subtitle) : ''}</option>`).join('');
   const lastUsed = localStorage.getItem('jh_last_batch');
   let selId = ntBatchCache.length ? ntBatchCache[0]._id : '';
@@ -5242,9 +5299,19 @@ async function onBatchChange() {
   nwBatchName = b ? b.name : '';
   if (nwBatchId) { try { localStorage.setItem('jh_last_batch', nwBatchId); } catch (e) { } }
   if (curMode === 'new') { return; }
-  const cu = await api('listCustomers', nwBatchId ? { batchId: nwBatchId } : {});
+  // ⭐ 2026-09-27：批内仍走云端（批内量小、要实时任务状态）；**"不限批次"改读本地缓存**
+  //   （原来走 listCustomers({})，云端只返回前 50 条 → 选客户时看不到全部）。
+  let src = [];
+  if (nwBatchId) {
+    const cu = await api('listCustomers', { batchId: nwBatchId });
+    src = cu.ok ? cu.customers : [];
+  } else {
+    const all = await custLocalList({ mode: curMode });
+    if (!all) { $('ntCustList') ? $('ntCustList').innerHTML = custLocalWarmingHtml() : 0; custCache = []; return; }
+    src = all;
+  }
   // 2026-09-25 老板定：选客户列表的店名要带完整编号 → 统一过 custWithCode（只影响后台内存）
-  custCache = custWithCode(cu.ok ? cu.customers : []).filter(c => c.customerType === curMode)
+  custCache = custWithCode(src).filter(c => c.customerType === curMode)
     .map(c => ({ ...c, _day: null, _seq: null }));
   ntDayMeta = {};
   ntRoutes = {};
@@ -5557,13 +5624,37 @@ function cdRender() {
   const hRow = (k, v, field, span) => '<div class="cd-row"' + (span ? ' style="grid-column:1/-1"' : '') + '>' +
     '<span class="k">' + k + '</span><span class="v"' + (field ? ' data-cdfield="' + field + '"' : '') + '>' +
     ((v === undefined || v === null || v === '') ? '<span style="color:#C3C9D2">—</span>' : v) + '</span></div>';
-  const photoBox = '<div style="margin-top:10px">' +
-    '<div style="font-size:12.5px;color:var(--sub);margin-bottom:6px">门店照片</div>' +
-    '<div style="display:flex;gap:8px">' +
-      [0, 1, 2].map(() => '<div style="width:88px;height:66px;border-radius:8px;border:1px dashed #E2E7ED;background:#FAFBFC;display:flex;align-items:center;justify-content:center;color:#C3C9D2;font-size:18px">📷</div>').join('') +
-    '</div>' +
-    '<div style="font-size:11.5px;color:#B7BEC7;margin-top:5px">还没有现场照片（业务员拍照后自动显示）</div>' +
-  '</div>';
+  // ⭐ 2026-09-27：门店照片三格改成**动态** ——
+  //   ① 业务员现场拍（云存储 fileID，已在 showCustDetail 换成临时 URL）
+  //   ② 平台图（**本地保存** admin/media/plat/<platShopUuid>/1.jpg → 走 server.js 的 /media/ 路由）
+  //   ⚠️ 平台图只抓了主图 1 张时，第 2/3 格自然是空的（空框 = 业务员现场拍的入口）
+  const photoBox = (function () {
+    const urls = (d && d._photoUrls) || {};
+    const shots = [];
+    (Array.isArray(c.photos) ? c.photos : []).forEach(p => {
+      const fid = (p && p.fileID) || (typeof p === 'string' ? p : '');
+      if (fid && urls[fid]) shots.push({ src: urls[fid], kind: 'salesman' });
+    });
+    // ⚠️ 只在"这家确实有平台图"时才渲染（d._platPhoto 由 showCustDetail 查索引得出）→ 避免每个客户一个 404
+    if (c.platShopUuid && d._platPhoto) shots.push({ src: '/media/plat/' + encodeURIComponent(c.platShopUuid) + '/1.jpg', kind: 'plat' });
+    const empty = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C3C9D2;font-size:18px">📷</div>';
+    const cells = [0, 1, 2].map(i => {
+      const s = shots[i];
+      if (!s) return '<div style="position:relative;width:88px;height:66px;border-radius:8px;border:1px dashed #E2E7ED;background:#FAFBFC">' + empty + '</div>';
+      const badge = s.kind === 'plat'
+        ? '<span style="position:absolute;left:3px;bottom:3px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:0 4px;border-radius:5px;line-height:1.5">平台</span>' : '';
+      return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid #E9EDF3;background:#FAFBFC;cursor:zoom-in" ' +
+        'title="点击看大图" onclick="showPhoto(this.dataset.src)" data-src="' + s.src + '">' +
+        empty +
+        '<img src="' + s.src + '" style="position:relative;width:100%;height:100%;object-fit:cover" onerror="this.remove()">' + badge +
+      '</div>';
+    }).join('');
+    const hint = shots.length ? '' : '<div style="font-size:11.5px;color:#B7BEC7;margin-top:5px">还没有门店照片（业务员现场拍，或等平台图抓取）</div>';
+    return '<div style="margin-top:10px">' +
+      '<div style="font-size:12.5px;color:var(--sub);margin-bottom:6px">门店照片</div>' +
+      '<div style="display:flex;gap:8px">' + cells + '</div>' + hint +
+    '</div>';
+  })();
   // 2026-09-25 老板定（第五版·定稿）：改用**真正的 <table>** ——
   //   grid 的 `1fr` 列会被不同长度的内容撑得参差（老板反复反馈"列头和内容错位"），
   //   表格是浏览器**原生列对齐** + `table-layout:fixed` + `colgroup` 把标签列钉死 64px → 绝不可能跑偏。
@@ -5613,6 +5704,20 @@ function cdRender() {
       //（见 cdBuildMap 末尾；后台 4 张地图共用同一套标识、同一个右下角位置，改一处四处生效）。
     '</div>';
   L.push(cdCard('🛎 服务与设施', plat.groupon ? '团购 有' : '', sBody));
+  // ⭐ 2026-09-27 新增：**业务员现场提报**（待审核：招牌菜/设施/团购外卖）—— 采纳即写进客户档案 platManual（修正 008）
+  const frs = d.fieldReports || [];
+  if (frs.length) {
+    const _frKind = f => f.kind === 'dish' ? '招牌菜' : (f.kind === 'fac' ? '设施' : (f.flagName || '标签'));
+    const _frVal = f => f.kind === 'flag' ? (f.flagTo ? '已开' : '未开') : esc(f.value || '');
+    L.push(cdCard('⏳ 现场提报', frs.length + ' 条待审核',
+      frs.map(f => '<div class="cd-row" style="display:flex;align-items:center;gap:8px">' +
+        '<span class="k" style="flex:0 0 auto">' + _frKind(f) + '</span>' +
+        '<span class="v" style="flex:1;min-width:0">' + _frVal(f) +
+          '<span style="color:#B7BEC7;font-size:11.5px;margin-left:6px">' + esc(f.salesmanName || '') + '</span></span>' +
+        '<button class="btn primary" style="height:26px;font-size:12px;padding:0 10px" onclick="reviewFieldReport(\'' + f._id + '\', true)">采纳</button>' +
+        '<button class="btn ghost" style="height:26px;font-size:12px;padding:0 10px" onclick="reviewFieldReport(\'' + f._id + '\', false)">忽略</button>' +
+      '</div>').join('')));
+  }
   L.push('</div>');
 
   // —— 右栏 ——
@@ -5711,11 +5816,17 @@ function cdLoadMapLib() {
   if (!cdCur) return;
   const c = cdCur.customer || {};
   if (!isFinite(Number(c.lat)) || !isFinite(Number(c.lng))) return; // 没坐标就不去加载 SDK
+  // ⭐ 2026-09-27 修（老板报"客户详情页地图一片灰白"）：
+  //   同一个客户**已经建好图就直接复用，绝不重建**。
+  //   原因：cdRender() 每次都会被调用（改备注 / 审核提报 / 编辑保存后都会重渲染），
+  //   而每调一次就 destroy+create 一个 TMap 实例 —— 反复建图会**泄漏 WebGL 上下文**
+  //   （浏览器上限约 16 个）→ 用一会儿之后 canvas 有尺寸、却再也渲不出来（表现为一片灰白 = 容器底色 #F7FAFC）。
+  if (cdMapObj && cdMapObj._for === c._id) { try { cdVerifyMap(); } catch (e) { /* 静默 */ } return; }
   if (window.TMap) { cdBuildMapSoon(); return; }
   if (cdMapLibLoading) return;
   cdMapLibLoading = true;
   const s = document.createElement('script');
-  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.src = 'https://map.qq.com/api/gljs?v=1&key=' + encodeURIComponent(mapKey);
   s.onload = () => { cdMapLibLoading = false; cdBuildMapSoon(); };
   s.onerror = () => { cdMapLibLoading = false; };
   document.head.appendChild(s);
@@ -5814,6 +5925,40 @@ function jhMapBadge(id) {
   setTimeout(() => jhHideMapLogo(box), 3000);
 }
 
+// ⭐ 2026-09-27 新增：**WebGL 自检**（排查"地图 90% 灰白/缺块"）——
+//   实测网络到腾讯地图各域名都正常（100~180ms/HTTP 200），而壳程序里 WebView2 是裸初始化（没给 GPU 参数）。
+//   若 WebView2 降级到软件渲染（SwiftShader），WebGL 地图就会灰白/缺块 → 这行自检一眼看出用的是谁在渲染。
+function cdGlInfo() {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2') || c.getContext('webgl') || c.getContext('experimental-webgl');
+    if (!gl) return '不可用（WebGL 被禁用）';
+    let r = '';
+    try {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      r = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '';
+    } catch (e) { /* 部分环境不开放该扩展 */ }
+    if (!r) r = gl.getParameter(gl.RENDERER) || '(未知)';
+    const soft = /swiftshader|software|basic render|microsoft basic/i.test(String(r));
+    return String(r).slice(0, 48) + (soft ? ' ⚠️软件渲染' : '');
+  } catch (e) { return '检测异常'; }
+}
+console.log('[地图自检] WebGL 渲染器 = ' + cdGlInfo());
+console.log('[地图自检] WebGL 渲染器 = ' + cdGlInfo());
+
+// ⭐ 2026-09-27 老板定：**把地图 SDK 本体缓存到本地**（Service Worker）
+//   收益：map.qq.com/api/gljs 约 2.2MB、URL 稳定 → 二次打开直接读本地，首屏明显更快。
+//   ⚠️ 只缓存这一个 URL；其余地图请求（瓦片 / 埋点 / 校验，URL 带随机参数）一律放行不缓存（实测命中率恒为 0）。
+//   关闭办法：控制台执行 navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()))
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw-map-cache.js', { scope: '/' }).then(() => {
+      if (navigator.serviceWorker.controller) console.log('[地图缓存] 已启用（本地优先，未命中才联网）');
+      else console.log('[地图缓存] 已安装：**刷新一次**后开始接管地图请求');
+    }).catch((e) => console.warn('[地图缓存] 注册失败（不影响使用）：' + ((e && e.message) || e)));
+  });
+}
+
 let cdMountRetry = 0;
 function cdMountMap() { cdMountRetry = 0; cdBuildMap(); cdVerifyMap(); }
 function cdRebuildMap() { cdMountRetry = 0; cdBuildMap(); cdVerifyMap(); }
@@ -5828,7 +5973,11 @@ function cdVerifyMap() {
     if (cv && cv.width > 10 && cv.height > 10) { cdMountRetry = 0; return; }   // ✅ 真的渲染出来了
     if (cdMountRetry < 3) {                                                    // ❌ 自动重建（间隔递增）
       cdMountRetry++;
-      setTimeout(() => { cdBuildMap(); cdVerifyMap(); }, 300 + cdMountRetry * 300);
+      setTimeout(() => {
+        // ⭐ 2026-09-27：重试前也要看容器还在不在（弹窗可能已关）—— 否则会在 0 尺寸容器上建图触发 far <= 0
+        if (!cdMapElOk(document.getElementById('cdMap'))) return;
+        cdBuildMap(); cdVerifyMap();
+      }, 300 + cdMountRetry * 300);
       return;
     }
     // ❌❌ 连续 4 次都没成 → 把诊断写进框里（老板看到就能直接告诉我卡在哪一步）
@@ -5839,11 +5988,21 @@ function cdVerifyMap() {
       '容器：' + el.clientWidth + '×' + el.clientHeight,
       '位置：top=' + Math.round(r.top) + ' bottom=' + Math.round(r.bottom) + ' 视口高=' + window.innerHeight,
       'TMap：' + (window.TMap ? '已加载' : '未加载'),
+      'WebGL：' + cdGlInfo(),
       '尝试：4 次'
     ];
     el.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;padding:0 14px;' +
       'text-align:center;color:#C1502E;font-size:11.5px;line-height:1.8">' + esc(bits.join('｜')) + '</div>';
   }, delay);
+}
+
+// ⭐ 2026-09-27：**地图容器可用性守卫**（修 `far <= 0` 白屏）——
+//   腾讯 GL 在"不可见 / 无尺寸"的容器上建图会抛 `Uncaught far <= 0`（相机远裁剪面非法），渲染管线随即断掉、地图灰白。
+//   判据：必须在 DOM 里 + 有真实尺寸（`display:none` 时 clientWidth/Height 必为 0）。
+function cdMapElOk(el) {
+  if (!el || !el.isConnected) return false;
+  if (el.clientWidth < 10 || el.clientHeight < 10) return false;
+  return true;
 }
 
 function cdDestroyMap() {
@@ -5855,6 +6014,8 @@ function cdBuildMap() {
   const d = cdCur;
   const cur = document.getElementById('cdMap');
   if (!cur || !d || !window.TMap) return;
+  // ⭐ 2026-09-27：容器不可用（弹窗已关 / 还没布局出尺寸）→ 不建图（否则 far <= 0，地图灰白）
+  if (!cdMapElOk(cur)) return;
   const c = d.customer || {};
   const lat = Number(c.lat), lng = Number(c.lng);
   if (!isFinite(lat) || !isFinite(lng)) {
@@ -5878,6 +6039,9 @@ function cdBuildMap() {
 
   setTimeout(() => {
     if (!cdCur || !cdCur.customer || cdCur.customer._id !== myId) return;   // 期间换客户了 → 放弃这一次
+    // ⭐ 2026-09-27：这 250ms 里弹窗可能已经被关掉（容器变 display:none）—— 在不可用容器上建图会抛
+    //   `Uncaught far <= 0` 且渲染管线直接断掉。不满足就放弃本次，下次打开详情页再建。
+    if (!cdMapElOk(el)) return;
     try {
       cdMapObj = new TMap.Map(el, {
         center: new TMap.LatLng(lat, lng),
@@ -5888,6 +6052,11 @@ function cdBuildMap() {
         //   point=POI文字 / label=**道路文字（道路名称）**。
         // 2026-09-25 老板定：① 要看到**道路名**（label）与餐饮/超市等**点位**（point）；
         //   ② 用 **building3d 而不是 building3d** —— 3D 楼块有高度会**遮住道路名和 POI 标注**，而且数据重、加载慢。
+        // ⭐ 2026-09-27 老板定：客户详情小地图要能看到 **超市 / 餐饮等 POI 点位** 与 **道路名**。
+        //   features：base=道路及底面 / building3d=3D楼块 / **point=POI 点位（超市·餐饮·医院·学校等）** / label=文字标注（道路名）
+        //   沿革：2026-09-25 老板定下的就是带 point 的组合；09-27 上午我为排查"地图灰白"临时去掉过，
+        //         对照实验证明 **point 与灰白无关**（去掉照样灰白），故按老板要求加回。
+        //   实测（无头 Edge + zoom16）：带 point 时可见 银泰百货 / 金华商城 / 整点烧烤 等商超餐饮 POI + 完整道路名。
         baseMap: [{ type: 'vector', features: ['base', 'building3d', 'point', 'label'] }]
       });
       cdMapObj._for = myId;
@@ -5956,7 +6125,7 @@ function cdPreloadMapLib() {
   if (window.TMap || cdMapLibLoading) return;
   cdMapLibLoading = true;
   const s = document.createElement('script');
-  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.src = 'https://map.qq.com/api/gljs?v=1&key=' + encodeURIComponent(mapKey);
   s.onload = () => { cdMapLibLoading = false; cdBuildMap(); };
   s.onerror = () => { cdMapLibLoading = false; };
   document.head.appendChild(s);
@@ -5976,6 +6145,26 @@ function cdStatusPills(c) {
     out.push('<span class="pill gray">无任务</span>');
   }
   return out.join('');
+}
+
+// ⭐ 2026-09-27：平台图索引（60 秒内存缓存）—— 只有"确实抓到了图"的客户才渲染 <img>，避免 404 刷屏
+let _platIdxAt = 0, _platIdx = [];
+async function platPhotoIndex() {
+  if (_platIdx.length && Date.now() - _platIdxAt < 60000) return _platIdx;
+  try {
+    const r = await fetch('/media/plat/_index', { cache: 'no-store' }).then(x => x.json());
+    _platIdx = (r && r.uuids) || [];
+    _platIdxAt = Date.now();
+  } catch (e) { /* 静默：拿不到就当空（不渲染平台图） */ }
+  return _platIdx;
+}
+
+// ⭐ 2026-09-27 新增：**现场提报审核**（修正 008）—— 采纳 → 云端写进客户档案 platManual；忽略 → 标记。
+//   审完自动重拉详情（提报块消失、招牌菜/设施随之更新）
+async function reviewFieldReport(reportId, approve) {
+  const res = await api('reviewFieldReport', { reportId: reportId, approve: approve });
+  if (!res || !res.ok) { alert((res && res.msg) || '操作失败'); return; }
+  showCustDetail(cdCurId);
 }
 
 async function showCustDetail(id) {
@@ -5999,6 +6188,23 @@ async function showCustDetail(id) {
     $('cmBody').innerHTML = '<div class="cd" style="grid-column:1/-1"><div class="cd-b" style="color:var(--danger)">加载失败：' + esc((res && res.msg) || '未知错误') + '</div></div>';
     return;
   }
+  // ⭐ 2026-09-27：门店照片若是云存储 fileID → 先批量换临时 URL（后台显示用）；平台图走本地 /media/... 不需要换
+  res._photoUrls = {};
+  // ⭐ 2026-09-27：平台图**先查索引** —— 这家有图才渲染 <img>（没图不渲染 → 控制台不再一堆 404）
+  res._platPhoto = false;
+  try {
+    if (res.customer && res.customer.platShopUuid) {
+      const idx = await platPhotoIndex();
+      res._platPhoto = idx.indexOf(String(res.customer.platShopUuid)) >= 0;
+    }
+  } catch (e) { /* 索引取不到就当没有图（不影响其它） */ }
+  try {
+    const _ids = ((res.customer && res.customer.photos) || []).map(p => (p && p.fileID) || (typeof p === 'string' ? p : '')).filter(Boolean);
+    if (_ids.length) {
+      const tr = await api('getTempFileURL', { fileIDs: _ids });
+      if (tr && tr.ok) res._photoUrls = tr.urls || {};
+    }
+  } catch (e) { /* 取图失败不影响详情渲染 */ }
   cdCur = res;
   if (res.customer) {
     const i = detailCustCache.findIndex(x => x._id === id);
@@ -6061,6 +6267,11 @@ function cdSaveEdit() {
       const c = cache && cache.find(x => x._id === cdCurId);
       if (c) Object.keys(fields).forEach(k => { c[k] = fields[k]; });
     });
+    // ⭐ 2026-09-27 M3 写后回写：把改动同步进本地缓存文件（能对上短键的才同步）
+    const _F2K = { name: 'n', nameRaw: 'nr', address: 'ad', phone: 'ph', customerType: 'ct', mallCode: 'mc', mallKey: 'mk', remark: 'rm', mallJoinedAt: 'mj' };
+    const _set = {};
+    Object.keys(fields).forEach(k => { if (_F2K[k]) _set[_F2K[k]] = fields[k]; });
+    if (Object.keys(_set).length) custPatchLocal([{ id: cdCurId, set: _set }], []);
     if (typeof renderBatchTbody === 'function' && $('page-batchDetail') && $('page-batchDetail').style.display !== 'none') {
       try { renderBatchTbody(); } catch (e) { }
     }
@@ -6233,6 +6444,7 @@ function cdApplyGeo() {
       const x = cache && cache.find(y => y._id === cdCurId);
       if (x) { x.lat = p.lat; x.lng = p.lng; x.coordSource = 'admin'; }
     });
+    custPatchLocal([{ id: cdCurId, set: { la: p.lat, ln: p.lng, cs: 'admin' } }], []);   // ⭐ M3 写后回写
   });
 }
 function cdMeters(lat1, lng1, lat2, lng2) {
@@ -6318,6 +6530,7 @@ async function saveCustRemark() {
     const c = cache && cache.find(x => x._id === curCustId);
     if (c) c.remark = res.remark;
   });
+  custPatchLocal([{ id: curCustId, set: { rm: res.remark || '' } }], []);   // ⭐ M3 写后回写
   // 2026-09-24 逐条留存：保存后**不关窗** —— 清空输入框、刷新历史列表（新记录出现在最上面）
   $('crRemark').value = '';
   loadCustRemarkHistory(curCustId);
@@ -6384,17 +6597,254 @@ async function loadLastMallImport() {
 // ⭐ 2026-09-26 🏪 客户管理（原名 📍 地域管理，同日老板定改名；内部 id 仍叫 geo）——
 //   老板定：库里要到 6 万家，必须按 城市→区域→商圈 看客户 + 圈人建批次
 //   三个下拉 + 190px 搜索框 + 分页 + 客户总表；选项**从数据动态生成**（坑 D）；搜索范围=当前范围
+
+// ===== ⭐ 2026-09-27 M2b：客户列表改读**本地缓存**（架构文档 §六「列表走本地，详情实时拉」）=====
+//   · 数据源：后台 `/mapPoints`（= admin/cache/map-points.json，一天一次全量；战况监控「🔄 更新地图数据」可重拉）
+//   · 本地做：筛选（城市/区域/商圈/关键词）+ 排序（建档时间倒序，与云端 listCustomers 同口径）+ 分页
+//     —— 库里到 6 万家也秒开，翻页 0 请求
+//   · 订单/拜访/任务状态/报错待审 这几列要查别的表 → 按**当前页**调一次 custPageAgg（≤200 家，很快）
+//   · 写后回写（M3）：改完（备注/坐标/字段/删除/建批次）调 /mapPoints/patch，把改动同步进本地缓存文件
+let custLocal = null;          // { syncedAt, points: [...], err? } —— 一次会话读一次
+let custLocalLoading = null;   // 并发保护（同时多个调用只发一次请求）
+async function ensureCustLocal(force) {
+  if (custLocal && !force) return custLocal;
+  if (custLocalLoading && !force) return custLocalLoading;
+  custLocalLoading = (async () => {
+    try {
+      const r = await fetch('/mapPoints', { cache: 'no-store' }).then(x => x.json());
+      custLocal = { syncedAt: r.syncedAt || 0, points: r.points || [], warming: !!r.warming, progress: r.progress || null };
+    } catch (e) {
+      custLocal = { syncedAt: 0, points: [], err: String((e && e.message) || e) };
+    }
+    custLocalLoading = null;
+    return custLocal;
+  })();
+  return custLocalLoading;
+}
+// 从本地点生成三层下拉选项（坑 D 教训：选项必须来自数据，不能写死）
+function custGeoFromPoints(points) {
+  const cities = [], districts = {}, bizCircles = {}, cs = {}, ds = {}, bk3 = {};
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    if (!p.c) continue;
+    if (!cs[p.c]) { cs[p.c] = 1; cities.push(p.c); }
+    if (p.d) {
+      const k = p.c + '|' + p.d;
+      if (!ds[k]) { ds[k] = 1; (districts[p.c] = districts[p.c] || []).push(p.d); }
+      if (p.b) {
+        // ⭐ 2026-09-27 修（老板报障"武义县的商圈没显示全"）：商圈要按「城市|区域|商圈」**三元组**去重 ——
+        //   原来错按「城市|区域」二元组去重（bk2[k]），结果**每个区域只收集到第一个商圈**
+        //   （武义县实际 3 个：白洋街道 / 壶山街道 / 桐琴镇，却只显示白洋街道）。
+        const k3 = k + '|' + p.b;
+        if (!bk3[k3]) { bk3[k3] = 1; (bizCircles[k] = bizCircles[k] || []).push(p.b); }
+      }
+    }
+  }
+  // ⭐ 2026-09-27 老板定：三层下拉**全部按客户数量从多到少**排（原来字典序 —— 找个大商圈要翻半天）。
+  //   先数一遍家数（一次遍历 ~5ms），再按家数降序；家数相同才轮到原顺序。
+  const _cCity = {}, _cDist = {}, _cBiz = {};
+  for (let j = 0; j < points.length; j++) {
+    const q = points[j];
+    if (!q.c) continue;
+    _cCity[q.c] = (_cCity[q.c] || 0) + 1;
+    if (!q.d) continue;
+    const k2 = q.c + '|' + q.d;
+    _cDist[k2] = (_cDist[k2] || 0) + 1;
+    if (q.b) {
+      const k4 = k2 + '|' + q.b;
+      _cBiz[k4] = (_cBiz[k4] || 0) + 1;
+    }
+  }
+  cities.sort((a, b) => (_cCity[b] || 0) - (_cCity[a] || 0));
+  Object.keys(districts).forEach(k => districts[k].sort((a, b) => (_cDist[k + '|' + b] || 0) - (_cDist[k + '|' + a] || 0)));
+  Object.keys(bizCircles).forEach(k => bizCircles[k].sort((a, b) => (_cBiz[k + '|' + b] || 0) - (_cBiz[k + '|' + a] || 0)));
+  return { cities: cities, districts: districts, bizCircles: bizCircles };
+}
+// 本地筛选 + 排序 + 分页 → { total, page, totalPages, rows: [长名对象] }
+// mode = 客户类型（回访 mall / 新客 new）→ 双工作台分线；f.unbatched=true → 只留"没有任何批次归属"的
+function custLocalPage(f, mode) {
+  const q = String(f.q || '').trim().toLowerCase();
+  const pts = (custLocal && custLocal.points) || [];
+  const hit = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (f.city && p.c !== f.city) continue;
+    if (f.district && p.d !== f.district) continue;
+    if (f.bizCircle && p.b !== f.bizCircle) continue;
+    if (mode && p.ct !== mode) continue;
+    if (f.unbatched && p.bi) continue;
+    if (q && String(p.n || '').toLowerCase().indexOf(q) < 0 && String(p.mc || '').toLowerCase().indexOf(q) < 0) continue;
+    hit.push(p);
+  }
+  // ⭐ 2026-09-27 老板定：这几列「今后都要做排序」→ 这里先把排序引擎备好（预聚合后才可能按全库排序）。
+  //   不传 f.sort 时保持原行为（建档时间倒序）；f.sort = {k, desc}：k ∈ ca/oc/oa/lo/lv/vc
+  const SORT_GET = {
+    ca: p => p.ca || 0,          // 建档时间
+    oc: p => p.oc || 0,          // 订单总数
+    oa: p => p.oa || 0,          // 订单总额
+    lo: p => String(p.lo || ''), // 最近下单
+    lv: p => String(p.lv || ''), // 最近拜访
+    vc: p => p.vc || 0,          // 拜访次数
+    vs: p => (p.vs === 'in_task' ? 1 : 0),                                  // 全局态（任务中的排前面）
+    vt: p => (({ visited: 3, ongoing: 2, pending: 1 })[p.vt] || 0),         // 任务内状态（已回访>拜访中>待回访）
+    mk: p => (String(p.mc || '').trim() || String(p.mk || '').trim() ? 1 : 0)   // 商城（已加在前）
+  };
+  const sk = f.sort && SORT_GET[f.sort.k] ? f.sort.k : 'ca';
+  const sgn = (f.sort && f.sort.desc === false) ? 1 : -1;      // 默认降序（大的在前）
+  const getv = SORT_GET[sk];
+  hit.sort((a, b) => {
+    const va = getv(a), vb = getv(b);
+    if (va === vb) return (b.ca || 0) - (a.ca || 0);           // 同值回落到建档时间，保证稳定
+    return (va > vb ? 1 : -1) * sgn;
+  });
+  const total = hit.length, size = f.size || 50;
+  const totalPages = Math.max(1, Math.ceil(total / size));
+  const page = Math.min(Math.max(f.page || 1, 1), totalPages);
+  const rows = hit.slice((page - 1) * size, page * size).map(custLocalRow);
+  return { total: total, page: page, totalPages: totalPages, rows: rows };
+}
+// 短键 → 渲染层要的长名对象（字段名与云端 listCustomers 保持一致，渲染代码原样复用）
+function custLocalRow(p) {
+  return {
+    _id: p.i, name: p.n || '', nameRaw: p.nr || '',
+    lat: p.la, lng: p.ln,
+    city: p.c || '', district: p.d || '', bizCircle: p.b || '',
+    address: p.ad || '', coordSource: p.cs || '', coord_status: p.cst || '',
+    mallCode: p.mc || '', mallKey: p.mk || '', mallJoinedAt: p.mj || '',
+    customerType: p.ct || '', phone: p.ph || '', remark: p.rm || '',
+    batchIds: p.bi ? String(p.bi).split(',') : [],
+    // ⭐ 2026-09-27 老板定：这 6 列**改为预聚合**（随客户点一起缓存在本地，口径与 custPageAgg 一致）
+    //   好处：翻页/排序都零请求；而且这两列现在**能参与排序**（按页现算是做不到的）。
+    coordFixPending: false,
+    visitState: p.vs || 'free',            // 全局态：free / in_task
+    visitStatus: p.vt || '',               // 任务内状态：pending / ongoing / visited
+    visitCount: p.vc || 0,                 // 拜访次数
+    lastVisitAt: p.lv || '',               // 最近拜访
+    orderCount: p.oc || 0,                 // 订单总数
+    orderAmountSum: p.oa || 0,             // 订单总额
+    lastOrderAt: p.lo || ''                // 最近下单
+  };
+}
+// ⭐ 2026-09-27 老板定：**4 个入口（手工建批 / 加客户到批次 / 商城比对 / 任务选客户）改读本地缓存**。
+//   起因：`listCustomers` 09-26 改成"分页返回"（为 6 万家做准备），但这 4 处仍按"一次拿全"写 —— 云端只给 50 条，
+//   它们不知道 → 手工建批列表只有 50 家、"商城比对"更是**静默只比前 50 家**（最危险）。
+//   做法：统一走这里 —— 数据来自本地缓存文件（6 万家已在本地点里），**全量、秒开、搜索在本地**。
+//   opt.mode：按客户类型过滤（mall 回访 / new 新客 / '' 不过滤）；opt.unbatched=true 只留未入批的；opt.batchId=只留该批次成员
+//   ⚠️ 返回 null 表示**本地缓存还没预热好**，调用方要给提示（不要静默当成"没有客户"）。
+async function custLocalList(opt) {
+  const o = opt || {};
+  const loc = await ensureCustLocal();
+  const pts = (loc && loc.points) || [];
+  if (!pts.length) return null;
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (o.mode && p.ct !== o.mode) continue;
+    if (o.unbatched && p.bi) continue;
+    if (o.batchId) {
+      const bis = p.bi ? String(p.bi).split(',') : [];
+      if (bis.indexOf(o.batchId) < 0) continue;
+    }
+    out.push(custLocalRow(p));
+  }
+  return custWithCode(out);
+}
+// 缓存未就绪时的统一提示文案（所有入口共用）——带**实时进度**（老板 2026-09-27 定：要看到"3.8万/6万"）
+function custFmtN(n) {
+  n = Number(n) || 0;
+  return n >= 10000 ? ((n / 10000).toFixed(1).replace(/\.0$/, '') + '万') : String(n);
+}
+function custWarmText() {
+  const p = (custLocal && custLocal.progress) || {};
+  const done = Number(p.done) || 0, total = Number(p.total) || 0;
+  const tail = '（首次启动约 1~2 分钟，之后全天秒开）';
+  if (!done) return '⏳ 正在准备客户数据…' + tail;
+  if (total && total > done) return '⏳ 正在准备客户数据 ' + custFmtN(done) + '/' + custFmtN(total) + '…' + tail;
+  return '⏳ 正在准备客户数据 已 ' + custFmtN(done) + ' 家…' + tail;
+}
+function custLocalWarmingHtml() {
+  return '<div class="empty">' + custWarmText() + '</div>';
+}
+// 预热中：每 2 秒重查一次（能就地看到进度往上走），好了自动回调刷新列表
+let custWarmTimer = null;
+function custStartWarmPoll(retry) {
+  if (custWarmTimer) return;
+  custWarmTimer = setInterval(async () => {
+    const loc = await ensureCustLocal(true);
+    const ready = loc && loc.points && loc.points.length;
+    const el = document.querySelector('#geoTbody .empty, #geoTbody .loading');
+    if (el) el.innerHTML = ready ? '' : custWarmText();
+    if (ready) {
+      clearInterval(custWarmTimer); custWarmTimer = null;
+      if (typeof retry === 'function') retry();
+    }
+  }, 2000);
+}
+
+// 按页拉聚合（订单/拜访/任务三态/报错待审）→ 就地补进 rows；失败静默（基础列照常显示）
+async function custFillPageAgg(rows) {
+  if (!rows || !rows.length) return;
+  // ⭐ 2026-09-27 老板定：这 6 列已**随本地缓存预聚合**（云函数 custMapPoints/custSync 一起下发）→ 直接跳过请求。
+  //   好处：翻页零请求、可按这几列全库排序。⚠️ 兼容：若本地还是旧版缓存（没有 oc 字段），仍回云端按页拉，不会空白。
+  const _p0 = ((custLocal && custLocal.points && custLocal.points[0]) || {});
+  if (_p0.oc !== undefined) return;
+  const ids = rows.map(r => r._id).filter(Boolean);
+  const codes = rows.map(r => r.mallCode).filter(Boolean);
+  let res = null;
+  try { res = await api('custPageAgg', { ids: ids, codes: codes }); } catch (e) { res = null; }
+  if (!res || !res.ok) return;
+  const byCode = res.byCode || {}, byId = res.byId || {};
+  rows.forEach(r => {
+    const a = byId[r._id] || {};
+    r.visitState = a.vs || 'free';
+    r.visitStatus = a.vt || '';
+    r.visitCount = a.vc || 0;
+    r.lastVisitAt = a.lv || '';
+    r.coordFixPending = !!a.cf;
+    const o = byCode[r.mallCode] || {};
+    r.orderCount = o.oc || 0;
+    r.orderAmountSum = o.oa || 0;
+    if (o.lo) r.lastOrderAt = o.lo;
+  });
+}
+// 写后回写（M3）：把改动同步进后台本地缓存文件（**必须先写云端、成功后才调这里**）
+function custPatchLocal(patches, removeIds) {
+  try {
+    fetch('/mapPoints/patch', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patches: patches || [], removeIds: removeIds || [] })
+    }).then(r => r.json()).then(r => {
+      if (!custLocal || !r || !r.ok) return;
+      const byId = {}, rm = {};
+      (patches || []).forEach(p => { if (p && p.id) byId[p.id] = p.set || {}; });
+      (removeIds || []).forEach(id => { if (id) rm[id] = 1; });
+      custLocal.points = custLocal.points.filter(p => !rm[p.i]).map(p => {
+        const set = byId[p.i];
+        if (set) Object.keys(set).forEach(k => { p[k] = set[k]; });
+        return p;
+      });
+    }).catch(() => null);
+  } catch (e) { /* 静默：回写失败不影响主流程（下次全量刷新会对齐） */ }
+}
+// 「数据截至 MM-DD HH:mm」（缓存的同步时间；架构文档铁律 5：缓存必须显示数据时间）
+function custSyncedText() {
+  if (!custLocal || !custLocal.syncedAt) return '';
+  const d = new Date(custLocal.syncedAt);
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
 let geoOpts = { cities: [], districts: {}, bizCircles: {} };
 let geoOptsLoaded = false;
-let geoF = { city: '', district: '', bizCircle: '', q: '', page: 1, size: 50, total: 0, totalPages: 1 };
+// ⭐ 2026-09-27 老板定：客户总表这几列要做排序 → 排序状态存这里（默认建档时间 ca 降序，保持原行为）
+let geoF = { city: '', district: '', bizCircle: '', q: '', page: 1, size: 50, total: 0, totalPages: 1, sort: { k: 'ca', desc: true } };
 
 async function loadGeoOptions() {
-  if (geoOptsLoaded) return;
+  // ⭐ 2026-09-27 M2b：选项**改从本地缓存生成**（不调云端）—— 坑 D 教训：选项必须来自数据，不能写死
+  const c = await ensureCustLocal();
+  if (!c || !c.points.length) return;
+  geoOpts = custGeoFromPoints(c.points);
   geoOptsLoaded = true;
-  try {
-    const r = await api('custGeoOptions');
-    if (r && r.ok) geoOpts = { cities: r.cities || [], districts: r.districts || {}, bizCircles: r.bizCircles || {} };
-  } catch (e) { geoOptsLoaded = false; }
   renderGeoBar();
 }
 
@@ -6415,7 +6865,7 @@ function renderGeoBar() {
     : geoF.district ? ('🗺 ' + geoF.district + ' · 区域总表')
     : geoF.city ? ('🏙 ' + geoF.city + ' · 城市总表')
     : '🌏 全部城市 · 客户总表';
-  $('geoStat').textContent = `共 ${geoF.total} 家`;
+  $('geoStat').textContent = `共 ${geoF.total} 家` + (custSyncedText() ? ` · 数据截至 ${custSyncedText()}` : '');
   const szSel = $('gfSize');
   if (szSel) szSel.value = String(geoF.size);   // 每页条数回填（50 / 100 / 200）
   // 2026-09-26 老板定：页码改成**可输入跳转**（输入框 + 总数 + 「跳」）
@@ -6447,8 +6897,27 @@ function geoPageJump() {
 // 2026-09-26 老板定：每页可选 50 / 100 / 200（后端 pageSize 上限就是 200）
 function geoSizeChange(v) {
   const n = parseInt(v, 10) || 50;
-  geoF.size = (n === 100 || n === 200) ? n : 50;
+  geoF.size = (n === 100 || n === 200 || n === 500) ? n : 50;   // ⭐ 2026-09-27 加 500 档（6 万家后 200 有点少）
   geoF.page = 1;   // 改每页条数就回第 1 页（否则页码可能超出）
+  loadGeoPage();
+}
+
+// ⭐ 2026-09-27 老板定：可排序表头（key 对应 custLocalPage 的 SORT_GET；默认降序，再点切升序）
+function geoSortedTh(key, label, width, cls) {
+  const cur = geoF.sort && geoF.sort.k === key;
+  const arrow = cur ? (geoF.sort.desc === false ? ' ↑' : ' ↓') : '';
+  return `<th class="${cls || ''} sortable${cur ? ' sorted' : ''}" data-sort="${key}"`
+    + ` style="width:${width}px" onclick="geoToggleSort('${key}')" title="点击排序（再点切升/降）">`
+    + label + `<span class="sarr">${arrow}</span></th>`;
+}
+function geoToggleSort(key) {
+  const cur = geoF.sort || {};
+  // ⚠️ 2026-09-27 修：原写法 `desc: !wasDesc` 会让"首次点击新列"直接变成升序（方向反了，实测发现）。
+  //   正确语义：**点击新列 = 降序（大的/新的在前）**，再点同一列才切换方向。
+  geoF.sort = (cur.k === key)
+    ? { k: key, desc: !(cur.desc !== false) }   // 同一列 → 切换升/降
+    : { k: key, desc: true };                   // 新列 → 默认降序
+  geoF.page = 1;                                // 换排序回到第 1 页
   loadGeoPage();
 }
 
@@ -6456,25 +6925,35 @@ async function loadGeoPage() {
   const tbody = $('geoTbody');
   if (!tbody) return;
   loadGeoOptions();
-  tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中…</td></tr>';
-  const res = await api('listCustomers', {
-    city: geoF.city, district: geoF.district, bizCircle: geoF.bizCircle,
-    q: geoF.q, page: geoF.page, pageSize: geoF.size
-  });
-  if (!res.ok) { tbody.innerHTML = `<tr><td colspan="8" class="empty">${esc(res.msg || '加载失败')}</td></tr>`; return; }
-  geoF.total = res.total || 0;
-  geoF.totalPages = res.totalPages || 1;
-  geoF.page = res.page || 1;
-  const list = custWithCode(res.customers || []);
+  tbody.innerHTML = '<tr><td colspan="16" class="loading">加载中…</td></tr>';
+  // ⭐ 2026-09-27 M2b：**改读本地缓存** —— 筛选/排序/分页全在本地算（6 万家也秒开、翻页 0 查询）；
+  //   订单/拜访/任务状态/报错待审 这几列要查别的表 → 按**当前页**调一次 custPageAgg（≤200 家，很快）
+  const cache = await ensureCustLocal();
+  if (!cache || !cache.points.length) {
+    tbody.innerHTML = `<tr><td colspan="16" class="empty">${esc(cache && cache.err ? ('本地缓存读取失败：' + cache.err) : custWarmText())}</td></tr>`;
+    custStartWarmPoll(() => loadGeoPage());   // ⭐ 预热中自动刷新，进度可见
+    return;
+  }
+  const pg = custLocalPage(geoF, '');
+  geoF.total = pg.total; geoF.totalPages = pg.totalPages; geoF.page = pg.page;
+  await custFillPageAgg(pg.rows);                       // 聚合列（订单/拜访/状态/待审）
+  const list = custWithCode(pg.rows);
   $('geoThead').innerHTML = '<tr>'
     + '<th class="no" style="width:22px">#</th>'
     + '<th style="width:38px"></th>'
     + '<th style="width:38px"></th>'
     + '<th class="no" style="width:22px;text-align:center"><input type="checkbox" id="geoChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle" onchange="geoCheckAll(this.checked)"></th>'
-    + '<th style="width:150px">店名</th><th style="width:56px">区域</th><th style="width:86px">商圈</th>'
-    + '<th style="width:62px">全局态</th><th style="width:66px">任务状态</th><th style="width:60px">订单总数</th><th style="width:88px">订单总额</th>'
-    + '<th style="width:64px">最近下单</th><th style="width:64px">最近拜访</th><th style="width:56px">坐标</th>'
-    + '<th style="width:170px">地址</th><th style="width:58px">商城</th>'
+    + '<th class="lft" style="width:150px">店名</th><th style="width:56px">区域</th><th style="width:86px" title="商圈">商圈</th>'
+    + geoSortedTh('vs', '全局态', 62)
+    + geoSortedTh('vt', '任务状态', 66)
+    + geoSortedTh('oc', '订单总数', 60)
+    // ⭐ 2026-09-27 老板定：订单总额列**太宽 → 88px 收到 74px**（仍靠右对齐）
+    + geoSortedTh('oa', '订单总额', 74)
+    + geoSortedTh('lo', '最近下单', 64, 'lft')
+    + geoSortedTh('lv', '最近拜访', 64)
+    + '<th style="width:56px">坐标</th>'
+    + '<th class="lft" style="width:170px">地址</th>'
+    + geoSortedTh('mk', '商城', 58)
     + '</tr>';
   const VS = { pending: '待回访', ongoing: '拜访中', visited: '已回访' };
   const rows = list.map((c, i) => {
@@ -6499,18 +6978,18 @@ async function loadGeoPage() {
       + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px" onclick="showCustDetail('${c._id}')">详情</button></td>`
       + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>`
       + `<td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}"${on} onclick="geoPick('${c._id}', this)"></td>`
-      + `<td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
+      + `<td class="lft" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
       + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.district || '—')}</td>`
       + `<td><span class="pill p-pu">${esc(c.bizCircle || '—')}</span></td>`
       + `<td>${c.visitState === 'in_task' ? '<span class="pill p-blue">任务中</span>' : '—'}</td>`
       + `<td>${taskSt ? '<span class="pill p-gray">' + taskSt + '</span>' : '—'}</td>`
       + `<td style="text-align:center">${c.orderCount || '—'}</td>`
       + `<td style="text-align:right;white-space:nowrap">${amtCell}</td>`
-      + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.lastOrderAt || '—')}</td>`
+      + `<td class="lft" style="white-space:nowrap;color:var(--sub)">${esc(c.lastOrderAt || '—')}</td>`
       + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.lastVisitAt || '—')}</td>`
       + `<td>${coord}</td>`
-      + `<td class="addr" title="${esc(c.address || '')}">${esc(geoAddr(c.address) || '—')}</td>`
-      + `<td>${c.mallCode ? '<span class="pill p-ok">已加</span>' : '<span class="pill p-bad">未加</span>'}</td>`
+      + `<td class="addr lft" title="${esc(c.address || '')}">${esc(geoAddr(c.address) || '—')}</td>`
+      + `<td>${(c.mallCode || c.mallKey) ? '<span class="pill p-ok">已加</span>' : '<span class="pill p-bad">未加</span>'}</td>`
       + '</tr>';
   }).join('');
   tbody.innerHTML = rows || '<tr><td colspan="16" class="empty">这个范围内还没有客户</td></tr>';
@@ -6541,7 +7020,7 @@ function geoAddr(s) {
 function geoNameCell(fullName) {
   const _raw = String(fullName || '');
   const _sp = _raw.indexOf(' ');
-  const _hasCode = _sp > 0 && /^[a-z]\d+$/i.test(_raw.slice(0, _sp));
+  const _hasCode = _sp > 0 && /^[a-z]{1,3}\d+$/i.test(_raw.slice(0, _sp));   // 2026-09-27 修：编号可能是多个字母（永康 AA021）
   return _hasCode
     ? '<span style="display:inline-block;width:44px">' + esc(_raw.slice(0, _sp)) + '</span>' + esc(_raw.slice(_sp + 1))
     : esc(_raw);
@@ -6582,10 +7061,33 @@ async function geoMakeBatch() {
   if (!ids.length) { alert('请先在表格里勾选客户（可点表头方框全选本页）'); return; }
   const name = (prompt('给这个批次起个名字：\n（例如「古山镇商圈 · 第一批」，共 ' + ids.length + ' 家）', '') || '').trim();
   if (!name) return;
-  const res = await api('createManualBatch', { name: name, subtitle: '', customerIds: ids });
+  // ⭐ 2026-09-27 修 -601008（云函数 30s 超时）：**先只建批次**，客户再**分批入批**（每批 100 家）。
+  //   原因：以前把全部客户一次性交给云函数逐个写库（每家 4~6 次 DB 往返），300 家就能撞 30s 超时。
+  //   安全性：addCustomerToBatch 是幂等的（已入批会跳过），中途失败可重跑、不会重复入批。
+  const res = await api('createManualBatch', { name: name, subtitle: '' });
   if (!res || !res.ok) { alert((res && res.msg) || '建立批次失败'); return; }
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const r2 = await api('addCustomersToBatch', { batchId: res.batchId, customerIds: slice });
+    if (!r2 || !r2.ok) {
+      alert('⚠️ 批次「' + name + '」已创建，客户加入了 ' + i + '/' + ids.length + ' 家。\n\n'
+        + '失败原因：' + ((r2 && r2.msg) || '未知') + '\n\n'
+        + '再点一次「📦 建立批次」即可继续（已入批的不会重复），或去「批次管理」里手动加客户。');
+      invalidateBatches();
+      try { await getBatches(true); } catch (e) { /* 静默 */ }
+      return;
+    }
+  }
+  // ⭐ 2026-09-27 M3 写后回写：把这批客户的本地「批次归属」补上（"未分批"过滤立刻准）
+  if (res.batchId) {
+    const _cur = {};
+    ((custLocal && custLocal.points) || []).forEach(p => { _cur[p.i] = p.bi || ''; });
+    custPatchLocal(ids.map(id => ({ id: id, set: { bi: _cur[id] ? (_cur[id] + ',' + res.batchId) : res.batchId } })), []);
+  }
   // 让「批次管理」页的批次卡缓存立刻带上新批次（下次进那页就是最新的）
-  try { const br = await api('listCustomerBatches'); if (br && br.ok) batchCache = br.batches || []; } catch (e) { /* 静默 */ }
+  invalidateBatches();
+  try { await getBatches(true); } catch (e) { /* 静默 */ }
   alert('✅ 已建立批次「' + name + '」（' + ids.length + ' 家）\n\n去「批次管理」页的批次卡里，就能选客户 + 派业务员建任务了。');
   geoClearPicked();   // 建完清空勾选，避免误操作
 }
@@ -6633,12 +7135,11 @@ let custFilter = { city: '', district: '', bizCircle: '', q: '', page: 1, size: 
 let custGeoLoaded = false;
 
 async function loadCustGeoOptions() {
-  if (custGeoLoaded) return;
+  // ⭐ 2026-09-27 M2b：同客户管理页 —— 选项改从**本地缓存**生成
+  const c = await ensureCustLocal();
+  if (!c || !c.points.length) return;
+  custGeo = custGeoFromPoints(c.points);
   custGeoLoaded = true;
-  try {
-    const r = await api('custGeoOptions');
-    if (r && r.ok) custGeo = { cities: r.cities || [], districts: r.districts || {}, bizCircles: r.bizCircles || {} };
-  } catch (e) { custGeoLoaded = false; }
   buildCustFilterBar();
 }
 
@@ -6736,23 +7237,26 @@ async function loadCustomers(batchId, batchName) {
   unbatchMode = batchId === '';
   const theadEl = batchMode ? $('batchThead') : $('custThead');
   const tbodyEl = batchMode ? $('batchTbody') : $('custTbody');
-  const cols = 8;
+  const cols = batchMode ? 13 : 8;   // ⚠️ 2026-09-27：批次表加了「商圈」列 → 13 列（占位/提示行要对上）
   tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="loading">加载中…</td></tr>`;
-  // ⭐ 2026-09-26：非批次模式走「三层入口 + 分页」—— 后端只返回当前页（默认 50 条），不再全量拉
-  const res = batchMode
-    ? await api('listCustomers', { batchId })
-    : await api('listCustomers', {
-        city: custFilter.city, district: custFilter.district, bizCircle: custFilter.bizCircle,
-        q: custFilter.q, page: custFilter.page, pageSize: custFilter.size
-      });
-  if (!batchMode && res.ok) {
-    custFilter.total = res.total || 0;
-    custFilter.totalPages = res.totalPages || 1;
-    custFilter.page = res.page || 1;
+  // ⭐ 2026-09-27 M2b：**非批次 / 未分批 = 读本地缓存**（筛选/分页本地算，6 万家也秒开）；
+  //   真批次（batchId）仍走云端 —— 批内量小、且要的是实时状态
+  let list = [];
+  if (batchMode && !unbatchMode) {
+    const res = await api('listCustomers', { batchId });
+    if (!res.ok) { tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="empty">${res.msg || '加载失败'}</td></tr>`; return; }
+    list = res.customers.filter(c => c.customerType === curMode);
+  } else {
+    const cache = await ensureCustLocal();
+    if (!cache || !cache.points.length) {
+      tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="empty">${esc(cache && cache.err ? ('本地缓存读取失败：' + cache.err) : '本地数据还没准备好 —— 去「🌐 战况监控」点「🔄 更新地图数据」，好了再回来')}</td></tr>`;
+      return;
+    }
+    const pg = custLocalPage(Object.assign({}, custFilter, { unbatched: !!unbatchMode }), curMode);
+    custFilter.total = pg.total; custFilter.totalPages = pg.totalPages; custFilter.page = pg.page;
+    await custFillPageAgg(pg.rows);
+    list = pg.rows;
   }
-  if (!res.ok) { tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="empty">${res.msg || '加载失败'}</td></tr>`; return; }
-  let list = res.customers.filter(c => c.customerType === curMode);
-  if (unbatchMode) list = list.filter(c => !(c.batchIds || []).length);
   // 2026-09-25 老板定：后台**显示层**统一把「客户编号」拼回店名（`mallKey`，如 `c347 早阳肉包(科创路店)`）。
   // ⚠️ 只加工后台这一份内存缓存 —— **云端数据与手机端都不动**；于是列表 / 弹窗 / 搜索候选等
   //    **所有**显示店名的地方会自动一致地带编号（老板原话："店名中的编号还是显示出来吧"）。
@@ -6772,6 +7276,8 @@ async function loadCustomers(batchId, batchName) {
       <th style="width:46px"></th>
       <th class="no" style="width:26px;text-align:center"><input type="checkbox" class="batchChkAll" id="batchChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle"></th>
       <th style="width:15%">店名</th>
+      <!-- ⭐ 2026-09-27 老板定：批次客户表**加「商圈」列**（与客户管理页同款胶囊样式） -->
+      <th style="width:96px;text-align:center;white-space:nowrap">商圈</th>
       <th style="width:86px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：任务中在前；再点：无任务在前" onclick="toggleBatchSort('visitState')">全局态${batchSortArrow('visitState')}</th>
       <th style="width:96px;text-align:center;cursor:pointer;white-space:nowrap" title="点击：待回访→拜访中→已回访（无任务沉底）；再点：无任务置顶倒序" onclick="toggleBatchSort('visitStatus')">任务状态${batchSortArrow('visitStatus')}</th>
       <!-- 2026-09-25 老板定：在「最近下单」左边加「**订单总数**」（实际订单条数，可点排序） -->
@@ -6831,13 +7337,42 @@ async function loadCustomers(batchId, batchName) {
 
 // ===================== 批次管理（2026-09-07 老板定稿，方案见交接文档 §7.12；2026-09-26 页签改名，原「客户管理」） =====================
 let batchCache = [];
+
+// ⭐ 2026-09-27 老板定：批次列表**共用一份会话内缓存**（60 秒 + 写后主动失效）。
+//   起因：全后台有 8 处调 listCustomerBatches，每次进「批次管理」/「新建任务」都真发一次请求 —— 典型的
+//   "高频、重复、开销大"（符合"该用缓存"的判断）；而**批内客户列表与任务状态仍走云端**（量小、要实时）。
+//   force=true 用于"刚写完必然要最新"的场景；其它写操作（删批次/派单等）靠 60 秒自然过期即可。
+let batchCacheAt = 0;              // 缓存时间戳（0 = 无缓存）
+let batchCacheUnbatched = 0;       // 未分批数（loadBatches 要用）
+let batchCachePending = null;      // 并发合并：多处同时调用只发一次请求
+async function getBatches(force) {
+  const FRESH = 60 * 1000;
+  if (!force && batchCacheAt && (Date.now() - batchCacheAt) < FRESH) {
+    return { ok: true, batches: batchCache, unbatched: batchCacheUnbatched, cached: true };
+  }
+  if (batchCachePending) return batchCachePending;
+  batchCachePending = (async () => {
+    let r = null;
+    try { r = await api('listCustomerBatches'); } catch (e) { r = null; }
+    if (r && r.ok) {
+      batchCache = r.batches || [];
+      batchCacheUnbatched = r.unbatched || 0;
+      batchCacheAt = Date.now();
+    }
+    batchCachePending = null;
+    return r;
+  })();
+  return batchCachePending;
+}
+function invalidateBatches() { batchCacheAt = 0; }   // 写后失效（需要"立刻最新"时配合 getBatches(true)）
+
 let curBatchId = '';
 let curBatchName = '';
 let curBatchCount = 0;
 
 async function loadBatches() {
-  const res = await api('listCustomerBatches');
-  if (!res.ok) { $('batchCards').innerHTML = `<div class="empty">${esc(res.msg || '加载失败')}</div>`; return; }
+  const res = await getBatches();                  // ⭐ 共用缓存（60 秒，进页面秒开）
+  if (!res || !res.ok) { $('batchCards').innerHTML = `<div class="empty">${esc((res && res.msg) || '加载失败')}</div>`; return; }
   batchCache = res.batches || [];
   renderBatchCards(res.batches, res.unbatched);
   renderBatchSum(res.summary);
@@ -7060,6 +7595,9 @@ function deleteSelectedCustomers() {
           if (blocked.length > 5) msg += '\n…还有 ' + (blocked.length - 5) + ' 家';
         }
         alert(msg);
+        // ⭐ 2026-09-27 M3 写后回写：把**真删掉**的从本地缓存移除（被跳过的不动）
+        const _delOk = ids.filter(x => !blocked.some(b => (b.id || b._id) === x));
+        if (_delOk.length) custPatchLocal([], _delOk);
         batchChecked.clear();
         loadCustomers(curBatchId, curBatchName); // 刷新当前表
         loadBatches();                           // 未分批计数会变，刷新批次列表
@@ -7097,7 +7635,15 @@ function fmtDistText(m) {
 
 // ===== 批次详情分页（2026-09-09 老板定：固定每页 20 条 + 上一页/下一页；勾选跨页保留；搜索对全部客户过滤后再分页） =====
 let batchPage = 1;
-const batchPageSize = 20;
+// ⭐ 2026-09-27 老板定：批次客户表**每页数量可选**（原来写死 20）—— 与客户管理页保持一致的档位
+let batchPageSize = 20;
+function batchSizeChange(v) {
+  batchPageSize = Math.max(5, Math.min(1000, parseInt(v, 10) || 20));
+  const sel = $('batchPageSizeSel');
+  if (sel && sel.value !== String(batchPageSize)) sel.value = String(batchPageSize);   // 让下拉与内部值对齐
+  batchPage = 1;                 // 换每页条数回到第 1 页
+  renderBatchTbody();
+}
 let batchSearchQ = '';
 let unbatchMode = false; // 未分批模式（行模板用）
 
@@ -7143,7 +7689,7 @@ function renderBatchTbody() {
     //    `c.name` 此时已是「编号 + 空格 + 店名」（custWithCode 拼过），这里按第一个空格拆开用。
     const _raw = String(fullName);
     const _sp = _raw.indexOf(' ');
-    const _hasCode = _sp > 0 && /^[a-z]\d+$/i.test(_raw.slice(0, _sp));
+    const _hasCode = _sp > 0 && /^[a-z]{1,3}\d+$/i.test(_raw.slice(0, _sp));   // 2026-09-27 修：编号可能是多个字母（永康 AA021）
     const nameCell = _hasCode
       ? '<span style="display:inline-block;width:44px">' + esc(_raw.slice(0, _sp)) + '</span>' + esc(_raw.slice(_sp + 1))
       : esc(_raw);
@@ -7155,6 +7701,7 @@ function renderBatchTbody() {
       <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 8px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>
       <td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}" ${batchChecked.has(c._id) ? 'checked' : ''}></td>
       <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(fullName)}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${nameCell}</span></td>
+      <td style="text-align:center;white-space:nowrap">${c.bizCircle ? '<span class="pill p-pu">' + esc(c.bizCircle) + '</span>' : '—'}</td>
       <td style="white-space:nowrap;text-align:center">${globalSt}</td>
       <td style="white-space:nowrap;text-align:center">${taskSt}</td>
       <td style="text-align:center;white-space:nowrap">${c.orderCount ? c.orderCount : '<span style="color:#C3C9D2">0</span>'}</td>
@@ -7164,15 +7711,11 @@ function renderBatchTbody() {
       <td class="light" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address || '—')}">${esc(shortAddr(c.address) || '—')}</td>
     </tr>`;
   }).join('');
-  // 2026-09-09 老板定：最后一页不足 20 条补空行，表格保持与前几页相同的固定高度（翻页不跳动）
-  // ⚠️ colspan 跟着列数走 —— 2026-09-25 加了「订单总数」后共 **12 列**（列序见上方表头），两处都要同步
+  // ⚠️ 2026-09-27 老板定（学习客户管理列表）：**最后一页不再补空行**。
+  //   原逻辑（2026-09-09）是"补满整页高度、翻页不跳动"——那时表格是整页滚动；
+  //   现在批次表已改成**固定高度 + 框内滚动**，翻页本来就不跳动，补空行只会多出一片空白。
   let rowsHtml = rows;
-  if (pageList.length < batchPageSize && total > 0) {
-    for (let k = pageList.length; k < batchPageSize; k++) {
-      rowsHtml += '<tr class="row-fill"><td colspan="12" style="height:36px">&nbsp;</td></tr>';
-    }
-  }
-  box.innerHTML = rowsHtml || `<tr><td colspan="12" class="empty">${q ? '没有匹配的客户' : '暂无客户，需要导入客户表'}</td></tr>`;
+  box.innerHTML = rowsHtml || `<tr><td colspan="13" class="empty">${q ? '没有匹配的客户' : '暂无客户，需要导入客户表'}</td></tr>`;
   renderBatchPageBar(total, pages, q);
   syncBatchChkAll();   // 2026-09-25：每页重绘后回写表头「全选」方框状态（翻页/搜索/排序后不会残留上一页的勾选态）
 }
@@ -7180,16 +7723,32 @@ function renderBatchTbody() {
 function renderBatchPageBar(total, pages, q) {
   const bar = $('batchPagebar');
   if (!bar) return;
-  const need = total > batchPageSize;
+  // ⚠️ 2026-09-27 修（老板报障：「选每页 500，往下拖动时下面选页那一行消失了」）：
+  //   原逻辑 `total > batchPageSize` —— 只有**超过 1 页**才显示分页条。
+  //   于是选 500 条后（批次 329 家 → 1 页）整条 bar 连同「每页数量」下拉一起消失，看起来像坏了。
+  //   改为**只要有客户就常显**：页数信息仍在，翻页按钮在 1 页时禁用，但「每页 N 条」始终可用。
+  const need = total > 0;
   bar.style.display = need ? 'flex' : 'none';
+  batchLastPages = pages;
   if (need) {
-    $('batchPageNum').textContent = batchPage;
+    const pIn = $('batchPageInput');
+    if (pIn) { pIn.value = batchPage; pIn.max = pages; }
     $('batchPageTotal').textContent = pages;
     $('batchPrevBtn').disabled = batchPage <= 1;
     $('batchNextBtn').disabled = batchPage >= pages;
+    const f = $('batchFirstBtn'), l = $('batchLastBtn');
+    if (f) f.disabled = batchPage <= 1;
+    if (l) l.disabled = batchPage >= pages;
   }
   const cnt = $('batchSearchCount');
   if (cnt) { cnt.style.display = q ? '' : 'none'; cnt.textContent = '筛出 ' + total + ' 家'; }
+}
+
+let batchLastPages = 1;   // 总页数（供「» 最后一页」用；renderBatchPageBar 里更新）
+function batchPageJump() {
+  const el = $('batchPageInput');
+  const v = Math.max(1, Math.min(batchLastPages || 1, parseInt(el && el.value, 10) || 1));
+  batchGotoPage(v);
 }
 
 function batchGotoPage(p) {
@@ -7369,11 +7928,12 @@ async function openManualBatch() {
   $('mbSubInput').value = '';
   $('mbSearch').value = '';
   $('mbList').innerHTML = '<div class="loading">加载中…</div>';
-  const res = await api('listCustomers');
-  // 2026-09-25 老板定：列表显示的店名要带完整编号 → 统一过 custWithCode（只影响后台内存）
-  mbCusts = res.ok ? custWithCode(res.customers).filter(c => c.customerType === 'mall') : [];
-  const br = await api('listCustomerBatches');
-  mbBatches = br.ok ? (br.batches || []) : [];
+  // ⭐ 2026-09-27：改读**本地缓存**（原来走 listCustomers，云端只返回前 50 条 → 列表缺客户）
+  const all = await custLocalList({ mode: 'mall' });
+  if (!all) { $('mbList').innerHTML = custLocalWarmingHtml(); return; }
+  mbCusts = all;
+  const br = await getBatches();                   // ⭐ 共用缓存
+  mbBatches = (br && br.ok) ? (br.batches || []) : [];
   mbSelected = new Set();
   renderManualBatchList();
 }
@@ -7429,7 +7989,7 @@ async function openBatchPick() {
   $('batchPickSelCount').textContent = '已勾选 0 个批次';
   $('batchPickList').innerHTML = '<div class="loading">加载中…</div>';
   $('batchPickOvl').style.display = 'flex';
-  const res = await api('listCustomerBatches');
+  const res = await getBatches();                  // ⭐ 共用缓存
   const list = (res && res.ok) ? (res.batches || []) : [];
   $('batchPickList').innerHTML = list.length ? list.map(b =>
     `<div style="display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);cursor:pointer" onclick="toggleBatchPick('${b._id}', this)">
@@ -7483,9 +8043,10 @@ async function openAddCustToBatch() {
   $('addCustOvl').style.display = 'flex';
   $('addCustSearch').value = '';
   $('addCustList').innerHTML = '<div class="loading">加载中…</div>';
-  const res = await api('listCustomers');
-  // 2026-09-25 老板定：列表显示的店名要带完整编号 → 统一过 custWithCode（只影响后台内存）
-  addCustAll = res.ok ? custWithCode(res.customers).filter(c => c.customerType === 'mall' && !(c.batchIds || []).length) : [];
+  // ⭐ 2026-09-27：改读**本地缓存**（原来走 listCustomers，云端只返回前 50 条 → 未分批客户列不全）
+  const all = await custLocalList({ mode: 'mall', unbatched: true });
+  if (!all) { $('addCustList').innerHTML = custLocalWarmingHtml(); return; }
+  addCustAll = all;
   addCustSelected = new Set();
   renderAddCustList();
 }
@@ -7779,7 +8340,7 @@ async function loadPeople() {
         <td>${a.role === 'super_admin' ? '<span style="color:#C4CAD1;font-size:12px">—</span>' : `<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${a._id}','${esc(a.name)}')">删除</button>`}</td>
       </tr>`;
     }).join('')
-    : '<tr><td colspan="7" class="empty">加载失败</td></tr>';
+    : '<tr><td colspan="8" class="empty">加载失败</td></tr>';
 }
 
 // 老板白名单开关（2026-09-09 老板定：仅指定管理员账号可进老板页面/战况地图）
@@ -9152,9 +9713,11 @@ async function confirmMallMatch() {
       mallLibCache = r.malls || [];
       updateMallLibHint();
     }
-    const cRes = await api('listCustomers', {});
-    if (!cRes.ok) throw new Error(cRes.msg || '拉取客户列表失败');
-    const all = cRes.customers || [];
+    // ⭐ 2026-09-27：改读**本地缓存**（原来走 listCustomers，云端只返回前 50 条 →
+    //   **比对会静默只比前 50 家**，最危险的一处）。本地缓存含 6 万家、全量参与比对。
+    //   ⚠️ 本地轻量字段没有 phone2（比对时按空处理，主号仍参与匹配），精度影响很小。
+    const all = await custLocalList({ mode: '' });
+    if (!all) throw new Error('客户数据正在预热（首次打开后台约几秒），请稍候重试');
     const visitCusts = curMatchBatchId
       ? all.filter(c => c.customerType === 'mall' && (c.batchIds || []).includes(curMatchBatchId))
       : all.filter(c => c.customerType === 'mall');

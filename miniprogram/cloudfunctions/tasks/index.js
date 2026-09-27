@@ -60,8 +60,30 @@ exports.main = async (event) => {
   //   权限：**登录的业务员即可读** —— 客户档案本来就全公司共享（大家都要上门拜访）；
   //   写入类动作不在本次范围（后续再开）。
   if (action === 'custDetail') return await custDetail(salesmanId, event, isBoss);
+  // ⭐ 2026-09-27 新增：业务员给客户档案补**门店照片**（详情页三个相框，点空框现场拍 → 云存储 → 写档案）
+  //   权限：登录业务员即可写（照片全公司共享，现场拍本就该业务员做）
+  if (action === 'saveCustPhoto') return await saveCustPhoto(salesmanId, event);
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
+
+// ⭐ 2026-09-27 新增：门店照片落库（设计文档 §四：平台图打底 + 现场拍覆盖 —— 这里只管"现场拍"那一半）
+//   入参：{ customerId, fileID, thumbID?, index? }   出参：{ ok, photos }
+//   ⚠️ 只动对应格子（index 0~2），其它格子原样保留；写 updatedAt（本地缓存的增量同步靠它）
+async function saveCustPhoto(salesmanId, event) {
+  const customerId = String((event && event.customerId) || '');
+  const fileID = String((event && event.fileID) || '');
+  const thumbID = String((event && event.thumbID) || '');
+  const index = Math.min(Math.max(Number(event && event.index) || 0, 0), 2);
+  if (!customerId || !fileID) return { ok: false, code: 'BAD_ARG', msg: '缺少参数' };
+  const cRes = await db.collection('customers').doc(customerId).get().catch(() => null);
+  if (!cRes || !cRes.data) return { ok: false, code: 'CUST_NOT_FOUND', msg: '客户不存在' };
+  const old = Array.isArray(cRes.data.photos) ? cRes.data.photos.slice(0, 3) : [];
+  while (old.length < 3) old.push(null);
+  old[index] = { fileID: fileID, thumbID: thumbID, by: salesmanId || '', at: Date.now() };
+  const photos = old.filter(Boolean);
+  await db.collection('customers').doc(customerId).update({ data: { photos: photos, updatedAt: Date.now() } }).catch(() => null);
+  return { ok: true, photos: photos, msg: '已保存到客户档案 ✓' };
+}
 
 // ================= 老板手机端（2026-09-09 §7.13）只读接口 =================
 // 首页数据：今日统计 + 全量任务总览（任务带 salesmanId/salesmanName）
@@ -848,6 +870,12 @@ async function custDetail(salesmanId, event, isBoss) {
     salesmanName: v.salesmanName || '',
     audioCount: (Array.isArray(v.audios) && v.audios.length) || (v.audio && v.audio.fileID ? 1 : 0),
     trText: (v.trEdited && v.trEdited.text) || '',
+    // ⭐ 2026-09-27：手机端详情页的「拜访历史」要**真播放录音 + 显示样品**
+    //   （原来只给 audioCount / trText，前端只能画进度条模拟；这里补 fileID 与时长、样品文本）
+    audios: ((Array.isArray(v.audios) && v.audios.length) ? v.audios : ((v.audio && v.audio.fileID) ? [v.audio] : []))
+      .map(a => ({ fileID: (a && a.fileID) || '', duration: Number(a && a.duration) || 0 }))
+      .filter(a => a.fileID).slice(0, 6),
+    samples: String(v.samples || ''),
     thumbs: (v.photos || []).map(p => (p && (p.thumbID || p.fileID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 3)
   }));
 
@@ -862,10 +890,19 @@ async function custDetail(salesmanId, event, isBoss) {
   const rmk = await fetchAllPaged('customer_remarks', { customerId }, {});
   rmk.sort((a, b) => (b.at || 0) - (a.at || 0));
 
+  // —— ⑤ 现场提报（待审核：招牌菜 / 设施 / 团购外卖）—— 手机端在对应位置显示「（待审核）」（修正 008）——
+  const fr = await db.collection('coord_fix_requests')
+    .where({ customerId, status: 'pending', type: 'field' }).limit(50).get().catch(() => ({ data: [] }));
+  const fieldReports = (fr.data || []).map(f => ({
+    _id: f._id, kind: f.kind || '', value: f.value || '', flagName: f.flagName || '', flagTo: !!f.flagTo
+  }));
+
   return {
     ok: true,
     // 这家客户是否正在拜访中（前端据此把底部按钮变成蓝色「拜访中」）
     visitOngoing: visitOngoing,
+    // ⭐ 2026-09-27：该客户**待审核的现场提报**（手机端据此显示"待审核"）
+    fieldReports: fieldReports,
     // ⚠️ 2026-09-25 检查时加固：**不能把整个文档原样返回给业务员** ——
     //   customers 里混着财务/工商字段（bank/bankAccount/creditLimit/invoiceType/legalPerson/regCapital…）。
     //   虽然**本批 463 家这些字段全是空的**（已扫过全部分片确认），但换批更全的数据就可能有值。

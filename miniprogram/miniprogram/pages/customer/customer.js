@@ -38,6 +38,12 @@ function mdCn(dateStr) {                         // 'YYYY-MM-DD' → '8月24日'
   const p = String(dateStr).slice(0, 10).split('-');
   return p.length === 3 ? (Number(p[1]) + '月' + Number(p[2]) + '日') : String(dateStr);
 }
+function fmtDur(sec) {                           // 秒 → '2 分 30 秒' / '45 秒'（录音时长，2026-09-27）
+  const n = Math.round(Number(sec) || 0);
+  if (!n) return '';
+  const m = Math.floor(n / 60), s = n % 60;
+  return m ? (m + ' 分' + (s ? (' ' + s + ' 秒') : '')) : (s + ' 秒');
+}
 function uniqueJoin(a, b, c) {                   // 大中小类去重后拼（'美食 · 东北菜'）
   const seen = [], out = [];
   [a, b, c].forEach(x => {
@@ -89,7 +95,7 @@ function listedYears(v) {
 }
 
 // ---------- 组装：把 custDetail 的返回变成页面要的 D ----------
-function buildD(res, photoUrls) {
+function buildD(res, photoUrls, recUrls) {
   const c = res.customer || {};
   const p = c.plat || {};
   const pm = c.platManual || {};
@@ -115,6 +121,14 @@ function buildD(res, photoUrls) {
   const fac = facRaw.split(/\s+/).map(x => x.trim())
     .filter(x => x && !/^收录\d+年$/.test(x));   // 配套设施里混着的「收录N年」滤掉
   (pm.facs || []).forEach(x => { if (x && fac.indexOf(x) < 0) fac.push(x); });
+  // ⭐ 2026-09-27：业务员现场提报（待管理员审核）—— 菜品/设施并入列表并标「（待审核）」；团购外卖记 flagPending
+  const frs = res.fieldReports || [];
+  const flagPending = {};
+  frs.forEach(f => {
+    if (f.kind === 'dish' && f.value) { const t = f.value + '（待审核）'; if (dishes.indexOf(t) < 0) dishes.push(t); }
+    else if (f.kind === 'fac' && f.value) { const t = f.value + '（待审核）'; if (fac.indexOf(t) < 0) fac.push(t); }
+    else if (f.kind === 'flag' && f.flagName) flagPending[f.flagName] = true;
+  });
 
   // 订单：日期 + 金额 + 商品行（点开看明细）
   const ordList = orders.map(o => ({
@@ -138,10 +152,16 @@ function buildD(res, photoUrls) {
       who: esc(v.salesmanName) || '—',
       mins: v.duration ? ('时长 ' + Math.round(v.duration / 60) + ' 分钟') : '',
       txt: esc(v.remark) || esc(v.trText) || '',
-      samp: '',
+      samp: esc(v.samples) || '',
       latest: i === 0,
       open: false,
-      rec: null,
+      // ⭐ 2026-09-27：真录音（fileID 已在 onLoad 换成临时 URL）—— 有 URL 才出播放条；
+      //   转写文字独立判断（wxml 里 rec.txt 为空就不出那一块）
+      rec: (function () {
+        const au = (v.audios || []).filter(a => a && a.fileID && recUrls && recUrls[a.fileID]);
+        if (!au.length) return null;
+        return { url: recUrls[au[0].fileID], dur: fmtDur(au[0].duration), txt: esc(v.trText) || '', playing: false, pct: 0 };
+      })(),
       shots: (v.thumbs || []).slice(0, 3)
     };
   });
@@ -160,6 +180,13 @@ function buildD(res, photoUrls) {
       ['最近下单', esc(c.lastOrderAt) ? (mdCn(c.lastOrderAt) + (daysAgo(c.lastOrderAt) ? '（' + daysAgo(c.lastOrderAt) + '）' : '')) : '—'],
       ['最近浏览商城', esc(c.lastBrowseAt) ? (mdCn(c.lastBrowseAt) + (daysAgo(c.lastBrowseAt) ? '（' + daysAgo(c.lastBrowseAt) + '）' : '')) : '—']
     ],
+    // ⭐ 2026-09-27：商城信息卡头小字（原 wxml 里写死「最近购买 8月24日」）——
+    //   最近购买 → 没有则 最近浏览 → 再没有 注册；未入商城直接「未加入商城」
+    mallSub: hasMall
+      ? (esc(c.lastOrderAt) ? ('最近购买 ' + mdCn(c.lastOrderAt))
+        : (esc(c.lastBrowseAt) ? ('最近浏览 ' + mdCn(c.lastBrowseAt))
+          : (esc(c.mallJoinedAt) ? ('注册 ' + mdCn(c.mallJoinedAt)) : '')))
+      : '未加入商城',
     photos: photos,
     purchase: {
       total: (res.orderTotal || 0) + ' 单',
@@ -171,6 +198,10 @@ function buildD(res, photoUrls) {
     },
     orders: ordList,
     rate: esc(p.rating) || '',
+    // ⭐ 2026-09-27：卡头小字（原来把「人均 ¥46/人」写死在 wxml 里 —— 那是演示稿的假数据）
+    rateSub: (esc(p.rating) ? (esc(p.rating) + ' 分') : '平台未收录')
+      + (esc(p.rating) && esc(p.avgPriceText) ? (' · ' + esc(p.avgPriceText)) : ''),
+    newShop: !!esc(p.newShop),      // ⭐「新店」蓝胶囊（平台"新店标签"有值就显示）
     rateTxt: esc(p.reviewCount) ? (esc(p.reviewCount) + ' 条评价' + (p.reviewCount2025 ? '（2025年 ' + esc(p.reviewCount2025) + ' 条）' : '')) : '',
     bars: [['口味', esc(p.taste) || '—', 0], ['环境', esc(p.env) || '—', 0], ['服务', esc(p.service) || '—', 0]]
       .map(b => [b[0], b[1], (parseFloat(b[1]) || 0) / 5 * 100]),
@@ -179,6 +210,7 @@ function buildD(res, photoUrls) {
       ['评论总数', esc(p.reviewCount) ? (esc(p.reviewCount) + ' 条') : '—']
     ].concat(Number(p.chainCount) >= 1 ? [['连锁情况', esc(p.chainCount) + ' 家']] : []),   // 单店不显示（老板定）
     dishes: dishes, flags: [['团购', !!p.groupon], ['外卖', !!p.takeout]],
+    flagPending: flagPending,      // ⭐ 2026-09-27：待审核的团购/外卖（wxml 显示「· 待审核」）
     // 商圈：老板 2026-09-25 定 —— **也不显示省和地级市** →
     //   原来拼了 `c.region`（"浙江省>金华市>永康市"）会重复出现省级信息，现在**只显示商圈名**（平台 regionName）。
     fac: fac, region: esc(p.regionName),
@@ -188,6 +220,18 @@ function buildD(res, photoUrls) {
     visiting: !!res.visitOngoing,
     remarks: remarks, history: history
   };
+}
+
+// ⭐ 2026-09-27：默认展开规则（设计文档 §六；原来写死"备注+历史"）——
+//   ① 备注 / 拜访历史有内容 → 只展开这两张（有内容的那张才开）
+//   ② 两张都没内容、但有商城资料 → 展开「🏪 商城信息」
+//   ③ 什么都没有 → 全部收起（只剩标题栏）
+function defaultOpen(d) {
+  const hasRemark = (d.remarks || []).length > 0;
+  const hasHist = (d.history || []).length > 0;
+  const open = { mall: false, purchase: false, rate: false, serv: false, remark: hasRemark, hist: hasHist };
+  if (!hasRemark && !hasHist && d.hasMall) open.mall = true;
+  return open;
 }
 
 const D = {
@@ -281,10 +325,12 @@ Page({
     //（客户 = 橙针 60% 透明 + 常显店名气泡；「我」= 蓝点，只有定位成功才加）
     markers: [],
     polyline: [],
-    open: { mall: false, purchase: false, rate: false, serv: false, remark: true, hist: true },
+    open: { mall: false, purchase: false, rate: false, serv: false, remark: false, hist: false },   // ⭐ 实际展开由 defaultOpen(d) 算（见 onLoad）
     // 弹层
     addShow: false, addKind: '', addTitle: '', addPh: '', addVal: '',
     flagShow: false, flagName: '', flagTo: true,
+    // ⭐ 2026-09-27：📍报错弹层（接 coordfix 真提交）
+    fixShow: false, fixNote: '', fixShots: ['', '', ''],
     sheetShow: false,
     viewerShow: false, viewerUrl: ''
   },
@@ -322,8 +368,20 @@ Page({
         } catch (e) { /* 取图失败不影响其它内容 */ }
       }
 
-      const d = buildD(res, photoUrls);
-      this.setData({ d, markers: this._mkMarkers(d, false), polyline: [] });
+      // ⭐ 2026-09-27：拜访录音同理（audio fileID → 临时 URL；一次最多 20 个，够覆盖近几条历史）
+      let recUrls = {};
+      const recIds = [];
+      (res.visits || []).forEach(v => (v.audios || []).forEach(a => { if (a && a.fileID) recIds.push(a.fileID); }));
+      if (recIds.length) {
+        try {
+          const r2 = await wx.cloud.getTempFileURL({ fileList: recIds.slice(0, 20) });
+          (r2.fileList || []).forEach(x => { if (x.fileID && x.tempFileURL) recUrls[x.fileID] = x.tempFileURL; });
+        } catch (e) { /* 取录音失败不影响其它内容 */ }
+      }
+
+      const d = buildD(res, photoUrls, recUrls);
+      // ⭐ 2026-09-27：默认展开按内容算（defaultOpen），不再写死
+      this.setData({ d, open: defaultOpen(d), markers: this._mkMarkers(d, false), polyline: [] });
       if (d.name) wx.setNavigationBarTitle({ title: d.name });
     } catch (e) {
       // 2026-09-25 修：错误**直接显示在页面上**（原来只用 toast，会被 hideLoading 盖掉 → 只看到"一直加载中"，没法排查）
@@ -378,16 +436,39 @@ Page({
   },
   addInput(e) { this._addVal = e.detail.value; },
   addNo() { this.setData({ addShow: false }); },
-  addYes() {
+  // ⭐ 2026-09-27：录入**真提报**（修正 008）—— 提交到 coordfix 云函数 → 后台审核 → 采纳后才写进客户档案；
+  //   审核期间在卡片里显示「（待审核）」
+  async addYes() {
     const v = String(this._addVal || '').trim();
+    const kind = this.data.addKind;
+    if (!v) { this.setData({ addShow: false }); return; }
+    const ok = await this._submitField({ kind: kind, value: v });
+    if (!ok) return;
     const d = this.data.d;
-    if (v) {
-      if (this.data.addKind === 'dish') d.dishes = d.dishes.concat([v]);
-      else if (this.data.addKind === 'fac') d.fac = d.fac.concat([v]);
-      this.setData({ d });
-      wx.showToast({ title: '已加入（演示：退出重进会恢复）', icon: 'none', duration: 1600 });
+    const t = v + '（待审核）';
+    if (kind === 'dish') d.dishes = d.dishes.concat([t]);
+    else if (kind === 'fac') d.fac = d.fac.concat([t]);
+    this.setData({ d, addShow: false });
+  },
+  // 提报公共逻辑（招牌菜/设施/团购外卖共用）：成功 → toast + 返回 true
+  async _submitField(payload) {
+    if (this._fieldBusy) return false;
+    if (!this._cid) { wx.showToast({ title: '缺少客户参数', icon: 'none' }); return false; }
+    this._fieldBusy = true;
+    wx.showLoading({ title: '提交中…', mask: true });
+    try {
+      const res = await api.call('coordfix', Object.assign({ customerId: this._cid }, payload));
+      wx.hideLoading();
+      this._fieldBusy = false;
+      if (!res || !res.ok) { wx.showModal({ title: '提交失败', content: (res && res.msg) || '请稍后再试', showCancel: false }); return false; }
+      wx.showToast({ title: res.msg || '已提报', icon: 'none', duration: 2000 });
+      return true;
+    } catch (e) {
+      wx.hideLoading();
+      this._fieldBusy = false;
+      wx.showModal({ title: '提交失败', content: (e && (e.errMsg || e.message)) || '网络异常', showCancel: false });
+      return false;
     }
-    this.setData({ addShow: false });
   },
 
   // ---------- 团购 / 外卖：点了切「已开 / 未开」----------
@@ -397,30 +478,120 @@ Page({
     this.setData({ flagShow: true, flagName: name, flagTo: !cur });
   },
   flagNo() { this.setData({ flagShow: false }); },
-  flagYes() {
+  // ⭐ 2026-09-27：点改也走**真提报**（后台审核后生效）
+  async flagYes() {
+    const name = this.data.flagName, to = this.data.flagTo;
+    const ok = await this._submitField({ kind: 'flag', flagName: name, flagTo: to });
+    if (!ok) return;
     const d = this.data.d;
-    d.flags = d.flags.map(f => (f[0] === this.data.flagName ? [f[0], this.data.flagTo] : f));
+    d.flags = d.flags.map(f => (f[0] === name ? [f[0], to] : f));
+    const fp = Object.assign({}, d.flagPending);
+    fp[name] = true;
+    d.flagPending = fp;
     this.setData({ d, flagShow: false });
   },
 
-  // ---------- 门店照片：点空框 → 就地拍照（2026-09-25 改：真调相机；**存档案属阶段 3**）----------
+  // ---------- 门店照片：点空框 → 就地拍照 → **传云存储 + 写客户档案**（2026-09-27 真落库）----------
   takePhoto(e) {
+    const i = Number(e.currentTarget.dataset.i) || 0;
+    wx.chooseMedia({
+      count: 1, mediaType: ['image'], sourceType: ['camera', 'album'], sizeType: ['compressed'],
+      success: async (r) => {
+        const f = (r.tempFiles || [])[0];
+        if (!f || !f.tempFilePath) return;
+        const cid = this._cid;
+        if (!cid) { wx.showToast({ title: '缺少客户参数', icon: 'none' }); return; }
+        wx.showLoading({ title: '上传中…', mask: true });
+        try {
+          const up = await wx.cloud.uploadFile({
+            cloudPath: 'custphotos/' + cid + '/' + Date.now() + '_' + i + '.jpg',
+            filePath: f.tempFilePath
+          });
+          const res = await api.call('tasks', { action: 'saveCustPhoto', customerId: cid, fileID: up.fileID, index: i });
+          wx.hideLoading();
+          if (!res || !res.ok) { wx.showModal({ title: '保存失败', content: (res && res.msg) || '请稍后再试', showCancel: false }); return; }
+          const d = this.data.d;
+          const photos = d.photos.slice();
+          photos[i] = f.tempFilePath;
+          d.photos = photos;
+          this.setData({ d });
+          wx.showToast({ title: '已保存到客户档案', icon: 'success' });
+        } catch (err) {
+          wx.hideLoading();
+          wx.showModal({ title: '上传失败', content: (err && (err.errMsg || err.message)) || '网络异常，请重试', showCancel: false });
+        }
+      },
+      fail: () => { /* 用户取消，不打扰 */ }
+    });
+  },
+
+  // ---------- 📍 坐标报错（2026-09-27：从"只弹提示"改为**真提交** coord_fix_requests）----------
+  //   流程：点报错 → 弹层（原因可选 + 现场照片可选）→ 提交时**现场精确定位** → 传照片 → 调 coordfix 云函数
+  //   ⚠️ 云函数侧：同客户已有 pending 报错会拒绝（去重）；老板模式=模拟成功不落库
+  openFix() {
+    this.setData({ fixShow: true, fixNote: '', fixShots: ['', '', ''] });
+  },
+  fixClose() { this.setData({ fixShow: false }); },
+  fixNoteIn(e) { this.setData({ fixNote: e.detail.value }); },
+  fixShot(e) {
     const i = Number(e.currentTarget.dataset.i) || 0;
     wx.chooseMedia({
       count: 1, mediaType: ['image'], sourceType: ['camera', 'album'], sizeType: ['compressed'],
       success: (r) => {
         const f = (r.tempFiles || [])[0];
         if (!f || !f.tempFilePath) return;
-        const d = this.data.d;
-        const photos = d.photos.slice();
-        photos[i] = f.tempFilePath;
-        d.photos = photos;
-        this.setData({ d });
-        // ⚠️ 「上传云存储 + 写回客户档案」是阶段 3 的事；现在只在页面显示，退出即消失
-        wx.showToast({ title: '已选取（保存到档案待下一阶段）', icon: 'none', duration: 1800 });
+        const s = this.data.fixShots.slice();
+        s[i] = f.tempFilePath;
+        this.setData({ fixShots: s });
       },
-      fail: () => { /* 用户取消，不打扰 */ }
+      fail: () => { /* 用户取消 */ }
     });
+  },
+  async submitFix() {
+    if (this._fixBusy) return;
+    this._fixBusy = true;
+    const cid = this._cid;
+    if (!cid) { wx.showToast({ title: '缺少客户参数', icon: 'none' }); this._fixBusy = false; return; }
+    try {
+      // ① 现场精确定位（失败即拦截 —— 报错的意义就是"人在这儿、坐标不对"）
+      wx.showLoading({ title: '正在精确定位…', mask: true });
+      const loc = await new Promise((resolve, reject) => {
+        wx.getLocation({ type: 'gcj02', isHighAccuracy: true, highAccuracyExpireTime: 5000, success: resolve, fail: reject });
+      });
+      // ② 现场照片（可选，最多 3 张）先传云存储
+      const shots = (this.data.fixShots || []).filter(Boolean).slice(0, 3);
+      const photos = [];
+      for (let k = 0; k < shots.length; k++) {
+        wx.showLoading({ title: '上传照片 ' + (k + 1) + '/' + shots.length + '…', mask: true });
+        const up = await wx.cloud.uploadFile({
+          cloudPath: 'coordfix/' + cid + '/' + Date.now() + '_' + k + '.jpg',
+          filePath: shots[k]
+        });
+        photos.push({ fileID: up.fileID, thumbID: '' });
+      }
+      // ③ 提交（云函数 coordfix：写 coord_fix_requests 待后台审核）
+      wx.showLoading({ title: '提交中…', mask: true });
+      const res = await api.call('coordfix', {
+        customerId: cid,
+        lat: loc.latitude,
+        lng: loc.longitude,
+        note: String(this.data.fixNote || '').trim().slice(0, 100),
+        photos: photos
+      });
+      wx.hideLoading();
+      this._fixBusy = false;
+      if (!res || !res.ok) { wx.showModal({ title: '提交失败', content: (res && res.msg) || '请稍后再试', showCancel: false }); return; }
+      this.setData({ fixShow: false });
+      wx.showModal({ title: '已提交 ✓', content: res.msg || '管理员审核后会更新客户坐标', showCancel: false });
+    } catch (err) {
+      wx.hideLoading();
+      this._fixBusy = false;
+      wx.showModal({
+        title: '定位失败',
+        content: '请走到店门口、确认手机定位已打开，再重新提交。\n（' + ((err && (err.errMsg || err.message)) || '未知原因') + '）',
+        showCancel: false
+      });
+    }
   },
 
   // ---------- 大图查看 ----------
@@ -467,35 +638,55 @@ Page({
     wx.navigateTo({ url: '/pages/visit/visit' });
   },
 
-  // ---------- 拜访录音：模拟播放（进度条走一遍；真机里放真实录音文件）----------
+  // ---------- 拜访录音：**真播放**（2026-09-27 从"进度条模拟"改为 wx.createInnerAudioContext）----------
+  //   ⚠️ obeyMuteSwitch=false 是项目铁律（真机静音键下也要出声）；同一时刻只放一条（单实例）
+  _stopAudio() {
+    if (this._audio) {
+      try { this._audio.stop(); } catch (e) { /* 静默 */ }
+      try { this._audio.destroy(); } catch (e) { /* 静默 */ }
+      this._audio = null;
+    }
+    this._audioIdx = -1;
+  },
+  _setRec(i, patch) {
+    const h = this.data.d.history.slice();
+    if (!h[i] || !h[i].rec) return;
+    h[i] = Object.assign({}, h[i], { rec: Object.assign({}, h[i].rec, patch) });
+    this.setData({ 'd.history': h });
+  },
   playRec(e) {
     const i = Number(e.currentTarget.dataset.i) || 0;
     const arr = this.data.d.history.slice();
-    if (!arr[i] || !arr[i].rec) return;
-    const rec = Object.assign({}, arr[i].rec);
-    if (this._recTimer) { clearInterval(this._recTimer); this._recTimer = null; }
-    if (rec.playing) {                       // 再点一下 = 暂停
-      rec.playing = false;
-      arr[i] = Object.assign({}, arr[i], { rec });
-      this.setData({ 'd.history': arr });
+    if (!arr[i] || !arr[i].rec || !arr[i].rec.url) return;
+    const wasPlaying = arr[i].rec.playing && this._audioIdx === i;
+    this._stopAudio();
+    if (wasPlaying) {                       // 再点一下 = 停止
+      this._setRec(i, { playing: false, pct: 0 });
       return;
     }
-    rec.playing = true;
-    arr[i] = Object.assign({}, arr[i], { rec });
-    this.setData({ 'd.history': arr });
-    this._recTimer = setInterval(() => {
-      const h = this.data.d.history.slice();
-      const r = Object.assign({}, h[i].rec);
-      r.pct = Math.min((r.pct || 0) + 4, 100);
-      if (r.pct >= 100) {
-        clearInterval(this._recTimer); this._recTimer = null;
-        r.playing = false; r.pct = 0;          // 放完复位
-      }
-      h[i] = Object.assign({}, h[i], { rec: r });
-      this.setData({ 'd.history': h });
-    }, 100);
+    const au = wx.createInnerAudioContext();
+    au.obeyMuteSwitch = false;
+    au.src = arr[i].rec.url;
+    this._audio = au;
+    this._audioIdx = i;
+    this._setRec(i, { playing: true, pct: 0 });
+    au.onTimeUpdate(() => {
+      const k = this._audioIdx;
+      if (k < 0) return;
+      const dur = Number(au.duration) || 0;
+      const pct = dur ? Math.min(Math.round(Number(au.currentTime) / dur * 100), 100) : 0;
+      this._setRec(k, { pct: pct });
+    });
+    au.onEnded(() => { const k = this._audioIdx; this._stopAudio(); if (k >= 0) this._setRec(k, { playing: false, pct: 0 }); });
+    au.onError(() => {
+      const k = this._audioIdx;
+      this._stopAudio();
+      if (k >= 0) this._setRec(k, { playing: false, pct: 0 });
+      wx.showToast({ title: '录音播放失败（可稍后重进页面再试）', icon: 'none' });
+    });
+    au.play();
   },
-  onUnload() { if (this._recTimer) { clearInterval(this._recTimer); this._recTimer = null; } },
+  onUnload() { this._stopAudio(); },
 
   // 阻止弹层内部点击冒泡到遮罩
   noop() {}

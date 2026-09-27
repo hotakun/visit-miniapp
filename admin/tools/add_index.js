@@ -8,11 +8,14 @@ const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json')
 
 // 2026-09-26：三层入口（城市/区域/商圈）+ 点评导入匹配 + 列表排序 需要的索引
 const IDX = [
-  { name: 'platShopUuid', keys: [{ name: 'platShopUuid', direction: '1' }] },  // ⭐ 导入每行按它查，刚需
-  { name: 'city',         keys: [{ name: 'city',         direction: '1' }] },
-  { name: 'district',     keys: [{ name: 'district',     direction: '1' }] },
-  { name: 'bizCircle',    keys: [{ name: 'bizCircle',    direction: '1' }] },
-  { name: 'createdAt',    keys: [{ name: 'createdAt',    direction: '-1' }] }, // 客户列表按它倒序翻页
+  { coll: 'customers', name: 'platShopUuid', keys: [{ name: 'platShopUuid', direction: '1' }] },  // ⭐ 导入每行按它查，刚需
+  { coll: 'customers', name: 'city',         keys: [{ name: 'city',         direction: '1' }] },
+  { coll: 'customers', name: 'district',     keys: [{ name: 'district',     direction: '1' }] },
+  { coll: 'customers', name: 'bizCircle',    keys: [{ name: 'bizCircle',    direction: '1' }] },
+  { coll: 'customers', name: 'createdAt',    keys: [{ name: 'createdAt',    direction: '-1' }] }, // 客户列表按它倒序翻页
+  // ⭐ 2026-09-27 M2b：按页聚合（custPageAgg）要按 customerCode / customerId 查 → 没索引会全表扫
+  { coll: 'orders', name: 'customerCode', keys: [{ name: 'customerCode', direction: '1' }] },
+  { coll: 'visits', name: 'customerId',   keys: [{ name: 'customerId',   direction: '1' }] },
 ];
 
 (async () => {
@@ -30,7 +33,7 @@ const IDX = [
   console.log('✅ access_token 获取成功');
 
   for (const ix of IDX) {
-    const body = { env: cfg.envId, collection_name: 'customers', create_indexes: [ix] };
+    const body = { env: cfg.envId, collection_name: ix.coll || 'customers', create_indexes: [{ name: ix.name, keys: ix.keys }] };
     let r = {};
     try {
       const res = await fetch(`https://api.weixin.qq.com/tcb/updateindex?access_token=${t.access_token}`, {

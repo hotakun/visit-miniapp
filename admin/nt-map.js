@@ -248,7 +248,7 @@ function initMap() {
   if (mapLibLoaded) { buildMap(); return; }
   mapLibLoaded = true;
   const s = document.createElement('script');
-  s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + encodeURIComponent(mapKey);
+  s.src = 'https://map.qq.com/api/gljs?v=1&key=' + encodeURIComponent(mapKey);
   s.onload = () => buildMap();
   s.onerror = () => { alert('腾讯地图加载失败：请检查 Key 与域名白名单配置'); };
   document.head.appendChild(s);

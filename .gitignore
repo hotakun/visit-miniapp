@@ -42,3 +42,8 @@ admin/cache/
 admin/current-port.txt
 # 第三方地图下载工具（19MB+ 的 C# 项目，不是我们的代码）
 MapDownloader-2.0/
+
+# 2026-09-27：抓取的店铺图（平台图）不入仓库 —— 属于数据，且会随抓取增长
+admin/media/
+# 壳程序编译中间产物（重编译即重新生成，不是源码）
+*.new.exe

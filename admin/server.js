@@ -516,15 +516,76 @@ const server = http.createServer(async (req, res) => {
     })().catch(e => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: false, msg: e.message })); });
     return;
   }
+  // ⭐ 2026-09-27 M3：写后回写 —— 前端改完（备注/坐标/字段/删除/建批次）把那几条同步进本地缓存
+  if (req.method === 'POST' && req.url === '/mapPoints/patch') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      let reqBody = {};
+      try { reqBody = JSON.parse(body || '{}'); } catch (e) { /* 空体当空对象 */ }
+      let r;
+      try { r = store.patch(reqBody.patches, reqBody.removeIds); }
+      catch (e) { r = { ok: false, msg: e.message }; }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(r));
+    });
+    return;
+  }
   if (req.method === 'GET' && req.url.indexOf('/mapPoints') === 0) {
     const c = store.read();
     // 没有 / 不是今天的 → 触发一次后台预热（不等它），同时把现有数据先给前端
     const warming = !store.isFreshToday(c);
     if (warming) store.refresh(callApi, STORE_AUTH).catch(() => null);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    // ⭐ 2026-09-27：一并把预热进度带给前端（老板要看到「已准备 3.8万/6万」）
+    const prog = (store.status() || {}).progress || { done: 0, total: 0, phase: '' };
     res.end(JSON.stringify(c
-      ? { ok: true, syncedAt: c.syncedAt, count: c.points.length, points: c.points, warming: warming }
-      : { ok: true, syncedAt: 0, count: 0, points: [], warming: true }));
+      ? { ok: true, syncedAt: c.syncedAt, count: c.points.length, points: c.points, warming: warming, progress: prog }
+      : { ok: true, syncedAt: 0, count: 0, points: [], warming: true, progress: prog }));
+    return;
+  }
+
+  // ⭐ 2026-09-27：**地图本地缓存用的 Service Worker**（浏览器只允许同源注册，必须由后台提供）
+  if (req.method === 'GET' && req.url.split('?')[0] === '/sw-map-cache.js') {
+    try {
+      const body = fs.readFileSync(path.join(__dirname, 'sw-map-cache.js'));
+      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(body);
+    } catch (e) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('sw-map-cache.js not found');
+    }
+    return;
+  }
+
+  // ⭐ 2026-09-27：**平台图索引**（前端据此判断"这家有没有平台图" —— 没有就不渲染 <img>，避免控制台一堆 404）。
+  //   ⚠️ 必须放在下面 /media/ 静态路由**之前**（否则静态路由会去找 media/plat/_index 文件 → 404）。
+  if (req.method === 'GET' && req.url.indexOf('/media/plat/_index') === 0) {
+    let uuids = [];
+    try {
+      uuids = fs.readdirSync(path.join(__dirname, 'media', 'plat'))
+        .filter(n => /^[A-Za-z0-9_-]{4,}$/.test(n));   // 只认目录名（跳过 _progress.json 之类）
+    } catch (e) { uuids = []; }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify({ ok: true, count: uuids.length, uuids: uuids }));
+    return;
+  }
+
+  // ===== ⭐ 2026-09-27：本地媒体文件（店铺照片等）=====
+  //   背景：老板定「照片以后台本地保存为主」（省云端存储费）—— 平台图抓下来就存在 admin/media/plat/<platShopUuid>/1.jpg，
+  //   后台客户详情页直接用 /media/... 读本地文件显示（业务员要看的才另行走"按需上云"）。
+  if (req.method === 'GET' && req.url.indexOf('/media/') === 0) {
+    const rel = (() => { try { return decodeURIComponent(req.url.slice('/media/'.length).split('?')[0]); } catch (e) { return ''; } })();
+    const mediaRoot = path.join(__dirname, 'media');
+    const safe = path.normalize(path.join(mediaRoot, rel));
+    if (!safe.startsWith(mediaRoot)) { res.writeHead(403); res.end(); return; }
+    fs.readFile(safe, (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not Found'); return; }
+      const ext = path.extname(safe).toLowerCase();
+      const mime = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'max-age=3600' });
+      res.end(data);
+    });
     return;
   }
 

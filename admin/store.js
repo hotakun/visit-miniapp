@@ -17,12 +17,14 @@ const path = require('path');
 
 const CACHE_DIR = path.join(__dirname, 'cache');
 const FILE = path.join(CACHE_DIR, 'map-points.json');
-const VERSION = 2;              // ⭐ 2026-09-27 M2a：字段从 7 项扩到 12 项 → 升版本，旧缓存自动失效并重拉
+const VERSION = 5;              // ⭐ 2026-09-27 M2b：字段 12 → 18 项（店名原值/建档时间/客户类型/电话/备注/批次归属）→ 升版本，旧缓存自动作废重拉
 const PAGE_LIMIT = 1000;        // 每片 1000 条（云函数单次返回上限 100KB，1000 条约 100KB 内）
 const MAX_PAGES = 1000;         // 硬上限（100 万条），防死循环
 
 let syncing = false;            // 是否正在拉取（前端显示进度用）
-let progress = { done: 0, phase: '' };
+// ⭐ 2026-09-27 老板定：预热时前端要能看到「已准备 3.8万/6万」→ progress 里带上 total。
+//   total 取「上一次缓存的条数」作参考（首次无缓存时为 0，前端就只显示已拉多少）。
+let progress = { done: 0, total: 0, phase: '' };
 
 function ensureDir() {
   try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch (e) { /* 已存在 */ }
@@ -72,7 +74,9 @@ function status() {
 async function refresh(callApi, cred) {
   if (syncing) return { ok: false, msg: '正在拉取中，请稍候' };
   syncing = true;
-  progress = { done: 0, phase: '开始' };
+  let expected = 0;
+  try { const old = read(); if (old && Array.isArray(old.points)) expected = old.points.length; } catch (e) { /* 忽略 */ }
+  progress = { done: 0, total: expected, phase: '开始' };
   const auth = cred || {};
   const t0 = Date.now();
   try {
@@ -93,7 +97,13 @@ async function refresh(callApi, cred) {
     //   客户管理页的表格要用；一条约 180 字节 → 5 万家 ≈ 9MB，仍可控。
     const slim = points.map(p => ({
       i: p.i, n: p.n, la: p.la, ln: p.ln, c: p.c, d: p.d, b: p.b,
-      ad: p.ad || '', cs: p.cs || '', cst: p.cst || '', mc: p.mc || '', mk: p.mk || '', u: p.u || 0
+      ad: p.ad || '', cs: p.cs || '', cst: p.cst || '', mc: p.mc || '', mk: p.mk || '', u: p.u || 0,
+      // ⭐ M2b 新增 6 项（本地列表渲染用）
+      nr: p.nr || '', ca: p.ca || 0, ct: p.ct || '', ph: p.ph || '', rm: p.rm || '', bi: p.bi || '', mj: p.mj || '',
+      // ⭐ 2026-09-27 老板定：「列表这几列今后都要做排序」→ 聚合结果也要进缓存，否则本地排不了序。
+      //   ⚠️ 这里必须与云函数 custMapPoints/custSync 下发的字段**逐一对齐** —— 少写一个就会被"瘦身"筛掉，
+      //   表现为"云函数明明返回了、界面却拿不到"（本次踩过一次）。
+      oc: p.oc || 0, oa: p.oa || 0, lo: p.lo || '', vc: p.vc || 0, lv: p.lv || '', vs: p.vs || 'free', vt: p.vt || ''
     }));
     write({ v: VERSION, syncedAt: Date.now(), count: slim.length, points: slim });
     progress.phase = '完成';
@@ -109,6 +119,29 @@ async function refresh(callApi, cred) {
   }
 }
 
+// ⭐ 2026-09-27 M3：**写后回写**（架构文档 §四）—— 前端改完（备注/坐标/字段/删除/建批次）把**那几条**
+//   同步进本地缓存，不用等下次全量刷新。写路径不变：**永远先写云端，成功后才调这里**。
+//   patches: [{ id, set: { 短键: 值 } }] ｜ removeIds: ['_id', ...]
+function patch(patches, removeIds) {
+  const c = read();
+  if (!c || !Array.isArray(c.points)) return { ok: false, msg: '本地缓存还不存在（没预热过）', patched: 0, removed: 0 };
+  const byId = {};
+  (patches || []).forEach(p => { if (p && p.id) byId[p.id] = p.set || {}; });
+  const rm = {};
+  (removeIds || []).forEach(id => { if (id) rm[id] = 1; });
+  let patched = 0, removed = 0;
+  const points = [];
+  c.points.forEach(p => {
+    if (rm[p.i]) { removed++; return; }
+    const set = byId[p.i];
+    if (set) { Object.keys(set).forEach(k => { p[k] = set[k]; }); patched++; }
+    points.push(p);
+  });
+  // syncedAt 保持不动（它表示“上次全量同步时间”，界面的「数据截至」用它）
+  write({ v: VERSION, syncedAt: c.syncedAt, count: points.length, points: points });
+  return { ok: true, patched: patched, removed: removed, count: points.length };
+}
+
 // 启动时自动预热：当天没拉过就静默拉一次（**不阻塞服务启动**）
 function startAutoRefresh(callApi, cred) {
   const c = read();
@@ -120,4 +153,4 @@ function startAutoRefresh(callApi, cred) {
   refresh(callApi, cred).catch(() => null);
 }
 
-module.exports = { read, write, status, refresh, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
+module.exports = { read, write, status, refresh, patch, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
