@@ -3537,9 +3537,14 @@ async function resetTestData(event) {
 //   'all'  = 全清（在上面基础上连 认领/批内成员/批次/客户档案 一起清空，用于换新数据结构重导）
 // 云存储：清 visits 时先把 fileID 攒进 settings.__wipeFiles（清了记录就找不到文件了），
 //        全部清完后再走 __files__ 阶段分批删，删完把暂存文档清掉。
+// ⭐ 2026-09-27 补漏（老板要"换新数据结构重新导入 6 万家"前的检查发现）：
+//   · `customer_remarks`（客户备注）原来**两个 scope 都不清** → 换数据后会留孤儿备注，现补上；
+//   · `locations`（业务员位置轨迹）原来**"重置业务数据"不清**（半清不净）→ 现补上；
+//   · `orders` / `order_items` **故意不清** —— 订单按 customerCode 关联，新数据编码一致即可复用；
+//     真要"干净重来"再手工处理（清客户不会误删订单）。
 const WIPE_STAGES = {
-  test: ['tasks', 'coord_fix_requests', 'transcripts', 'visits', '__files__', '__reset_cust__'],
-  all: ['tasks', 'coord_fix_requests', 'transcripts', 'mall_claims', 'batch_members', 'customer_batches', 'customers', 'visits', '__files__']
+  test: ['tasks', 'coord_fix_requests', 'transcripts', 'visits', 'locations', 'customer_remarks', '__files__', '__reset_cust__'],
+  all: ['tasks', 'coord_fix_requests', 'transcripts', 'mall_claims', 'batch_members', 'customer_batches', 'customers', 'visits', 'locations', 'customer_remarks', '__files__']
 };
 const WIPE_ROWS = 80;   // 每轮每个集合最多删 80 条文档（确保单次调用几秒内返回）
 const WIPE_FIDS = 100;  // 每轮最多删 100 个云存储文件

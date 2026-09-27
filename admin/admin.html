@@ -8741,14 +8741,15 @@ async function saveRegionCode() {
 async function wipeRun(scope, onProgress) {
   let st = { i: 0, stats: {}, files: 0, fids: 0 };
   let guard = 0;
-  while (guard++ < 800) {                       // 800 轮封顶：80 条/轮 × 800 = 6.4 万条，够用
+  while (guard++ < 2000) {                      // ⭐ 2026-09-27：800 → 2000 轮（80 条/轮 × 2000 = 16 万条）
+                                                //   6 万客户约需 755 轮，原来零余量；现在留足
     const res = await api('wipeData', { scope, st });
     if (!res || !res.ok) throw new Error((res && res.msg) || '清理失败');
     if (res.st) st = res.st;
     if (typeof onProgress === 'function') onProgress(res, guard);
     if (res.done) return st;
   }
-  throw new Error('清理轮次超过 800 轮，已中止（数据量异常大，请分批手动处理）');
+  throw new Error('清理轮次超过 2000 轮，已中止（数据量异常大，请分批手动处理）');
 }
 
 // 重置业务数据（2026-09-07 老板要重新测试）：双重警告确认，不可恢复
@@ -8783,6 +8784,21 @@ async function runWipe(scope, label) {
     if (typeof loadTasks === 'function') loadTasks();
     if (typeof loadCustomers === 'function') loadCustomers();
     if (typeof loadCustomerBatches === 'function') loadCustomerBatches();
+    // ⭐ 2026-09-27 补漏：**清完必须重建本地地图缓存**。
+    //   地图读的是本地文件 `admin/cache/map-points.json`（由 server.js 托管），
+    //   云函数清库**不会**动本地文件 —— 不重建的话，清完地图上还显示"已经删掉的客户"（老板会以为没清干净）。
+    //   顺带把内存里的客户缓存也丢掉，避免下次读旧数据。
+    try {
+      trackCustCache = null; trackCustCacheAt = 0;              // 丢掉内存缓存
+      custAggCache = null; custAggCacheKey = '';
+      setTxt('⏳ ' + label + '完成，正在重建地图缓存…');
+      const rr = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json()).catch(() => null);
+      if (rr && rr.ok) setTxt('✅ ' + label + '完成（地图缓存已重建：' + (rr.count || 0) + ' 家）');
+      else setTxt('⚠️ ' + label + '完成，但地图缓存重建失败 —— 请手动点「🔄 更新地图数据」');
+    } catch (e) {
+      setTxt('⚠️ ' + label + '完成，但地图缓存重建失败 —— 请手动点「🔄 更新地图数据」');
+    }
+    setTimeout(() => { if (btn) btn.style.display = 'none'; }, 6000);
   } catch (e) {
     setTxt('❌ ' + label + '中断：' + ((e && e.message) || e));
     alert(label + '失败：' + ((e && e.message) || e) + '\n\n可再次点击继续（已清的不会重复清）。');
