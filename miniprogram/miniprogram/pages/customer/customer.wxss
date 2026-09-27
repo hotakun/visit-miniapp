@@ -230,19 +230,17 @@
    被裁掉的正好是腾讯地图 logo/版权那一块。圆角/边框/阴影都挪到 wrapper 上，否则裁完底部两角会变方。 */
 .cmap-wrap { position: relative; width: 100%; height: 150px; margin-top: 9px; border-radius: 12px; overflow: hidden;
   border: 1px solid #EFF1F5; box-shadow: 0 2px 8px rgba(31,36,48,.05); }
-.cmap { width: 100%; height: calc(100% + 40px); }
+.cmap { width: 100%; height: 100%; }   /* ⭐ 2026-09-27：改回 100%（原 +40px 是为了把腾讯 logo 裁掉，现在要恢复显示） */
 /* 经纬度（2026-09-25 老板定）：**单独一行、不许换行**（原来那句太长了会折行）。
    图例小蓝点 / 绿短线（.cdot / .cwalk）已随「我的位置 / 步行路线」一起去掉，样式不再需要。 */
 .coords { margin-top: 6px; font-size: 11px; color: #99A2AE; text-align: right; white-space: nowrap; }
 
-/* ===== 「聚火地图」地图标识（2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成这个） =====
-   logo 已被上面的"裁剪法"裁掉，所以 badge **不再需要不透明底** → 改成和**后台一致**的「橙字白描边」。
-   指南针用「圆环 + 旋转 45° 的小方块」拼（view 支持 border-radius / transform），白边靠多层 text-shadow。 */
-.jh-badge { position: absolute; right: 8px; bottom: 8px; z-index: 99; pointer-events: none;
-  display: flex; align-items: flex-end; gap: 3px; }
-.jh-compass { width: 13px; height: 13px; border: 2px solid #F5531C; border-radius: 50%; margin-right: 3px;
-  box-shadow: 0 0 0 2px #fff;   /* 白圈 = 图标的白边 */
+/* ===== 「聚火地图」标识（⭐ 2026-09-27：腾讯 logo 已恢复显示，本 badge 同时保留 → 挪到**左上角**，不再压右下角的腾讯 logo） =====
+   白底半透明胶囊，保证压在地图上也看得清；指南针 = 圆环 + 旋转 45° 小方块。 */
+.jh-badge { position: absolute; left: 8px; top: 8px; z-index: 99; pointer-events: none;
+  display: flex; align-items: center; gap: 3px;
+  background: rgba(255,255,255,.94); border-radius: 8px; padding: 2px 6px; }
+.jh-compass { width: 11px; height: 11px; border: 2px solid #F5531C; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; }
-.jh-needle { width: 5px; height: 5px; background: #F5531C; transform: rotate(45deg); }
-.jh-word { font-size: 12px; font-weight: 800; letter-spacing: -0.2px; line-height: 1; color: #F5531C;
-  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 3px #fff; }
+.jh-needle { width: 4px; height: 4px; background: #F5531C; transform: rotate(45deg); }
+.jh-word { font-size: 11px; font-weight: 800; letter-spacing: -0.2px; line-height: 1; color: #F5531C; }

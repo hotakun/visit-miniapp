@@ -9,6 +9,8 @@
          正好落在被裁掉的范围里。（官方无隐藏接口，"裁剪"是社区通用做法，视觉上等于去掉。）
          因为不再需要"盖住"，badge 改用**普通 view + z-index** —— 小程序 map 自基础库 2.7.0 起支持同层渲染，
          官方已推荐用 view 替代 cover-view（cover-view 的 CSS 支持太有限，是上一版没生效的原因之一）。 -->
+    <!-- ⭐ 2026-09-27：腾讯地图 logo/审图号**恢复显示**（撤销裁剪法）；「聚火地图」badge 同时保留，
+         位置改到**左上角**（腾讯 logo 在右下角，不能互相压）。 -->
     <view class="jh-badge">
       <view class="jh-compass"><view class="jh-needle"></view></view>
       <view class="jh-word">聚火地图</view>

@@ -34,3 +34,11 @@ miniprogram/miniapp/
 miniprogram/project.miniapp.json
 miniprogram/miniprogram/app.miniapp.json
 __pycache__/
+
+# ===== 2026-09-27 补充 =====
+# 本地缓存（会随数据增长，不该进仓库）
+admin/cache/
+# 端口文件（每次启动都写，制造噪音）
+admin/current-port.txt
+# 第三方地图下载工具（19MB+ 的 C# 项目，不是我们的代码）
+MapDownloader-2.0/

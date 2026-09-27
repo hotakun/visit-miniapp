@@ -117,6 +117,61 @@ input,textarea{-webkit-user-select:text;user-select:text}
    .main 是 overflow:hidden，里面的页面必须**自己** overflow-y:auto；
    这一行原来漏了导入页，所以它从来不能滚，以前内容短没暴露出来。 */
 #page-import{flex:1;min-height:0;overflow-y:auto;padding-bottom:6px}
+/* ⭐ 2026-09-26 补 #page-geo（🏪 客户管理 页，新增；原名「📍 地域管理」，2026-09-26 老板定改名）—— 同上面的道理：
+   .main 是 overflow:hidden，页面必须**自己** overflow-y:auto，否则内容超一屏就滚不动。 */
+#page-geo{flex:1;min-height:0;overflow-y:auto;padding-bottom:6px}
+/* ⭐ 2026-09-26 🏪 客户管理（原名 📍 地域管理）：表格样式**照演示稿**（_scratch/客户管理页面-操作演示-v2.html）
+   —— 表头 #F7F9FC + sticky、单元格 8px 9px、**数据行一律不加粗**（font-weight:400） */
+#page-geo .gsel{height:32px;border:1px solid var(--line);border-radius:8px;padding:0 8px;font-size:12.5px;font-weight:400;color:#333A44;background:#fff;min-width:96px;outline:0;font-family:inherit}
+#page-geo .ginp{width:190px;height:32px;border:1px solid var(--line);border-radius:8px;padding:0 9px;font-size:12.5px;font-weight:400;outline:0;font-family:inherit}
+#page-geo .lb{font-size:12.5px;font-weight:700;color:var(--sub);white-space:nowrap}
+#page-geo .tw{overflow-x:auto}
+/* ⭐ 2026-09-26 修（老板报障："上下滚动条就是看不到"，连系统设成"始终显示"也不行）：
+   → **自定义 ::-webkit-scrollbar 反过来把滚动条弄没了**（WebView2 下渲染异常）。
+   所以这里**整套删掉自定义滚动条样式**，回到**系统原生滚动条**（老板已把 Win 设成"始终显示"）。
+   宽度、颜色、常显/淡出全由系统控制，不再由我们插手。 */
+#page-geo .ct{width:100%;border-collapse:collapse;font-size:12.5px}
+#page-geo .ct th,#page-geo .ct td{border-bottom:1px solid var(--line);padding:8px 9px;text-align:left;vertical-align:middle;font-weight:400;color:#333A44}
+/* ⭐ 2026-09-26 老板定：① **表格内容尽量不换行**（地址/店名超长时用省略号，悬停看全）
+   ② **编号 / 详情 / 备注 / 勾选 四列收紧**，别占太多地方（左右内边距压到 4px，列宽已在JS里改小） */
+#page-geo .ct th,#page-geo .ct td{white-space:nowrap}
+#page-geo .ct th:nth-child(1),#page-geo .ct td:nth-child(1),
+#page-geo .ct th:nth-child(2),#page-geo .ct td:nth-child(2),
+#page-geo .ct th:nth-child(3),#page-geo .ct td:nth-child(3),
+#page-geo .ct th:nth-child(4),#page-geo .ct td:nth-child(4){padding-left:4px;padding-right:4px}
+#page-geo .ct th{background:#F7F9FC;font-weight:700;color:#374151;white-space:nowrap;position:sticky;top:0;z-index:2}
+#page-geo .ct .addr{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#page-geo .ct tbody tr:hover{background:#FAFBFC}
+#page-geo .ct tr.picked{background:#FFF7F2}
+#page-geo .tbtn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:2px 6px;font-size:12px;cursor:pointer;line-height:1.4}
+#page-geo .cb{width:14px;height:14px;cursor:pointer;accent-color:#F5531C;vertical-align:middle}
+#page-geo .pill{font-weight:700}
+#page-geo .p-pu{background:#F3EDFC;color:#7C3AED}
+#page-geo .p-or{background:var(--primary-tint);color:var(--primary-deep)}
+#page-geo .p-ok{background:var(--green-tint);color:var(--green)}
+#page-geo .p-bad{background:#FCEBEC;color:var(--danger)}
+#page-geo .p-warn{background:var(--warn-tint);color:#B97A0B}
+#page-geo .p-blue{background:var(--blue-tint);color:var(--blue)}
+#page-geo .p-gray{background:#EEF1F4;color:var(--sub)}
+/* ⭐ 2026-09-26 照演示稿的**核心布局**（演示稿第 16-19 行那句「表格是主体，要占最大屏幕面积」）：
+   · 整页**竖排 flex**、上下各条只占"够用"高度；
+   · 表格区 flex:1 + min-height:0 吃掉所有剩余空间，**在内部滚动（整页不滚）**；
+   · 表头 sticky 靠的就是这个内部滚动容器。 */
+/* ⭐ 2026-09-26 真相（老板观察："有细白条但看不到滚动块"）：
+   根因不在本页，而是 **admin.html 第 22-23 行的全局规则**把**所有**滚动条藏了：
+     *::-webkit-scrollbar{width:0;height:0;background:transparent}
+     *{scrollbar-width:none;scrollbar-color:transparent transparent}
+   其中 `scrollbar-color:transparent transparent` 把**滑块设成了全透明**（轨道可能露一条细边）——
+   这正是"有轨道、无滑块"的现象。
+   → 对策：在**本页把滚动条恢复可见**（特异度高于 `*`，能盖住它）：
+     scrollbar-width:auto + scrollbar-color:灰色滑块/浅灰轨道
+   ⚠️ 注意：一旦写了 scrollbar-width，Chromium 就会**忽略 ::-webkit-scrollbar** 自定义，
+      所以本页不再写 webkit 伪元素（上一版的已删）。
+   同时**回退上一版“页面级滚动”的改法**（那会让列头/分页条跟着滚）——
+   回到“表格区内部滚”（工具栏与分页条固定、表头吸顶）。 */
+#page-geo{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+#page-geo > .card{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0}
+#page-geo .tw{flex:1;min-height:0;overflow:auto;padding:0 12px;scrollbar-width:thin;scrollbar-color:#AEB8C4 #F1F3F6}   /* thin = 系统细档（≈8px，比 auto 的≈15px 细一半）；嫌粗细再说 */
 .topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;position:relative}
 .topbar .pt{font-size:20px;font-weight:800}
 .topbar .pt small{display:block;font-size:12px;color:var(--sub);font-weight:500;margin-top:3px}
@@ -431,7 +486,7 @@ tr.row-off td:not(.keep){opacity:.4}
 .ts-tab{padding:9px 22px 10px;border-radius:10px 10px 0 0;background:#F1F3F6;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid transparent;border-bottom:0;transition:background .15s,color .15s}
 .ts-tab:hover{background:#E9ECF0;color:#333A44}
 .ts-tab.on{background:#fff;color:#1F2430;font-weight:700;border-color:var(--line);position:relative;z-index:2}
-/* 当前任务卡 + 历史任务卡内部行通用样式（2026-09-09 老板定：与客户管理批次卡同款白卡——白底细边框轻阴影、hover 轻上浮；行节奏=名称行→副信息→日期→进度条→实线分隔+操作按钮，参数对齐 .batch-card/.bc-*） */
+/* 当前任务卡 + 历史任务卡内部行通用样式（2026-09-09 老板定：与**批次管理页**的批次卡同款白卡——白底细边框轻阴影、hover 轻上浮；行节奏=名称行→副信息→日期→进度条→实线分隔+操作按钮，参数对齐 .batch-card/.bc-*） */
 .tk-grid{display:flex;flex-direction:column;gap:12px;margin-top:14px}
 .tk-card{background:linear-gradient(62deg,#FFF6EE 0%,#FFF9F4 50%,#FFFFFF 100%);border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 10px rgba(31,36,48,.06);padding:16px 18px;cursor:pointer;transition:box-shadow .15s,transform .15s} /* 2026-09-09 老板定：极淡冷蓝底 */
 .tk-card:hover{box-shadow:0 8px 20px rgba(31,36,48,.12);transform:translateY(-1px)}
@@ -499,6 +554,8 @@ tr.row-off td:not(.keep){opacity:.4}
 .tm-legend .lg-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 /* 任务地图店名气泡（2026-09-09） */
 .tm-iw{background:#fff;border-radius:10px;padding:9px 13px;font-size:12px;color:#333A44;box-shadow:0 3px 14px rgba(31,36,48,.18);min-width:120px}
+/* 2026-09-26 老板定：鼠标指到客户点冒出的**店名**小气泡（只要店名，轻量，不抢点击信息窗） */
+.tm-tip{background:rgba(31,36,48,.92);color:#fff;border-radius:6px;padding:4px 9px;font-size:12px;line-height:1.35;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .tm-iw b{font-size:13px}
 .tm-iw div{margin-top:3px}
 
@@ -585,7 +642,8 @@ tr.row-off td:not(.keep){opacity:.4}
     <div class="ni on" data-p="tasks" onclick="nav('tasks')">🧭 任务管理</div>
     <div class="ni dis" title="开发中">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
-    <div class="ni" data-p="customers" onclick="nav('customers')">🏪 客户管理</div>
+    <div class="ni" data-p="customers" onclick="nav('customers')">🗃️ 批次管理</div>
+    <div class="ni" data-p="geo" onclick="nav('geo')">🏪 客户管理</div>
     <div class="ni" data-p="import" onclick="nav('import')">📥 导入信息</div>
     <div class="ni" data-p="track" onclick="nav('track')">🌐 战况监控</div>
     <div class="grp">系统</div>
@@ -636,6 +694,27 @@ tr.row-off td:not(.keep){opacity:.4}
         </details>
       </div>
 
+      <!-- ⭐ 2026-09-26 多城市改造第 1 步：给**已有客户**回填三层骨架字段
+           （新导入的客户在 importdata 里会**自动带上**，这个按钮只管老数据 / 规则改了重跑）-->
+      <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid #7C3AED">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">🏙 回填三层字段（城市 / 区域 / 商圈）</div>
+        <div class="sb-d">
+          给已有客户补上 <b>city / district / bizCircle</b> 三个字段，用来做「城市 → 区域 → 商圈」的分层管理。<br>
+          <b>新导入的客户会自动带上这三个字段</b>，这个按钮是给<b>老数据</b>用的（或者以后取数规则改了、要重跑一遍）。<br>
+          <b>安全</b>：只补空的、不动已有值；重复点会跳过已填好的（幂等）。
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn" id="bfGeoBtn" onclick="startBackfillGeo()" style="background:#7C3AED">🏙 开始回填</button>
+          <span class="sb-d" id="bfGeoMsg" style="flex:1;min-width:200px"></span>
+        </div>
+        <div id="bfGeoBarWrap" style="display:none;max-width:560px;margin-top:10px">
+          <div style="height:8px;background:#EEF1F6;border-radius:99px;overflow:hidden">
+            <div id="bfGeoBar" style="height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#C4A6FF,#7C3AED);transition:width .3s"></div>
+          </div>
+          <div class="sb-d" id="bfGeoText" style="margin-top:6px"></div>
+        </div>
+      </div>
+
       <!-- 2026-09-25 老板定：四个入口**各自吃表格 / 目录**（不再要求找 .json 分片）→ 默认展开、标题改成实际用途 -->
       <details open style="max-width:1040px;margin-bottom:14px">
         <summary style="cursor:pointer;font-size:14px;font-weight:700;padding:6px 0;user-select:none">📥 分项导入（商城客户 / 大众点评 / 销售订单 / 订单明细）</summary>
@@ -676,10 +755,10 @@ tr.row-off td:not(.keep){opacity:.4}
             <span class="sb-d" id="st-plat" style="padding:1px 8px;background:#F1F3F5;border-radius:99px;font-size:11.5px">暂不需要</span>
           </div>
           <div class="sb-d" style="margin-top:6px">
-            选<b>大众点评表</b>（.xlsx，如「金华-永康-已匹配商城-带商城客户名-补齐同店.xlsx」）。<br>
-            按 <b>shopuuid</b> 匹配，<b>只更新客户的「平台画像 plat」</b>（评分 / 菜品 / 设施 / 营业时间…）。
-            ⚠️ <b>客户其它资料一条都不会动</b>（店名、地址、电话、坐标、备注、现场照片都不碰）。<br>
-            <b>一般不用单独导</b>：导商城客户表时已按 shopuuid 把画像并进 plat；此入口用于将来只更新点评数据。
+            选<b>大众点评表</b>（.xlsx，45 列、含 <b>shopuuid</b>；如「浙江-金华.csv」导出的点评表，shopuuid 为空的行会自动跳过）。<br>
+            按 <b>shopuuid</b> 匹配已有客户：<b>匹配上 → 只补空位</b>（该客户已有的值一律不动，冲突以商城为准）；<b>匹配不上 → 新建客户</b>。
+            ⚠️ <b>点评表里 shopuuid 为空的行直接跳过</b>（点评表专属规则，商城表不适用）；<b>客户其它资料一条都不会动</b>（备注、现场照片、手工改过的坐标都不碰）。<br>
+            <b>点评表现在可以单独导</b>：不再需要先有商城表，也不用那张「假商城表」中转（2026-09-26 新规则）。
           </div>
           <div style="display:flex;align-items:center;gap:9px;margin-top:12px;flex-wrap:wrap">
             <input type="file" id="fx-plat" accept=".xlsx,.xls" style="display:none" onchange="onExcelPicked('plat', this)">
@@ -762,7 +841,7 @@ tr.row-off td:not(.keep){opacity:.4}
           导入进来的数据若有个别不准，直接改即可 —— 改动不会被后续导入覆盖（除非新文件里该字段明确有新值）。
         </div>
         <div style="display:flex;gap:9px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn primary btn-sm" onclick="nav('customers')">进入客户管理</button>
+          <button class="btn primary btn-sm" onclick="nav('geo')">进入客户管理</button>
         </div>
       </div>
     </div>
@@ -790,6 +869,9 @@ tr.row-off td:not(.keep){opacity:.4}
       <div class="card" style="padding:12px 16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span style="font-size:12px;color:var(--sub);font-weight:600" id="trackStat"></span>
+          <!-- ⭐ 2026-09-27：地图数据本地缓存（架构文档 §十 M1）—— 每天首次自动拉；点了就重拉 -->
+          <button class="btn ghost btn-sm" id="mapDataBtn" style="height:26px;font-size:12px;padding:0 10px" onclick="refreshMapData()">🔄 更新地图数据</button>
+          <span style="font-size:12px;color:var(--sub)" id="mapDataStat"></span>
           <span style="margin-left:auto"></span>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">轨迹<input type="checkbox" id="trackLineSw" onchange="toggleTrackLine()"></label>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">客户点<input type="checkbox" id="custLayerSw" checked onchange="toggleCustLayer()"></label>
@@ -999,10 +1081,10 @@ tr.row-off td:not(.keep){opacity:.4}
       </div>
     </div>
 
-    <!-- 客户管理 -->
+    <!-- 🗃️ 批次管理（页签已改名：2026-09-26 老板定，原名「🏪 客户管理」；图标同日在 🗃️ 定下；内部 id 仍叫 page-customers） -->
     <div id="page-customers" style="display:none">
       <div class="title-bar">
-        <span class="t" id="custPageTitle">回访客户列表</span>
+        <span class="t" id="custPageTitle">批次管理</span>
       </div>
       <!-- 批次列表大卡：顶部按钮工具条 + 批次卡 + 未分批；点批次卡 → 单独进入批次详情页 -->
         <div class="batch-wrap">
@@ -1042,6 +1124,62 @@ tr.row-off td:not(.keep){opacity:.4}
         </div>
     </div>
 
+    <!-- 🏪 客户管理（2026-09-26 新增；原名「📍 地域管理」，同日老板定改名；内部 id 仍叫 page-geo）
+         老板定：库里要到 6 万家，得按 城市→区域→商圈 看客户 + 圈人建批次 -->
+    <div id="page-geo" style="display:none">
+      <div class="card" style="box-shadow:0 3px 10px rgba(31,36,48,.06)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)">
+          <!-- 2026-09-26 老板定：标题 + 计数放在这一行的**最左边**（照演示稿「标题 + 计数 │ 三个下拉 │ 🔍 搜索」挤一行） -->
+          <span id="geoTitle" style="font-size:13.5px;font-weight:800;color:var(--ink);white-space:nowrap">🌏 全部城市 · 客户总表</span>
+          <span class="sb-d" id="geoStat" style="white-space:nowrap"></span>
+          <!-- 2026-09-26 老板定：「已选 N 家」放在「共 N 家」的**右边**（下拉区/搜索区相应右移） -->
+          <span id="geoPicked" style="white-space:nowrap;font-weight:800;color:var(--primary-deep)"></span>
+          <!-- 2026-09-26 老板定：「已选 N 家」右边一个 ✕ → 点击**取消全部选择**（没选中时自动隐藏） -->
+          <button id="geoPickedClear" onclick="geoClearPicked()" title="取消全部选择"
+            style="display:none;border:0;background:transparent;cursor:pointer;font-size:14px;line-height:1;color:var(--sub);padding:0 3px">✕</button>
+          <!-- 2026-09-26 老板定：勾选客户 → 在这里**建立批次**
+               （批次卡那条老链路「批次 → 选客户 + 选业务员 → 建任务」完全不变，只是多一个建批次的入口） -->
+          <button onclick="geoMakeBatch()" title="把已勾选的客户建成一个批次（建完后去「批次管理」的批次卡里派单）"
+            style="height:26px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:var(--primary-deep);font-family:inherit;white-space:nowrap">📦 建立批次</button>
+          <span style="width:10px"></span>
+          <span class="lb">城市</span>
+          <select id="gfCity" onchange="geoFilterChange('gfCity')" class="gsel"></select>
+          <span class="lb">区域</span>
+          <select id="gfDistrict" onchange="geoFilterChange('gfDistrict')" class="gsel"></select>
+          <span class="lb">商圈</span>
+          <select id="gfBiz" onchange="geoFilterChange('gfBiz')" class="gsel"></select>
+          <input id="gfQ" placeholder="店名关键词" onkeydown="if(event.key==='Enter')geoSearch()" class="ginp">
+          <button class="btn ghost btn-sm" onclick="geoSearch()">🔍 搜索</button>
+        </div>
+        <div class="tw">
+          <table class="ct">
+            <thead id="geoThead"></thead>
+            <tbody id="geoTbody"><tr><td colspan="16" class="loading">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:9px 12px;font-size:12.5px;color:var(--sub);position:relative">
+          <span>每页显示：<select id="gfSize" onchange="geoSizeChange(this.value)" class="gsel" style="min-width:78px">
+            <option value="50">50</option><option value="100">100</option><option value="200">200</option>
+          </select> 条</span>
+          <!-- 2026-09-26 老板定：分页控件居中 —— 最前 « ｜ ‹ 上一页 ｜ 第 [可输入] / N 页 [跳] ｜ 下一页 › ｜ 最后 »
+               最前/最后只用符号（« »），上一页/下一页保留文字；页码可输入后回车或点「跳」跳转。 -->
+          <span style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px">
+            <button class="btn ghost btn-sm" id="gfFirst" onclick="geoPageTo(1)" title="第一页">«</button>
+            <button class="btn ghost btn-sm" id="gfPrev" onclick="geoPage(-1)">‹ 上一页</button>
+            <span style="display:flex;align-items:center;gap:4px">第
+              <input id="gfPageInput" type="number" min="1" title="输入页码后回车跳转"
+                onkeydown="if(event.key==='Enter'){geoPageJump();}"
+                style="width:54px;height:26px;text-align:center;border:1px solid var(--line);border-radius:6px;font-size:12.5px;font-family:inherit;outline:0;background:#fff">
+              / <span id="gfPageTotal">1</span> 页
+              <button class="btn ghost btn-sm" onclick="geoPageJump()" style="padding:0 8px">跳</button>
+            </span>
+            <button class="btn ghost btn-sm" id="gfNext" onclick="geoPage(1)">下一页 ›</button>
+            <button class="btn ghost btn-sm" id="gfLast" onclick="geoPageTo(geoF.totalPages)" title="最后一页">»</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- 批次详情页（点批次卡单独进入，像任务详情页；按钮按本页需求布局） -->
     <div id="page-batchDetail" style="display:none">
       <div class="title-bar">
@@ -1056,7 +1194,9 @@ tr.row-off td:not(.keep){opacity:.4}
           <button class="btn ghost" id="batchDelSelBtn" style="display:none;height:34px;font-size:13px;color:var(--primary-deep);font-weight:700;border:1px solid var(--primary)" onclick="deleteSelectedFromBatch()">🗑 删除所选</button>
           <!-- 2026-09-24 老板定：批次详情页不再放「删除整批」入口（避免在详情页误删整批）；
                要移除客户改用「删除所选」（勾选后出现，移回未分批） -->
-          <button class="btn ghost" id="batchAddCustBtn" style="height:34px;font-size:13px" onclick="openAddCustToBatch()">＋ 添加客户</button>
+          <!-- 2026-09-26 老板定：暂时不要「未分批」入口 —— 这个按钮是“从未分批池里挑客户补进本批次”，
+               先藏（style 里写死 display:none；代码保留，老板后面再定要不要改成“从客户管理页选”） -->
+          <button class="btn ghost" id="batchAddCustBtn" style="display:none;height:34px;font-size:13px" onclick="openAddCustToBatch()">＋ 添加客户</button>
           <button class="btn ghost" id="batchImportBtn" style="height:34px;font-size:13px" onclick="openImport(true, curBatchId)">📥 追加导入</button>
           <button class="btn primary" id="batchNewTaskBtn" style="height:34px;font-size:13px" onclick="openNewTaskForBatch(curBatchId, curBatchName)">＋ 新建任务</button>
           <!-- ===== 未分批专用（2026-09-24 老板定：勾选客户后才出现，给未分批客户分流或清理）===== -->
@@ -2090,15 +2230,19 @@ function curPurposeId() {
 function nav(p) {
   stopDetailTimer('');
   document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === p));
-  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import'].forEach(id => { $('page-' + id).style.display = 'none'; });
-  const title = { tasks: '任务管理', customers: '客户管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息' }[p] || '';
+  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import', 'geo'].forEach(id => { $('page-' + id).style.display = 'none'; });
+  // ⭐ 2026-09-26 老板定：**客户管理页（原名「地域管理」）的表格跟着窗口走** —— 放开 .main 的 max-width:1200px，
+  //    其他页保持原样（1200px 上限）。窗口多宽，表格就铺多宽。
+  const mainEl = document.querySelector('main.main');
+  if (mainEl) mainEl.style.maxWidth = (p === 'geo') ? 'none' : '';
+  const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
   if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台')); }
-  // 顶部导航：仅回访工作台的客户管理页显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
+  // 顶部导航：仅回访工作台的**批次管理**页（内部 id=customers）显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
   $('topActions').style.display = (p === 'customers' && curMode === 'mall') ? 'flex' : 'none';
   if (p === 'customers') {
     // 两工作台各自文案与按钮（2026-09-07 批次化：回访=批次卡片列表；新客=原客户表格）
     const isNew = curMode === 'new';
-    $('custPageTitle').textContent = isNew ? '新客户列表' : '客户批次';
+    $('custPageTitle').textContent = isNew ? '新客户列表' : '批次管理';
     $('impCustBtn').textContent = isNew ? '📥 导入新客户' : '📥 导入新批次';
     $('matchBtn').style.display = 'none'; // 2026-09-08：比对/待确认下沉到批次卡，顶部按钮停用
     $('claimBtn').style.display = 'none';
@@ -2110,7 +2254,7 @@ function nav(p) {
     $('newCustView').style.display = isNew ? '' : 'none';
     if (!isNew) { loadLastMallImport(); loadClaims(); }
   }
-  $('page-' + p).style.display = (p === 'tasks' || p === 'customers' || p === 'track') ? 'flex' : 'block';
+  $('page-' + p).style.display = (p === 'tasks' || p === 'customers' || p === 'track' || p === 'geo') ? 'flex' : 'block';   // geo：竖排 flex（表格占满剩余高度、内部滚动）
   if (p === 'track') {
     // 2026-09-24 修（老板发现的规律："先去别的页、再回战况就看不到地图"）：
     // 地图一旦在「容器宽高还没算好」时创建过，腾讯 GL 就渲染成空白、且**不会自愈**（补 resize 也救不回）。
@@ -2130,6 +2274,7 @@ function nav(p) {
     loadTasks();
   }
   if (p === 'customers') { if (curMode === 'new') loadCustomers(); else loadBatches(); }
+  if (p === 'geo') loadGeoPage();   // 2026-09-26 新增
   if (p === 'people') loadPeople();
   if (p === 'settings') loadSettings();
   if (p === 'import') initImportPage();
@@ -2330,6 +2475,41 @@ async function startExcelImport() {
     setTimeout(tick, 800);
   };
   tick();
+}
+
+/* ⭐ 2026-09-26 多城市改造第 1 步：给**已有客户**回填三层骨架字段（city / district / bizCircle）。
+   分批调 adminapi.backfillGeo（每批 200 条），边跑边显示进度；可随时再点一次接着跑（幂等）。
+   新导入的客户不需要它 —— importdata 里已经自动算好了；这个按钮管的是**老数据**。 */
+async function startBackfillGeo() {
+  const btn = $('bfGeoBtn'), msg = $('bfGeoMsg'), wrap = $('bfGeoBarWrap'), bar = $('bfGeoBar'), txt = $('bfGeoText');
+  if (!confirm('给已有客户回填「城市 / 区域 / 商圈」三层字段？\n\n' +
+    '· 只补空的，不动已有值\n' +
+    '· 已经填好的会跳过（重复点安全）\n\n确定开始吗？')) return;
+  btn.disabled = true; btn.textContent = '回填中…';
+  msg.textContent = '正在回填…';
+  wrap.style.display = ''; bar.style.width = '0%';
+  let offset = 0, total = 0, sumUpd = 0, sumSkip = 0, round = 0;
+  try {
+    while (true) {
+      round++;
+      const r = await api('backfillGeo', { offset, limit: 200 });
+      if (!r || !r.ok) throw new Error((r && r.msg) || '回填失败');
+      if (round === 1) total = r.total || 0;
+      sumUpd += r.updated || 0; sumSkip += r.skipped || 0;
+      const done = Math.min(r.nextOffset || 0, total || (r.nextOffset || 0));
+      bar.style.width = (total ? Math.round(done / total * 100) : 100) + '%';
+      txt.textContent = `第 ${round} 轮 · 已处理 ${done} / ${total} 家（更新 ${sumUpd}，跳过 ${sumSkip}）`;
+      if (!r.processed || done >= total) break;
+      offset = r.nextOffset || (offset + 200);
+      if (round > 500) { msg.textContent = '⚠️ 轮次过多，已停（可再点一次继续）'; return; }
+    }
+    bar.style.width = '100%';
+    msg.innerHTML = `<b style="color:#16A34A">✅ 完成</b> —— 共 ${total} 家，本次更新 ${sumUpd} 家，跳过 ${sumSkip} 家`;
+  } catch (e) {
+    msg.innerHTML = `<b style="color:#C0392B">❌ ${e && e.message ? e.message : e}</b>（可再点一次继续，已填好的不会重做）`;
+  } finally {
+    btn.disabled = false; btn.textContent = '🏙 开始回填';
+  }
 }
 
 async function startImp(kind) {
@@ -2611,6 +2791,18 @@ function shortAddr(s) {
   const m = t.match(/^([\u4e00-\u9fa5]{1,8}市)([\u4e00-\u9fa5]{2,5}(?:市|区|县))/);
   if (m) t = t.slice(m[1].length);
   return t;
+}
+
+// 详情标题 / 列表店名统一口径：**编号 + 店名**（如 `a101 沙县小吃(市场路店)`）—— **单条版**（给详情标题用）
+//   ⚠️ 与下面 custWithCode 同一口径；幂等：已以编号开头就不再拼。
+function custTitleOf(c) {
+  if (!c) return '';
+  const raw = String(c.nameRaw || '').trim();
+  if (raw) return raw;                                   // ① 导入时保留的原值（就是「编号 + 店名」）
+  const code = String(c.mallCode || '').trim();           // ② 退路：用客户编号拼（老档案）
+  const nm = String(c.name || '');
+  if (!code) return nm;
+  return nm.indexOf(code) === 0 ? nm : (code + ' ' + nm);
 }
 
 // 2026-09-25 老板定：后台**显示层**统一把客户编号拼回店名（编号取 `mallKey`，如 `c347 早阳肉包(科创路店)`）。
@@ -3506,8 +3698,11 @@ function buildTrackMap(keep) {
     const tl = $('trackLoading');
     if (tl) tl.style.display = 'flex'; // 准备期显示旋转雷达加载动画
   }
-  // 矢量底图要素：base=道路及底面 / building3d=3D建筑 / label=道路文字
-  // ⚠️ 2026-09-24 实测：这个组合别动 —— 去掉 building3d（只留 base+label）会让底图连浏览器里都渲染不出来
+  // 矢量底图要素：base=道路及底面 / building2d=2D楼块 / building3d=3D楼块 / label=道路文字
+  // ⚠️⚠️⚠️ 【别动这个组合】【别动这个组合】【别动这个组合】
+  //   2026-09-24 实测：去掉 building3d（或换成 building2d）→ **底图完全渲染不出来（整张地图空白）**。
+  //   2026-09-27 又踩一次（按官方文档说“2D 更省”改成 building2d → 后台 4 张 TMap GL 地图全白，回退即好）。
+  //   结论：**代码里的“实测警告”优先级高于官方文档的通用建议** —— 实测 > 文档。
   const baseMap = [{ type: 'vector', features: ['base', 'building3d', 'label'] }];
   if (trafficOn) baseMap.push({ type: 'traffic', opacity: trafficOpacity }); // 实时路况（2026-09-08 老板定）
   trackMap = new TMap.Map($('trackMap'), {
@@ -3524,8 +3719,37 @@ function buildTrackMap(keep) {
     if (!pickOn || !evt || !evt.latLng) return;
     showPickCoord(evt.latLng.getLat().toFixed(6), evt.latLng.getLng().toFixed(6));
   });
-  refreshTrackPage();
+  // ⭐ 2026-09-26 修（老板报障：Console 刷「所传入参数并非 TMap.Map 的实例！」/「projectToContainer 的 latLng …」）：
+  //   **地图实例构造完 ≠ GL 就绪** —— 紧接着 refreshTrackPage() 就会撞这两条
+  //   （是 TMap 内部 console.error 打的，外层 try/catch 拦不住）。
+  //   所以：先补 resize 让它拿到宽高，再等 `idle`（400ms 兜底）才首次绘制；只画一次。
   nudgeTrackResize(); // 2026-09-24 加固：地图创建即补 resize，兜住"容器宽高未就绪就创建"的竞态
+  let _trackFirstDrawn = false;
+  const _trackFirstDraw = () => {
+    if (_trackFirstDrawn) return;
+    _trackFirstDrawn = true;
+    try { refreshTrackPage(); } catch (e) { /* 静默 */ }
+  };
+  try { trackMap.on('idle', _trackFirstDraw); } catch (e) { /* 静默 */ }
+  setTimeout(_trackFirstDraw, 400);
+  // ⭐⭐⭐ 2026-09-27 **根本性修正**（老板："地图刷新更糟糕了？20 万客户怎么办？"）：
+  //   **拖地图/缩放时，JS 什么都不做** —— GL 自己会 GPU 平移 + 裁剪视野外内容，这是它的本职工作。
+  //   之前我在 bounds_changed / idle 上都挂重绘 → 每拖一下就 setGeometries →
+  //   **反复打断瓦片渲染 → 缺块**（GL 被打断后不会自己恢复）。
+  //   现在：**`bounds_changed` 上不再挂任何重绘**（仓库星跟随仍保留，见上面 3701 行）；
+  //   只在 **`idle`（停稳）** 时看一眼 —— 且 `drawCustLayer` 内部只在**"跨档了"或"数据变了"**时才真正重算。
+  let _trackIdleTimer = null;
+  try {
+    trackMap.on('idle', () => {
+      if (_trackIdleTimer) clearTimeout(_trackIdleTimer);
+      _trackIdleTimer = setTimeout(() => {
+        try { drawCustLayer().catch(e => console.error('[地图] 客户点层重绘失败：', e)); } catch (e) { console.error('[地图] 客户点层异常：', e); }
+      }, 200);
+    });
+  } catch (e) { /* 静默 */ }
+  // ⭐ 2026-09-27：鼠标指到聚合圆点 → 弹「区域名 + N 家」。
+  //   ⚠️ 不用 MultiMarker 的 `hover`（**WebView2 里不触发**，任务地图上已踩过）→ 用地图级 mousemove 自己找最近点。
+  try { trackMap.on('mousemove', onCustBubbleMove); } catch (e) { /* 静默 */ }
   jhMapBadge('trackMap');   // 2026-09-25 老板定：所有地图统一挂「聚火地图」标识（替换腾讯 logo）
 }
 
@@ -3582,6 +3806,9 @@ function buildTaskMap() {
     zoom: 12, pitch: 0, rotation: 0,
     baseMap: [{ type: 'vector', features: ['base', 'building3d', 'label'] }]
   });
+  // 2026-09-26：MultiMarker 的 hover 在 WebView2 里**不触发**（老板实测“指着没反应”），
+  //   所以改成**地图 mousemove + 自己找最近点** —— 不依赖官方 hover，浏览器/壳里都能用。
+  try { tmMapObj.on('mousemove', onTmMapMove); } catch (e) { /* 静默 */ }
   try { tmMapObj.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 静默 */ }
   try { tmMapObj.removeControl(TMap.constants.DEFAULT_CONTROL_ID.SCALE); } catch (e) { /* 静默 */ }
   tmInfoWin = new TMap.InfoWindow({
@@ -3629,11 +3856,14 @@ async function renderTmTask(idx) {
   tmCustomers = d.customers || [];
   tmDays = (d.task.dayPlan || []).map(p => p.day);
   const todayD = d.task.todayDay;
-  tmDay = (todayD && tmDays.includes(todayD)) ? todayD : (tmDays[0] || null);
-  $('tmDays').innerHTML = tmDays.map(day => `<span class="tm-day ${day === tmDay ? 'on' : ''}" data-day="${day}" onclick="switchTmDay(${day})">第 ${day} 页</span>`).join('');
+  // 2026-09-26 起 tmDay 统一存**字符串**（数字天 = '1'/'2'…，或特殊值 'all'），比较一律用 String()
+  tmDay = String((todayD && tmDays.includes(todayD)) ? todayD : (tmDays[0] != null ? tmDays[0] : ''));
+  // 2026-09-26 老板定：天页签**最前面加一个「全部」** —— 一次看整个任务的所有客户点
+  $('tmDays').innerHTML = `<span class="tm-day ${tmDay === 'all' ? 'on' : ''}" data-day="all" onclick="switchTmDay('all')">全部</span>`
+    + tmDays.map(day => `<span class="tm-day ${String(day) === tmDay ? 'on' : ''}" data-day="${day}" onclick="switchTmDay('${day}')">第 ${day} 页</span>`).join('');
   // 进入/切业务员自动检测仓库开关（2026-09-09 老板定：与手机端同口径）
   {
-    const plan0 = (d.task.dayPlan || []).find(p => p.day === tmDay);
+    const plan0 = (d.task.dayPlan || []).find(p => String(p.day) === tmDay);
     const r0 = plan0 && plan0.route;
     const firstC = tmDayList()[0];
     if (r0 && Array.isArray(r0.pts) && r0.pts.length) autoTmWhStar({ lat: r0.pts[0][0], lng: r0.pts[0][1] });
@@ -3643,12 +3873,13 @@ async function renderTmTask(idx) {
 }
 
 function switchTmDay(day) {
+  day = String(day);   // 'all' 或 '1'/'2'…（2026-09-26 加了「全部」）
   if (tmDay === day) return;
   tmDay = day;
-  document.querySelectorAll('#tmDays .tm-day').forEach(el => el.classList.toggle('on', Number(el.dataset.day) === day));
+  document.querySelectorAll('#tmDays .tm-day').forEach(el => el.classList.toggle('on', el.dataset.day === day));
   // 切天自动检测仓库开关（2026-09-09 老板定：与手机端同口径）
   {
-    const plan0 = (tmCurTask && tmCurTask.dayPlan || []).find(p => p.day === tmDay);
+    const plan0 = (tmCurTask && tmCurTask.dayPlan || []).find(p => String(p.day) === tmDay);
     const r0 = plan0 && plan0.route;
     const firstC = tmDayList()[0];
     if (r0 && Array.isArray(r0.pts) && r0.pts.length) autoTmWhStar({ lat: r0.pts[0][0], lng: r0.pts[0][1] });
@@ -3658,7 +3889,9 @@ function switchTmDay(day) {
 }
 
 function tmDayList() {
-  const plan = (tmCurTask && tmCurTask.dayPlan || []).find(p => p.day === tmDay);
+  // 2026-09-26 老板定：「全部」= 整个任务的**所有客户点**（不分天）
+  if (tmDay === 'all') return tmCustomers.filter(c => c && c.lat && c.lng);
+  const plan = (tmCurTask && tmCurTask.dayPlan || []).find(p => String(p.day) === tmDay);
   const ids = plan ? (plan.customerIds || []) : [];
   return ids.map(id => tmCustomers.find(c => c._id === id)).filter(c => c && c.lat && c.lng);
 }
@@ -3666,6 +3899,7 @@ function tmDayList() {
 function renderTmDay(fitAll) {
   try {
   if (!tmMapObj || !tmCurTask) return;
+  hideTmTip();                 // 2026-09-26：重绘前先收回 hover 店名气泡
   const all = tmDayList();
   // 状态开关过滤（2026-09-09 老板定：图例可点击，与手机端状态口径一致——visitStatus: visited/ongoing/pending）
   const list = all.filter(c => {
@@ -3674,7 +3908,16 @@ function renderTmDay(fitAll) {
     return tmKindOn.pending;
   });
   // 客户点：复用手机 pins 数字圆标（24×24）；序号按当天全序（不受开关过滤影响）
-  const idxOf = c => all.indexOf(c) + 1;
+  // 2026-09-26 老板定：「全部」模式下编号 = **它在自己那一页（天）里的序号**
+  //（不再全任务连号 —— 那样“第 37 家”没意义，还会因为只有 1~20 号图而全挤成 20）
+  const daySeq = new Map();
+  (tmCurTask.dayPlan || []).forEach(p => {
+    (p.customerIds || []).forEach((id, i) => { if (!daySeq.has(id)) daySeq.set(id, i + 1); });
+  });
+  const idxOf = c => ((tmDay === 'all' && daySeq.get(c._id)) ? daySeq.get(c._id) : (all.indexOf(c) + 1));
+  // 2026-09-26：把当前图上的点记下来，供 mousemove 找“最近点”冒店名用
+  tmAllPts = list.map(c => ({ key: String(c._id), lat: c.lat, lng: c.lng, name: c.name }));
+  tmLastTipKey = '';
   const mk = (arr, z) => {
     if (!arr.length) return null;
     const styles = {};
@@ -3693,6 +3936,11 @@ function renderTmDay(fitAll) {
       };
     });
     const m = new TMap.MultiMarker({ map: tmMapObj, styles, geometries: geos, zIndex: z });
+    // 2026-09-26 老板定：**鼠标指到客户点就冒出店名**（hover 仅桌面端触发；移开时 evt 为 null）
+    m.on('hover', evt => {
+      if (!evt || !evt.geometry) { hideTmTip(); return; }
+      showTmTip(evt.geometry.properties || {}, evt.geometry.position);
+    });
     m.on('click', evt => {
       const g = evt.geometry;
       if (!g) return;
@@ -3711,18 +3959,22 @@ function renderTmDay(fitAll) {
   const mkOngoing = mk(list.filter(c => c.visitStatus === 'ongoing'), 8);
   tmMarkers = [mkVisited, mkPending, mkOngoing];
   // 路线（绿色实线；无真实轨迹按顺序直线兜底——与手机一致）
-  const plan = (tmCurTask.dayPlan || []).find(p => p.day === tmDay);
+  // 2026-09-26：「全部」模式下**不画路线**（跨天串起来没意义，只给人看客户点）
+  const isAll = (tmDay === 'all');
+  const plan = isAll ? null : (tmCurTask.dayPlan || []).find(p => String(p.day) === tmDay);
   const route = plan && plan.route;
   let linePts = [];
-  if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
-    linePts = route.pts.map(p => new TMap.LatLng(p[0], p[1]));
-  } else if (list.length >= 2) {
-    linePts = list.map(c => new TMap.LatLng(c.lat, c.lng));
+  if (!isAll) {
+    if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
+      linePts = route.pts.map(p => new TMap.LatLng(p[0], p[1]));
+    } else if (list.length >= 2) {
+      linePts = list.map(c => new TMap.LatLng(c.lat, c.lng));
+    }
   }
   const WH = { lat: 28.970802, lng: 120.154526 };
   // 仓库开关开：直线兜底路线以仓库为起点重连（手机端同款"重排以仓库为起点，不取定位"）；
   // 云端真实轨迹(route)保留不动，仅仓库星显示在仓库坐标
-  if (tmWhOn && !(route && Array.isArray(route.pts) && route.pts.length >= 2) && list.length) {
+  if (!isAll && tmWhOn && !(route && Array.isArray(route.pts) && route.pts.length >= 2) && list.length) {
     linePts = [new TMap.LatLng(WH.lat, WH.lng)].concat(linePts);
   }
   if (tmPolyline) { tmPolyline.setMap(null); tmPolyline = null; }
@@ -3751,8 +4003,8 @@ function renderTmDay(fitAll) {
       zIndex: 6
     });
   }
-  // 视野：切业务员/刷新=全部客户点；切天=未完成（全部已拜访则全部）
-  const fitPts = fitAll ? list : (list.filter(c => c.visitStatus !== 'visited').length ? list.filter(c => c.visitStatus !== 'visited') : list);
+  // 视野：切业务员/刷新=全部客户点；切天=未完成（全部已拜访则全部）；「全部」=全部客户点
+  const fitPts = (fitAll || tmDay === 'all') ? list : (list.filter(c => c.visitStatus !== 'visited').length ? list.filter(c => c.visitStatus !== 'visited') : list);
   if (fitPts.length) {
     const bounds = new TMap.LatLngBounds();
     fitPts.forEach(c => bounds.extend(new TMap.LatLng(c.lat, c.lng)));
@@ -3766,12 +4018,63 @@ function renderTmDay(fitAll) {
   }
 }
 
+// 2026-09-26 老板定：鼠标指到客户点 → 冒出**店名**（独立的轻量小气泡；点一下才是完整信息窗）
+// 触发方式：地图 mousemove → 自己找最近点（见 onTmMapMove）—— WebView2 里官方 hover 不触发
+let tmHoverWin = null;
+let tmAllPts = [];        // 当前图上的所有客户点（每次重绘时刷新）
+let tmLastTipKey = '';    // 气泡当前显示的是哪个点（同一点不重复渲染）
+function showTmTip(p, pos) {
+  if (!tmMapObj || !pos) return;
+  try {
+    if (!tmHoverWin) {
+      tmHoverWin = new TMap.InfoWindow({
+        map: tmMapObj,
+        position: pos,
+        offset: { x: 0, y: -14 },
+        enableCustom: true,          // 与 tmInfoWin 同款：content 按 HTML 渲染
+        content: '<div class="tm-tip"></div>'
+      });
+    }
+    tmHoverWin.setPosition(pos);
+    tmHoverWin.setContent(`<div class="tm-tip">${esc(p.name || '（无店名）')}</div>`);
+    tmHoverWin.open();
+  } catch (e) { /* 静默：气泡挂了不影响地图 */ }
+}
+function hideTmTip() {
+  tmLastTipKey = '';
+  if (tmHoverWin) { try { tmHoverWin.close(); } catch (e) { /* 静默 */ } }
+}
+
+// 鼠标 → 最近客户点：“指到”判定为“距鼠标 14 像素半径以内最近的那个点”（用米换算，跟缩放无关）
+function tmMetersPerPixel() {
+  const z = (tmMapObj && tmMapObj.getZoom) ? (tmMapObj.getZoom() || 16) : 16;
+  const c0 = (tmMapObj && tmMapObj.getCenter) ? tmMapObj.getCenter() : null;
+  const lat = (c0 && c0.getLat) ? c0.getLat() : 29;
+  return 156543.03392 * Math.cos((lat || 29) * Math.PI / 180) / Math.pow(2, z);
+}
+function onTmMapMove(evt) {
+  if (!evt || !evt.latLng || !tmAllPts.length) { if (tmLastTipKey) hideTmTip(); return; }
+  const la = evt.latLng.getLat(), ln = evt.latLng.getLng();
+  const lim = tmMetersPerPixel() * 14;      // 14 像素内算“指到了”
+  let best = null, bestD = lim;
+  for (let i = 0; i < tmAllPts.length; i++) {
+    const p = tmAllPts[i];
+    const d = tmHaversine(la, ln, p.lat, p.lng);
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  if (!best) { if (tmLastTipKey) hideTmTip(); return; }
+  if (best.key === tmLastTipKey) return;     // 还是同一个点 → 不动
+  tmLastTipKey = best.key;
+  showTmTip(best, new TMap.LatLng(best.lat, best.lng));
+}
+
 function clearTmLayers() {
   (tmMarkers || []).forEach(m => { if (m) { m.setMap(null); } });
   tmMarkers = null;
   if (tmStarMarker) { tmStarMarker.setMap(null); tmStarMarker = null; }
   if (tmPolyline) { tmPolyline.setMap(null); tmPolyline = null; }
   if (tmInfoWin) tmInfoWin.close();
+  hideTmTip();   // 2026-09-26：顺带收回 hover 店名气泡
 }
 
 function tmHaversine(lat1, lng1, lat2, lng2) {
@@ -3910,6 +4213,10 @@ function rebuildTrackMap() {
   try { trackMap.destroy(); } catch (e) { /* 静默 */ }
   trackMap = null;
   trackMarkers = null; trackPolyline = null; custLayer = null; custInfoWin = null; custSearchHit = null; // 旧实例随地图作废
+  // ⭐ 2026-09-26 自查补漏：聚合气泡层 + 聚合缓存也必须随地图作废 ——
+  //   否则切页/重建地图后，custBubbleLayer 还指着**已销毁**的图层，下次 setGeometries 会静默失效甚至报错。
+  custBubbleLayer = null;
+  custAggCache = null; custAggCacheKey = '';
   trackManWin = null;
   if (trackWhStar) { try { trackWhStar.remove(); } catch (e) { /* 静默 */ } trackWhStar = null; }
   buildTrackMap(keep); // 重建后 refreshTrackPage 会重画全部图层
@@ -3948,6 +4255,13 @@ function fmtClock(ts) {
 }
 
 async function refreshTrackPage() {
+  // ⭐ 2026-09-26 修（老板报障：在其他页刷屏三条 TMap 报错）——
+  //   `autoTick` 定时器**不管在哪个页都会**调到这里，而地图实例此时可能已销毁/未就绪 →
+  //   TMap 库内部会直接刷「所传入参数并非 TMap.Map 的实例！」「projectToContainer 的 latLng …」
+  //   （库自己 console 报的，外层 try/catch 拦不住）。→ **不在战况页就直接不刷**。
+  const _pt = $('page-track');
+  if (!_pt || _pt.style.display === 'none') return;
+  if (!trackMap || !window.TMap) return;   // 地图还没建/库没加载 → 也别去碰
   let res;
   try {
     res = await api('listLatestLocations');
@@ -3972,46 +4286,35 @@ async function refreshTrackPage() {
   try { drawTrackMarkers(); } catch (e) { /* 静默 */ }
   if (trackSelId) drawTrackLine(trackSelId).catch(() => {});
   else if (trackPolyline) { try { trackPolyline.setGeometries([]); } catch (e) { /* 静默 */ } } // 未选中：确保旧轨迹清除
-  drawCustLayer().catch(() => {});
+  // 2026-09-27：不再静默吞错（地图问题排查时看不到任何线索）
+  drawCustLayer().catch(e => console.error('[地图] 客户点层绘制失败：', e));
   try { positionTrackWhStar(); } catch (e) { /* 静默 */ } // 仓库星随刷新同步（2026-09-08 老板定）
   // 战况监控入场动画：会话内首次数据渲染完成后播放一次（2026-09-09 老板定：仓库为中心 18 级 45° 斜视 → 平滑旋转回正北并缩小到全部客户点撑满）
   if (!trackIntroPlayed) { trackIntroPlayed = true; playTrackIntro(); }
 }
 
 let trackIntroPlayed = false;
+// ⭐ 2026-09-27 老板定：**完全去掉入场动画**（原“仓库 20 级旋转 → 缩到全览”）。
+//   原因：原动画 `setZoom(20)`（最贴地，瓦片量最大）+ `setRotation(270)` + 从 20 级缩到全览，
+//   **一次性把 20 级到全览之间所有级别的瓦片全拉一遍** —— 这是“打开战况监控地图加载慢”的最大单一来源。
+//   现在：**直接把视野定到“全部客户点撑满”并显示** —— 不做动画、不跨级、不旋转。
+//   （函数名保留 `playTrackIntro`，调用点不用改；它仍负责 定位视野 / 显示地图 / 收起加载动画 三件事）
 async function playTrackIntro() {
+  const el = $('trackMap');
+  const tl = $('trackLoading');
   try {
-    if (!trackMap) { trackIntroPlayed = false; return; } // 地图尚未初始化：重置标志，等首次渲染完成再播
+    if (!trackMap) { trackIntroPlayed = false; if (tl) tl.style.display = 'none'; return; }
     const list = await loadCustData(false);
-    if (!list.length) {
-      trackIntroPlayed = false; // 暂无客户点：重置标志，有数据后再播
-      const el0 = $('trackMap');
-      if (el0) el0.style.opacity = '1'; // 无点不播动画，但地图必须可见
-      const tl0 = $('trackLoading');
-      if (tl0) tl0.style.display = 'none';
-      return;
+    if (list.length) {
+      const b = new TMap.LatLngBounds();
+      list.forEach(c => b.extend(new TMap.LatLng(c.lat, c.lng)));
+      trackMap.fitBounds(b, { padding: 40 });   // ⭐ 一次到位，无过渡动画
     }
-    // ① 先算最终视野：全部客户点撑满（与全览同口径 padding 40）——同一执行帧内立即被起始态覆盖，用户看不到跳变
-    const b = new TMap.LatLngBounds();
-    list.forEach(c => b.extend(new TMap.LatLng(c.lat, c.lng)));
-    trackMap.fitBounds(b, { padding: 40 });
-    const finZ = trackMap.getZoom();
-    const finC = trackMap.getCenter();
-    // ② 起始态：仓库中心 + 20 级最大贴地 + 270° 大斜角（此时地图仍隐藏，亮相即起始态）
-    trackMap.setZoom(20);
-    trackMap.setRotation(270);
-    trackMap.setCenter(new TMap.LatLng(28.970802, 120.154526));
-    const el = $('trackMap');
-    if (el) el.style.opacity = '1'; // 亮相：显示最大贴地起始态
-    const tl = $('trackLoading');
-    if (tl) tl.style.display = 'none'; // 加载动画退场
-    // ③ 单段平滑过渡：旋转回正北 + 缩小到全部客户点撑满（2026-09-09 老板定：一段即可）
-    trackMap.easeTo({ zoom: finZ, center: finC, rotation: 0, pitch: 0 }, { duration: 2000 });
+    if (el) el.style.opacity = '1';             // 地图可见
+    if (tl) tl.style.display = 'none';          // 雷达加载动画退场
   } catch (e) {
-    console.error('playTrackIntro error:', e);
-    const el = $('trackMap');
-    if (el) el.style.opacity = '1'; // 异常兜底：确保地图最终可见
-    const tl = $('trackLoading');
+    console.error('[地图] 初始化视野失败：', e);
+    if (el) el.style.opacity = '1';
     if (tl) tl.style.display = 'none';
   }
 }
@@ -4067,6 +4370,13 @@ function ensureTrackWhStar() {
 
 function positionTrackWhStar() {
   if (!trackMap) return;
+  // ⭐ 2026-09-26 修（老板报障：切到别的页后 Console 一直刷
+  //   「Map.projectToContainer 的 latLng 参数应该是 LatLng 类型」+「所传入参数并非 TMap.Map 的实例！」）：
+  //   战况页隐藏后，窗口 resize / 定时器仍会跑到这里，而地图实例此时可能已销毁或未就绪 →
+  //   **TMap 库内部直接 console 报错**（是库自己打的，外层 try/catch 拦不住）。
+  //   所以：**不在战况页就一律跳过**。
+  const pt = $('page-track');
+  if (!pt || pt.style.display === 'none') return;
   const star = ensureTrackWhStar();
   if (!trackWhOn) { star.style.display = 'none'; return; }
   try {
@@ -4138,31 +4448,352 @@ function renderLegend() {
   });
 }
 
-// 客户数据（60 秒缓存）：listCustomers 全量 + listTasks 构建 客户→业务员 映射
+// ⭐ 2026-09-26 老板定：客户点**分级聚合** —— 数万客户不能一次全画。
+//   ⭐ 2026-09-27 老板定：**聚合最高只到「区域」** —— 库里只有“金华市”一个城市，
+//   聚到城市就是孤零零一个大泡泡，信息量为零。依次为：**区域 → 商圈 → 按距离分群（网格）→ 真实点**。
+//   例：永康市 1900 家 → 古山镇 320 家 → 真实点（点开/悬停看家数）
+//   点气泡 = 放大进那个区域（一路钻下去）。
+let custBubbleLayer = null;                                   // 聚合圆点层（**MultiMarker + 15 张固定图片**，非文字图层）
+let custBubbleSig = '';                                       // 2026-09-27：气泡内容指纹（一样就**不碰图层** —— 治缺块）
+// ⭐⭐⭐ 2026-09-27 根本性优化：**“当前显示的档”与“数据版本”** ——
+//   拖地图/微调缩放时，只要没跨档、数据也没变，就**直接 return，一个字节都不碰图层**
+//  （GL 自己会 GPU 平移 + 裁剪视野外内容；我们插手反而打断它的渲染 → 缺块）
+let custLastLevel = null;                                     // 上次画的档（null=从未 / ''=真实点档）
+let custCustVer = -1;                                         // 上次画时用的数据版本号
+let custFilterSig = '';                                       // 2026-09-27：筛选指纹（业务员/图例/点大小 变了要重画）
+let custAggCache = null, custAggCacheKey = '', custAggCacheAt = 0;
+const CUST_AGG_LIMIT = 3000;                                  // 一次最多画这么多客户点（真实点不像气泡能合并，只能设个安全上限）
+// ⭐⭐⭐ 2026-09-27 老板定：**停用聚合，所有客户点直接显示**。
+//   原因：聚合问题太多（层级/样式/性能反复出问题），老板拍板"先去掉聚合"。
+//   ⚠️ **不是删除**：聚合的代码（`localAggregate` / `drawCustBubbles` / `aggDotIcon` / `custBubble*`）**全部保留**，
+//      想让聚合回来，**只要把下面这个函数恢复成"按 zoom 返回三档"即可**（原来的实现见 git 历史/交接文档）。
+function custAggLevel(z) {                                    // 恒返回 '' = 永远走"真实点"分支
+  return '';
+}
+// —— 原聚合层级（2026-09-27 停用，保留备查）——
+//   if (z <= 12) return 'district';    // 区域（永康市 / 义乌市 / 金东区…）
+//   if (z <= 14) return 'bizCircle';   // 商圈（古山镇 / 九铃中路…）
+//   return '';                         // ≥15 直接显示客户点
+// ⚠️ 2026-09-27：聚合停用后，本函数**只剩"已停用的聚合分支"在用**（drawCustBubbles）；真实点档已不再按视野过滤。
+function trackBoundsParam() {                                 // 当前视野矩形（原本给云函数/聚合做过滤）
+  try {
+    const b = trackMap && trackMap.getBounds ? trackMap.getBounds() : null;
+    if (!b || !b.getSouthWest || !b.getNorthEast) return {};
+    const sw = b.getSouthWest(), ne = b.getNorthEast();
+    return { minLat: sw.getLat(), maxLat: ne.getLat(), minLng: sw.getLng(), maxLng: ne.getLng() };
+  } catch (e) { return {}; }
+}
+// ⭐⭐⭐ 2026-09-27 **定案**（老板拍板：聚合改用 MultiMarker 圆点 + 悬停看数字）：
+//   教训 —— **`MultiLabel`（矢量文字图层）是性能陷阱**：
+//     · 老板实测：真实点档用 `MultiMarker`（图片）"速度可接受、刷新稳定"；
+//       聚合一换成 `MultiLabel` 就卡 + 缺块 —— 同地图、同数据、同 setGeometries，**唯一变量就是图层类型**。
+//     · 官方资料也印证：腾讯自己要用"栅格化 + Web Worker"去救**矢量文字**的渲染开销。
+//   做法 —— 圆点**大小 5 档**（表数量）× **颜色 3 档**（表量级）= **最多 15 张图，开机画一次永久复用**；
+//           之后只 setGeometries，**零重复编码**。数字改在**悬停**时用 InfoWindow 显示（老板定）。
+const DOT_R = [18, 22, 28, 34, 42];                       // 圆点半径（px），对应数量档
+const DOT_C = ['#F5531C', '#E0641F', '#B4441B'];           // 浅橙 / 中橙 / 深橙，对应量级档
+const aggDotCache = {};
+let aggDotCacheN = 0;
+// 数量 → 显示文本（≥ 1 万用「1.2万」，保证在圆里放得下）
+function dotLabel(n) {
+  if (n >= 10000) {
+    const w = n / 10000;
+    return (w >= 10 ? Math.round(w) : (Math.round(w * 10) / 10)) + '万';
+  }
+  return String(n);
+}
+// ⭐ 2026-09-27 老板定：**圆底 + 白色数字**（壳程序里流畅，编码不是瓶颈）
+function aggDotIcon(si, ci, count) {
+  const txt = dotLabel(count || 0);
+  const ck = si + '_' + ci + '_' + txt;
+  if (aggDotCache[ck]) return aggDotCache[ck];
+  const r = DOT_R[si], S = r * 2 + 8;
+  const c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const ctx = c.getContext('2d');
+  // 圆底
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, r, 0, Math.PI * 2);
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = DOT_C[ci];
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#FFF8F0';
+  ctx.stroke();
+  // 数字（字号按文本长度自适应，保证放得下）
+  const L = txt.length;
+  const fs = Math.max(9, Math.round(r * (L <= 2 ? 0.9 : (L === 3 ? 0.68 : (L === 4 ? 0.54 : 0.46)))));
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 ' + fs + 'px "PingFang SC","Microsoft YaHei",Arial,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(txt, S / 2, S / 2 + 1);
+  const url = c.toDataURL();
+  if (aggDotCacheN > 500) { for (const k in aggDotCache) delete aggDotCache[k]; aggDotCacheN = 0; }  // 防无限膨胀
+  aggDotCache[ck] = url; aggDotCacheN++;
+  return url;
+}
+// 数量 → 档位（5 档大小 / 3 档颜色）
+function dotSizeIdx(n) { return n >= 1000 ? 4 : (n >= 200 ? 3 : (n >= 50 ? 2 : (n >= 10 ? 1 : 0))); }
+function dotColorIdx(n) { return n >= 1000 ? 2 : (n >= 100 ? 1 : 0); }
+function clearCustBubbles() {
+  if (custBubbleLayer) { try { custBubbleLayer.setGeometries([]); } catch (e) { /* 静默 */ } }
+}
+async function drawCustBubbles(level) {
+  if (custLayer) { try { custLayer.setGeometries([]); } catch (e) { /* 静默 */ } }  // 真实点层清空
+  // ⭐ 2026-09-27：聚合**改本地算** —— 数据已在本地（loadCustData 读的缓存），
+  //   遍历几千~几万条只要 1~2ms，比请求云端快得多。云函数 custGeoAggregate 保留作**兜底**（超大数据/无缓存时）。
+  const list = await loadCustData(false);
+  const bp = trackBoundsParam();
+  const key = level + '|' + JSON.stringify(bp) + '|' + list.length;
+  const now = Date.now();
+  if (custAggCache && custAggCacheKey === key && now - custAggCacheAt < 60000) { renderCustBubbles(custAggCache); return; }
+  const res = localAggregate(level, list, bp);
+  custAggCache = res; custAggCacheKey = key; custAggCacheAt = now;
+  renderCustBubbles(res);
+}
+
+// ⚠️⚠️⚠️ 【本节代码当前**已停用**（2026-09-27 老板定：去掉聚合，客户点直接显示）】
+//   调用入口 `custAggLevel()` 现在恒返回 '' → 下面这些永远不会被执行。
+//   **故意保留**（老板要求：聚合代码留着，以后想开回来改一行即可）：
+//     · localAggregate()  —— 按 区域/商圈 分组（组内平均坐标当气泡位置）
+//     · drawCustBubbles() / renderCustBubbles() —— 气泡图层（MultiMarker + 固定圆点图）
+//     · aggDotIcon() / dotLabel() / dotSizeIdx() / dotColorIdx() —— 圆点图标（5 档大小 × 3 档颜色 + 数字）
+//     · custBubble* / custAggCache —— 相关状态
+//   要恢复聚合：把 custAggLevel() 改回“按 zoom 返回 district/bizCircle”即可（原实现注释在它下面）。
+// =====================================================================
+
+// 本地聚合：**只按字段分组**（区域 / 商圈），组内平均坐标当气泡位置。
+//   ⚠️ 2026-09-27：**去掉了“网格(按距离分群)”那一档** —— 老板定稿只要区域/商圈两档，商圈之下直接显示客户点。
+function localAggregate(level, list, bp) {
+  const has = bp && bp.minLat != null;
+  const pad = 0.002;
+  const field = level === 'bizCircle' ? 'bizCircle' : 'district';
+  const m = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    if (has && (p.lat < bp.minLat - pad || p.lat > bp.maxLat + pad || p.lng < bp.minLng - pad || p.lng > bp.maxLng + pad)) continue;
+    const k = String(p[field] || '') || '未标注';
+    let g = m.get(k);
+    if (!g) { g = { name: k, count: 0, la: 0, ln: 0 }; m.set(k, g); }
+    g.count++; g.la += p.lat; g.ln += p.lng;
+  }
+  const groups = [];
+  m.forEach(g => groups.push({ name: g.name, count: g.count, lat: g.la / g.count, lng: g.ln / g.count }));
+  groups.sort((a, b) => b.count - a.count);
+  return { ok: true, level: level, groups: groups.slice(0, 300), total: groups.reduce((a, g) => a + g.count, 0) };
+}
+function renderCustBubbles(res) {
+  const groups = (res && res.groups) || [];
+  // 内容没变就不碰图层（治"反复打断瓦片渲染 → 缺块"）
+  const _sig = groups.length + '|' + groups.map(g => g.name + ':' + g.count).join(',');
+  if (custBubbleSig === _sig && custBubbleLayer) return;
+  custBubbleSig = _sig;
+  const styles = {};
+  // ⭐ 2026-09-27：把圆点位置存下来，供"鼠标指过去出名字"用
+  //   （**WebView2 里 MultiMarker 的 hover 不触发** —— 2026-09-26 在任务地图上已踩过，老板"指着没反应"）
+  custBubblePts = groups.map((g, i) => ({
+    key: (g.name ? String(g.name) : 'g' + i),
+    name: String(g.name || '未标注'),
+    count: g.count || 0,
+    lat: g.lat, lng: g.lng
+  }));
+  const geos = groups.map((g, i) => {
+    const n = g.count || 0;
+    const si = dotSizeIdx(n), ci = dotColorIdx(n);
+    const sid = 'd' + si + ci + '_' + dotLabel(n);   // ⚠️ 带数字文本，否则同档不同数字会共用第一张图
+    if (!styles[sid]) {
+      const R = DOT_R[si], S = R * 2 + 8;
+      styles[sid] = new TMap.MarkerStyle({ width: S, height: S, anchor: { x: R + 4, y: R + 4 }, src: aggDotIcon(si, ci, n) });
+    }
+    return {
+      id: (g.name ? String(g.name) : 'g' + i),
+      styleId: sid,
+      // ⚠️ 必须 TMap.LatLng（原生 API；网上 vue 组件的 {lat,lng} 写法在这里会报 "position 属性无效"）
+      position: new TMap.LatLng(g.lat, g.lng),
+      properties: { name: String(g.name || '未标注'), count: n }
+    };
+  });
+  if (custBubbleLayer) {
+    custBubbleLayer.setStyles(styles);               // ≤15 种 style，set 一下很便宜
+    custBubbleLayer.setGeometries(geos);
+  } else {
+    custBubbleLayer = new TMap.MultiMarker({ map: trackMap, styles, geometries: geos, zIndex: 2 });
+    // 点击 = 放大进那个区域（老板习惯）
+    custBubbleLayer.on('click', e => {
+      const g = e.geometry;
+      if (!g || !g.position) return;
+      const c = g.position;
+      const z = trackMap.getZoom() || 12;
+      trackMap.easeTo({ center: new TMap.LatLng(c.getLat(), c.getLng()), zoom: Math.min(z + 2, 16) }, { duration: 600 });
+    });
+    // ⚠️ **不要用 hover** —— WebView2 里不触发；改由地图级 mousemove 处理（见 onCustBubbleMove）
+  }
+}
+
+// ⭐ 2026-09-27：鼠标指到聚合圆点 → 弹「区域名 + N 家」
+let custBubblePts = [];
+let custBubbleTip = null, custBubbleTipKey = '';
+function trackMetersPerPixel() {
+  const z = (trackMap && trackMap.getZoom) ? (trackMap.getZoom() || 12) : 12;
+  const c0 = (trackMap && trackMap.getCenter) ? trackMap.getCenter() : null;
+  const lat = (c0 && c0.getLat) ? c0.getLat() : 29;
+  return 156543.03392 * Math.cos((lat || 29) * Math.PI / 180) / Math.pow(2, z);
+}
+function showCustBubbleTip(p) {
+  if (!trackMap) return;
+  try {
+    const pos = new TMap.LatLng(p.lat, p.lng);
+    if (!custBubbleTip) {
+      custBubbleTip = new TMap.InfoWindow({
+        map: trackMap, position: pos, offset: { x: 0, y: -10 },
+        enableCustom: true, content: '<div></div>'
+      });
+    }
+    custBubbleTip.setPosition(pos);
+    custBubbleTip.setContent('<div style="font-size:12px;line-height:1.7;padding:2px 4px"><b style="font-size:13px">' + esc(p.name) + '</b><br><span style="color:#F5531C;font-weight:700">' + p.count + ' 家</span></div>');
+    custBubbleTip.open();
+  } catch (e) { /* 静默：气泡挂了不影响地图 */ }
+}
+function hideCustBubbleTip() {
+  custBubbleTipKey = '';
+  if (custBubbleTip) { try { custBubbleTip.close(); } catch (e) { /* 静默 */ } }
+}
+function onCustBubbleMove(evt) {
+  if (!evt || !evt.latLng || !custBubblePts.length) { if (custBubbleTipKey) hideCustBubbleTip(); return; }
+  const la = evt.latLng.getLat(), ln = evt.latLng.getLng();
+  const lim = trackMetersPerPixel() * 20;      // 20 像素内算"指到了"（圆点最大半径 40px，够用）
+  let best = null, bestD = lim;
+  for (let i = 0; i < custBubblePts.length; i++) {
+    const p = custBubblePts[i];
+    const d = tmHaversine(la, ln, p.lat, p.lng);
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  if (!best) { if (custBubbleTipKey) hideCustBubbleTip(); return; }
+  if (best.key === custBubbleTipKey) return;   // 还是同一个 → 不动
+  custBubbleTipKey = best.key;
+  showCustBubbleTip(best);
+}
+
+// ⭐ 2026-09-27：客户点**改读本地缓存**（后台 /mapPoints）—— 不再每次调 listCustomers 全量拉。
+//   依据：_scratch/架构-本地缓存与同步方案.md §十（M1）。
+//   数据流：后台每天首次自动拉 → 写 admin/cache/map-points.json → 这里一次性读进来（毫秒）。
+//   拜访状态（拜访中/待拜访/已回访）仍由**任务**合成 —— 只拉一次 listTasks（量小）。
+let trackStoreMeta = { syncedAt: 0, count: 0, warming: false };
+let trackCustVer = 0;                       // ⭐ 2026-09-27：客户数据版本号（loadCustData 每次重载 +1）
+// 客户数据（60 秒缓存）：本地缓存 + listTasks 构建 客户→业务员 映射
 async function loadCustData(force) {
   if (!force && trackCustCache && Date.now() - trackCustCacheAt < 60000) return trackCustCache;
-  const [cc, tt] = await Promise.all([api('listCustomers', {}), api('listTasks', {})]);
+  // ① 轻量客户点：读**本地缓存**（后台已按天预热好；极端情况后台还没好 → 空数组 + warming 标记）
+  let pts = [];
+  try {
+    const r = await fetch('/mapPoints', { cache: 'no-store' }).then(x => x.json());
+    pts = (r && r.points) || [];
+    trackStoreMeta = { syncedAt: (r && r.syncedAt) || 0, count: (r && r.count) || 0, warming: !!(r && r.warming) };
+  } catch (e) { pts = []; }
+  // ② 任务（量小，实时）→ 客户↔业务员 映射 + “任务中”业务员集合
+  let tt = null;
+  try { tt = await api('listTasks', {}); } catch (e) { tt = null; }
   const taskMap = {};
-  const tSet = new Set(); // 有进行中任务的业务员（2026-09-10：业务员气泡"任务中/无任务"）
-  (tt.ok ? (tt.tasks || []) : []).forEach(t => {
-    // 2026-09-08 修复：优先新接口顶层 customerIds；老云端兜底用 dayPlan 各天合并
+  const tSet = new Set();
+  ((tt && tt.ok ? tt.tasks : []) || []).forEach(t => {
     const ids = (t.customerIds && t.customerIds.length) ? t.customerIds
       : ((t.dayPlan || []).reduce((a, d) => a.concat(d.customerIds || []), []));
     ids.forEach(id => { taskMap[id] = t.salesmanId; });
     if (t.salesmanId) tSet.add(t.salesmanId);
   });
   trackTaskSalesmen = tSet;
-  trackCustCache = (cc.ok ? (cc.customers || []) : []).filter(c => c && c.lat && c.lng).map(c => ({ ...c, taskSalesmanId: taskMap[c._id] || null }));
+  // 缓存字段是缩写（i/n/la/ln/c/d/b + M2a 的 ad/cs/cst/mc/mk/u）→ 在这里还原成原来代码用的名字
+  trackCustCache = pts.filter(p => p && p.la && p.ln).map(p => ({
+    _id: p.i, name: p.n, lat: p.la, lng: p.ln,
+    city: p.c || '', district: p.d || '', bizCircle: p.b || '',
+    // ⭐ 2026-09-27 M2a：列表层新字段（客户管理页表格要用）
+    address: p.ad || '', coordSource: p.cs || '', coord_status: p.cst || '',
+    mallCode: p.mc || '', mallKey: p.mk || '', updatedAt: p.u || 0,
+    visitState: taskMap[p.i] ? 'in_task' : 'none',
+    taskSalesmanId: taskMap[p.i] || null
+  }));
   trackCustCacheAt = Date.now();
+  trackCustVer++;                           // ⭐ 数据版本号 +1：让 drawCustLayer 知道“数据变了，该重画”
+  updateMapDataLabel();
   return trackCustCache;
+}
+
+// ⭐ 2026-09-27：手动重拉地图数据（本地缓存刷新）—— 对应战况监控工具栏的「🔄 更新地图数据」
+async function refreshMapData() {
+  const b = $('mapDataBtn');
+  if (b) { b.disabled = true; b.textContent = '🔄 拉取中…'; }
+  try {
+    const r = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json());
+    if (!r || !r.ok) { alert('更新失败：' + ((r && r.msg) || '未知错误')); return; }
+    trackCustCache = null; trackCustCacheAt = 0;   // 丢弃旧内存缓存，下次重读
+    custAggCache = null; custAggCacheKey = '';
+    await loadCustData(true);
+    drawCustLayer().catch(() => {});
+    alert('✅ 已更新：' + r.count + ' 家客户（耗时 ' + (Math.round((r.ms || 0) / 100) / 10) + ' 秒）');
+  } catch (e) {
+    alert('更新失败：' + (e && e.message ? e.message : e));
+  } finally {
+    if (b) { b.disabled = false; b.textContent = '🔄 更新地图数据'; }
+  }
+}
+
+// 显示「数据截至 …」（未就绪时提示“正在准备”），让人知道缓存新旧
+function updateMapDataLabel() {
+  const el = $('mapDataStat');
+  if (!el) return;
+  if (trackStoreMeta.warming) { el.textContent = '⏳ 正在准备地图数据…'; return; }
+  if (!trackStoreMeta.syncedAt) { el.textContent = ''; return; }
+  const d = new Date(trackStoreMeta.syncedAt);
+  const p2 = n => String(n).padStart(2, '0');
+  el.textContent = '数据截至 ' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ' · ' + trackStoreMeta.count + ' 家';
 }
 
 async function drawCustLayer() {
   if (!trackMap) return;
   if (custInfoWin) { try { custInfoWin.close(); } catch (e) { /* 静默 */ } custInfoWin = null; }
-  if (!custLayerOn) { if (custLayer) custLayer.setGeometries([]); return; }
-  const list = await loadCustData(false);
-  // 最终口径（2026-09-08 老板定）：选中业务员 → 只显示他自己的任务客户点；
+  if (!custLayerOn) { if (custLayer) custLayer.setGeometries([]); clearCustBubbles(); return; }
+  // ⭐ 2026-09-26 分级聚合：小比例尺画**数字气泡**（几万个客户也只出几十个气泡）
+  //   ⚠️ 自查确认的 3 条已知限制（不是 bug，是本期范围外的）：
+  //     ① 聚合模式**不分拜访状态** —— 那 4 个图例开关（custKindOn）只在街道级真实点生效；
+  //     ② **「全览」/ 开场动画仍是全量拉客户**（fitCustBounds / playTrackIntro 走 loadCustData）→ 数万客户时会明显变慢；
+  //     ③ **任务地图（tmMap）没跟着改**，它仍是"当天客户点全画" —— 同样需要这套分档。
+  const _z = trackMap.getZoom() || 16;
+  const _lv = custAggLevel(_z);
+  // ⭐⭐⭐ 2026-09-27 根本性优化（治"越拖越糟/缺块"）：
+  //   **没跨档、数据也没变 → 直接 return，一个字节都不碰图层。**
+  //   拖地图/微调缩放都属于这种情况 —— GL 自己会 GPU 平移 + 裁剪视野外内容，我们插手反而打断它。
+  //   （以前每次 idle 都重算+setGeometries，拖着拖着就把瓦片渲染队列打死了 → 缺块且永不恢复）
+  if (_lv && _lv === custLastLevel && custBubbleLayer && custCustVer === trackCustVer) return;
+  if (_lv) { custLastLevel = _lv; custCustVer = trackCustVer; await drawCustBubbles(_lv); return; }
+  // ⭐⭐⭐ 2026-09-27 老板定：**聚合已停用 → 永远走这里，把所有客户点一次画全**。
+  //   ⭐ 关键：**不再按视野过滤** —— 一次把点全设进图层，之后拖地图/缩放**什么都不做**（GL 自己平移+裁剪）。
+  //   ⚠️ 极端情况（几十万客户）一次塞不下 → 留安全上限 CUST_AGG_LIMIT，到那个量再说。
+  //   筛选指纹：业务员下拉 / 图例开关 / 点大小 变了必须重画，否则上面的 return 会把它吃掉。
+  const _filterSig = (trackSelId || '') + '|' + (trackShowAll ? 1 : 0) + '|'
+    + [custKindOn.ongoing, custKindOn.pending, custKindOn.visited, custKindOn.gray].join('') + '|' + custSize;
+  if (custLastLevel === '' && custCustVer === trackCustVer && custFilterSig === _filterSig && custLayer) return;
+  custLastLevel = ''; custCustVer = trackCustVer; custFilterSig = _filterSig;
+  clearCustBubbles();                       // 收气泡（聚合停用时本来就是空的）
+  let list = await loadCustData(false);
+  // ⭐⭐ 2026-09-27 修正：原来直接 `slice(0, N)` 是**按 _id 顺序**截断 → 客户超过上限时，
+  //   "排在后面的那批"会**永远不显示**（哪怕它就在屏幕正中央）。
+  //   改成**以地图中心为圆心、取最近的 N 家** —— 保证屏幕上的点永远是最相关的那批。
+  if (list.length > CUST_AGG_LIMIT) {
+    const c0 = trackMap && trackMap.getCenter ? trackMap.getCenter() : null;
+    const cla = c0 && c0.getLat ? c0.getLat() : 0, cln = c0 && c0.getLng ? c0.getLng() : 0;
+    if (cla && cln) {
+      const withD = list.map(c => {
+        const dlat = c.lat - cla, dlng = (c.lng - cln) * 0.87;   // 金华一带 cos(纬度)≈0.87，够用
+        return { c: c, d: dlat * dlat + dlng * dlng };
+      });
+      withD.sort((a, b) => a.d - b.d);
+      list = withD.slice(0, CUST_AGG_LIMIT).map(x => x.c);
+    } else {
+      list = list.slice(0, CUST_AGG_LIMIT);
+    }
+  }
   // 其他客户点无论什么状态（含无任务灰点）全部消失；「全部」模式/未选中 → 显示所有客户点
   const sel = trackSelId;
   const items = list.filter(c => {
@@ -4599,7 +5230,7 @@ async function loadBatchSelect() {
   if (lastUsed && ntBatchCache.some(b => b._id === lastUsed)) selId = lastUsed;
   $('ntBatchSel').innerHTML = ntBatchCache.length
     ? opts + `<option value="">（全部客户·不限批次）</option>`
-    : `<option value="">（暂无批次——请先到客户管理导入/建批）</option>`;
+    : `<option value="">（暂无批次——请先到「客户管理」勾选客户建批）</option>`;
   $('ntBatchSel').value = selId;
   onBatchChange();
 }
@@ -4624,9 +5255,9 @@ async function onBatchChange() {
 
 async function showNewTask() {
   stopDetailTimer('');
-  // 侧边栏高亮同步到「任务管理」（2026-09-07 老板定：客户管理里点新建任务=跳转到任务管理的新建任务页）
+  // 侧边栏高亮同步到「任务管理」（2026-09-07 老板定：批次管理页里点新建任务=跳转到任务管理的新建任务页）
   document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === 'tasks'));
-  $('topActions').style.display = 'none'; // 顶部「导入所有客户列表」仅客户管理页显示
+  $('topActions').style.display = 'none'; // 顶部「导入所有客户列表」仅**批次管理**页显示
   $('page-tasks').style.display = 'none';
   ['page-taskDetail', 'page-customers', 'page-batchDetail', 'page-people'].forEach(id => { $(id).style.display = 'none'; });
   $('page-newTask').style.display = 'block';
@@ -4847,15 +5478,25 @@ let cdCur = null, cdCurId = null, cdEditing = false, cdGeoPending = null;
 // 云函数返回的 orderItems（单号 → 商品行数组）暂存在这里，供弹窗按单号取。
 let cdOrderItems = {};
 let cdOrders = [];   // 同上：当前客户的订单头（最近 20 单，含日期/状态/支付方式），弹窗头部显示用
+// ⭐ 2026-09-26 老板定：坐标**直接显示来源**（不再显示"正常"）——
+//   商城 / 平台 / 采集（业务员采集，审核通过后写回） / 修改（管理员后台改） / 待审核；
+//   没坐标的仍显示"补标"（否则看不出这家缺坐标）。五个名字统一两字，整齐。
 const CD_GEO_SRC = {
-  '商城': { bg: '#E7F6EC', fg: '#16A34A' },
-  '平台': { bg: '#EEF1F4', fg: '#66707A' },
-  '业务员上传': { bg: '#E8F1FD', fg: '#2F80ED' },
-  '后台修改': { bg: '#FFEDE5', fg: '#D93E0E' }
+  '商城':   { bg: '#E7F6EC', fg: '#16A34A' },   // 绿：商城导入（实地验证过）
+  '平台':   { bg: '#EEF1F4', fg: '#66707A' },   // 灰：大众点评抓取
+  '采集':   { bg: '#E8F1FD', fg: '#2F80ED' },   // 蓝：业务员采集
+  '修改':   { bg: '#FFEDE5', fg: '#D93E0E' },   // 橙：管理员后台改
+  '待审核': { bg: '#FEF3C7', fg: '#B45309' },   // 琥珀：坐标报错待审 / 已审待定
+  '补标':   { bg: '#FCEBEC', fg: '#C93A40' }    // 红：还没有坐标
 };
 function cdSrcName(c) {
-  return c.coordSource === 'platform' ? '平台' : c.coordSource === 'salesman' ? '业务员上传'
-    : c.coordSource === 'admin' ? '后台修改' : '商城';
+  if (!c || (c.lat == null && c.lng == null)) return '补标';                       // 没坐标
+  if (c.coordFixPending || c.coord_status === 'pending_confirm') return '待审核';   // 报错待审 / 已审待定
+  // ⚠️ 兼容旧值：导入脚本曾经把点评来源写成 'plat'（正确是 'platform'）—— 两者都当“平台”
+  return (c.coordSource === 'platform' || c.coordSource === 'plat') ? '平台'
+    : c.coordSource === 'salesman' ? '采集'
+    : c.coordSource === 'admin' ? '修改'
+    : '商城';
 }
 function cdSrcStyleAttr(src) {
   const s = CD_GEO_SRC[src] || CD_GEO_SRC['平台'];
@@ -4943,7 +5584,11 @@ function cdRender() {
         tr2('商城等级', esc(c.level || ''), '', '营业时间', esc(hours), '') +
         trW('地址', esc(c.address || ''), 'address') +
         trLine +
-        tr2('品类', esc(cat) + (plat.rank ? ' <span style="color:#C79A16;font-size:11.5px;margin-left:6px">🏆 ' + esc(plat.rank) + '</span>' : ''), '', '商圈', esc(area), '') +
+        tr2('品类', esc(cat), '', '商圈', esc(area), '') +
+        // ⭐ 2026-09-27 老板定：**排名单独一行**。
+        //   原来把「🏆 榜单」塞在"品类"的格子里 —— 品类名一长，排名就被挤到第二行、断成两截。
+        //   现在独立成整行（有排名才出，没有不出）。
+        (plat.rank ? trW('🏆 排名', '<span style="color:#C79A16">' + esc(plat.rank) + '</span>') : '') +
       '</tbody>' +
     '</table>' +
     photoBox));
@@ -5239,11 +5884,11 @@ function cdBuildMap() {
         zoom: 16, minZoom: 10, maxZoom: 20,
         pitch: 0, rotation: 0,
         draggable: false,
-        // 官方文档：vector 的 features 可选 —— base=道路及底面 / building3d=3D楼块 / building2d=2D楼块 /
+        // 官方文档：vector 的 features 可选 —— base=道路及底面 / building3d=3D楼块 / building3d=2D楼块 /
         //   point=POI文字 / label=**道路文字（道路名称）**。
         // 2026-09-25 老板定：① 要看到**道路名**（label）与餐饮/超市等**点位**（point）；
-        //   ② 用 **building2d 而不是 building3d** —— 3D 楼块有高度会**遮住道路名和 POI 标注**，而且数据重、加载慢。
-        baseMap: [{ type: 'vector', features: ['base', 'building2d', 'point', 'label'] }]
+        //   ② 用 **building3d 而不是 building3d** —— 3D 楼块有高度会**遮住道路名和 POI 标注**，而且数据重、加载慢。
+        baseMap: [{ type: 'vector', features: ['base', 'building3d', 'point', 'label'] }]
       });
       cdMapObj._for = myId;
       // 2026-09-25 老板定：**不要任何控件** —— 缩放 ＋/－、比例尺、3D 导航球全部移除
@@ -5339,7 +5984,7 @@ async function showCustDetail(id) {
   // 2026-09-25 老板定：详情页标题栏显示**完整编号**。
   // ⚠️ 编号已在缓存层由 `custWithCode()` 拼进 `name`（detailCustCache / custListCache 都过了一遍），
   //    这里**不要再拼一次**，否则会出现「c347 c347 早阳肉包」。
-  $('cmTitle').textContent = '🏪 ' + ((c0 && c0.name) || '客户详情');
+  $('cmTitle').textContent = '🏪 ' + (custTitleOf(c0) || '客户详情');
   $('cdPills').innerHTML = c0 ? cdStatusPills(c0) : '';
   $('cdBtnEdit').style.display = 'none';
   $('cdBtnSave').style.display = 'none';
@@ -5358,6 +6003,12 @@ async function showCustDetail(id) {
   if (res.customer) {
     const i = detailCustCache.findIndex(x => x._id === id);
     if (i >= 0) detailCustCache[i] = Object.assign({}, detailCustCache[i], res.customer);
+    // ⭐ 2026-09-27 修复（老板报障：“客户详情窗口标题栏应该显示客户全名”）：
+    //   原来只在打开那一瞬用缓存里的名字设一次 —— 若这个入口没进过 detailCustCache / custListCache
+    //   （比如从批次详情里点进来），c0 就是空 → 标题会**停在「🏮 客户详情」**，而且详情加载回来也不会补上。
+    //   现在数据一到就**用权威的 res.customer 重设标题**。
+    const nm = custTitleOf(res.customer);
+    if (nm) $('cmTitle').textContent = '🏪 ' + nm;
   }
   cdRender();
   $('cdBtnEdit').style.display = '';
@@ -5730,17 +6381,375 @@ async function loadLastMallImport() {
   } catch (e) { /* 静默 */ }
 }
 
+// ⭐ 2026-09-26 🏪 客户管理（原名 📍 地域管理，同日老板定改名；内部 id 仍叫 geo）——
+//   老板定：库里要到 6 万家，必须按 城市→区域→商圈 看客户 + 圈人建批次
+//   三个下拉 + 190px 搜索框 + 分页 + 客户总表；选项**从数据动态生成**（坑 D）；搜索范围=当前范围
+let geoOpts = { cities: [], districts: {}, bizCircles: {} };
+let geoOptsLoaded = false;
+let geoF = { city: '', district: '', bizCircle: '', q: '', page: 1, size: 50, total: 0, totalPages: 1 };
+
+async function loadGeoOptions() {
+  if (geoOptsLoaded) return;
+  geoOptsLoaded = true;
+  try {
+    const r = await api('custGeoOptions');
+    if (r && r.ok) geoOpts = { cities: r.cities || [], districts: r.districts || {}, bizCircles: r.bizCircles || {} };
+  } catch (e) { geoOptsLoaded = false; }
+  renderGeoBar();
+}
+
+function renderGeoBar() {
+  const citySel = $('gfCity'), distSel = $('gfDistrict'), bizSel = $('gfBiz');
+  if (!citySel) return;
+  citySel.innerHTML = '<option value="">全部城市</option>' + geoOpts.cities.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  citySel.value = geoF.city;
+  const ds = geoOpts.districts[geoF.city] || [];
+  distSel.innerHTML = '<option value="">全部区域</option>' + ds.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  distSel.value = geoF.district;
+  const bk = (geoF.city || '') + '|' + geoF.district;
+  const bs = geoF.district ? (geoOpts.bizCircles[bk] || []) : [];
+  bizSel.innerHTML = '<option value="">全部商圈</option>' + bs.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  bizSel.value = geoF.bizCircle;
+  bizSel.disabled = !geoF.district;
+  $('geoTitle').textContent = geoF.bizCircle ? ('🏘 ' + geoF.bizCircle + ' · 商圈总表')
+    : geoF.district ? ('🗺 ' + geoF.district + ' · 区域总表')
+    : geoF.city ? ('🏙 ' + geoF.city + ' · 城市总表')
+    : '🌏 全部城市 · 客户总表';
+  $('geoStat').textContent = `共 ${geoF.total} 家`;
+  const szSel = $('gfSize');
+  if (szSel) szSel.value = String(geoF.size);   // 每页条数回填（50 / 100 / 200）
+  // 2026-09-26 老板定：页码改成**可输入跳转**（输入框 + 总数 + 「跳」）
+  const pIn = $('gfPageInput');
+  if (pIn) { pIn.value = geoF.page; pIn.max = geoF.totalPages; }
+  const pTot = $('gfPageTotal');
+  if (pTot) pTot.textContent = geoF.totalPages;
+  $('gfPrev').disabled = geoF.page <= 1;
+  $('gfNext').disabled = geoF.page >= geoF.totalPages;
+  const f1 = $('gfFirst'), l1 = $('gfLast');   // 「最前 «」「最后 »」边界置灰
+  if (f1) f1.disabled = geoF.page <= 1;
+  if (l1) l1.disabled = geoF.page >= geoF.totalPages;
+}
+
+// 2026-09-26 老板定：跳到指定页（« 最前 / » 最后 用）
+function geoPageTo(n) {
+  const p = Math.min(Math.max(parseInt(n, 10) || 1, 1), geoF.totalPages);
+  if (p === geoF.page) return;
+  geoF.page = p;
+  loadGeoPage();
+}
+
+// 2026-09-26 老板定：输入页码后回车 / 点「跳」跳转（越界自动夹到 1 ~ 总页数）
+function geoPageJump() {
+  const el = $('gfPageInput');
+  geoPageTo(el ? el.value : 1);
+}
+
+// 2026-09-26 老板定：每页可选 50 / 100 / 200（后端 pageSize 上限就是 200）
+function geoSizeChange(v) {
+  const n = parseInt(v, 10) || 50;
+  geoF.size = (n === 100 || n === 200) ? n : 50;
+  geoF.page = 1;   // 改每页条数就回第 1 页（否则页码可能超出）
+  loadGeoPage();
+}
+
+async function loadGeoPage() {
+  const tbody = $('geoTbody');
+  if (!tbody) return;
+  loadGeoOptions();
+  tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中…</td></tr>';
+  const res = await api('listCustomers', {
+    city: geoF.city, district: geoF.district, bizCircle: geoF.bizCircle,
+    q: geoF.q, page: geoF.page, pageSize: geoF.size
+  });
+  if (!res.ok) { tbody.innerHTML = `<tr><td colspan="8" class="empty">${esc(res.msg || '加载失败')}</td></tr>`; return; }
+  geoF.total = res.total || 0;
+  geoF.totalPages = res.totalPages || 1;
+  geoF.page = res.page || 1;
+  const list = custWithCode(res.customers || []);
+  $('geoThead').innerHTML = '<tr>'
+    + '<th class="no" style="width:22px">#</th>'
+    + '<th style="width:38px"></th>'
+    + '<th style="width:38px"></th>'
+    + '<th class="no" style="width:22px;text-align:center"><input type="checkbox" id="geoChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle" onchange="geoCheckAll(this.checked)"></th>'
+    + '<th style="width:150px">店名</th><th style="width:56px">区域</th><th style="width:86px">商圈</th>'
+    + '<th style="width:62px">全局态</th><th style="width:66px">任务状态</th><th style="width:60px">订单总数</th><th style="width:88px">订单总额</th>'
+    + '<th style="width:64px">最近下单</th><th style="width:64px">最近拜访</th><th style="width:56px">坐标</th>'
+    + '<th style="width:170px">地址</th><th style="width:58px">商城</th>'
+    + '</tr>';
+  const VS = { pending: '待回访', ongoing: '拜访中', visited: '已回访' };
+  const rows = list.map((c, i) => {
+    const no = (geoF.page - 1) * geoF.size + i + 1;
+    const taskSt = c.visitStatus ? (VS[c.visitStatus] || c.visitStatus) : '';
+    // ⭐ 2026-09-26 老板定：「坐标」列**不再显示"正常/补标/待定"**，直接显示**来源**：
+    //   商城 / 平台 / 采集（业务员采集、审核通过后写回） / 修改（管理员后台改） / 待审核 / 补标（没坐标）
+    //   规则与标签都复用客户详情页同一个函数 cdSrcName()，两处显示口径永远一致。
+    const srcName = typeof cdSrcName === 'function' ? cdSrcName(c) : '商城';
+    const srcCls = srcName === '待审核' ? 'p-warn' : srcName === '补标' ? 'p-bad' : srcName === '采集' ? 'p-blue'
+      : srcName === '修改' ? 'p-or' : srcName === '平台' ? 'p-gray' : 'p-ok';
+    const coord = `<span class="pill ${srcCls}">${srcName}</span>`;
+    const amt = Number(c.orderAmountSum) || 0;
+    // ⭐ 2026-09-26 老板定：订单总额（紧跟订单总数右边）—— 累加 actualAmount，与客户详情页同口径
+    const amtCell = amt ? ('¥' + amt.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '—';
+    const on = geoPicked[c._id] ? ' checked' : '';
+    // 详情 / 备注 / 勾选三列**照客户批次表（renderBatchTbody）的方式**（2026-09-26 老板定）：
+    //   详情、备注都是 btn ghost 小按钮（22px / 11px / padding 0 8px）；备注有内容时橙色高亮；
+    //   勾选 = input.rowchk + data-id（表头带全选）。
+    return `<tr class="${geoPicked[c._id] ? 'picked' : ''}">`
+      + `<td class="no">${no}</td>`
+      + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px" onclick="showCustDetail('${c._id}')">详情</button></td>`
+      + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>`
+      + `<td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}"${on} onclick="geoPick('${c._id}', this)"></td>`
+      + `<td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
+      + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.district || '—')}</td>`
+      + `<td><span class="pill p-pu">${esc(c.bizCircle || '—')}</span></td>`
+      + `<td>${c.visitState === 'in_task' ? '<span class="pill p-blue">任务中</span>' : '—'}</td>`
+      + `<td>${taskSt ? '<span class="pill p-gray">' + taskSt + '</span>' : '—'}</td>`
+      + `<td style="text-align:center">${c.orderCount || '—'}</td>`
+      + `<td style="text-align:right;white-space:nowrap">${amtCell}</td>`
+      + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.lastOrderAt || '—')}</td>`
+      + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.lastVisitAt || '—')}</td>`
+      + `<td>${coord}</td>`
+      + `<td class="addr" title="${esc(c.address || '')}">${esc(geoAddr(c.address) || '—')}</td>`
+      + `<td>${c.mallCode ? '<span class="pill p-ok">已加</span>' : '<span class="pill p-bad">未加</span>'}</td>`
+      + '</tr>';
+  }).join('');
+  tbody.innerHTML = rows || '<tr><td colspan="16" class="empty">这个范围内还没有客户</td></tr>';
+  renderGeoBar();
+  updateGeoPicked();
+}
+
+// ⭐ 2026-09-26 老板定：表里「区域」列已经显示了区/县/市 → 地址列把开头的
+//   **省 + 市 + 区/县/市** 三段都剥掉（**通用规则，不写死任何地名**），省空间：
+//     浙江省金华市永康市东城街道… → 东城街道…
+//     浙江省金华市武义县桐琴镇… → 桐琴镇…
+//     浙江省杭州市西湖区文三路… → 文三路…
+//   ⚠️ 只在**客户管理页**（原地域管理）用；批次表那边仍是 shortAddr（只剥省+第一个市）—— 要一起改说一声。
+function geoAddr(s) {
+  if (!s) return '';
+  const raw = String(s).trim();
+  let t = raw;
+  t = t.replace(/^[\u4e00-\u9fa5]{2,8}?省/, '');            // 浙江省
+  t = t.replace(/^[\u4e00-\u9fa5]{2,8}?市/, '');            // 金华市
+  t = t.replace(/^[\u4e00-\u9fa5]{2,5}?(?:市|区|县)/, '');  // 永康市 / 武义县 / 婺城区
+  return t || raw;   // 全剥空了就回退原值
+}
+
+// ⭐ 2026-09-26 老板定：店名显示规则**照客户批次表（renderBatchTbody）**搬过来 ——
+//   店名 = 「客户编号 + 空格 + 店名」（c.name 已由 custWithCode() 拼好），
+//   **编号用定宽内联块（44px）**：这样任何字体下店名都从同一列开始。
+//   （批次表注释：不能用"编号后补空格"对齐 —— 比例字体下 c/a/1/9 宽度不同，补了照样参差。）
+function geoNameCell(fullName) {
+  const _raw = String(fullName || '');
+  const _sp = _raw.indexOf(' ');
+  const _hasCode = _sp > 0 && /^[a-z]\d+$/i.test(_raw.slice(0, _sp));
+  return _hasCode
+    ? '<span style="display:inline-block;width:44px">' + esc(_raw.slice(0, _sp)) + '</span>' + esc(_raw.slice(_sp + 1))
+    : esc(_raw);
+}
+
+// 勾选（为"按商圈圈客户 → 派单"做准备；下一步接派单动作）
+let geoPicked = {};
+function geoPick(id, el) {
+  const on = el && el.checked;
+  if (on) geoPicked[id] = 1; else delete geoPicked[id];
+  const tr = el && el.closest ? el.closest('tr') : null;
+  if (tr) tr.className = on ? 'picked' : '';
+  updateGeoPicked();
+}
+// 表头全选 / 取消本页（照客户批次表的方式）
+function geoCheckAll(on) {
+  document.querySelectorAll('#geoTbody input.rowchk').forEach(b => {
+    b.checked = !!on;
+    const id = b.getAttribute('data-id');
+    if (on) geoPicked[id] = 1; else delete geoPicked[id];
+  });
+  document.querySelectorAll('#geoTbody tr').forEach(tr => { tr.className = on ? 'picked' : ''; });
+  updateGeoPicked();
+}
+function updateGeoPicked() {
+  const n = Object.keys(geoPicked).length;
+  const el = $('geoPicked');
+  if (el) el.textContent = n ? ('已选 ' + n + ' 家') : '';
+  const cl = $('geoPickedClear');               // 「已选 N 家」右边那个 ✕：有选中才显示
+  if (cl) cl.style.display = n ? 'inline-block' : 'none';
+}
+
+// ⭐ 2026-09-26 老板定：**客户管理页（原地域管理）= 建批次的入口** —— 勾选客户 → 建批次卡；
+//   批次卡那条老链路（批次 → 选客户 + 选业务员 → 建任务）**完全不变**，
+//   所以这里只调现成的 createManualBatch（与「复制到新批次」「＋手工建批」同一个后端，支持直接传 customerIds）。
+async function geoMakeBatch() {
+  const ids = Object.keys(geoPicked);
+  if (!ids.length) { alert('请先在表格里勾选客户（可点表头方框全选本页）'); return; }
+  const name = (prompt('给这个批次起个名字：\n（例如「古山镇商圈 · 第一批」，共 ' + ids.length + ' 家）', '') || '').trim();
+  if (!name) return;
+  const res = await api('createManualBatch', { name: name, subtitle: '', customerIds: ids });
+  if (!res || !res.ok) { alert((res && res.msg) || '建立批次失败'); return; }
+  // 让「批次管理」页的批次卡缓存立刻带上新批次（下次进那页就是最新的）
+  try { const br = await api('listCustomerBatches'); if (br && br.ok) batchCache = br.batches || []; } catch (e) { /* 静默 */ }
+  alert('✅ 已建立批次「' + name + '」（' + ids.length + ' 家）\n\n去「批次管理」页的批次卡里，就能选客户 + 派业务员建任务了。');
+  geoClearPicked();   // 建完清空勾选，避免误操作
+}
+
+// ⭐ 2026-09-26 老板定：「已选 N 家」右边的 ✕ = **一键取消全部选择**
+function geoClearPicked() {
+  geoPicked = {};                                                          // 清空内存里的选择
+  document.querySelectorAll('#geoTbody input.rowchk').forEach(b => { b.checked = false; });  // 取消本页所有勾选
+  document.querySelectorAll('#geoTbody tr').forEach(tr => { tr.className = ''; });           // 去掉选中行底色
+  const all = $('geoChkAll');
+  if (all) all.checked = false;                                            // 表头「全选」也跟着取消
+  updateGeoPicked();
+}
+
+function geoFilterChange(id) {
+  if (id === 'gfCity') { geoF.city = $('gfCity').value; geoF.district = ''; geoF.bizCircle = ''; }
+  else if (id === 'gfDistrict') { geoF.district = $('gfDistrict').value; geoF.bizCircle = ''; }
+  else { geoF.bizCircle = $('gfBiz').value; }
+  geoF.page = 1;
+  renderGeoBar();
+  loadGeoPage();
+}
+
+function geoSearch() {
+  const qEl = $('gfQ');
+  geoF.q = qEl ? String(qEl.value || '').trim() : '';
+  geoF.page = 1;
+  loadGeoPage();
+}
+
+function geoPage(delta) {
+  const p = geoF.page + delta;
+  if (p < 1 || p > geoF.totalPages) return;
+  geoF.page = p;
+  loadGeoPage();
+}
+
+// ⭐ 2026-09-26 三层入口（老板定：库里要从 463 家涨到 6 万家，必须按 城市→区域→商圈 看）
+//   · 界面：三个下拉 + 🔍 搜索框，**全挤在一行**（2026-09-25 老板定：省上下空间）
+//   · 搜索范围 = **当前选中的范围**（选古山镇就搜古山镇；"全部城市"就是全局搜索）
+//   · 统一"点搜索键/回车才搜"，不边打边搜（大范围会每敲一字查一次库）
+//   · 选项**从数据里动态生成**（坑 D 教训：写死选项会出现"选了却是空表"）
+let custGeo = { cities: [], districts: {}, bizCircles: {} };
+let custFilter = { city: '', district: '', bizCircle: '', q: '', page: 1, size: 50, total: 0, totalPages: 1 };
+let custGeoLoaded = false;
+
+async function loadCustGeoOptions() {
+  if (custGeoLoaded) return;
+  custGeoLoaded = true;
+  try {
+    const r = await api('custGeoOptions');
+    if (r && r.ok) custGeo = { cities: r.cities || [], districts: r.districts || {}, bizCircles: r.bizCircles || {} };
+  } catch (e) { custGeoLoaded = false; }
+  buildCustFilterBar();
+}
+
+// 把筛选条插到客户表前面（只建一次；用 DOM 动态注入，避免大段改 HTML）
+function ensureCustFilterBar() {
+  let bar = $('custFilterBar');
+  if (bar) return bar;
+  const tb = $('custTbody');
+  const table = tb ? tb.closest('table') : null;
+  const host = table ? table.parentNode : null;
+  if (!host) return null;
+  bar = document.createElement('div');
+  bar.id = 'custFilterBar';
+  bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--line)">'
+    + '<span id="custFilterTitle" style="font-weight:700;font-size:13.5px"></span>'
+    + '<span class="sb-d" id="custFilterStat"></span>'
+    + '<select id="cfCity" class="sb-d" style="height:30px;border:1px solid var(--line);border-radius:7px;padding:0 6px"></select>'
+    + '<select id="cfDistrict" class="sb-d" style="height:30px;border:1px solid var(--line);border-radius:7px;padding:0 6px"></select>'
+    + '<select id="cfBiz" class="sb-d" style="height:30px;border:1px solid var(--line);border-radius:7px;padding:0 6px"></select>'
+    + '<input id="cfQ" placeholder="店名关键词" style="width:190px;height:30px;border:1px solid var(--line);border-radius:7px;padding:0 8px;font-size:12.5px">'
+    + '<button class="btn ghost btn-sm" onclick="doCustSearch()">🔍 搜索</button>'
+    + '<span style="margin-left:auto;display:flex;align-items:center;gap:6px">'
+    + '<button class="btn ghost btn-sm" id="cfPrev" onclick="custPage(-1)">上一页</button>'
+    + '<span class="sb-d" id="cfPageInfo"></span>'
+    + '<button class="btn ghost btn-sm" id="cfNext" onclick="custPage(1)">下一页</button>'
+    + '</span></div>';
+  host.insertBefore(bar, table);
+  ['cfCity', 'cfDistrict', 'cfBiz'].forEach(id => $(id).addEventListener('change', onCustFilterChange));
+  const q = $('cfQ');
+  if (q) q.addEventListener('keydown', e => { if (e.key === 'Enter') doCustSearch(); });
+  return bar;
+}
+
+// 用当前选项填充三个下拉（级联：城市 → 区域 → 商圈）
+function buildCustFilterBar() {
+  if (!ensureCustFilterBar()) return;
+  const citySel = $('cfCity'), distSel = $('cfDistrict'), bizSel = $('cfBiz');
+  citySel.innerHTML = '<option value="">全部城市</option>' + custGeo.cities.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  citySel.value = custFilter.city;
+  const ds = custGeo.districts[custFilter.city] || [];
+  distSel.innerHTML = '<option value="">全部区域</option>' + ds.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  distSel.value = custFilter.district;
+  const bk = (custFilter.city || '') + '|' + custFilter.district;
+  const bs = custFilter.district ? (custGeo.bizCircles[bk] || []) : [];
+  bizSel.innerHTML = '<option value="">全部商圈</option>' + bs.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  bizSel.value = custFilter.bizCircle;
+  bizSel.disabled = !custFilter.district;
+  const t = $('custFilterTitle');
+  if (t) {
+    t.textContent = custFilter.bizCircle ? ('🏘 ' + custFilter.bizCircle + ' · 商圈总表')
+      : custFilter.district ? ('🗺 ' + custFilter.district + ' · 区域总表')
+      : custFilter.city ? ('🏙 ' + custFilter.city + ' · 城市总表')
+      : '🌏 全部城市 · 客户总表';
+  }
+  const info = $('cfPageInfo');
+  if (info) info.textContent = `第 ${custFilter.page} / ${custFilter.totalPages} 页`;
+  const st = $('custFilterStat');
+  if (st) st.textContent = `共 ${custFilter.total} 家`;
+  const prev = $('cfPrev'), next = $('cfNext');
+  if (prev) prev.disabled = custFilter.page <= 1;
+  if (next) next.disabled = custFilter.page >= custFilter.totalPages;
+}
+
+function onCustFilterChange(e) {
+  const id = e && e.target ? e.target.id : '';
+  if (id === 'cfCity') { custFilter.city = $('cfCity').value; custFilter.district = ''; custFilter.bizCircle = ''; }
+  else if (id === 'cfDistrict') { custFilter.district = $('cfDistrict').value; custFilter.bizCircle = ''; }
+  else { custFilter.bizCircle = $('cfBiz').value; }
+  custFilter.page = 1;
+  buildCustFilterBar();
+  loadCustomers();
+}
+
+function doCustSearch() {
+  const qEl = $('cfQ');
+  custFilter.q = qEl ? String(qEl.value || '').trim() : '';
+  custFilter.page = 1;
+  loadCustomers();
+}
+
+function custPage(delta) {
+  const p = custFilter.page + delta;
+  if (p < 1 || p > custFilter.totalPages) return;
+  custFilter.page = p;
+  loadCustomers();
+}
+
 // ===== 客户 =====
 async function loadCustomers(batchId, batchName) {
   loadLastMallImport();
   const isNew = curMode === 'new';
   const batchMode = batchId !== undefined; // 批次详情页（含未分批 ''）
+  // ⭐ 2026-09-26 三层入口：非批次模式先确保筛选条在（选项从数据动态生成）
+  if (!batchMode) { ensureCustFilterBar(); if (!custGeoLoaded) loadCustGeoOptions(); }
   unbatchMode = batchId === '';
   const theadEl = batchMode ? $('batchThead') : $('custThead');
   const tbodyEl = batchMode ? $('batchTbody') : $('custTbody');
   const cols = 8;
   tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="loading">加载中…</td></tr>`;
-  const res = await api('listCustomers', batchId ? { batchId } : {});
+  // ⭐ 2026-09-26：非批次模式走「三层入口 + 分页」—— 后端只返回当前页（默认 50 条），不再全量拉
+  const res = batchMode
+    ? await api('listCustomers', { batchId })
+    : await api('listCustomers', {
+        city: custFilter.city, district: custFilter.district, bizCircle: custFilter.bizCircle,
+        q: custFilter.q, page: custFilter.page, pageSize: custFilter.size
+      });
+  if (!batchMode && res.ok) {
+    custFilter.total = res.total || 0;
+    custFilter.totalPages = res.totalPages || 1;
+    custFilter.page = res.page || 1;
+  }
   if (!res.ok) { tbodyEl.innerHTML = `<tr><td colspan="${cols}" class="empty">${res.msg || '加载失败'}</td></tr>`; return; }
   let list = res.customers.filter(c => c.customerType === curMode);
   if (unbatchMode) list = list.filter(c => !(c.batchIds || []).length);
@@ -5782,7 +6791,7 @@ async function loadCustomers(batchId, batchName) {
           ? (c.mallJoinedAt ? '✅ 已入商城 ' + esc(c.mallJoinedAt) : '<span class="pill warn">待开发</span>')
           : (c.lastOrderAt ? esc(c.lastOrderAt) : '<span class="pill warn">未下单</span>');
         return `<tr>
-      <td class="no">${i + 1}</td>
+      <td class="no">${batchMode ? (i + 1) : ((custFilter.page - 1) * custFilter.size + i + 1)}</td>
       <td><b style="cursor:pointer" onclick="openCustProfile('${c._id}')">${esc(c.name)}</b></td>
       <td><span class="pill ${c.customerType === 'new' ? 'blue' : 'orange'}">${c.customerType === 'new' ? '新客户' : '回访'}</span></td>
       <td class="light">${esc(c.address || '—')}</td><td class="light">${esc(c.phone || '—')}${c.phone2 ? '<br>' + esc(c.phone2) : ''}</td>
@@ -5792,6 +6801,7 @@ async function loadCustomers(batchId, batchName) {
     </tr>`;
       }).join('');
     tbodyEl.innerHTML = rows || `<tr><td colspan="8" class="empty">暂无客户，需要导入客户表</td></tr>`;
+    if (!batchMode) buildCustFilterBar();   // 2026-09-26：刷新标题 / 共N家 / 第 N/M 页
   }
   // 批次详情页头部信息（2026-09-07：点批次卡单独进入详情页；副标题从批次缓存/云端取）
   if (batchMode) {
@@ -5809,7 +6819,9 @@ async function loadCustomers(batchId, batchName) {
     // 2026-09-24：未分批页也显示操作区（以前整体隐藏 → 勾选客户后无处可操作）
     $('batchDetailOps').style.display = '';
     // 未分批：隐藏「批次内专用」按钮（添加客户/追加导入/新建任务 都需要批次）
-    ['batchAddCustBtn', 'batchImportBtn', 'batchNewTaskBtn'].forEach(id => {
+    // 2026-09-26 老板定：暂时不要「未分批」入口 —— batchAddCustBtn 已在 HTML 里写死 display:none，
+    //   所以这里不再控制它（要恢复：把它加回数组、并去掉 HTML 里那个 display:none）
+    ['batchImportBtn', 'batchNewTaskBtn'].forEach(id => {
       const b = $(id);
       if (b) b.style.display = unbatchMode ? 'none' : '';
     });
@@ -5817,7 +6829,7 @@ async function loadCustomers(batchId, batchName) {
   }
 }
 
-// ===================== 客户批次管理（2026-09-07 老板定稿，方案见交接文档 §7.12） =====================
+// ===================== 批次管理（2026-09-07 老板定稿，方案见交接文档 §7.12；2026-09-26 页签改名，原「客户管理」） =====================
 let batchCache = [];
 let curBatchId = '';
 let curBatchName = '';
@@ -5888,7 +6900,9 @@ function renderBatchCards(batches, unbatched) {
   }).join('') : `<div class="empty" style="width:100%">还没有批次，点右上角「📥 导入新批次」导入客户
     ${unbatched > 0 ? `<div style="margin-top:12px"><button class="btn primary" onclick="runArchive()">🏗 执行初始归档（现有 ${unbatched} 家客户归入「2026年9月1日第一批导入」）</button></div>` : ''}
   </div>`;
-  $('unbatchedCard').style.display = unbatched > 0 ? '' : 'none';
+  // 2026-09-26 老板定：**暂时不要「未分批」卡了** —— 所有客户都在「🏪 客户管理」页按地域看/筛，
+  //   这张卡的意义不大（要恢复：改回 unbatched > 0 ? '' : 'none'）
+  $('unbatchedCard').style.display = 'none';   // 原来是：unbatched > 0 ? '' : 'none'
   $('unbatchedCount').textContent = `${unbatched} 家未分批`;
 }
 
@@ -7210,7 +8224,9 @@ function openImport(append, batchId) {
     : (importAppendBatchId ? `🔥 回访客户 · 追加进「${curBatchName || '当前批次'}」` : '🔥 回访客户（将自动新建批次）');
   // 2026-09-24 老板定：只有「追加导入」（有目标批次）时才显示"从未分批里挑客户"的入口
   const impPb = $('impPickUnbatched');
-  if (impPb) impPb.style.display = importAppendBatchId ? '' : 'none';
+  // 2026-09-26 老板定：暂时不要「未分批」入口 —— 这块（从“未分批池”挑客户加进本批次）先藏；
+  //   要恢复：改回 impPb.style.display = importAppendBatchId ? '' : 'none';
+  if (impPb) impPb.style.display = 'none';
 }
 
 // 「＋ 未分批」：从导入弹窗跳到"从未分批客户里勾选 → 加入本批次"（复用现成的 addCustOvl）

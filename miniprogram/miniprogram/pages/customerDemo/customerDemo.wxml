@@ -160,6 +160,8 @@
         <!-- 2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成「聚火地图」。
              去 logo 用**裁剪法**：.cmap-wrap 加 overflow:hidden，.cmap 高度多出 40px → 底部 logo 区被裁掉。
              ⚠️ wx:if 必须留在**外层 wrapper** 上（卡片折叠靠它控制显隐，原生组件用 CSS 隐藏压不住）。 -->
+    <!-- ⭐ 2026-09-27：腾讯地图 logo/审图号**恢复显示**（撤销裁剪法）；「聚火地图」badge 同时保留，
+         位置改到**左上角**（腾讯 logo 在右下角，不能互相压）。 -->
         <view class="jh-badge">
           <view class="jh-compass"><view class="jh-needle"></view></view>
           <view class="jh-word">聚火地图</view>

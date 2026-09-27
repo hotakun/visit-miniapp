@@ -25,7 +25,11 @@ PART_LIMIT = 68 * 1024  # 每片字节上限（云函数入参 100KB，留余量
 # ===== 任务与源文件路径（2026-09-25：后台「导入信息」页改成四个入口各自吃表格/目录）=====
 # TASK 决定**只跑哪一类**（原来是 all 一把全跑）：
 #   mall  = 商城客户（生成 customers，含平台画像）
-#   plat  = 大众点评（**只更新 customers.plat**：分片里只带关联键 + plat，不动其它字段）
+#   plat  = ⭐ 大众点评（2026-09-26 老板定：**点评导入也能建客户**）
+#           分片里带「点评侧有的全部字段」；入库时云端按 shopuuid 匹配：
+#           匹配上 → 字段级取优（只补空位，冲突以商城为准）；匹配不上 → **新建客户**。
+#           ⚠️ 旧规则「只更新 customers.plat、且分片裁成关联键 + plat」**已作废**。
+#           ⚠️ 点评表里 **shopuuid 为空的行直接跳过**（这条只对点评表成立，商城表不适用）。
 #   order = 销售订单（orders）
 #   item  = 订单明细（order_items）
 #   all   = 三类全跑（保持兼容）
@@ -166,49 +170,251 @@ def write_parts(prefix, docs):
 
 # ============ ① 读源表 ============
 def load_sources():
+    """按任务读表：
+         mall       商城客户表（必填）＋ 点评表（可选，带来就顺便补平台画像）
+         plat ⭐     大众点评表（必填）—— 2026-09-26 老板定：点评导入**也能建客户**，不再需要商城表
+         order/item 只导订单/明细，两张表都不需要
+    """
     p_mall = F_MALL or os.path.join(BASE, '商城客户列表002-已匹配大众点评-带shopuuid.xlsx')
     p_plat = F_PLAT or os.path.join(BASE, '金华-永康-已匹配商城-带商城客户名-补齐同店.xlsx')
     p_dup = os.path.join(BASE, '客户列表0912-同店重复注册.xlsx')
-    if not os.path.exists(p_mall):
-        raise SystemExit('找不到商城客户表：' + p_mall)
-    mall = pd.read_excel(p_mall)
-    R('① 商城侧 %s → %d 行 × %d 列' % (os.path.basename(p_mall), len(mall), len(mall.columns)))
-    if TASK in ('mall', 'all'):
+    mall = plat = None
+
+    if TASK == 'plat':
+        # ⚠️ 2026-09-26 修 bug：原来这里**只认 mall/all**（`if TASK in ('mall','all')` 才读点评表），
+        #    于是后台「大众点评客户导入」等于白跑，还会把已有客户的 plat 覆盖成空对象。
         if not os.path.exists(p_plat):
             raise SystemExit('找不到大众点评表：' + p_plat)
         plat = pd.read_excel(p_plat)
-        R('② 点评侧 %s → %d 行 × %d 列' % (os.path.basename(p_plat), len(plat), len(plat.columns)))
-    else:
-        plat = None          # 只导订单/明细时不需要点评表
+        R('① 点评侧 %s → %d 行 × %d 列' % (os.path.basename(p_plat), len(plat), len(plat.columns)))
+    elif TASK in ('mall', 'all'):
+        if not os.path.exists(p_mall):
+            raise SystemExit('找不到商城客户表：' + p_mall)
+        mall = pd.read_excel(p_mall)
+        R('① 商城侧 %s → %d 行 × %d 列' % (os.path.basename(p_mall), len(mall), len(mall.columns)))
+        if os.path.exists(p_plat):
+            plat = pd.read_excel(p_plat)
+            R('② 点评侧 %s → %d 行 × %d 列' % (os.path.basename(p_plat), len(plat), len(plat.columns)))
+        else:
+            R('② 点评侧（本次没给这张表 → 不带平台画像）')
+
     dup = pd.read_excel(p_dup, header=1) if os.path.exists(p_dup) else None
     R('③ 同店重复登记 %s' % ('%d 行' % len(dup) if dup is not None else '（无此文件，跳过）'))
     return mall, plat, dup
 
+# ============ 点评行：内部合并 / 画像块 / 建客户 ============
+# 点评表的「空」口径：`-` / `--` / `[]` / `['']` 都当没有（clean_plat_field 同口径）
+PLAT_EMPTY = ('', '-', '--', '[]', "['']", 'nan', 'none', 'nat', 'null')
+
+def plat_richness(row, cols):
+    """有效字段数（老板 2026-09-13 口径）：遍历该行，剔除 空 / '-' / '[]' / "['']" / False / 0 / '0.0'"""
+    n = 0
+    for col in cols:
+        v = s(row.get(col))
+        if not v:
+            continue
+        lv = v.lower()
+        if lv in PLAT_EMPTY or lv in ('false', '0', '0.0'):
+            continue
+        n += 1
+    return n
+
+def plat_score(row):
+    try:
+        return float(s(row.get('评分')) or 0)
+    except Exception:
+        return 0.0
+
+def merge_plat_rows(rows, cols, uuid):
+    """同一 shopuuid 的多条点评记录 → **字段级合并**（老板 2026-09-13 拍板「方案 A」）：
+       ① 定主记录：有效字段多 → 评分高 → 随机（用 uuid 的 md5 掷，**保证每次跑结果一样**）
+       ② 主记录为基座，逐字段补缺（主记录为空就用另一条的值）
+       ③ 【收录时间】例外：取**更早**的那个
+       ④ 【小类】不同 → **两个都留成标签**（老板 2026-09-26 定；`cat3Tags` 装全部，`小类` 仍给主记录的）
+    """
+    rows = list(rows)
+    if len(rows) == 1:
+        one = rows[0]
+        c3 = clean_plat_field(one.get('小类'))
+        return {'row': one, 'cat3Tags': [c3] if c3 else [], 'mergeCount': 1,
+                'fromNames': [s(one.get('name'))]}
+
+    rich = [plat_richness(r, cols) for r in rows]
+    cand = [i for i in range(len(rows)) if rich[i] == max(rich)]
+    sco = [plat_score(rows[i]) for i in cand]
+    cand = [i for i in cand if plat_score(rows[i]) == max(sco)]
+    pick = cand[int(hashlib.md5(uuid.encode('utf-8')).hexdigest(), 16) % len(cand)]
+    base = rows[pick]
+
+    merged = {}
+    for col in cols:
+        v = clean_plat_field(base.get(col))
+        if not v:
+            for r2 in rows:
+                if r2 is base:
+                    continue
+                v = clean_plat_field(r2.get(col))
+                if v:
+                    break
+        merged[col] = v
+
+    # 收录时间取更早（两条都读）
+    times = [t for t in (listed_time(r.get('收录时间')) for r in rows) if t]
+    if times:
+        merged['收录时间'] = min(times)
+
+    # 小类：两个都留
+    cat3 = []
+    for r2 in rows:
+        v = clean_plat_field(r2.get('小类'))
+        if v and v not in cat3:
+            cat3.append(v)
+    merged['小类'] = cat3[0] if cat3 else ''
+
+    return {'row': merged, 'cat3Tags': cat3, 'mergeCount': len(rows),
+            'fromNames': [s(r.get('name')) for r in rows]}
+
 def plat_index(plat):
-    """shopuuid → 点评行（同一 shopuuid 多条时按 §1.3 方案 A：字段级合并，收录时间取更早）"""
+    """shopuuid → 合并后的点评条目 { row, cat3Tags, mergeCount, fromNames }。
+       ⚠️ **shopuuid 为空的行直接跳过**（2026-09-26 老板定）—— ⚠️ 这条只对**点评表**成立，
+       商城表不按这个规则（商城没有 shopuuid 也照导）。实测金华表有 5 行整行全空的废行。
+    """
     if plat is None:
-        return {}
-    idx = {}
+        return {}, {'skipNoUuid': 0, 'merged': 0}
+    cols = list(plat.columns)
+    buckets, order, skip = {}, [], 0
     for _, r in plat.iterrows():
         u = s(r.get('shopuuid'))
         if not u:
+            skip += 1
             continue
-        if u not in idx:
-            idx[u] = r
-        else:
-            a, b = idx[u], r
-            merged = {}
-            for col in plat.columns:
-                va, vb = clean_plat_field(a.get(col)), clean_plat_field(b.get(col))
-                merged[col] = va if va else vb
-            # 收录时间取更早
-            ta, tb = listed_time(a.get('收录时间')), listed_time(b.get('收录时间'))
-            if ta and tb:
-                merged['收录时间'] = min(ta, tb)
-            elif ta or tb:
-                merged['收录时间'] = ta or tb
-            idx[u] = pd.Series(merged)
-    return idx
+        if u not in buckets:
+            buckets[u] = []
+            order.append(u)
+        buckets[u].append(r)
+    idx, merged_n = {}, 0
+    for u in order:
+        item = merge_plat_rows(buckets[u], cols, u)
+        if item['mergeCount'] > 1:
+            merged_n += 1
+        idx[u] = item
+    return idx, {'skipNoUuid': skip, 'merged': merged_n}
+
+# 只用来给「随机选主记录」掷一个**稳定**的骰子（同 shopuuid 每次跑结果都一样，导入才幂等）
+import hashlib
+
+
+def plat_block(row, uuid, cat3_tags=None):
+    """点评行 → customers.plat 平台画像块（商城路径与点评路径共用同一套字段名）"""
+    b = {
+        'newShop': clean_plat_field(row.get('新店标签')),
+        'phone1': clean_plat_field(row.get('phone1')),
+        'phone2': clean_plat_field(row.get('phone2')),
+        'cityCode': clean_plat_field(row.get('城市编码')),
+        'addr': clean_plat_field(row.get('地址')),
+        'province': clean_plat_field(row.get('省份')),
+        'city': clean_plat_field(row.get('城市')),
+        'district': clean_plat_field(row.get('行政区')),
+        'regionName': clean_plat_field(row.get('regionName')),
+        'regionId': clean_plat_field(row.get('regionId')),
+        'cityId': clean_plat_field(row.get('cityId')),
+        'shopUuid': uuid,
+        'shopId': clean_plat_field(row.get('shopid')),
+        'bizStatus': clean_plat_field(row.get('经营状态')),
+        'cat1': clean_plat_field(row.get('大类')),
+        'cat2': clean_plat_field(row.get('中类')),
+        'cat3': clean_plat_field(row.get('小类')),
+        'dishes': clean_plat_field(row.get('菜品')),
+        'dishDetail': clean_plat_field(row.get('菜品详情')),
+        'avgPriceText': clean_plat_field(row.get('人均消费')),
+        'rating': clean_plat_field(row.get('评分')),
+        'taste': clean_plat_field(row.get('评分详情_口味')),
+        'env': clean_plat_field(row.get('评分详情_环境')),
+        'service': clean_plat_field(row.get('评分详情_服务')),
+        'reviewCount': clean_plat_field(row.get('评论总数')),
+        'reviewCount2025': clean_plat_field(row.get('评论总数(2025年)')),
+        'groupon': plat_bool(row.get('团购')),
+        'takeout': plat_bool(row.get('外卖')),
+        'rank': clean_plat_field(row.get('榜单信息')),
+        'features': clean_plat_field(row.get('特色服务')),
+        'facilities': clean_plat_field(row.get('配套设施')),
+        'services': clean_plat_field(row.get('服务设施')),
+        'foreign': plat_bool(row.get('外国')),
+        'lng': num(clean_plat_field(row.get('lng'))),      # 平台坐标：入库留存
+        'lat': num(clean_plat_field(row.get('lat'))),
+        'url': clean_plat_field(row.get('url')),
+        'photoCount': clean_plat_field(row.get('图片数量')),
+        'alias': clean_plat_field(row.get('商户别名')),
+        'hours': clean_plat_field(row.get('营业时间')),
+        'lastPhotoAt': clean_plat_field(row.get('商家最近上次图片时间')),
+        'chainCount': clean_plat_field(row.get('已登记的连锁店数量')),
+        'listedTime': listed_time(row.get('收录时间')),
+    }
+    # 小类两边不一样时**两个都留成标签**（老板 2026-09-26 定）：cat3 仍是主记录的，cat3Tags 装全部
+    if cat3_tags and len(cat3_tags) > 1:
+        b['cat3Tags'] = list(cat3_tags)
+    return b
+
+
+def build_customers_from_plat(pmap):
+    """⭐ 点评导入建客户（2026-09-26 老板定的新规则）：
+       **点评表自己就能建客户** —— 不再要求先有商城表，"假商城表中转"那套也就作废了。
+
+       写进去的只有「点评侧有的」：店名 / 地址 / 三层骨架 / 坐标 / 平台画像；
+       **一律不写商城侧字段**（mallKey、mallCode、购买次数、订单数…）—— 还没加入商城就留空，
+       以后这家加入了商城、再导商城表时，云端会按 shopuuid 匹配上并自然补齐（见 importdata）。
+
+       同 shopuuid 的多条记录**已经在 plat_index 里合并成一条**（不建"主副档"）：
+       点评那两条没有各自的订单和拜访记录，合并什么都不丢；留 platMergeCount / platMergeFrom 可回溯。
+    """
+    docs = []
+    stat = {'noCoord': 0}
+    for uuid, item in pmap.items():
+        row = item['row']
+        lng = num(clean_plat_field(row.get('lng')))
+        lat = num(clean_plat_field(row.get('lat')))
+        if lng is None or lat is None:
+            stat['noCoord'] += 1
+        city = clean_plat_field(row.get('城市'))
+        if city and not city.endswith('市'):
+            city += '市'
+        docs.append({
+            # —— 关联键（点评侧唯一键）——
+            'platShopUuid': uuid,
+            # —— 基本信息（点评侧有什么写什么）——
+            'name': clean_plat_field(row.get('name')),
+            'address': clean_plat_field(row.get('地址')),
+            # ⭐ 2026-09-27 老板定：**顶部电话也要从平台带过来**。
+            #   原来只写进 plat.phone1/phone2，导致"点评新建的客户"顶层 phone 为空 → 详情页/手机端看不到电话。
+            #   口径（老板原话）：**商城有就用商城、平台有就用平台、两个都有就用商城的** ——
+            #   这里是"点评新建"（商城本来没有），所以直接写；若是"匹配上已有客户"，合并逻辑会保证不覆盖商城已有值。
+            'phone': clean_plat_field(row.get('phone1')),
+            'phone2': clean_plat_field(row.get('phone2')),
+            # —— 三层骨架（点评表本来就分好了城市/行政区/商圈，直接取，不做地址解析）——
+            'city': city,
+            'district': clean_plat_field(row.get('行政区')),
+            'bizCircle': clean_plat_field(row.get('regionName')) or '❓ 未划分商圈',
+            # —— 坐标（§坐标取数口径第 2 条：没有商城坐标就用点评坐标）——
+            'lng': lng,
+            'lat': lat,
+            'coord_status': 'ok' if (lng is not None and lat is not None) else 'pending',
+            'coordSource': 'platform',   # ⚠️ 2026-09-26 修正：必须是 'platform'（之前写成 'plat' → 前台会误显示成“商城”）
+            # —— 类型与状态 ——
+            'customerType': 'mall',   # 2026-09-26 老板定：暂时不分线，点评新建的也先放"老客"这边
+            'status': 'active',
+            'platMatched': True,
+            'platMergeCount': item.get('mergeCount', 1),
+            'platMergeFrom': item.get('fromNames') or [],
+            'plat': plat_block(row, uuid, item.get('cat3Tags')),
+            # —— 空壳（与商城路径一致，详情页/后台不用判空）——
+            'isSubAccount': False,
+            'mainAccountId': '',
+            'subAccounts': [],
+            'remarks': [],
+            'photos': [],
+            'platManual': {},
+        })
+    return docs, stat
 
 # ============ ② 组 customers 文档 ============
 def build_customers(mall, plat_map):
@@ -276,19 +482,27 @@ def build_customers(mall, plat_map):
             'pointsPolicy': s(r.get('积分策略')),
             'routeLine': s(r.get('配送线路')),
             # —— 坐标（商城侧，实地验证）——
+            # ⭐ 2026-09-26 老板定：**商城优先，但“有坐标才写”** ——
+            #   商城表里这家没填经纬度时，**不要写 coord_status / coordSource**（下面条件赋值），
+            #   否则会把「平台导入时已有的坐标」误标成“补标”（坐标还在、状态却说没有）。
+            #   而 lng/lat 为 None 时也不用担心：importdata 的“空值不写”会自动跳过。
             'lng': lng,
             'lat': lat,
-            'coord_status': 'ok' if (lng is not None and lat is not None) else 'pending',
-            'coordSource': 'mall',                     # 来源：商城（2026-09-24 定）
             # —— 客户类型（沿用现有字段）——
             'customerType': 'mall',
             'status': 'active',
         }
+        # 有坐标才写「状态 + 来源」：商城坐标一落地就把来源定成商城（覆盖平台来的）
+        if lng is not None and lat is not None:
+            doc['coord_status'] = 'ok'
+            doc['coordSource'] = 'mall'
         if not doc['mallJoinedAt'] and not doc['lastOrderAt']:
             stat['nodate'] += 1
 
         # —— 平台画像（按 shopuuid 硬匹配）——
-        p = plat_map.get(uuid)
+        #   plat_map[uuid] = { row, cat3Tags, mergeCount, fromNames }（点评内部已按 shopuuid 合并，见 plat_index）
+        item = plat_map.get(uuid)
+        p = item['row'] if item else None
         if p is not None:
             stat['plat'] += 1
             doc['platMatched'] = True
@@ -532,18 +746,24 @@ def main():
 
     if TASK in ('mall', 'plat', 'all'):
         mall, plat, dup = load_sources()
-        pidx = plat_index(plat)
-        R('点评侧按 shopuuid 去重后：%d 个 shopuuid' % len(pidx))
-        cust, stat = build_customers(mall, pidx)
-        R('')
-        R('customers：%d 条文档' % len(cust))
-        R('  其中：有平台画像 %d 家 ｜ 无坐标 %d 家 ｜ 商城日期全空 %d 家' % (stat['plat'], stat['nocoord'], stat['nodate']))
+        pidx, pstat = plat_index(plat)
+        R('点评侧：%d 个 shopuuid ｜ 同 shopuuid 合并 %d 组 ｜ shopuuid 为空跳过 %d 行'
+          % (len(pidx), pstat['merged'], pstat['skipNoUuid']))
         if TASK == 'plat':
-            # 大众点评导入：**只更新 customers.plat** —— 分片里只保留"关联键 + plat"，
-            # importdata 的 update 是**字段级**的（只覆盖带过来的字段），所以客户其它字段一条都不会动。
-            keep = ('mallKey', 'mallCode', 'platShopUuid', 'name', 'phone', 'plat', 'platMatched')
-            cust = [{k: v for k, v in d.items() if k in keep} for d in cust]
-            R('  → 已裁剪为「关联键 + plat」，入库时不动客户其它字段')
+            # ⭐ 2026-09-26 老板定的新规则：**点评导入也能建客户**
+            #   —— 不再裁成「关联键 + plat」，也不再依赖商城表（那张"假商城表"作废）。
+            #   分片里带的是「点评侧有的全部字段」；入库由云端 fill 模式做字段级取优：
+            #   匹配上已有客户 → 只补空位（冲突以商城为准）；匹配不上 → 新建客户。
+            cust, stat = build_customers_from_plat(pidx)
+            R('')
+            R('customers：%d 条点评档案（匹配得上就合并、匹配不上就新建 —— 由云端判定）' % len(cust))
+            R('  其中：无坐标 %d 家' % stat['noCoord'])
+        else:
+            cust, stat = build_customers(mall, pidx)
+            R('')
+            R('customers：%d 条文档' % len(cust))
+            R('  其中：有平台画像 %d 家 ｜ 无坐标 %d 家 ｜ 商城日期全空 %d 家'
+              % (stat['plat'], stat['nocoord'], stat['nodate']))
     if TASK in ('order', 'all'):
         ords = build_orders(cust)
     if TASK in ('item', 'all'):

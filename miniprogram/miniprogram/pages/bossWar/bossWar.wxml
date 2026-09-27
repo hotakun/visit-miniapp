@@ -24,6 +24,8 @@
          去 logo 用**裁剪法**：.wmap-wrap 加 overflow:hidden，.wmap 高度多出 40rpx → 底部 logo 区被裁掉。
          badge 用普通 view（map 自基础库 2.7.0 起同层渲染，官方推荐 view 替代 cover-view）。
          位置放**右下**，避开左下角已有的图例 .wlegend（logo 已被裁掉，不需要再盖它）。 -->
+    <!-- ⭐ 2026-09-27：腾讯地图 logo/审图号**恢复显示**（撤销裁剪法）；「聚火地图」badge 同时保留，
+         位置改到**左上角**（腾讯 logo 在右下角，不能互相压）。 -->
     <view class="jh-badge">
       <view class="jh-compass"><view class="jh-needle"></view></view>
       <view class="jh-word">聚火地图</view>

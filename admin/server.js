@@ -8,8 +8,13 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const XLSX = require('xlsx');
+const store = require('./store');   // 2026-09-27：本地缓存层（客户点缓存，见 _scratch/架构-本地缓存与同步方案.md）
 
 const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+// ⚠️ 2026-09-27 踩过的坑：store 拉缓存时调的是 **adminapi**，而它**需要账号密码认证** ——
+//   不带就返回「登录失效」，预热会**静默失败**（现象：/mapPoints 一直空 + warming:true）。
+//   默认 qingyan/123456；不想写死可在 config.json 加 adminUser / adminPass 覆盖。
+const STORE_AUTH = { username: cfg.adminUser || 'qingyan', password: cfg.adminPass || '123456' };
 // 端口优先取命令行 --port=N，其次环境变量 PORT，最后默认 8080（壳程序用 --port 传，绕开环境变量传递坑）
 const argPort = parseInt(((process.argv.find(a => a.indexOf('--port=') === 0) || '').split('=')[1]), 10);
 const PREFERRED_PORT = argPort || parseInt(process.env.PORT) || 8080;
@@ -496,6 +501,33 @@ const server = http.createServer(async (req, res) => {
     }
     return;
   }
+  // ===== 2026-09-27 新增：客户点本地缓存（架构文档 §十 M1）=====
+  // 前端地图不再直接请求云端，改读本地缓存；拖动/缩放 0 网络请求。
+  if (req.method === 'GET' && req.url.indexOf('/mapPoints/status') === 0) {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(store.status()));
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/mapPoints/refresh') {
+    (async () => {
+      const r = await store.refresh(callApi, STORE_AUTH);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(r));
+    })().catch(e => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: false, msg: e.message })); });
+    return;
+  }
+  if (req.method === 'GET' && req.url.indexOf('/mapPoints') === 0) {
+    const c = store.read();
+    // 没有 / 不是今天的 → 触发一次后台预热（不等它），同时把现有数据先给前端
+    const warming = !store.isFreshToday(c);
+    if (warming) store.refresh(callApi, STORE_AUTH).catch(() => null);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(c
+      ? { ok: true, syncedAt: c.syncedAt, count: c.points.length, points: c.points, warming: warming }
+      : { ok: true, syncedAt: 0, count: 0, points: [], warming: true }));
+    return;
+  }
+
   const raw = req.url.split('?')[0]; // 剥掉 query（如 nt-map.js?v=0906 防缓存版本号）
   const file = raw === '/' ? 'admin.html' : (() => { try { return decodeURIComponent(raw.slice(1)); } catch (e) { return raw.slice(1); } })();
   const safe = path.normalize(path.join(__dirname, file));
@@ -574,25 +606,51 @@ async function runExcelImport(job, opt) {
   // ② 读分片，逐片调 importdata 入库
   const files = fs.readdirSync(partDir).filter(f => /\.json$/i.test(f) && f.charAt(0) !== '_').sort();
   if (!files.length) throw new Error('脚本没产出分片（表格目录或文件名可能不对，见下方报告）');
-  let done = 0, ins = 0, upd = 0;
-  for (const f of files) {
-    const obj = JSON.parse(fs.readFileSync(path.join(partDir, f), 'utf8'));
-    // ⚠️ 2026-09-25 关键修复：importdata 的 verifyAdmin 要求**入参里带账号密码**，
-    //    否则返回 NO_AUTH、一片都写不进去（"脚本成功却导不进去"的真因）。
-    //    凭据由前端启动任务时传进来（见 admin.html 的 startOneImport），这里原样转发。
-    const text = await callApi({
-      action: 'import', _cfn: 'importdata', type: obj.type || 'customers', rows: obj.rows || [],
-      username: opt.username || '', password: opt.password || ''
-    });
-    const r = JSON.parse(text || '{}');
-    if (!r || !r.ok) throw new Error('第 ' + (done + 1) + ' 片（' + f + '）入库失败：' + String((r && r.msg) || text || '').slice(0, 200));
-    ins += r.inserted || 0; upd += r.updated || 0;
-    done++;
-    job.pct = 12 + Math.round(done / files.length * 86);
-    job.text = '入库中 ' + done + '/' + files.length + '：' + f + '（新增 ' + ins + '、更新 ' + upd + '）';
+  let done = 0, ins = 0, upd = 0, skip = 0;
+  // ⭐ 2026-09-26 老板定：**大众点评导入走 fill 模式**（字段级取优：匹配上只补空位、匹配不上新建客户）
+  //    其它导入仍是 overwrite（非空字段照写、空值不写）。
+  const mode = opt.task === 'plat' ? 'fill' : '';
+  // ⭐ 2026-09-26 提速（老板定：金华一个市就是 1401 片，原来**顺序**一片一片调云函数要 2~5 小时）：
+  //    改成 **4 片并发**（云函数内部本来就是 30 并发写库，4 片 = 120 路；免费环境也扛得住）。
+  //    失败不再立刻中止（累计 5 片才放弃）：单片失败多半是偶发超时，**重跑幂等、不会翻倍**。
+  const CONC = 4;
+  const failed = [];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < files.length && failed.length < 5) {
+      const f = files[cursor++];
+      try {
+        const obj = JSON.parse(fs.readFileSync(path.join(partDir, f), 'utf8'));
+        // ⚠️ 2026-09-25 关键修复：importdata 的 verifyAdmin 要求**入参里带账号密码**，
+        //    否则返回 NO_AUTH、一片都写不进去（"脚本成功却导不进去"的真因）。
+        //    凭据由前端启动任务时传进来（见 admin.html 的 startOneImport），这里原样转发。
+        const text = await callApi({
+          action: 'import', _cfn: 'importdata', type: obj.type || 'customers', rows: obj.rows || [],
+          mode: mode,
+          username: opt.username || '', password: opt.password || ''
+        });
+        const r = JSON.parse(text || '{}');
+        if (!r || !r.ok) throw new Error('入库失败：' + String((r && r.msg) || text || '').slice(0, 160));
+        ins += r.inserted || 0; upd += r.updated || 0; skip += r.skipped || 0;
+      } catch (e) {
+        failed.push({ f: f, err: String((e && e.message) || e).slice(0, 160) });
+      }
+      done++;
+      job.pct = 12 + Math.round(done / files.length * 86);
+      job.text = '入库中 ' + done + '/' + files.length + '：' + f
+        + '（新增 ' + ins + '、更新 ' + upd + (skip ? '、无变化 ' + skip : '')
+        + (failed.length ? '、失败 ' + failed.length : '') + '）';
+    }
+  };
+  await Promise.all(new Array(Math.min(CONC, files.length || 1)).fill(0).map(worker));
+  if (failed.length) {
+    throw new Error('有 ' + failed.length + ' 片入库失败（已成功 ' + Math.max(0, done - failed.length) + ' 片）：'
+      + failed.slice(0, 3).map(x => x.f + '→' + x.err).join('；')
+      + '。⚠️ 直接再点一次导入即可 —— 同一条数据导两次不会翻倍（幂等），已成功的片会自动算作"更新/无变化"。');
   }
   job.pct = 100; job.state = 'done';
-  job.text = '✅ 完成：' + files.length + ' 片入库，新增 ' + ins + ' 条、更新 ' + upd + ' 条';
+  job.text = '✅ 完成：' + files.length + ' 片入库，新增 ' + ins + ' 条、更新 ' + upd + ' 条'
+    + (skip ? '、无变化 ' + skip + ' 条' : '');
 }
 // 都没有才退回系统默认浏览器
 function openBrowser(port) {
@@ -641,6 +699,8 @@ function startServer(port, attempts) {
     getToken()
       .then(() => callApi({ action: 'getSettings' }).catch(() => {}))
       .catch(() => {});
+    // 2026-09-27：客户点缓存预热（当天没拉过就**后台静默拉**；不阻塞服务启动）
+    store.startAutoRefresh(callApi, STORE_AUTH);
     if (!NO_BROWSER) openBrowser(port);
   });
 }
