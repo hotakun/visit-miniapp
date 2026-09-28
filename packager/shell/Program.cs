@@ -17,8 +17,8 @@ public class ShellForm : Form
     private Panel titleBar;
     private Rectangle savedBounds = Rectangle.Empty;
     private bool isCustomMax = false;
-    private Button btnBell, btnSet, btnMax, btnMin, btnClose;
-    private Panel pnlRefresh; // 2026-09-08 老板定：标题栏铃铛左侧自绘刷新图标（点击旋转动画）
+    private Button btnSet, btnMax, btnMin, btnClose;   // 2026-09-28 晚：btnBell 已删（消息改看网页里的「📬 消息中心」）
+    private Panel pnlRefresh; // 2026-09-08 老板定：标题栏自绘刷新图标（点击旋转动画；原来在铃铛左侧，铃铛删了它保留）
     private Timer refreshSpinTimer;
     private int spinAngle = 0;
     private bool refreshHover = false;
@@ -111,12 +111,9 @@ public class ShellForm : Form
         lblBadge.MouseUp += TitleMouseUp;
         lblBadge.MouseDoubleClick += TitleDoubleClick;
 
-        // 右侧白色图标排（Segoe MDL2 Assets）：通知/刷新/设置/全屏/最小化/关闭（2026-09-08 加刷新，铃铛左侧）
-        btnBell = MakeBtn("\uE7ED", "显示/隐藏消息铃铛（不影响通知）");
-        btnBell.Click += delegate
-        {
-            try { if (wv != null && wv.CoreWebView2 != null) wv.CoreWebView2.PostWebMessageAsString("toggle-bell"); } catch { }
-        };
+        // ⭐ 2026-09-28 晚 老板定：**标题栏的铃铛图标已删** —— 后台改用边栏「📬 消息中心」（带角标、点卡片能直接审核），
+        //   这里"显示/隐藏消息铃铛"那个按钮就没意义了（原来点击会给网页发 "toggle-bell"）。
+        //   ⚠️ 删的是铃铛，**刷新图标（pnlRefresh）保留**。
         // 自绘刷新图标：点击立即刷新当前页，图标旋转一圈反馈
         pnlRefresh = new Panel();
         pnlRefresh.Size = new Size((int)(40 * uiScale), titleBar.Height);
@@ -174,7 +171,7 @@ public class ShellForm : Form
         btnMin = MakeBtn("\uE921", "最小化");
         btnClose = MakeBtn("\uE8BB", "关闭");
         titleBar.Controls.Add(lblBadge);
-        titleBar.Controls.Add(btnBell);
+        // 2026-09-28 晚：`btnBell`（消息铃铛）已彻底删除 —— 消息改看网页里的「📬 消息中心」。
         titleBar.Controls.Add(pnlRefresh);
         titleBar.Controls.Add(btnSet);
         titleBar.Controls.Add(btnMax);
@@ -193,7 +190,7 @@ public class ShellForm : Form
         btnClose.FlatAppearance.MouseDownBackColor = Color.FromArgb(190, 10, 25);
         Color hover = Color.FromArgb(70, 255, 255, 255);
         Color down = Color.FromArgb(110, 255, 255, 255);
-        Button[] deco = { btnBell, btnSet, btnMax, btnMin };
+        Button[] deco = { btnSet, btnMax, btnMin };   // 2026-09-28 晚：btnBell 已彻底删除
         foreach (Button b in deco)
         {
             b.FlatAppearance.MouseOverBackColor = hover;
@@ -308,9 +305,11 @@ public class ShellForm : Form
 
     private void PositionTitleItems()
     {
-        // 右侧从右到左：关闭/最小化/全屏/设置/通知/刷新（刷新在铃铛左侧）
+        // ⭐ 2026-09-28 晚：铃铛已删 → 右侧从右到左只有：关闭/最小化/全屏/设置/刷新
+        //   ⚠️ 数组里是 Control（混合 Button 与 Panel）→ 下面必须 `foreach (Control b in right)`，
+        //      **别强转 Button**（pnlRefresh 是 Panel，强转会在启动时崩）。
         int w = titleBar.ClientSize.Width;
-        Control[] right = { btnClose, btnMin, btnMax, btnSet, btnBell, pnlRefresh };
+        Control[] right = { btnClose, btnMin, btnMax, btnSet, pnlRefresh };
         int x = w;
         foreach (Control b in right)
         {
@@ -410,14 +409,8 @@ public class ShellForm : Form
                     btnFloatClose.Location = new Point(ClientSize.Width - (int)(44 * uiScale), 0);
                     btnFloatClose.BringToFront();
                 }
-                else if (msg == "bell-hidden")
-                {
-                    btnBell.ForeColor = Color.FromArgb(140, 255, 255, 255); // 铃铛已隐藏：图标半透明
-                }
-                else if (msg == "bell-visible")
-                {
-                    btnBell.ForeColor = Color.White; // 铃铛可见：图标恢复
-                }
+                // ⭐ 2026-09-28 晚：`bell-hidden` / `bell-visible` 两个分支**已删** —— 铃铛按钮连同状态反馈一起去掉
+                //   （网页那边也删了 toggle-bell 的处理，不再回执这两个消息，所以这里没必要再留着）。
             };
             StartServerAndNavigate();
             Log("START SERVER CALLED");

@@ -303,6 +303,13 @@ Page({
   // 云端说"仍是业务员"则顺手刷新本地缓存（拿到最新身份）；网络异常/系统繁忙一律放行（离线可用）
   _verifyIdentity() {
     const app = getApp();
+    // ⭐ 2026-09-28 修 bug：**实习（游客）身份直接跳过复核**。
+    //   实习入口**不绑定 openid**（老板定：不允许自动绑定），云端 login 天然查不到这个人 →
+    //   复核必然回 NEED_REGISTER → 被误判成"账号已解绑"踢回登录页。
+    //   （现象就是"点实习体验入口、进去马上被踢"，2026-09-28 老板报的。）
+    //   实习本来就是只读、不写库（tasks/visits/transcribe/coordfix 四处云端硬拦 TRIAL_FORBIDDEN），
+    //   不需要也不可能复核身份 → 直接放行。
+    if (app.globalData.asTrial) return;
     api.call('login', {})
       .then(res => {
         if (res && res.ok && res.user && res.user.role === 'salesman') {
@@ -323,8 +330,12 @@ Page({
   },
   _kickToLogin(msg) {
     getApp().clearUser(); // 清 user/boss_mode/welcome/devAuthed 及 storage
-    wx.showToast({ title: msg, icon: 'none', duration: 2000 });
-    setTimeout(() => wx.redirectTo({ url: '/pages/login/login' }), 800);
+    // ⭐ 2026-09-28 老板定：**静默返回登录页** —— 不要弹任何提示窗。
+    //   原因：原来是「toast 2s ＋ 等 1.8s 再跳」→ 提示窗显示完再跳，看起来就是"界面闪一下重进"，
+    //   比没提示还难受。现在直接一次跳完；reLaunch 会清空页面栈，比 redirectTo 更干净。
+    //   msg 参数保留（调用方仍在传），将来若要恢复提示可直接用；临时排查也可打开下面这行：
+    // wx.showToast({ title: msg, icon: 'none', duration: 2000 });
+    wx.reLaunch({ url: '/pages/login/login' });
   },
   onHide() {
     this._shown = false;

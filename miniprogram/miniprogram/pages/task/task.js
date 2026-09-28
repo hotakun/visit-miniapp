@@ -62,7 +62,7 @@ Page({
       const res = await api.call('tasks', { action: 'detail', taskId: this.taskId });
       if (!res.ok) return;
       const st = res.task.status;
-      if (st === 'done') api.toast('审核已通过，任务已完成 ✓', 'success');
+      if (st === 'done') api.toast('审核已通过，任务已完成', 'success'); // 2026-09-28 老板定：文案不带 ✓（success 图标已是勾）
       else if (st === 'published') api.toast('审核未通过，任务继续执行', 'none');
       if (this._shown) this.load();
     } catch (e) { /* 静默，下次刷新再试 */ }

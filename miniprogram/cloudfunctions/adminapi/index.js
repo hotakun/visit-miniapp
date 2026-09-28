@@ -70,7 +70,159 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'ping'];
+
+// =====================================================================================
+// ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
+//   老板口径：分两类 ——
+//     · **重点消息**（要人做决定 → **计入铃铛/角标**）：坐标修正 / 现场提报 / 注册审核 / 任务审核
+//     · **滚动消息**（业务员动态 → **只读流水，不计入数字**）：开始拜访 / 拜访完毕 / 坐标&提报留痕
+//   为什么这么设计：**数字 = 实时查"未处理条数"**（不是"读过就减"）→ **后台关着期间产生的消息一条都不会漏**
+//   （老板报的痛点：后台没启动时提交的审核，铃铛和语音都漏了）。
+//   处理完一条（采纳/忽略、同意/驳回）→ 对应记录 status 变化 → 下次查数字自动减。
+// =====================================================================================
+
+// 只要"未处理数"（轻量：铃铛 + 边栏角标轮询用；不做客户/业务员名映射，只数条数）
+async function msgCount() {
+  const C = (q) => q.count().then(r => (r && r.total) || 0).catch(() => 0);
+  const [coord, field, reg, task] = await Promise.all([
+    C(db.collection('coord_fix_requests').where({ status: 'pending', type: _.neq('field') })),  // 坐标修正
+    C(db.collection('coord_fix_requests').where({ status: 'pending', type: 'field' })),         // 现场提报
+    C(db.collection('registrations').where({ status: 'pending' })),                             // 注册审核
+    C(db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }))       // 任务审核
+  ]);
+  return { ok: true, coord, field, reg, task, total: coord + field + reg + task };
+}
+
+// 消息中心页面数据
+//  入参：{ tab: 'imp' | 'roll', page: 0, pageSize: 20 }
+//   · imp  → 待处理的重点消息（带客户名/业务员名/距离，供列表展示 + 就地审核）
+//   · roll → 时间倒序流水（**必须分页**：visits 几千条，一次全拉会撞云函数 100KB 出参上限）
+async function msgCenter(event) {
+  const tab = String(event.tab || 'imp');
+  const page = Math.max(0, Number(event.page) || 0);
+  const size = Math.min(50, Math.max(5, Number(event.pageSize) || 20));
+
+  // ---------- ① 重点消息 ----------
+  if (tab === 'imp') {
+    const [fRes, rRes, tRes] = await Promise.all([
+      db.collection('coord_fix_requests').where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(50).get(),
+      db.collection('registrations').where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(30).get(),
+      db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }).orderBy('createdAt', 'desc').limit(30).get()
+    ]);
+    const cids = [...new Set(fRes.data.map(f => f.customerId).filter(Boolean))];
+    const uids = [...new Set([].concat(fRes.data.map(f => f.salesmanId), tRes.data.map(t => t.salesmanId)).filter(Boolean))];
+    const [cRes, uRes] = await Promise.all([
+      // ⭐ 2026-09-28 晚 老板定：客户名要**带编码的原值**（如 `c347 早阳肉包(科创路店)`）→ 取 nameRaw（导入时留底），回退 name
+      cids.length ? db.collection('customers').where({ _id: _.in(cids) }).field({ name: true, nameRaw: true, lat: true, lng: true, customerType: true }).get() : { data: [] },
+      uids.length ? db.collection('users').where({ _id: _.in(uids) }).field({ name: true }).get() : { data: [] }
+    ]);
+    const cmap = {}; cRes.data.forEach(c => { cmap[c._id] = c; });
+    const umap = {}; uRes.data.forEach(u => { umap[u._id] = u; });
+    const items = [];
+    fRes.data.forEach(f => {
+      const c = cmap[f.customerId] || {}, u = umap[f.salesmanId] || {};
+      const dist = (c.lat && c.lng && f.newLat && f.newLng) ? Math.round(haversine(f.newLat, f.newLng, c.lat, c.lng)) : null;
+      items.push({
+        kind: (f.type === 'field') ? 'field' : 'coord',
+        id: f._id, at: f.createdAt || 0,
+        customerId: f.customerId, customerName: c.nameRaw || c.name || '', customerType: c.customerType || '',
+        salesmanName: u.name || '', note: f.note || '',
+        oldLat: c.lat || null, oldLng: c.lng || null, newLat: f.newLat || null, newLng: f.newLng || null,
+        distance: dist, photos: Array.isArray(f.photos) ? f.photos : [],
+        fieldKind: f.kind || '', fieldValue: f.value || '', flagName: f.flagName || ''
+      });
+    });
+    rRes.data.forEach(r => items.push({
+      kind: 'reg', id: r._id, at: r.createdAt || 0, name: r.name || '', phone: r.phone || '',
+      referrerName: r.referrerName || '', trial: !!r.trial, msg: '新用户注册待审核'
+    }));
+    tRes.data.forEach(t => items.push({
+      kind: 'task', id: t._id, at: t.createdAt || 0, taskNo: t.taskNo || '', taskName: t.name || '',
+      salesmanName: umap[t.salesmanId] ? umap[t.salesmanId].name : '', msg: '任务审核中，等待处理'
+    }));
+    items.sort((a, b) => (b.at || 0) - (a.at || 0));
+    return { ok: true, tab: 'imp', total: items.length, items };
+  }
+
+  // ---------- ② 滚动消息 ----------
+  const vRes = await db.collection('visits')
+    .where({ startedAt: _.exists(true) })
+    .orderBy('startedAt', 'desc').skip(page * size).limit(size)
+    .field({ customerId: true, salesmanId: true, startedAt: true, finishedAt: true, result: true })
+    .get().catch(() => ({ data: [] }));
+  const vRows = vRes.data || [];
+  const cids = [...new Set(vRows.map(v => v.customerId).filter(Boolean))];
+  const uids = [...new Set(vRows.map(v => v.salesmanId).filter(Boolean))];
+  const [cRes, uRes] = await Promise.all([
+    // ⭐ 2026-09-28 晚 老板定：客户名带编码原值（nameRaw）
+    cids.length ? db.collection('customers').where({ _id: _.in(cids) }).field({ name: true, nameRaw: true }).get() : { data: [] },
+    uids.length ? db.collection('users').where({ _id: _.in(uids) }).field({ name: true }).get() : { data: [] }
+  ]);
+  const cmap = {}; cRes.data.forEach(c => { cmap[c._id] = c; });
+  const umap = {}; uRes.data.forEach(u => { umap[u._id] = u; });
+  const list = [];
+  vRows.forEach(v => {
+    const cc = cmap[v.customerId] || {};
+    const cn = cc.nameRaw || cc.name || '某客户';   // ⭐ 带编码的原值（老板 2026-09-28 定）
+    const sn = (umap[v.salesmanId] || {}).name || '业务员';
+    if (v.startedAt) list.push({ id: v._id + '-s', kind: 'visitStart', at: v.startedAt, salesmanName: sn, customerId: v.customerId, customerName: cn, text: '开始拜访 ' + cn });
+    if (v.finishedAt) list.push({ id: v._id + '-f', kind: 'visitDone', at: v.finishedAt, salesmanName: sn, customerId: v.customerId, customerName: cn, text: '拜访完毕 ' + cn + (v.result ? '（' + v.result + '）' : '') });
+  });
+  // 坐标修正 / 现场提报的留痕（含已处理的 → 有迹可循：谁改过、你采纳还是忽略）
+  try {
+    const fRes = await db.collection('coord_fix_requests')
+      .orderBy('createdAt', 'desc').skip(page * size).limit(size)
+      // ⭐ 2026-09-28 晚：**必须把 reviewedAt / reviewedBy 取出来** —— 滚动消息里要显示"时间 + 审核人"
+      .field({ type: true, customerId: true, salesmanId: true, status: true, createdAt: true, reviewedAt: true, reviewedBy: true }).get();
+    const fids = [...new Set(fRes.data.map(f => f.customerId).filter(Boolean))];
+    const fuid = [...new Set(fRes.data.map(f => f.salesmanId).filter(Boolean))];
+    const [fcRes, fuRes] = await Promise.all([
+      fids.length ? db.collection('customers').where({ _id: _.in(fids) }).field({ name: true, nameRaw: true }).get() : { data: [] },
+      fuid.length ? db.collection('users').where({ _id: _.in(fuid) }).field({ name: true }).get() : { data: [] }
+    ]);
+    const fcm = {}; fcRes.data.forEach(c => { fcm[c._id] = c; });
+    const fum = {}; fuRes.data.forEach(u => { fum[u._id] = u; });
+    fRes.data.forEach(f => {
+      const fc = fcm[f.customerId] || {};
+      const cn = fc.nameRaw || fc.name || '某客户';   // ⭐ 带编码的原值（老板 2026-09-28 定）
+      const sn = (fum[f.salesmanId] || {}).name || '业务员';
+      const what = (f.type === 'field') ? '提交资料' : '修正坐标';
+      // ⭐ 2026-09-28 晚 修 bug（老板报"修正坐标通过的那条，滚动消息却显示**已作废**"）：
+      //   **坐标审核「同意」写的是 `confirmed`**，而这里原来只认 `approved` → 落到最后分支成了"已作废"。
+      //   现场提报走的是 `approved` —— 两套值不一样，所以**两个都算"已采纳"**；
+      //   真正的"作废"只有 `superseded`（重新提报时旧条被顶掉）。
+      const isDone = (f.status === 'approved' || f.status === 'confirmed');
+      const st = f.status === 'pending' ? '待审核'
+        : (isDone ? '已采纳 ✓'
+          : (f.status === 'rejected' ? '已忽略'
+            : (f.status === 'superseded' ? '已作废' : String(f.status || ''))));
+      // ⭐ 2026-09-28 晚 老板定：**审核人单独返回**（前端把它放在"时间"后面），**正文里不写审核人**；
+      //   正文开头已经有"范宇琨 修正坐标…"了，右边再重复一次产生人是多余的。
+      //   时间优先用"审核时间"（审核后按审核时间排更合理，待审核时才用提交时间）。
+      list.push({ id: f._id + '-r', kind: 'coordfix', at: f.reviewedAt || f.createdAt || 0, salesmanName: sn, customerId: f.customerId, customerName: cn, reviewedBy: f.reviewedBy || '', text: sn + ' ' + what + ' · ' + cn + ' · ' + st });
+    });
+  } catch (e) { /* 留痕取不到不影响主流程 */ }
+  // ⭐ 2026-09-28 晚 老板报"审核人员通过，滚动消息里没记录"→ 补上**注册审核**的流水。
+  //   （registrations 没有 customerId / salesmanId，它是"人"的事 → 单独一段，不带客户名）
+  try {
+    const rRes = await db.collection('registrations')
+      .orderBy('createdAt', 'desc').skip(page * size).limit(size)
+      .field({ name: true, phone: true, status: true, createdAt: true, reviewedAt: true, reviewedBy: true, trial: true }).get();
+    rRes.data.forEach(r => {
+      const st = r.status === 'pending' ? '待审核' : (r.status === 'approved' ? '已通过 ✓' : '已拒绝');
+      const tail = (r.status === 'pending') ? '' : (' · ' + st);
+      // ⭐ 2026-09-28 晚 老板定：审核人**单独返回**（前端放在"时间"后面），**正文里不写**（避免重复）
+      list.push({
+        id: r._id + '-g', kind: 'register', at: r.reviewedAt || r.createdAt || 0,
+        salesmanName: '', customerId: '', customerName: '', reviewedBy: r.reviewedBy || '',
+        text: '👤 新用户注册 · ' + (r.name || '未填姓名') + (r.phone ? ('（' + r.phone + '）') : '') + (r.trial ? ' · 实习' : '') + tail
+      });
+    });
+  } catch (e) { /* 注册流水取不到不影响主流程 */ }
+  list.sort((a, b) => (b.at || 0) - (a.at || 0));
+  return { ok: true, tab: 'roll', page, pageSize: size, hasMore: vRows.length >= size, items: list };
+}
 
 // 2026-09-11 老板定：后台可编辑转写文字（改错别字）—— 写 visits.trEdited（与小程序同一字段，两边同步可见）
 async function saveVisitTrText(event) {
@@ -334,6 +486,9 @@ exports.main = async (event) => {
     //   → 前端拿到 ok:true 却没有 byId/byCode → 静默不填 → 六列全空、且不报错。
     if (action === 'custPageAgg') return await custPageAgg(event);
     if (action === 'backfillAddressFromPlat') return await backfillAddressFromPlat(event);   // 2026-09-27：用平台地址补全 customers.address（一次性/幂等）
+    // ⭐ 2026-09-28 晚：**消息中心**（边栏「📬 消息中心」+ 铃铛/角标数字，老板 2026-09-28 定）
+    if (action === 'msgCount') return await msgCount(event);     // 只要"未处理数"（轻量，供角标轮询）
+    if (action === 'msgCenter') return await msgCenter(event);   // 消息中心页面数据（重点消息 / 滚动消息）
     if (action === 'customerNames') return await customerNames(event);
     if (action === 'importCustomers') return await importCustomers(event);
     if (action === 'importMallCustomers') return await importMallCustomers(event);
@@ -2876,8 +3031,10 @@ async function reviewRegistration(event) {
   const r = rr && rr.data;
   if (!r) return { ok: false, code: 'NOT_FOUND', msg: '申请不存在' };
   if (r.status !== 'pending') return { ok: false, code: 'STATE', msg: '该申请已处理' };
+  // ⭐ 2026-09-28 晚：**记下审核人** —— 滚动消息里要显示"日期时间 + 操作员姓名"
+  const _by = (event && event._admin && event._admin.name) || '管理员';
   if (act === 'reject') {
-    await rRef.update({ data: { status: 'rejected', reason: String(reason || '').slice(0, 100), reviewedAt: Date.now() } });
+    await rRef.update({ data: { status: 'rejected', reason: String(reason || '').slice(0, 100), reviewedAt: Date.now(), reviewedBy: _by } });
     return { ok: true, msg: '已拒绝该申请' };
   }
   // approve：匹配已有业务员（同手机号）→ 绑定；否则新建
@@ -2923,7 +3080,8 @@ async function reviewRegistration(event) {
       });
     } catch (e) { /* 推荐人写入失败不阻断审核通过 */ }
   }
-  await rRef.update({ data: { status: 'approved', reviewedAt: Date.now(), userId: boundId } });
+  // ⭐ 2026-09-28 晚：**通过时也记审核人**（滚动消息里要显示"审核人"）
+  await rRef.update({ data: { status: 'approved', reviewedAt: Date.now(), userId: boundId, reviewedBy: _by } });
   return { ok: true, msg: '已通过并绑定微信（免登录进入）' };
 }
 

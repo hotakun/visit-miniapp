@@ -104,6 +104,9 @@ const mainInner = async (event) => {
   //     微信向用户发验证码短信，确认后返回该微信绑定的真实手机号；前端自动填入注册表单）
   if (event.action === 'verifyPhone') return await verifyPhone(event);
 
+  // 3.55 取消注册申请（2026-09-28 老板定：注册页「取消申请」按钮 → 撤回待审核申请）
+  if (event.action === 'cancelReg') return await cancelReg(OPENID);
+
   // 3.6 欢迎仪式配置（2026-09-10 老板定：管理员从登录页手动进老板模式时拉取；老板自动进由下方返回携带）
   if (event.action === 'welcomeCfg') return await welcomeCfg();
 
@@ -321,6 +324,18 @@ async function verifyPhone(e) {
     return { ok: true, phone };
   } catch (err) {
     return { ok: false, code: 'VERIFY_FAIL', msg: '验证失败，请重试（或手动输入手机号）' };
+  }
+}
+
+// 取消注册申请（2026-09-28 老板定）：把本微信的**待审核申请**删掉
+//   ⚠️ 只删 status='pending'，**不碰**已通过 / 已拒绝的记录（那些是历史留痕）。
+//   前端「取消申请」按钮调用；失败也不阻塞 —— 照常返回 ok，让用户能干净退出。
+async function cancelReg(openid) {
+  try {
+    const r = await db.collection('registrations').where({ openid, status: 'pending' }).remove();
+    return { ok: true, removed: (r && r.stats && r.stats.removed) || 0 };
+  } catch (e) {
+    return { ok: true, removed: 0 };
   }
 }
 

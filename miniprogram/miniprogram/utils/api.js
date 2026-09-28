@@ -7,11 +7,17 @@ function call(name, data = {}) {
   if (app && app.globalData.bossMode && !data.boss) {
     data = Object.assign({}, data, { boss: true });
   }
-  // 2026-09-28 实习态（开发者「以游客身份进入」）：同一 openid 同时绑了「实习」+ 正式账号时，
-  //   云端据此把实习(trial)账号放在身份解析最前（见 login/tasks/visits/transcribe/coordfix）。
-  //   不带该标志时云端行为完全不变（正式优先）。
-  if (app && app.globalData.asTrial && !data.asTrial) {
-    data = Object.assign({}, data, { asTrial: true });
+  // 2026-09-28 实习态（实习/游客入口）：**两个字段都要带**，各云函数认的名字不同 ——
+  //   · asTrial      → 业务云函数（tasks/visits/transcribe/coordfix）的"兜底认人"
+  //   · asTrialVisit → login 云函数的只读实习分支
+  //   ⚠️ 只带 asTrial 时 login **不认** → 会走普通流程查不到 openid 绑定 → 回 NEED_REGISTER
+  //      → 首页身份复核把实习身份踢回登录页（2026-09-28 踩过：点实习入口进去马上被踢）。
+  if (app && app.globalData.asTrial && !data.asTrialVisit) {
+    data = Object.assign({}, data, { asTrial: true, asTrialVisit: true });
+    // ⚠️ 2026-09-28 必带 trialId：实习**不绑 openid**，云端只能拿 trialId 去库里核对身份
+    //   （tasks/visits/transcribe/coordfix 的"兜底认人"段）。不带 → 云端回 NO_AUTH →
+    //   实习进来**任务列表是空的**（老板报的"看不到任务"就是这个，2026-09-28 踩过）。
+    if (app.globalData.trialId) data.trialId = app.globalData.trialId;
   }
   return new Promise((resolve, reject) => {
     wx.cloud.callFunction({

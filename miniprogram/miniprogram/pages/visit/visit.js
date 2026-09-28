@@ -422,7 +422,7 @@ Page({
         // 标记已提交的段（提交拜访时只对"未提交"的段兜底，不重复计费）
         const marked = (this.data.recs || []).map(r => (r.transcribe && r.fileID && !r.trStatus) ? { ...r, trStatus: 'processing' } : r);
         this.setData({ recs: marked, trBusy: false, trMsg: '已提交转写，等 1~3 分钟可在客户详情看文字' });
-        api.toast('已提交转写 ✓', 'success');
+        api.toast('已提交转写', 'success'); // 2026-09-28 老板定：文案不带 ✓（success 图标已是勾）
       } else {
         this.setData({ trBusy: false, trMsg: '' });
         api.toast((res && res.msg) || '提交转写失败');
@@ -466,7 +466,7 @@ Page({
       this.clearStart();
       this.submitting = false;
       this.setData({ confirmShow: false });
-      api.toast('演示版：到这里就结束了，真机才会真的提交 ✓', 'success');
+      api.toast('演示版：到这里就结束了，真机才会真的提交', 'success'); // 2026-09-28 老板定：文案不带 ✓（success 图标已是勾）
       setTimeout(() => wx.navigateBack(), 1200);
       return;
     }

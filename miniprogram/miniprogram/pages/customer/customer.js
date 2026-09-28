@@ -327,6 +327,11 @@ Page({
     // 弹层
     addShow: false, addKind: '', addTitle: '', addPh: '', addVal: '',
     flagShow: false, flagName: '', flagTo: true,
+    // ⭐ 2026-09-28 晚：**地图修正模式**（点「修正」进入）——
+    //   fixing=true → 地图可拖（enable-scroll）+ 正中显示图钉 + 上方经纬度改成显示"地图中心点"和与原坐标的距离
+    //   ⚠️ centerLat/centerLng = **地图当前中心**：修正模式下 map 的 latitude/longitude 绑它俩。
+    //      **绝不能绑 d.lat** —— 那样用户一拖地图，页面任何 setData 都会把视野拉回客户点（地图根本拖不动）。
+    fixing: false, fixLat: '', fixLng: '', fixDist: '', centerLat: '', centerLng: '',
     // ⭐ 2026-09-27：📍报错弹层（接 coordfix 真提交）
     fixShow: false, fixNote: '', fixShots: ['', '', ''],
     sheetShow: false,
@@ -379,7 +384,9 @@ Page({
 
       const d = buildD(res, photoUrls, recUrls);
       // ⭐ 2026-09-27：默认展开按内容算（defaultOpen），不再写死
-      this.setData({ d, open: defaultOpen(d), markers: this._mkMarkers(d, false), polyline: [] });
+      // ⚠️ centerLat/centerLng 一起初始化：地图的 latitude/longitude 绑的是它俩（见 wxml），
+      //    平时 = 客户坐标；缩放结束后会被"拉回"这里实现"以针点为中心缩放"。
+      this.setData({ d, open: defaultOpen(d), markers: this._mkMarkers(d, false), polyline: [], centerLat: d.lat, centerLng: d.lng });
       if (d.name) wx.setNavigationBarTitle({ title: d.name });
     } catch (e) {
       // 2026-09-25 修：错误**直接显示在页面上**（原来只用 toast，会被 hideLoading 盖掉 → 只看到"一直加载中"，没法排查）
@@ -519,9 +526,161 @@ Page({
     });
   },
 
+  // ---------- 🧭 导航到该客户（⭐ 2026-09-28 晚老板定：小地图下方新增「导航」按钮）----------
+  //   用 wx.openLocation 打开**微信内置地图**（无需任何 key）：用户在里面可一键跳高德/百度继续导航。
+  //   无坐标（d.lat 空）时按钮本身不渲染（wxml 里 wx:if）。
+  onNav() {
+    const d = this.data.d || {};
+    const lat = Number(d.lat), lng = Number(d.lng);
+    if (!lat || !lng) { api.toast('这个客户还没有坐标'); return; }
+    wx.openLocation({
+      latitude: lat, longitude: lng, scale: 18,
+      name: d.name || '客户位置',
+      address: d.addr || ''
+    });
+  },
+
+  // ---------- 📝 快速记事（⭐ 2026-09-28 晚老板定：电话行右侧那块 44×44 从「📍报错」改成它）----------
+  //   点它 = **以本客户为对象**快速记一笔（标题/位置/关联客户自动带好）。
+  //   ⚠️ 记事功能**尚未开发**（老板 2026-09-28：先改客户详情页做准备，再做记事）——
+  //      所以现在只提示；等记事页做好后，把这里改成「带着本客户信息跳到记事新建页」。
+  goQuickNote() {
+    api.toast('记事功能开发中，马上就来');
+  },
+
+  // ---------- ⭐ 2026-09-28 晚：**地图修正模式**（点「📍 修正」→ 拖地图取中心点 → 确定提交审核）----------
+  //   老板口径：① 地图可移动 ② 取新的经纬度 ③ 上方经纬度显示新坐标 + 与原坐标的距离
+  //             ④ 「修正」变「确定」、左边多出「取消」 ⑤ 确定后变成新经纬度并**自动提交后台审核**
+  //   ⚠️ **两个都留**：原来的「📍 报错」（弹层 + 手机 GPS 现场定位）照旧保留；本条走**地图中心点**。
+  //   ⚠️ 云端 `coordfix` **一个字没改** —— 它本来就收 { customerId, lat, lng, note, photos }（这条不传 photos）。
+  //   ⚠️ 老板模式：云函数会模拟成功不落库（跟「报错」那条一样的老规矩）。
+  startFix() {
+    const d = this.data.d || {};
+    if (!d.lat || !d.lng) { api.toast('这个客户还没有坐标'); return; }
+    // ⚠️ 把"地图当前中心"也初始化成客户坐标：修正模式下 latitude 绑的是 centerLat/centerLng
+    //    （若继续绑 d.lat，用户一拖地图、页面任何 setData 都会把视野**拉回**客户点 → 根本拖不动）
+    this.setData({ fixing: true, centerLat: d.lat, centerLng: d.lng, fixLat: d.lat, fixLng: d.lng, fixDist: '' });
+    api.toast('拖动地图，把红点对准门店位置');
+  },
+  // 地图视野变化（拖动 / 缩放都会走这里）
+  //   ⚠️ 用事件自带的 e.detail.centerLocation，**不要用 mapCtx.getCenterLocation()** ——
+  //      后者会触发地图重算视野，表现就是"一拖就弹回去"（2026-09-28 踩过）。
+  //
+  //   ⭐ 2026-09-28 晚老板反馈："缩放是按鼠标/手指位置缩放的，不是按针点" ——
+  //     这是微信 <map> 的原生行为（缩放中心 = 手势/光标位置），**没有任何开关能改**。
+  //     所以在这里自己修：
+  //       · **缩放**（e.detail.scale 变了）→ 把视野**拉回针点**（平时 = 客户坐标 / 修正中 = 上一次的中心）
+  //         → 用户看到的效果就是"**以针点为中心缩放**"；
+  //       · **拖动**（scale 没变）→ 修正模式下更新针点位置；平时不可拖，不管。
+  onRegionChange(e) {
+    if (e && e.type && e.type !== 'end') return;   // 只在"结束"那一刻处理，避免过程中疯狂 setData
+    // 🔴 2026-09-28 晚（老板报"地图很卡、经常卡死不刷新"）：
+    //   **自己 setData 把视野拉回去，会再触发一次 regionchange → 再拉 → 无限循环 → 卡死**。
+    //   打一个"这次是我自己发起的"标记，下一次进来直接忽略（只忽略一次，不吞用户的真实操作）。
+    if (this._selfMove) { this._selfMove = false; return; }
+
+    const d = this.data.d || {};
+    const det = (e && e.detail) || {};
+    const sc = (det.scale == null || det.scale === '') ? null : Number(det.scale);
+    const isZoom = (this._lastScale != null && sc != null && sc !== this._lastScale);
+    if (sc != null) this._lastScale = sc;
+    // 小工具：当前中心是否已经在 (la,ln) —— 已经在就**别再 setData**（省一次地图重绘，也避免抖动）
+    const at = (la, ln) => Math.abs(Number(la) - Number(this.data.centerLat)) < 1e-6 && Math.abs(Number(ln) - Number(this.data.centerLng)) < 1e-6;
+
+    if (this.data.fixing) {
+      if (isZoom) {
+        // 修正模式 · 缩放 → 拉回**针点**（= 上一次的中心）：实现"以针点为中心缩放"
+        const la = Number(this.data.fixLat), ln = Number(this.data.fixLng);
+        if (!la || !ln || at(la, ln)) return;
+        this._selfMove = true;
+        this.setData({ centerLat: la, centerLng: ln });
+      } else {
+        // 修正模式 · 拖动 → 针点跟着走到新的地图中心
+        const c = det.centerLocation;
+        if (!c) return;
+        const lat = Number(c.latitude.toFixed(6)), lng = Number(c.longitude.toFixed(6));
+        if (at(lat, lng)) return;   // 没真的动 → 不 setData
+        this.setData({ centerLat: lat, centerLng: lng, fixLat: lat, fixLng: lng, fixDist: this._distText(d.lat, d.lng, lat, lng) });
+      }
+    } else if (isZoom) {
+      // 平时（不可拖，只可能缩放）→ 缩放后把中心拉回**客户坐标**
+      const la = Number(d.lat), ln = Number(d.lng);
+      if (!la || !ln || at(la, ln)) return;
+      this._selfMove = true;
+      this.setData({ centerLat: la, centerLng: ln });
+    }
+  },
+  cancelFix() {
+    const d = this.data.d || {};
+    // 退出修正模式 → 中心回到 d.lat/d.lng（客户原位），地图自然回到客户点上；_lastScale 也清掉
+    this._lastScale = null;
+    this.setData({ fixing: false, fixLat: d.lat, fixLng: d.lng, fixDist: '', centerLat: d.lat, centerLng: d.lng });
+  },
+  // 与原坐标的球面距离（Haversine；小程序没有"算距离"的 API，自己算）
+  _distText(lat1, lng1, lat2, lng2) {
+    const R = 6371000, rad = (x) => x * Math.PI / 180;
+    const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
+    const m = Math.round(2 * R * Math.asin(Math.sqrt(a)));
+    return m < 1000 ? (m + ' 米') : ((m / 1000).toFixed(1) + ' 公里');
+  },
+  async confirmFix() {
+    if (this._fixBusy) return;
+    const cid = this._cid;
+    const { fixLat, fixLng } = this.data;
+    if (!cid || !fixLat || !fixLng) { api.toast('缺少参数'); return; }
+    this._fixBusy = true;
+    wx.showLoading({ title: '提交审核…', mask: true });
+    try {
+      // note 固定写「地图修正」；云函数侧 note ≤100 字、同客户已有 pending 会拒绝（去重）
+      const res = await api.call('coordfix', { customerId: cid, lat: fixLat, lng: fixLng, note: '地图修正（业务员在地图上拖动定位）' });
+      wx.hideLoading();
+      if (res && res.ok) {
+        // ⚠️ 2026-09-28 晚老板反馈"改了定位但后台没收到、铃铛没提示"——**不是通知坏了**：
+        //   若以「👑 老板模式」进小程序，api.js 会自动带 boss:true → 云端 isBoss=true →
+        //   **虚拟写、不落库**（老板模式本来就是"全量只读 + 虚拟写"）。后台查不到 → 自然不会响铃/播报。
+        //   这里给明确提示，别让人误以为提交成功了。
+        if (res.boss) {
+          this._fixBusy = false;
+          this.setData({ fixing: false, fixDist: '' });
+          wx.showModal({
+            title: '演示模式 · 没有真正提交',
+            content: '当前是「老板模式」（只读 + 虚拟写），这次修正不会进后台。\n要真正提交（后台可审核、会响铃播报），请用业务员身份进入后再试。',
+            showCancel: false
+          });
+          return;
+        }
+        // 立即生效：上方经纬度换成新值（真正写进客户档案要等后台审核通过）
+        const d = Object.assign({}, this.data.d, { lat: fixLat, lng: fixLng });
+        // ⭐ 2026-09-28 晚老板定：**在新位置打一个「半透明蓝点」**（= 待审核的新位置）——
+        //   直接用现成的 /images/locdot.png + `alpha: 0.5`（老板明确："就用半透明蓝点，不要自己画"）。
+        //   原来的橙针**保留在原坐标不动**，两个点一眼能看出差多远。
+        //   同时把地图中心 centerLat/centerLng 也换成新坐标 → **地图以新针点为中心**（缩放也围着它）。
+        //   id 固定用 99，重复确定时先剔除旧的，不会越打越多。
+        const ms = (this.data.markers || []).filter(m => m.id !== 99);
+        ms.push({
+          id: 99, latitude: fixLat, longitude: fixLng,
+          iconPath: '/images/locdot.png', width: 26, height: 26,
+          anchor: { x: 0.5, y: 0.5 }, zIndex: 10, alpha: 0.5
+        });
+        this._lastScale = null;   // 中心变了，让下一次缩放重新判定
+        this.setData({ d, markers: ms, fixing: false, fixLat: fixLat, fixLng: fixLng, fixDist: '',
+          centerLat: fixLat, centerLng: fixLng });
+        wx.showModal({ title: '已提交审核', content: '新坐标已提交，后台审核通过后会更新到客户档案。', showCancel: false });
+      } else {
+        wx.showModal({ title: '提交失败', content: (res && res.msg) || '请稍后重试', showCancel: false });
+      }
+    } catch (err) {
+      wx.hideLoading();
+      wx.showModal({ title: '提交失败', content: (err && (err.errMsg || err.message)) || '网络异常，请重试', showCancel: false });
+    }
+    this._fixBusy = false;
+  },
+
   // ---------- 📍 坐标报错（2026-09-27：从"只弹提示"改为**真提交** coord_fix_requests）----------
   //   流程：点报错 → 弹层（原因可选 + 现场照片可选）→ 提交时**现场精确定位** → 传照片 → 调 coordfix 云函数
-  //   ⚠️ 云函数侧：同客户已有 pending 报错会拒绝（去重）；老板模式=模拟成功不落库
+  //   ⚠️ 云端（2026-09-28 晚改）：**允许重复提交** —— 再提交会把旧的 pending 标成 superseded，后台只看最新一条。
+  //   ⚠️ 老板模式 = 模拟成功**不落库**（后台收不到、铃铛不响、语音不播）—— 跟「地图修正」同一条规矩。
   openFix() {
     this.setData({ fixShow: true, fixNote: '', fixShots: ['', '', ''] });
   },

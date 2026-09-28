@@ -6,10 +6,11 @@
       <text>{{item.label}}</text>
     </view>
   </view>
-  <!-- 2026-09-28 老板定：栏尾「退出」—— **只在游客身份显示**（正式业务员、老板都不显示） -->
+  <!-- 2026-09-28 老板定：栏尾「退出」—— **只在游客身份显示**（正式业务员、老板都不显示）
+       ⚠️ 图标用**文字符号** ⏏（U+23CF），不要用 emoji —— emoji 是彩色的、color 管不住（项目规矩） -->
   <view class="tb tb-out" wx:if="{{isTrial}}" bindtap="onLogout">
     <view class="pill">
-      <text>退出</text>
+      <text>⏏ 退出</text>
     </view>
   </view>
 </view>

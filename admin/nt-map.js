@@ -266,7 +266,11 @@ function buildMap() {
     zoom: 12,
     pitch: 0,
     rotation: 0,
-    baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] }
+    baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] },
+    // ⭐ 2026-09-28 晚 老板定：后台**全部地图**统一用个性化样式。
+    //   常量 ADM_MAP_STYLE_ID 定义在 admin.html 里（改那一处即可全局切换/回退）。
+    //   ⚠️ nt-map.js 是独立文件、加载顺序在后 —— 所以用 typeof 兜一层，拿不到就走默认样式（不报错）。
+    mapStyleId: (typeof ADM_MAP_STYLE_ID !== 'undefined' ? ADM_MAP_STYLE_ID : '')
   });
   // 控件定制（2026-09-08 老板定）：只留 3D 导航球；移除 +/− 缩放与比例尺（官方 API removeControl）
   try { ntMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 控件不存在则静默 */ }

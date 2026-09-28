@@ -34,9 +34,10 @@
 .pwrap { flex: 1; min-width: 0; }
 .ph { font-size: 16.5px; font-weight: 800; }
 .lb { margin-top: 1px; font-size: 11px; color: var(--sub); font-weight: 600; }
-.fixbtn { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px; background: #EAF2FE; color: var(--blue);
-  font-size: 9.5px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.25; }
-.fixbtn .fi { font-size: 14px; }
+/* 电话行右侧「快速记事」（⭐ 2026-09-28 晚老板定）：文字**上下两层**（上「快速」下「记事」），
+   尺寸沿用原来那个报错方块的 44×44 / 圆角 12px。原来是 📍报错 —— 报错已挪到小地图下方。 */
+.notebtn { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px; background: #FFF1EA; color: var(--primary);
+  font-size: 11px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; }
 
 /* ===================== 通用卡 ===================== */
 .card { margin-top: 11px; background: #fff; border-radius: 16px; overflow: hidden;
@@ -248,15 +249,46 @@
    做法：容器 height:0 + **padding-top:75%** —— padding 的百分比基准是**宽度** → 高 = 宽 × 0.75（兼容性 100%，
    不依赖 aspect-ratio）；map 不能写 height:100%（父容器高度是 0），用**绝对定位**铺满容器。
    2026-09-25 起 wrapper 的 overflow:hidden 保留（圆角/边框/阴影挂在 wrapper 上）。 */
-/* ⭐ 2026-09-28 老板定：小地图加**描边 + 更强投影**，让地图框更立体（原来那圈边几乎看不见、阴影也很淡）。 */
-.cmap-wrap { position: relative; width: 100%; height: 0; padding-top: 75%; margin-top: 9px; border-radius: 12px; overflow: hidden;
-  border: 1px solid #D8DFE8; box-shadow: 0 6px 16px rgba(31,36,48,.16), 0 1px 3px rgba(31,36,48,.10); }
+/* ⭐ 2026-09-28 晚老板定：小地图从"浮起"改成**凹下（内阴影）** —— 看起来像嵌进卡片里的一道凹槽。
+   ⚠️ 关键点：<map> 是绝对定位铺满容器的（见下面 .cmap），所以**内阴影不能写在 .cmap-wrap 上** ——
+      会被地图整个盖住、根本看不见。做法：在地图**上面**叠一层普通 view（`.cmap-in`，见下面 + wxml），
+      pointer-events:none 不挡操作；z-index 2 低于「聚火地图」badge（9），badge 仍浮在最上。
+      ⚠️ **不要改成伪元素 ::after** —— 伪元素盖原生组件不如普通 view 稳（本页 badge 用 view 已实测可行）。
+   ⭐ 2026-09-28 晚老板定：左右**比卡片内容区稍宽一点，但留一点白边**。
+      原来被卡片 .cb 的 `padding: 12px 15px` 挡着、两边各空 15px；老板先说"顶到边"→试了 -15px **太狠**，
+      改成**左右各留 8px**（负边距 = -(15-8) = **-7px**）。
+      🔴 **教训（2026-09-28 晚，老板报"小地图灰屏"）**：当时为了补偿"撑宽 14px 后 75% 少掉的 10.5px"，
+         把高度写成了 `calc(75% + 10.5px)` —— **真机上地图直接灰屏/不显示**（WXSS 对 calc 里百分比+px 的支持不稳）。
+         现在**改回纯 `75%`**：高度 = 父内容宽 × 0.75，比"撑宽后的宽"略扁约 3%（肉眼几乎看不出），
+         但**能稳定显示** —— **稳 > 精确**。
+      ⚠️ **别再往 padding-top 里塞 calc / var / 百分比混合运算**，就用纯百分比。 */
+.cmap-wrap { position: relative; width: auto; height: 0; padding-top: 75%; margin: 9px -7px 0; border-radius: 12px; overflow: hidden;
+  border: 1px solid #D8DFE8; }
+/* 地图之上的"凹槽"层（⭐ 2026-09-28 晚老板定）：只画 inset 阴影，把地图从"浮起"变成"凹下"。
+   必须是普通 view（原因见 wxml 里那段注释）；z-index 2 低于 badge 的 9；pointer-events:none 不挡缩放。
+   ⭐ 2026-09-28 晚老板再定：**阴影再减淡一档**（.22/.14 → .14/.08）。 */
+.cmap-in { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 12px; pointer-events: none; z-index: 2;
+  box-shadow: inset 0 3px 8px rgba(31,36,48,.14), inset 0 1px 3px rgba(31,36,48,.08); }
 .cmap { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }   /* 2026-09-28：随容器绝对定位铺满（父高由 padding-top 撑） */
+/* 地图中心图钉（⭐ 2026-09-28 晚新增）：**只在修正模式显示** —— 固定在地图正中，表示"取的就是这个点"。
+   必须是普通 view 才能盖在原生 <map> 上（同 .cmap-in / .jh-badge）；pointer-events:none 不挡拖动。
+   ⚠️ **只有这一个圆点，圆心就是"取的那个点"**（= 容器正中心，见 left/top:50%）。
+      圆点下面原来还挂了一根细短线（.stem），容易让人误以为"取的是线尾" → 2026-09-28 晚按老板要求**删掉**。 */
+.cmap-pin { position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 3; pointer-events: none; }
+.cmap-pin .dot { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%;
+  background: #F5531C; border: 2.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 /* 「📍 商圈与位置」后面的店家名称（2026-09-28 老板定）：**橙色**显示更醒目（与标题同款小字，只加左间距） */
 .subsec .cname { margin-left: 6px; color: var(--primary); }
-/* 经纬度（2026-09-25 老板定）：**单独一行、不许换行**（原来那句太长了会折行）。
-   图例小蓝点 / 绿短线（.cdot / .cwalk）已随「我的位置 / 步行路线」一起去掉，样式不再需要。 */
-.coords { margin-top: 6px; font-size: 11px; color: #99A2AE; text-align: right; white-space: nowrap; }
+/* 小地图下方那一行按钮（⭐ 2026-09-28 晚定）：🧭 导航 / 📍 报错 **靠左**，📍 修正（或 取消+确定）**靠最右**。
+   高 28px ≈ 一行文字高；原来这里是"经纬度"那行。 */
+.mapln { display: flex; gap: 8px; margin-top: 8px; }
+.mbtn { height: 28px; line-height: 26px; padding: 0 13px; border-radius: 9px; font-size: 12px; font-weight: 700;
+  color: var(--sub); background: #F5F7FA; border: 1px solid #E9EDF3; }
+.mbtn.warn { color: var(--primary); background: #FFF7F3; border-color: #FFDCCB; }
+.mbtn.ml { margin-left: auto; }                                                        /* 靠最右 */
+.mbtn.ok { color: #fff; background: var(--primary); border-color: var(--primary); }     /* 「确定」= 主色实心 */
+/* 经纬度行里的"距原位置 xx"（修正模式）：淡一点、小一点 */
+.r .dist { color: #99A2AE; font-size: 11px; font-weight: 400; }
 
 /* ===== 「聚火地图」标识（⭐ 2026-09-28 老板定（最新）：放回**小地图卡片的左下角**，跟随地图卡片移动）=====
    · position 由 fixed 改回 **absolute** —— fixed 会钉在屏幕上（页面滚动时浮在内容上）；

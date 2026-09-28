@@ -11,13 +11,24 @@ Page({
   data: {
     user: null, adminMode: false, canBoss: false, adminName: '', logoUrl: '',
     // 注册状态机（2026-09-09 老板拍板：注册→审核→免登；拒绝可重提）
-    registerMode: false, pendingMode: false, rejectedMode: false,
+    // 2026-09-28 老板反馈"进登录页还是会闪" · **B2 修法**：registerMode 初始值改成 true。
+    //   原来三个 flag 初始全 false → 首屏命中 wx:else 显示"正在识别身份…"，等云函数（可能冷启动 1s+）回来
+    //   才换成表单 → 看着就是"闪一下 / 像加载了两次"。
+    //   改成"先按注册页渲染"，云端回来再按真实状态覆盖：新用户（绝大多数）本来就该看到注册页 → **完全不闪**；
+    //   只有"审核中 / 被拒"的人会从注册页切过去（少数，且他们清楚自己在等什么）。
+    registerMode: true, pendingMode: false, rejectedMode: false,
     name: '', phone: '', regBusy: false,
     trialId: '',   // 2026-09-27 恢复：游客体验入口（云函数 NEED_REGISTER 时下发）
     phoneVerified: false, // 2026-09-09 老板定：微信一键验证标记（getPhoneNumber 快速验证组件）
     pendingAt: '', rejectReason: '',
     // 开发者双身份选择页（2026-09-09 开发者范宇琨定：只他自己可见）
     devMode: false, devUser: null
+  },
+  // 2026-09-28 老板报"进登录页会闪一下" · **A 修法**：
+  //   logoUrl 原来只在 onShow 里设，而 onShow 比首帧晚 → 第一帧 logo 是空的、下一帧才冒出来（闪一下）。
+  //   onLoad 早于首帧，所以挪到这儿先填一次。
+  onLoad() {
+    this.setData({ logoUrl: getApp().globalData.logoUrl });
   },
   onShow() {
     const app = getApp();
@@ -97,7 +108,8 @@ Page({
       const res = await api.call('login', { action: 'verifyPhone', code });
       if (res.ok && res.phone) {
         this.setData({ phone: res.phone, phoneVerified: true });
-        api.toast('验证成功 ✓', 'success');
+        // 2026-09-28 老板定：文案里不带 ✓（success 图标本身就是大勾，重复）
+        api.toast('验证成功', 'success');
       } else {
         api.toast(res.msg || '验证失败，请手动输入手机号');
       }
@@ -122,7 +134,8 @@ Page({
         getApp().setBossMode(true);
         getApp().globalData.welcome = res.welcome || null; // 2026-09-10：欢迎仪式配置随注册下发
         this.clearRef(); // 2026-09-24：推荐人已用掉
-        api.toast('老板身份已激活 ✓', 'success');
+        // 2026-09-28 老板定：文案里不带 ✓（success 图标本身就是大勾，重复）
+        api.toast('老板身份已激活', 'success');
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 800);
       } else if (res.ok) {
         this.setData({ registerMode: false, pendingMode: true });
@@ -143,6 +156,41 @@ Page({
     } finally {
       this.setData({ regBusy: false });
     }
+  },
+  // ⭐ 2026-09-28 老板定：注册页「取消申请」= 放弃本次注册
+  //   ① 撤回云端的**待审核申请**（若有）② 清掉已填 / 已验证的手机号（前端）③ 清本地标记 ④ 重进登录页
+  //   ⚠️ 微信那层"手机号授权"小程序**无权撤销**（微信不提供 API）——用户若想彻底解绑，得去
+  //      微信 →「我」→ 设置 → 隐私 → 授权管理 里删掉本小程序；这里只清我们自己的记录。
+  cancelReg() {
+    wx.showModal({
+      title: '取消申请',
+      content: '将放弃本次注册：已填写的手机号和验证状态都会清除，已提交的申请也会撤回。',
+      confirmText: '放弃',
+      cancelText: '再想想',
+      success: (r) => { if (r.confirm) this._doCancelReg(); }
+    });
+  },
+  async _doCancelReg() {
+    wx.showLoading({ title: '正在取消…', mask: true });
+    // ① 云端：撤回待审核申请（只删 pending，不碰"已通过 / 已拒绝"）
+    try { await api.call('login', { action: 'cancelReg' }); } catch (e) { /* 离线也允许取消 */ }
+    // ② 清前端：姓名、手机号、验证标记
+    this.setData({ name: '', phone: '', phoneVerified: false, regBusy: false });
+    // ③ 清本地标记
+    try {
+      wx.removeStorageSync('as_trial');
+      wx.removeStorageSync('dev_session');
+      wx.removeStorageSync('ref_from');
+      wx.removeStorageSync('is_dev');
+    } catch (e) { /* 静默 */ }
+    // ④ 清全局状态
+    const app = getApp();
+    const g = app.globalData || {};
+    g.asTrial = false; g.bossMode = false; g.devAuthed = false; g.refFrom = '';
+    if (typeof app.clearUser === 'function') { try { app.clearUser(); } catch (e) { /* 静默 */ } }
+    wx.hideLoading();
+    // ⑤ 退出 → 重进登录页（页面栈清干净，回到最初状态）
+    wx.reLaunch({ url: '/pages/login/login' });
   },
   // 推荐人已用掉 → 清本地记录（2026-09-24）。失败时不调它，保留 ref 供重试
   clearRef() {
@@ -167,7 +215,8 @@ Page({
       const res = await api.call('login', { asTrialVisit: true, trialId: this.data.trialId });
       if (res.ok) {
         getApp().setUser(res.user);
-        api.toast('已进入游客身份 ✓', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
+        // 2026-09-28 老板定：文案里**不再带 ✓** —— success 图标本身就是个大勾，右边再跟一个 ✓ 是重复
+        api.toast('已进入游客身份', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.globalData.trialId = this.data.trialId; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('trial_id', this.data.trialId); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 700);
       } else {
         api.toast(res.msg || '进入失败');
@@ -186,7 +235,8 @@ Page({
       const res = await api.call('login', { asTrialVisit: true, trialId: this.data.trialId });
       if (res.ok) {
         getApp().setUser(res.user);
-        api.toast('已进入游客身份 ✓', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
+        // 2026-09-28 老板定：文案里**不再带 ✓**（success 图标已是大勾）—— 这是老板实际点的那条路径
+        api.toast('已进入游客身份', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.globalData.trialId = this.data.trialId; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('trial_id', this.data.trialId); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 600);
       } else {
         api.toast(res.msg || '进入失败');

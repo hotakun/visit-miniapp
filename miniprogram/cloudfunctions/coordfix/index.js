@@ -54,14 +54,20 @@ exports.main = async (event) => {
   const cRes = await db.collection('customers').doc(customerId).get().catch(() => null);
   if (!cRes || !cRes.data) return { ok: false, code: 'CUST_NOT_FOUND', msg: '客户不存在' };
 
-  // 同客户 24 小时内重复上报去重
-  const dup = await db.collection('coord_fix_requests')
-    .where({ customerId, status: 'pending' })
-    .count();
-  if (dup.total > 0) return { ok: false, code: 'DUPLICATED', msg: '该客户已有待处理的报错申请，请勿重复提交' };
-
-  // 老板模式（2026-09-09 §7.13）：模拟提交成功，不落库（后台审核列表不可见）
+  // 老板模式（2026-09-09 §7.13）：模拟提交成功，**不落库**（后台审核列表不可见）
+  //   ⚠️ 必须放在下面"作废旧记录"之前 —— 老板模式连库都不该碰。
   if (isBoss) return { ok: true, boss: true, msg: '已提交，管理员审核后将更新客户坐标 ✓（演示：未保存）' };
+
+  // ⭐ 2026-09-28 晚老板定：**允许重复提交**（原来"同客户已有 pending 就拒绝"的规则**已作废**）——
+  //   再次提交时，把该客户**旧的 pending 记录全部作废**（status → 'superseded'），再写入新的。
+  //   后台审核列表查的是 `{ status: 'pending' }` → 于是**只显示最后一次提交的那条**，
+  //   天然做到"审核端以最后一次提交的数据为准"；旧记录仍留库（可追溯谁在哪天改过），不删除。
+  //   ⚠️ **别改回"拒绝重复"** —— 老板原话："应该可以重复提交，审核端以最后一次提交的数据为准"。
+  try {
+    await db.collection('coord_fix_requests')
+      .where({ customerId, status: 'pending' })
+      .update({ data: { status: 'superseded', supersededAt: Date.now(), supersededBy: me.data[0]._id } });
+  } catch (e) { /* 老数据/权限异常都不影响提交，忽略 */ }
 
   await db.collection('coord_fix_requests').add({
     data: {

@@ -611,14 +611,22 @@ tr.row-off td:not(.keep){opacity:.4}
 /* 消息浮窗 */
 .nf-fab{position:relative;width:38px;height:38px;border-radius:11px;background:#fff;color:#333A44;font-size:15.5px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 10px rgba(31,36,48,.1);z-index:80}
 .nf-badge{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
-.nf-panel{position:fixed;right:14px;top:64px;width:340px;max-height:420px;background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(31,36,48,.2);z-index:81;overflow:hidden;display:flex;flex-direction:column}
+/* ⭐ 2026-09-28 晚 老板定：铃铛消息**不再浮在最上层**，改成**弹窗 + 遮罩覆盖**（居中）。
+   原来是 `position:fixed; right:14px; top:64px`（贴右上角的浮层，会压住页面内容）——
+   现在：先铺一层半透明遮罩（点它即关），弹窗居中显示，看完就消失，不长期占着页面。 */
+.nf-mask{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(20,26,38,.38);z-index:900;display:none}
+.nf-panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:440px;max-width:92vw;max-height:72vh;background:#fff;border-radius:16px;box-shadow:0 24px 64px rgba(20,26,38,.4);z-index:901;overflow:hidden;display:flex;flex-direction:column}
 .np-head{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);font-size:14px}
 .np-clear{margin-left:auto;font-size:12px;color:var(--sub);font-weight:700;cursor:pointer}
 .np-list{overflow-y:auto;max-height:360px}
-.np-item{padding:11px 16px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.6}
+/* ⭐ 2026-09-28 晚 老板定：滚动消息 —— 正文**不加粗、字号减两号**（13 → 11px）；
+   同日再改：**整行更紧凑**（上下内边距 9 → 6px）、**一行放完**（正文靠左、日期时间+人名靠右）。
+   （.np-item 现在只用于滚动消息 —— 原来那个铃铛弹窗已删，所以改它不会牵连别处。） */
+.np-item{padding:6px 14px;border-bottom:1px solid var(--line);font-size:11px;line-height:1.5}
 .np-item.imp{background:#FFF7F0;border-left:3px solid var(--primary)}
-.np-t{font-weight:600;color:var(--ink)}
-.np-meta{margin-top:2px;font-size:11.5px;color:var(--sub);font-weight:600}
+.np-t{font-weight:400;color:var(--ink)}
+/* 元信息（时间 · 业务员 / 审核人）：默认小一档；滚动那一行还会用内联把它压到 10px 并靠右 */
+.np-meta{margin-top:2px;font-size:10.5px;color:var(--sub);font-weight:400}
 .np-act{color:var(--primary-deep);font-weight:800;cursor:pointer}
 .np-empty{padding:28px 16px;text-align:center;color:var(--sub);font-size:13px}
 .mall-last{font-size:12px;font-weight:700;color:var(--sub);white-space:nowrap}
@@ -669,6 +677,11 @@ tr.row-off td:not(.keep){opacity:.4}
     <div class="grp">工作台</div>
     <div class="ni dis" title="开发中">📊 仪表盘</div>
     <div class="ni on" data-p="tasks" onclick="nav('tasks')">🧭 任务管理</div>
+    <!-- ⭐ 2026-09-28 晚 老板定：**消息中心**（放在「任务管理」下面）——
+         角标数字 = **未处理的重点消息条数**（坐标修正/现场提报/注册审核/任务审核），
+         **实时查出来的**，所以后台关着期间产生的消息也不会漏（治"漏铃铛/漏语音"）。
+         ⚠️ 只有**在消息中心里处理完**才会减 —— 点开铃铛不再清零（原来 toggleNotify 里 nfUnread=0 已去掉）。 -->
+    <div class="ni" data-p="msg" onclick="nav('msg')">📬 消息中心<span class="nav-badge" id="msgNavBadge" hidden>0</span></div>
     <div class="ni dis" title="开发中">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
     <div class="ni" data-p="customers" onclick="nav('customers')">🗃️ 批次管理</div>
@@ -691,7 +704,12 @@ tr.row-off td:not(.keep){opacity:.4}
       </div>
       <div class="top-right">
         <div class="wb-tag" onclick="showWb()" id="wbTag">🔥 回访工作台 ▾</div>
-        <div class="nf-fab" id="nfFab" onclick="toggleNotify()" title="消息中心">🔔<span class="nf-badge" id="nfBadge" style="display:none"></span></div>
+        <!-- ⭐ 2026-09-28 晚 老板定：**去掉铃铛** —— 有了边栏「📬 消息中心」（带角标、点卡片能直接审核），
+             原来这个只能弹"通知列表"的 🔔 就画蛇添足了。
+             ⚠️ 这里用 display:none **藏起来而不是删掉**：① JS 里 renderNotifies/pushNotify 还会更新 nfBadge，
+                元素还在就不会空转；② 想恢复只需把这段的 display:none 去掉。
+             ⚠️ **语音播报不受影响** —— 打开后台的"补播"挂在 refreshMsgBadge() 上，跟铃铛无关。 -->
+        <div class="nf-fab" id="nfFab" onclick="toggleNotify()" title="消息中心" style="display:none">🔔<span class="nf-badge" id="nfBadge" style="display:none"></span></div>
       </div>
     </div>
 
@@ -907,6 +925,10 @@ tr.row-off td:not(.keep){opacity:.4}
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">仓库<input type="checkbox" id="whSw" checked onchange="toggleWhStar()"></label>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">路况<input type="checkbox" id="trafficSw" onchange="rebuildTrackMap()"></label>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">拾取<input type="checkbox" id="pickSw" onchange="togglePick()"></label>
+          <!-- ⭐ 2026-09-28 晚 老板定：**「全部」开关** —— 勾上就把本地缓存里的**全部客户点**（6 万多家）
+               一次全画到地图上；不勾 = 按地图中心取最近 3000 家（默认，快）。
+               数据本来就全在本地缓存（admin/cache/map-points.json）里，**不用重新拉云端**。 -->
+          <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--primary)">全部<input type="checkbox" id="showAllSw" onchange="toggleShowAllCust()"></label>
           <label style="font-size:12px;color:var(--sub);display:flex;align-items:center;gap:4px">点大小<input type="range" id="custSizeRange" min="8" max="26" value="16" style="width:70px" oninput="onCustSize()"></label>
           <span style="display:flex;align-items:center;gap:8px;font-size:12px" id="custLegend">
             <span class="lg" id="lg_ongoing" style="color:#2F80ED" onclick="toggleCustKind('ongoing')">● 拜访中</span>
@@ -1388,6 +1410,32 @@ tr.row-off td:not(.keep){opacity:.4}
       </div>
     </div>
 
+    <!-- ⭐ 2026-09-28 晚 老板定：**消息中心**（边栏 📬 消息中心）——
+         两个 Tab：**重点消息**（要人做决定 → 计入角标数字）/ **滚动消息**（业务员动态流水 → 只读）。
+         重点消息里**就地审核**：坐标修正 / 现场提报 → 直接采纳/忽略；注册审核 / 任务审核 → 跳原页处理。
+         数字只在**这里处理完**才减（点开铃铛不清零）。 -->
+    <div id="page-msg" style="display:none">
+      <!-- ⭐ 2026-09-28 晚 老板定：**两张卡并排** —— 左半边「滚动消息」、右半边「重点消息」（不分 Tab） -->
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <!-- 左：滚动消息（业务员动态流水，只读） -->
+        <div class="card" style="flex:1 1 50%;min-width:0;padding:0">
+          <div class="np-head"><span style="font-weight:800">📜 滚动消息</span>
+            <span class="sb-d" style="margin-left:auto">业务员动态 · 只读</span>
+            <button class="btn ghost btn-sm" style="margin-left:8px" onclick="msgRender()">刷新</button></div>
+          <div id="msgRollList" class="np-list" style="max-height:calc(100vh - 210px)"><div class="np-empty">加载中…</div></div>
+          <div id="msgMore" style="display:none;text-align:center;padding:10px 0"><button class="btn ghost btn-sm" onclick="msgLoadMore()">加载更多</button></div>
+        </div>
+        <!-- 右：重点消息（要处理，计入角标数字） -->
+        <div class="card" style="flex:1 1 50%;min-width:0;padding:0">
+          <div class="np-head"><span style="font-weight:800">🔴 重点消息</span>
+            <span id="mtab-n-imp" style="margin-left:8px;min-width:19px;height:19px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">0</span>
+            <span class="sb-d" style="margin-left:6px">待处理</span>
+            <button class="btn ghost btn-sm" style="margin-left:auto" onclick="loadMsgCenter()">刷新</button></div>
+          <div id="msgImpList" class="np-list" style="max-height:calc(100vh - 210px);padding:10px"><div class="np-empty">加载中…</div></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 系统设置 -->
     <div id="page-settings" style="display:none">
       <div class="title-bar"><span class="t">系统设置</span></div>
@@ -1783,13 +1831,18 @@ tr.row-off td:not(.keep){opacity:.4}
       </div>
     </div>
 
-    <!-- 坐标报错审核弹层 -->
+    <!-- 坐标报错审核弹层（⭐ 2026-09-28 晚：加了"老位置 vs 新位置"小地图；同日再改：
+         弹窗加宽到 **640px**、改成 flex 布局把**按钮行固定在底部**，只有内容区滚动。
+         🔴 之前的问题：我写的 style="max-width:560px" **只改了上限、没改宽度** → 实际宽度还是 .modal 的 520px，
+            内容一长（地图 320 + 照片 + 备注 + 时间）就把底部按钮挤出可视区、看不全。 -->
     <div class="ovl" id="coordFixOvl" style="display:none">
-      <div class="modal" style="max-width:480px">
-        <div class="mt">📍 坐标报错审核</div>
-        <div id="cfBody"></div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
-          <button class="btn ghost" onclick="$('coordFixOvl').style.display='none'">关闭</button>
+      <div class="modal" style="width:640px;max-width:94vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;padding:18px 22px">
+        <div class="mt" style="flex:0 0 auto">📍 坐标报错审核</div>
+        <!-- ✅ 只有这块滚动（地图 / 坐标 / 照片 / 备注 / 时间都在里面） -->
+        <div id="cfBody" style="flex:1 1 auto;overflow-y:auto;min-height:0;padding-right:4px"></div>
+        <!-- ✅ 按钮行固定在底部，永远不会被挤出屏幕 -->
+        <div style="flex:0 0 auto;display:flex;justify-content:flex-end;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+          <button class="btn ghost" onclick="$('coordFixOvl').style.display='none';cfDestroyMap()">关闭</button>
           <button class="btn ghost" id="cfReject" style="color:var(--danger)" onclick="reviewCoordFix(false)">拒绝</button>
           <button class="btn primary" id="cfApprove" onclick="reviewCoordFix(true)">✅ 同意并更新坐标</button>
         </div>
@@ -2222,13 +2275,9 @@ try {
   if (window.chrome && window.chrome.webview && window.chrome.webview.addEventListener) {
     window.chrome.webview.addEventListener('message', function (ev) {
       const m = ev && ev.data;
-      if (m === 'toggle-bell') {
-        const fab = $('nfFab');
-        if (!fab) return;
-        const hide = fab.style.display !== 'none';
-        fab.style.display = hide ? 'none' : '';
-        notifyShell(hide ? 'bell-hidden' : 'bell-visible');
-      }
+      // ⭐ 2026-09-28 晚 老板定：**"切换铃铛"整段已删** —— 铃铛功能整体去掉（由边栏「📬 消息中心」取代）。
+      //   壳再发 toggle-bell 就当作不认识：前端不处理、也不回执。
+      //   ⚠️ 壳标题条上那个「铃铛」图标若也要一起去掉，得改壳的 C#（packager/shell/Program.cs）再重编译 exe。
       if (m === 'manual-refresh') {
         // 2026-09-10 老板定：标题栏「刷新数据」= 立即现在马上拉取最新数据一次（不重载页面）
         manualRefresh();
@@ -2250,10 +2299,17 @@ function enterWb(m) {
   $('wbView').style.display = 'none';
   $('mainView').style.display = 'flex';
   $('sideName').textContent = admin.name;
-  $('nfFab').style.display = ''; // 进入工作台后才显示消息铃铛
+  // ⭐ 2026-09-28 晚 老板定：**铃铛已去掉**（有了边栏「📬 消息中心」，它带角标、点卡片能直接审核）。
+  //   ⚠️ 原来这里是 `$('nfFab').style.display = ''`（进工作台就把铃铛显示出来）→ 现在**保持隐藏**。
+  //   想恢复铃铛：把 HTML 里 #nfFab 的 style="display:none" 去掉，这里再改回 display=''。
+  //   ⚠️ 语音播报不受影响（补播在下面 refreshMsgBadge 里）。
   notifyShell('logged-in'); // 通知壳：已进入后台 → 显示标题条
   startAuto(); // 进入工作台启动全局 15 秒自动刷新
   warmTts(); // 预热：后台悄悄合成全部业务员的语音 mp3
+  // ⭐ 2026-09-28 晚 老板定：**打开后台先补播** —— 查一次未处理数，有就报一条语音。
+  //   治的就是"后台没开着 → 那段时间提交的审核，铃铛和语音都漏了"（老板 2026-09-28 报的）。
+  //   延迟 1.2 秒：等 warmTts 的合成请求先出去，避免抢带宽（语音从 /tts 本地缓存出，通常已是热的）。
+  setTimeout(() => refreshMsgBadge(true), 1200);
   const label = { mall: '🔥 回访工作台', new: '🌱 新客开发工作台' }[m];
   $('wbTag').textContent = label + ' ▾';
   // 拜访目的按工作台显示：回访=三种，新客=新客开发；默认选第一项
@@ -2281,13 +2337,15 @@ function curPurposeId() {
 function nav(p) {
   stopDetailTimer('');
   document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === p));
-  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import', 'geo'].forEach(id => { $('page-' + id).style.display = 'none'; });
+  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import', 'geo', 'msg'].forEach(id => { $('page-' + id).style.display = 'none'; });   // ⭐ 2026-09-28 晚：加了 'msg'（消息中心）
   // ⭐ 2026-09-26 老板定：**客户管理页（原名「地域管理」）的表格跟着窗口走** —— 放开 .main 的 max-width:1200px，
   //    其他页保持原样（1200px 上限）。窗口多宽，表格就铺多宽。
   const mainEl = document.querySelector('main.main');
   if (mainEl) mainEl.style.maxWidth = (p === 'geo') ? 'none' : '';
-  const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
-  if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台')); }
+  const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理', msg: '消息中心' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
+  if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (p === 'msg' ? '待处理的重点消息 · 业务员动态流水' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台'))); }
+  // ⭐ 2026-09-28 晚 老板定：进入消息中心 → 实时拉数据（**不是"读过了就清零"**）
+  if (p === 'msg') loadMsgCenter();
   // 顶部导航：仅回访工作台的**批次管理**页（内部 id=customers）显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
   $('topActions').style.display = (p === 'customers' && curMode === 'mall') ? 'flex' : 'none';
   if (p === 'customers') {
@@ -3740,6 +3798,15 @@ function loadTrackMapLib() {
   document.head.appendChild(s);
 }
 
+// ⭐ 2026-09-28 晚 老板定：**地图样式（腾讯个性化地图）** —— 控制台里的样式 **ID 是 `Style 1`**。
+//   ⚠️⚠️ **别写成样式的"名字"**（比如「永康餐饮01」）—— 那样控制台会报
+//        "个性化样式 xxx 并未找到，已自动启用默认样式！"（老板 2026-09-28 亲测报过：**名字 ≠ ID**）
+//   作用：① 换成老板配好的配色 ② 样式里配了"餐饮/超市"等 POI → 后台地图上就能看到周边店。
+//   🔴 **要切换 / 要回退：只改这一行**（设成空字符串 '' 即全部恢复默认样式），**别逐个地图去改**。
+//   ⚠️ 样式 ID 写错时 TMap 会回退默认样式（不会白屏）；但样式本身配得不对可能异常 —— 真出事就把这行清空。
+//   ⚠️ 与它无关的铁律：`baseMap` 里的 `building3d` 照旧一个字都不能动。
+const ADM_MAP_STYLE_ID = 'Style 1';
+
 function buildTrackMap(keep) {
   if (trackMap || !$('trackMap')) return;
   // 2026-09-09 老板定：首次进入时地图先隐藏（数据准备+起始态就绪前不显示），入场动画开始时才亮相
@@ -3759,7 +3826,8 @@ function buildTrackMap(keep) {
   trackMap = new TMap.Map($('trackMap'), {
     center: (keep && keep.center) ? keep.center : new TMap.LatLng(28.970802, 120.154526),
     zoom: (keep && keep.zoom != null) ? keep.zoom : 12,
-    pitch: 0, rotation: 0, baseMap
+    pitch: 0, rotation: 0, baseMap,
+    mapStyleId: ADM_MAP_STYLE_ID        // ⭐ 个性化地图样式（改常量即可全局切换/回退）
   });
   // 控件定制（2026-09-08 老板定）：只留 3D 导航球；移除 +/− 缩放与比例尺（官方 API removeControl）
   try { trackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 静默 */ }
@@ -3855,7 +3923,8 @@ function buildTaskMap() {
   tmMapObj = new TMap.Map($('tmMap'), {
     center: new TMap.LatLng(28.970802, 120.154526),
     zoom: 12, pitch: 0, rotation: 0,
-    baseMap: [{ type: 'vector', features: ['base', 'building3d', 'label'] }]
+    baseMap: [{ type: 'vector', features: ['base', 'building3d', 'label'] }],
+    mapStyleId: ADM_MAP_STYLE_ID        // ⭐ 个性化地图样式（改常量即可全局切换/回退）
   });
   // 2026-09-26：MultiMarker 的 hover 在 WebView2 里**不触发**（老板实测“指着没反应”），
   //   所以改成**地图 mousemove + 自己找最近点** —— 不依赖官方 hover，浏览器/壳里都能用。
@@ -4514,6 +4583,22 @@ let custCustVer = -1;                                         // 上次画时用
 let custFilterSig = '';                                       // 2026-09-27：筛选指纹（业务员/图例/点大小 变了要重画）
 let custAggCache = null, custAggCacheKey = '', custAggCacheAt = 0;
 const CUST_AGG_LIMIT = 3000;                                  // 一次最多画这么多客户点（真实点不像气泡能合并，只能设个安全上限）
+// ⭐ 2026-09-28 晚 老板定：**「全部」开关**（战况监控工具栏那个勾选框）。
+//   勾上 → 把本地缓存里的**全部客户点**（当前 6 万多家）一次画出来（**不过滤、不截断**）；
+//   不勾 → 保持原样：只画「任务中的客户」，再按地图中心取最近 CUST_AGG_LIMIT 家（快）。
+//   ⚠️ **数据不用重拉** —— 本地缓存 admin/cache/map-points.json 本来就是全量。
+//   ⚠️ 6 万个点一次塞给 GL 可能卡（老板要求"试试看"）→ 卡了就取消勾选 / 刷新页面。
+let trackShowAllCust = false;
+function toggleShowAllCust() {
+  const sw = $('showAllSw');
+  trackShowAllCust = !!(sw && sw.checked);
+  custLastLevel = null;      // 清掉"上次画的档" → 强制重画
+  custFilterSig = '';        // 指纹也清掉，避免被"没变就 return"吃掉
+  // ⚠️ 关键：**必须清掉 loadCustData 的 60 秒缓存** —— 那份缓存里存的是**上次过滤后的结果**
+  //    （"只画任务中客户"时就是几百家），不清掉的话切到「全部」要等 60 秒才生效。
+  trackCustCache = null; trackCustCacheAt = 0;
+  drawCustLayer();           // 立刻重画（和地图 idle 之后走同一条路）
+}
 // ⭐⭐⭐ 2026-09-27 老板定：**停用聚合，所有客户点直接显示**。
 //   原因：聚合问题太多（层级/样式/性能反复出问题），老板拍板"先去掉聚合"。
 //   ⚠️ **不是删除**：聚合的代码（`localAggregate` / `drawCustBubbles` / `aggDotIcon` / `custBubble*`）**全部保留**，
@@ -4759,7 +4844,12 @@ async function loadCustData(force) {
   //   无任务的客户**一个都不画**（业务员实时位置 / 仓库星这些图层不受影响）。
   //   判据：该客户出现在**进行中任务**的 customerIds / dayPlan 里 —— 上面的 taskMap 已经算好了 ✓
   //   → 数据量从 6 万降到几十~几百，地图秒开。
-  trackCustCache = pts.filter(p => p && p.la && p.ln && taskMap[p.i]).map(p => ({
+  // ⭐ 2026-09-28 晚 老板要「全部」开关 —— **这里才是真正要放行的地方**：
+  //   勾上 = **不过滤**，把本地缓存里 6 万多家一次全画（老板要求"试试看"）；
+  //   不勾 = 保持上面的口径（只画任务中的，快）。
+  //   ⚠️ 6 万点确实会把地图画卡（历史上就卡过）→ 卡了就取消勾选 / 刷新页面。
+  const _allCust = trackShowAllCust;
+  trackCustCache = pts.filter(p => p && p.la && p.ln && (_allCust || taskMap[p.i])).map(p => ({
     _id: p.i, name: p.n, lat: p.la, lng: p.ln,
     city: p.c || '', district: p.d || '', bizCircle: p.b || '',
     // ⭐ 2026-09-27 M2a：列表层新字段（客户管理页表格要用）
@@ -4828,7 +4918,7 @@ async function drawCustLayer() {
   //   ⭐ 关键：**不再按视野过滤** —— 一次把点全设进图层，之后拖地图/缩放**什么都不做**（GL 自己平移+裁剪）。
   //   ⚠️ 极端情况（几十万客户）一次塞不下 → 留安全上限 CUST_AGG_LIMIT，到那个量再说。
   //   筛选指纹：业务员下拉 / 图例开关 / 点大小 变了必须重画，否则上面的 return 会把它吃掉。
-  const _filterSig = (trackSelId || '') + '|' + (trackShowAll ? 1 : 0) + '|'
+  const _filterSig = (trackSelId || '') + '|' + (trackShowAll ? 1 : 0) + '|' + (trackShowAllCust ? 1 : 0) + '|'
     + [custKindOn.ongoing, custKindOn.pending, custKindOn.visited, custKindOn.gray].join('') + '|' + custSize;
   if (custLastLevel === '' && custCustVer === trackCustVer && custFilterSig === _filterSig && custLayer) return;
   custLastLevel = ''; custCustVer = trackCustVer; custFilterSig = _filterSig;
@@ -4837,7 +4927,8 @@ async function drawCustLayer() {
   // ⭐⭐ 2026-09-27 修正：原来直接 `slice(0, N)` 是**按 _id 顺序**截断 → 客户超过上限时，
   //   "排在后面的那批"会**永远不显示**（哪怕它就在屏幕正中央）。
   //   改成**以地图中心为圆心、取最近的 N 家** —— 保证屏幕上的点永远是最相关的那批。
-  if (list.length > CUST_AGG_LIMIT) {
+  // ⭐ 2026-09-28 晚：**勾了工具栏的「全部」就不再截断** —— 6 万多家一次全画（老板要求试试看）。
+  if (!trackShowAllCust && list.length > CUST_AGG_LIMIT) {
     const c0 = trackMap && trackMap.getCenter ? trackMap.getCenter() : null;
     const cla = c0 && c0.getLat ? c0.getLat() : 0, cln = c0 && c0.getLng ? c0.getLng() : 0;
     if (cla && cln) {
@@ -4978,7 +5069,8 @@ async function openVisitTrack(visitId) {
     visitTrackMap = new TMap.Map($('visitTrackMap'), {
       center: new TMap.LatLng(28.970802, 120.154526),
       zoom: 14, pitch: 0, rotation: 0,
-      baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] }
+      baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] },
+      mapStyleId: ADM_MAP_STYLE_ID        // ⭐ 个性化地图样式（改常量即可全局切换/回退）
     });
     // 控件定制（2026-09-08 老板定）：只留 3D 导航球；移除 +/− 缩放与比例尺
     try { visitTrackMap.removeControl(TMap.constants.DEFAULT_CONTROL_ID.ZOOM); } catch (e) { /* 静默 */ }
@@ -5121,15 +5213,15 @@ function renderNotifies() {
 }
 
 function toggleNotify() {
-  const p = $('nfPanel');
-  p.style.display = p.style.display === 'none' ? 'block' : 'none';
-  nfUnread = 0;
-  renderNotifies();
+  // ⭐ 2026-09-28 晚：**铃铛 / 弹窗 / 遮罩已整体删掉**（消息改看边栏「📬 消息中心」）→ 这里改成安全空函数：
+  //   ① 防残留 onclick 报错；② 即使有人再调它，也不会因为 $('nfPanel') 为 null 而崩。
+  //   （原实现是：切 nfPanel/nfMask 显隐 + 顺手查未处理数 + 渲染通知列表。）
+  return;
 }
 
 function clearNotifies() {
   notifies = [];
-  nfUnread = 0;
+  // ⭐ 2026-09-28 晚：**清空"通知浮窗列表" ≠ 处理完** → 不再清 nfUnread（数字只在消息中心处理完才减）
   try { localStorage.removeItem('nf'); } catch (e) {}
   renderNotifies();
 }
@@ -6048,6 +6140,7 @@ function cdBuildMap() {
         zoom: 16, minZoom: 10, maxZoom: 20,
         pitch: 0, rotation: 0,
         draggable: false,
+        mapStyleId: ADM_MAP_STYLE_ID,       // ⭐ 个性化地图样式（改常量即可全局切换/回退）
         // 官方文档：vector 的 features 可选 —— base=道路及底面 / building3d=3D楼块 / building3d=2D楼块 /
         //   point=POI文字 / label=**道路文字（道路名称）**。
         // 2026-09-25 老板定：① 要看到**道路名**（label）与餐饮/超市等**点位**（point）；
@@ -6165,6 +6258,11 @@ async function reviewFieldReport(reportId, approve) {
   const res = await api('reviewFieldReport', { reportId: reportId, approve: approve });
   if (!res || !res.ok) { alert((res && res.msg) || '操作失败'); return; }
   showCustDetail(cdCurId);
+  // ⭐ 2026-09-28 晚：**消息中心也要刷新** —— 现场提报卡审核完同样要从「重点消息」消失，
+  //   并在「滚动消息」里显示「已采纳 ✓」（和坐标修正同一个道理，同一个根因）。
+  try {
+    if ($('page-msg') && $('page-msg').style.display !== 'none') msgRender();
+  } catch (e) { /* 没进过消息中心就忽略 */ }
 }
 
 async function showCustDetail(id) {
@@ -8351,6 +8449,216 @@ async function setUserBoss(userId, on) {
   refreshPeople();
 }
 
+// =====================================================================================
+// ⭐ 2026-09-28 晚 老板定：**消息中心**（边栏 📬 消息中心）
+//   数字口径 = **未处理的重点消息条数**（坐标修正/现场提报/注册审核/任务审核），**实时查出来的**
+//   → 后台关着期间产生的消息**一条都不会漏**（治老板报的"后台没启动 → 铃铛和语音都漏了"）。
+//   ⚠️ 数字**只在消息中心里处理完**才减 —— 点开铃铛**不再清零**（原来是 toggleNotify 里 nfUnread=0，已去掉）。
+// ⚠️ 调审核接口的参数名**照现有调用抄，别想当然**（2026-09-28 差点写错）：
+//     reviewCoordFix 要 { fixId, approve }；reviewFieldReport 要 { reportId, approve }。
+// =====================================================================================
+let msgTab = 'imp', msgPage = 0;
+
+// 查未处理数 → 更新两处角标（边栏页签 + 铃铛）+ 打开后台时补播语音
+async function refreshMsgBadge(announce) {
+  try {
+    const r = await api('msgCount');
+    if (!r || !r.ok) return r;
+    const n = r.total || 0;
+    const navB = $('msgNavBadge'); if (navB) { navB.textContent = n; navB.hidden = n === 0; }
+    const tn = $('mtab-n-imp'); if (tn) tn.textContent = n;
+    nfUnread = n; renderNotifies();   // 铃铛角标跟着走
+    if (announce && n > 0) {
+      // 打开后台时**补播一条**（语音只报"最要紧的那一类"，总数看角标）
+      if ((r.coord + r.field) > 0) playTts('管理员', 'coordfix', 1);
+      else if (r.reg > 0) playTts('管理员', 'regReview', 1);
+    }
+    return r;
+  } catch (e) { return null; }
+}
+
+// 进入消息中心（nav('msg') 调它）
+function loadMsgCenter() {
+  refreshMsgBadge(false);
+  msgPage = 0;
+  msgRender();
+}
+
+// ⭐ 2026-09-28 晚：**不再用 Tab 切换** —— 老板定"两张卡并排"（左滚动 / 右重点），
+//   所以原来的 switchMsgTab() 已删除（它引用的 mtab-imp / mtab-roll 元素也一并没了）。
+function msgLoadMore() { msgPage++; msgRender(true); }
+
+const msgT = ts => ts ? (() => { const d = new Date(Number(ts)); const p = n => String(n).padStart(2, '0'); return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; })() : '—';
+
+// 同时渲染**两张卡**：左「滚动消息」+ 右「重点消息」
+//   ⭐ 2026-09-28 晚 老板定：**不分 Tab，左右并排**（滚动在左、重点在右，各占一半）。
+async function msgRender(append) {
+  const impBox = $('msgImpList'), rollBox = $('msgRollList');
+  if (!impBox || !rollBox) return;
+  if (!append) { impBox.innerHTML = '<div class="np-empty">加载中…</div>'; rollBox.innerHTML = '<div class="np-empty">加载中…</div>'; }
+  // ⭐ 2026-09-28 晚 修（老板报"重点消息空白/一直加载中，但云端明明有数据"）：
+  //   原来是 `Promise.all([...])` —— **只要"滚动"那边失败，整个函数就中断**，
+  //   "重点消息"永远停在"加载中…"，而且**看不到真正的报错**、也没法降级。
+  //   现在：两个请求**各自独立 try/catch**；失败时给出**明确提示**（不再假装"没有待处理"）。
+  let imp = null, roll = null;
+  try { imp = await api('msgCenter', { tab: 'imp', page: 0, pageSize: 50 }); }
+  catch (e) { console.error('[消息中心] 重点消息拉取失败', e); }
+  try { roll = await api('msgCenter', { tab: 'roll', page: msgPage, pageSize: 20 }); }
+  catch (e) { console.error('[消息中心] 滚动消息拉取失败', e); }
+
+  // 右：重点消息
+  const impOk = !!(imp && imp.ok);
+  if (!impOk) {
+    impBox.innerHTML = '<div class="np-empty">重点消息加载失败 —— 请按 F12 看控制台红色报错（也请确认云函数 adminapi 重传成功了）</div>';
+  } else {
+    const impItems = imp.items || [];
+    impBox.innerHTML = impItems.length ? impItems.map(msgImpCard).join('') : '<div class="np-empty">🎉 没有待处理的消息了</div>';
+  }
+  // 左：滚动消息
+  const rollOk = !!(roll && roll.ok);
+  const rollItems = (rollOk && roll.items) || [];
+  const rollHtml = rollOk
+    ? (rollItems.length ? rollItems.map(msgRollRow).join('') : '<div class="np-empty">暂无动态</div>')
+    : '<div class="np-empty">滚动消息加载失败（按 F12 看控制台）</div>';
+  if (append) rollBox.insertAdjacentHTML('beforeend', rollHtml); else rollBox.innerHTML = rollHtml;
+  const more = $('msgMore'); if (more) more.style.display = (rollOk && roll.hasMore) ? '' : 'none';
+  refreshMsgBadge(false);
+}
+
+// 重点消息卡（⭐ 2026-09-28 晚 老板定：**卡片上不放操作按钮** —— 点整张卡片打开对应的窗口，
+//   在窗口里看地图/两根针/距离，再决定同意还是驳回；避免在列表里"盲点"）
+function msgImpCard(it) {
+  const t = msgT(it.at), who = esc(it.salesmanName || '');
+  if (it.kind === 'coord') {
+    const dist = it.distance != null ? (' · 相距 ' + it.distance + ' 米') : '';
+    return `<div class="card" style="padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="openCoordFix('${it.customerId}')">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="pill" style="background:#FFF1EA;color:#D93E0E;font-weight:700">📍 坐标修正</span>
+        <b style="font-size:14.5px">${esc(it.customerName)}</b>
+        <span style="margin-left:auto;color:var(--sub);font-size:12px">${t}</span>
+      </div>
+      <div class="sb-d" style="margin-top:6px">${who} 提交 · 新坐标 ${it.newLat}, ${it.newLng}${dist}${it.note ? ' · 备注：' + esc(it.note) : ''}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <!-- 2026-09-28 晚：左边这行提示也做成"鼠标一指就动一下"（与右边按钮呼应）——
+             悬停时向右轻移 2px + 颜色加深 + 一点文字投影，移开复原。
+             ⚠️ 提醒：这一段是写在 JS 模板字符串里的 HTML，**绝不能出现反引号**（会提前结束模板字符串，
+                整个脚本报错、后台直接点不动）；也不要写美元大括号那种插值。 -->
+        <span class="sb-d" style="color:var(--primary);font-weight:700;cursor:pointer;display:inline-block;
+          transition:transform .15s,color .15s,text-shadow .15s"
+          onmouseover="this.style.transform='translateX(2px)';this.style.color='#D93E0E';this.style.textShadow='0 1px 2px rgba(245,83,28,.28)'"
+          onmouseout="this.style.transform='none';this.style.color='var(--primary)';this.style.textShadow='none'">点击左边 → 打开审核窗口（改坐标）</span>
+        <!-- ⭐ 2026-09-28 晚 老板定：右下角「客户详情」要有颜色 + 一点"浮起"感（原来 ghost 太素）。
+             选**浅蓝底 + 蓝字 + 淡蓝描边 + 极淡阴影**（老板 2026-09-28："阴影减少，很淡很淡"），
+             鼠标移上去仍浮高 1px、阴影略加深（一点点，不刺眼）。
+             为什么是蓝色不是橙色：**蓝色 = "看信息"，橙色 = "要你审核"** —— 语义分开，避免误以为点它就是审核通过。
+             ⚠️ 必须 event.stopPropagation() —— 卡片本身 onclick 是"打开审核窗口"，不加会被连带触发（两个窗口一起弹）。 -->
+        <button style="margin-left:auto;height:26px;padding:0 12px;border-radius:13px;cursor:pointer;
+          font-size:12px;font-weight:700;font-family:inherit;
+          color:#2C7BE5;background:#EAF2FE;border:1px solid #C7DDFB;
+          box-shadow:0 1px 3px rgba(44,123,229,.10)"
+          onmouseover="this.style.boxShadow='0 2px 5px rgba(44,123,229,.16)';this.style.transform='translateY(-1px)'"
+          onmouseout="this.style.boxShadow='0 1px 3px rgba(44,123,229,.10)';this.style.transform='none'"
+          onclick="event.stopPropagation();showCustDetail('${it.customerId}')">客户详情 ›</button>
+      </div>
+    </div>`;
+  }
+  if (it.kind === 'field') {
+    const what = (it.fieldKind === 'dish' ? '招牌菜' : (it.fieldKind === 'fac' ? '设施' : '团购/外卖')) + '：' + esc(it.fieldValue || it.flagName || '');
+    return `<div class="card" style="padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="showCustDetail('${it.customerId}')">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="pill" style="background:#EAF2FE;color:#2C7BE5;font-weight:700">✍️ 现场提报</span>
+        <b style="font-size:14.5px">${esc(it.customerName)}</b>
+        <span style="margin-left:auto;color:var(--sub);font-size:12px">${t}</span>
+      </div>
+      <div class="sb-d" style="margin-top:6px">${who} 提交 · ${what}</div>
+      <!-- ⭐ 2026-09-28 晚 老板定：卡上的"去处理"提示统一成**橙色文字 + 一指一跳**（同款手感） -->
+      <div style="margin-top:8px">
+        <span style="display:inline-block;color:var(--primary);font-weight:700;font-size:13px;cursor:pointer;
+          transition:transform .15s,color .15s,text-shadow .15s"
+          onmouseover="this.style.transform='translateX(2px)';this.style.color='#D93E0E';this.style.textShadow='0 1px 2px rgba(245,83,28,.28)'"
+          onmouseout="this.style.transform='none';this.style.color='var(--primary)';this.style.textShadow='none'">点击卡片 → 打开客户详情 ›</span>
+      </div>
+    </div>`;
+  }
+  if (it.kind === 'reg') {
+    return `<div class="card" style="padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="pill" style="background:#EEF3FF;color:#3B5BDB;font-weight:700">👤 注册审核</span>
+        <b style="font-size:14.5px">${esc(it.name)}</b>
+        <span class="sb-d" style="margin-left:4px">${esc(it.phone)}${it.trial ? ' · 实习' : ''}</span>
+        <span style="margin-left:auto;color:var(--sub);font-size:12px">${t}</span>
+      </div>
+      <!-- ⭐ 2026-09-28 晚 老板定：「去审核」统一做成**橙色文字 + 一指一跳**（与坐标卡左边那行同款手感） -->
+      <div style="margin-top:10px">
+        <span style="display:inline-block;color:var(--primary);font-weight:700;font-size:13px;cursor:pointer;
+          transition:transform .15s,color .15s,text-shadow .15s"
+          onmouseover="this.style.transform='translateX(2px)';this.style.color='#D93E0E';this.style.textShadow='0 1px 2px rgba(245,83,28,.28)'"
+          onmouseout="this.style.transform='none';this.style.color='var(--primary)';this.style.textShadow='none'"
+          onclick="nav('people')">去审核（跳人员管理）›</span>
+      </div></div>`;
+  }
+  return `<div class="card" style="padding:14px 16px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="pill" style="background:#F5F7FA;font-weight:700">🧭 任务审核</span>
+      <b style="font-size:14.5px">${esc(it.taskName || it.taskNo || '')}</b>
+      <span style="margin-left:auto;color:var(--sub);font-size:12px">${t}</span>
+    </div>
+    <div class="sb-d" style="margin-top:6px">${esc(it.salesmanName || '')} 提交 · ${esc(it.msg || '')}</div>
+    <!-- ⭐ 2026-09-28 晚 老板定：「去审核」统一做成**橙色文字 + 一指一跳**（与其它卡同款手感） -->
+    <div style="margin-top:10px">
+      <span style="display:inline-block;color:var(--primary);font-weight:700;font-size:13px;cursor:pointer;
+        transition:transform .15s,color .15s,text-shadow .15s"
+        onmouseover="this.style.transform='translateX(2px)';this.style.color='#D93E0E';this.style.textShadow='0 1px 2px rgba(245,83,28,.28)'"
+        onmouseout="this.style.transform='none';this.style.color='var(--primary)';this.style.textShadow='none'"
+        onclick="nav('tasks');showDetail('${it.id}')">去审核（跳任务详情）›</span>
+    </div></div>`;
+}
+
+// 滚动消息的一行（⭐ 2026-09-28 晚 老板定：**紧凑成一行** —— 正文靠左，
+//   右边只放「日期时间 · 审核人 XX」；**产生人不再重复显示**（正文开头已经有"范宇琨 修正坐标…"了，
+//   右边再写一遍是多余的）。没审核人的（待审核）右边就只有时间。正文太长自动省略号，不挤乱右边。）
+// 🔴 2026-09-28 晚 兜底（老板报"审核通过的那条还是显示已作废"）：
+//   "显示成什么"是**云函数**拼进 text 的 → 光刷新网页修不好（要重传 adminapi 才根治）。
+//   但旧版云函数把「审核通过(confirmed)」误判成了"已作废"，而两者其实能区分：
+//     · 真作废 = superseded（被新提报顶掉的旧记录）→ **没有审核人**
+//     · 误判的 = "已作废" **后面跟着 "· 审核人 xxx"** → 其实是**已采纳**
+//   所以这里兜一道：**"已作废"后面跟"审核人"的 → 改回"已采纳 ✓"**。
+//   ⚠️ 云端更新后这段自然失效（新版不会再拼出这个组合），不会误伤。
+function msgRollRow(it) {
+  let txt = String(it.text || '');
+  if (/已作废\s*·\s*审核人/.test(txt)) txt = txt.replace(/已作废/, '已采纳 ✓');
+  const meta = msgT(it.at) + (it.reviewedBy ? (' · 审核人 ' + esc(it.reviewedBy)) : '');
+  return `<div class="np-item" style="display:flex;align-items:baseline;gap:10px">
+    <div class="np-t" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(txt)}</div>
+    <div class="np-meta" style="flex:0 0 auto;margin-top:0;font-size:10px;color:#9AA1AB;white-space:nowrap">${meta}</div>
+  </div>`;
+}
+
+// 就地审核（坐标修正 / 现场提报）→ 处理完**数字立刻减**（数字是实时查出来的）
+//   ⚠️ 参数名按云端签名来：reviewCoordFix={fixId,approve}、reviewFieldReport={reportId,approve}
+async function reviewMsgItem(kind, id, ok) {
+  const payload = (kind === 'field') ? { reportId: id, approve: !!ok } : { fixId: id, approve: !!ok };
+  const act = (kind === 'field') ? 'reviewFieldReport' : 'reviewCoordFix';
+  const r = await api(act, payload);
+  if (!r || !r.ok) { msgToast((r && r.msg) || '操作失败'); return; }
+  msgToast(ok ? '已采纳 ✓' : '已忽略');
+  msgRender();          // 列表刷新（那条会消失）
+  refreshMsgBadge(false);
+}
+
+// 轻提示（后台没有通用 toast，这里用最小的一个：临时挂一个浮层）
+function msgToast(txt) {
+  let el = document.getElementById('msgToastBox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'msgToastBox';
+    el.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(24,30,42,.9);color:#fff;font-size:13px;padding:9px 16px;border-radius:10px;z-index:99999;opacity:0;transition:opacity .2s;pointer-events:none';
+    document.body.appendChild(el);
+  }
+  el.textContent = txt; el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 1600);
+}
+
 // ===== 注册审核（2026-09-09 老板拍板：注册→后台审核→通过后免登） =====
 // 两处计数角标（左侧栏菜单 + 待审核 Tab 右上角，2026-09-09 老板定）
 function updateRegBadges(n) {
@@ -8595,6 +8903,11 @@ async function reviewReg(regId, act, name) {
   alert(res.msg || '操作失败');
   refreshRegs();
   refreshPeople();
+  // ⭐ 2026-09-28 晚：**消息中心也要刷新** —— 注册审核通过/拒绝后，那张「👤 注册审核」卡
+  //   要从「重点消息」消失、角标数字要减，并在「滚动消息」里留下记录（老板报的就是这个）。
+  try {
+    if ($('page-msg') && $('page-msg').style.display !== 'none') msgRender();
+  } catch (e) { /* 没进过消息中心就忽略 */ }
 }
 
 function openUserModal() {
@@ -8722,24 +9035,140 @@ async function openCoordFix(customerId) {
        <div style="margin-top:12px;display:grid;gap:8px;font-size:13px;line-height:1.6">
          <div>📍 原坐标：${(f.oldLat || f.oldLng) ? f.oldLat + ', ' + f.oldLng : '无'}</div>
          <div>🆕 业务员上报：<b>${f.newLat}, ${f.newLng}</b></div>
-         <div>📏 与原坐标距离：${(f.distance !== null && f.distance !== undefined) ? (f.distance < 1000 ? f.distance + ' 米' : (f.distance / 1000).toFixed(1) + ' 公里') : '—'}</div>
+         <div style="font-weight:800;color:var(--primary)">📏 相距距离：${(f.distance !== null && f.distance !== undefined) ? (f.distance < 1000 ? f.distance + ' 米' : (f.distance / 1000).toFixed(1) + ' 公里') : '—'}</div>
+         <!-- ⭐ 2026-09-28 晚 老板定：弹窗里**标出老位置 + 新位置**（看不见地图 = 没法判断要不要采纳）：
+              橙针 = 原位置（客户档案坐标）｜ 蓝针 = 业务员上报位置 ｜ 两点之间一条直线。
+              地图在 cfBuildMap() 里建；**关闭弹窗时 cfDestroyMap() 销毁**（不干扰页面上的其它 5 张地图）。 -->
+         <div id="cfMap" style="height:320px;border-radius:12px;background:#F7FAFC;overflow:hidden;border:1px solid #D5DAE0;box-sizing:border-box"></div>
+         <!-- ⭐ 2026-09-28 晚 老板定：① 地图**再大一些**（230 → 320px）② 地图框加**细灰描边**（1px #D5DAE0，box-sizing 防止边框撑破圆角框） -->
+         <div style="font-size:11px;color:#9AA1AB;margin-top:-2px">🟠 原位置　🔵 业务员上报　｜　直线 = 两点相距</div>
          ${photosHtml}
          <div>💬 备注：${esc(f.note || '—')}</div>
          <div>🕑 提交时间：${new Date(f.createdAt + 8 * 3600 * 1000).toLocaleString('zh-CN', { hour12: false })}</div>
          ${f.reviewedAt ? '<div>✅ 审核时间：' + new Date(f.reviewedAt + 8 * 3600 * 1000).toLocaleString('zh-CN', { hour12: false }) + '（' + esc(f.reviewedBy || '管理员') + '）</div>' : ''}
        </div>`;
     $('cfBody').innerHTML = isPending
-      ? `<div class="hint">业务员「${esc(f.salesmanName)}」报错客户「${esc(f.customerName)}」的坐标。<b>审核后不会覆盖客户原坐标</b>，仅将客户坐标状态标记为「待定」，上报坐标暂存备查。</div>${coordLines}`
-      : `<div class="hint">客户「${esc(f.customerName)}」的坐标已标记为<b>待定</b>。以下为业务员「${esc(f.salesmanName)}」上报的坐标（<b>未覆盖原坐标</b>，仅作参考）。</div>${coordLines}`;
+      ? `<div class="hint">业务员「${esc(f.salesmanName)}」报错客户「${esc(f.customerName)}」的坐标。点「<b>同意并更新坐标</b>」= **把业务员上报的坐标写入客户档案**（坐标状态变为「正常」、来源标记为「采集」）。</div>${coordLines}`
+      : `<div class="hint">客户「${esc(f.customerName)}」的坐标**已按业务员上报更新**（来源：采集）。以下是本次上报记录，仅作留痕。</div>${coordLines}`;
     $('cfApprove').style.display = isPending ? '' : 'none';
     $('cfReject').style.display = isPending ? '' : 'none';
-    $('cfApprove').textContent = '✅ 同意并标记待定';
+    // ⭐ 2026-09-28 晚：文案与**云端真实行为对齐** —— 同意 = **把上报坐标写回客户档案**。
+    //   （云端 reviewCoordFix 从 2026-09-26 起就是"写回坐标 + coord_status='ok'"，
+    //    这里一直是老的"同意并标记待定"，属于文案没跟上，已改。）
+    $('cfApprove').textContent = '✅ 同意并更新坐标';
   } else {
     $('cfBody').innerHTML = '<div class="hint">没有找到该客户的坐标报错申请。</div>';
     $('cfApprove').style.display = 'none';
     $('cfReject').style.display = 'none';
   }
   $('coordFixOvl').style.display = 'flex';
+  // ⭐ 必须在**弹窗显示之后**才建图（隐藏时容器尺寸为 0，那一刻建图会白屏且不自愈）
+  cfBuildMap(f);
+}
+
+// ===== 坐标审核弹窗里的小地图（⭐ 2026-09-28 晚 老板定）=====
+//   橙针 = 原位置（客户档案坐标）；蓝针 = 业务员上报位置；两点之间一条直线
+//   → 一眼看出"偏了多远、往哪个方向偏"（原来只有文字，看不到新位置在哪）。
+//   🔴 安全约定（这条链路上的坑，别踩）：
+//     · 建图必须在**弹窗显示之后**（隐藏时容器尺寸为 0，那一刻建图会白屏且不自愈）；
+//     · 每次打开**先销毁旧实例**，再**换一个新建的 DOM 容器**才建（TMap destroy 后旧容器不能复用）；
+//     · 只碰 `#cfMap`，**绝不碰页面上的其它地图**（trackMap / tmMap / visitTrackMap / cdMap…）；
+//     · 关弹窗必须调 cfDestroyMap()，别把实例留着；
+//     · `baseMap` 里 **`building3d` 一个字都不能改**（铁律：改成 building2d 会整张地图全白）。
+let cfMapObj = null, cfMapMarkers = null, cfMapPolyline = null, cfMapTimer = null;
+
+// 针形 marker（⭐ 2026-09-28 晚 老板定）——老板原话："你画了两个鸭蛋一样的东西，丑爆了"，要**针**。
+//   和 dotIcon() 一样是 canvas 画完转 dataURL，区别是**画成水滴针**：上面实心圆 + 下面收成尖。
+//   **针尖对准坐标** → MarkerStyle 的 anchor 放**底部**（配 26×34 的显示尺寸写 { x: 13, y: 34 }）。
+//   ⚠️ 单独一个函数，**不改 dotIcon** —— 那个被仓库点 / 客户点 / 轨迹在用，动它会牵连一大片。
+function cfPinIcon(fill, stroke) {
+  const W = 120, H = 156;             // 画布略高，给针尖留位置
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const cx = W / 2, cy = 58, r = 46;  // 圆心 / 半径
+  // ① 深色底（圆 + 下方三角 = 水滴），形成一圈描边
+  ctx.fillStyle = stroke || fill;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.72, cy + r * 0.66);
+  ctx.lineTo(cx, H - 6);
+  ctx.lineTo(cx + r * 0.72, cy + r * 0.66);
+  ctx.closePath(); ctx.fill();
+  // ② 正面颜色（小一圈，露出描边）
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.arc(cx, cy, r - 6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - (r - 6) * 0.7, cy + (r - 6) * 0.62);
+  ctx.lineTo(cx, H - 16);
+  ctx.lineTo(cx + (r - 6) * 0.7, cy + (r - 6) * 0.62);
+  ctx.closePath(); ctx.fill();
+  // ③ 中心白点（"针"的经典观感）
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2); ctx.fill();
+  return c.toDataURL();
+}
+
+function cfDestroyMap() {
+  if (cfMapTimer) { clearTimeout(cfMapTimer); cfMapTimer = null; }
+  try { if (cfMapObj) cfMapObj.destroy(); } catch (e) { /* 静默 */ }
+  cfMapObj = null; cfMapMarkers = null; cfMapPolyline = null;
+}
+
+function cfBuildMap(f) {
+  cfDestroyMap();
+  if (!f || !window.TMap) return;   // SDK 没就绪 / 无数据 → 不建（文字里本来就有坐标，不影响审核）
+  const oldLat = Number(f.oldLat), oldLng = Number(f.oldLng);
+  const newLat = Number(f.newLat), newLng = Number(f.newLng);
+  if (!newLat || !newLng) return;
+  const hasOld = !!(oldLat && oldLng);
+  // ⚠️ 250ms 后再建：TMap 销毁 + 容器替换必须异步（项目铁律，同步建必白屏）
+  cfMapTimer = setTimeout(() => {
+    const el = $('cfMap');
+    if (!el || !el.parentNode) return;
+    // 换一个新建的空容器（旧容器被 TMap 动过，不能复用来建新实例）
+    const fresh = el.cloneNode(false);
+    el.parentNode.replaceChild(fresh, el);
+    try {
+      const center = hasOld ? new TMap.LatLng((oldLat + newLat) / 2, (oldLng + newLng) / 2) : new TMap.LatLng(newLat, newLng);
+      cfMapObj = new TMap.Map(fresh, {
+        center, zoom: 17, pitch: 0, rotation: 0, viewMode: '2D',
+        mapStyleId: ADM_MAP_STYLE_ID,       // ⭐ 个性化地图样式（改常量即可全局切换/回退）
+        // 🔴 `building3d` 一个字都不能动（铁律：改成 building2d 会整张地图全白）。
+        // ⭐ 2026-09-28 晚 老板要"地图上显示餐饮/超市" → 正解是 features 里加 **'point'**（POI 文字层）。
+        //    ⚠️ 别写成 'poi' —— 那是**无效值**（GL 的 features 只认 base / building2d / building3d / point / label 之类），
+        //       本行早先试过 'poi' 无效，已撤。
+        //    ✅ 依据：客户详情小地图 cdMap 就是这么写的 —— ['base','building3d','point','label']，
+        //       老板 2026-09-25 实测过"能看到餐饮/超市等点位"。再配合上面的 mapStyleId 一起用。
+        baseMap: [{ type: 'vector', features: ['base', 'building3d', 'point', 'label'] }]
+      });
+      // 🔴 2026-09-28 晚（老板原话："你画了两个鸭蛋一样的东西，丑爆了"）：marker 必须用**针**，不能用圆点。
+      //   原先用的 dotIcon() 画的是**圆形**（那是仓库点/客户点的样式），所以看上去像两个鸭蛋。
+      //   这里换成 cfPinIcon() —— 本函数自己画的**水滴针**，针尖对准坐标（anchor 在底部）。
+      const styles = {
+        old: new TMap.MarkerStyle({ width: 26, height: 34, anchor: { x: 13, y: 34 }, src: cfPinIcon('#F5531C', '#D93E0E') }),
+        nw: new TMap.MarkerStyle({ width: 26, height: 34, anchor: { x: 13, y: 34 }, src: cfPinIcon('#2C7BE5', '#1E63C4') })
+      };
+      const geos = [];
+      if (hasOld) geos.push({ id: 'old', styleId: 'old', position: new TMap.LatLng(oldLat, oldLng) });
+      geos.push({ id: 'nw', styleId: 'nw', position: new TMap.LatLng(newLat, newLng) });
+      cfMapMarkers = new TMap.MultiMarker({ map: cfMapObj, styles, geometries: geos });
+      if (hasOld) {
+        cfMapPolyline = new TMap.MultiPolyline({
+          map: cfMapObj,
+          styles: { l: new TMap.PolylineStyle({ color: '#F5531C', width: 3, borderWidth: 1, borderColor: '#ffffff', lineCap: 'round' }) },
+          geometries: [{ id: 'l', styleId: 'l', paths: [new TMap.LatLng(oldLat, oldLng), new TMap.LatLng(newLat, newLng)] }]
+        });
+        // 自动缩放，保证两个点都在视野里
+        const b = new TMap.LatLngBounds();
+        b.extend(new TMap.LatLng(oldLat, oldLng));
+        b.extend(new TMap.LatLng(newLat, newLng));
+        // ⚠️ padding 必须写**对象**（照抄项目既有用法：nt-map.js:439、tmMap:4103）
+        cfMapObj.fitBounds(b, { padding: { top: 40, right: 40, bottom: 40, left: 40 } });
+      }
+      jhMapBadge('cfMap');   // 「聚火地图」标识（与后台其它地图统一）
+    } catch (e) { /* 建图失败也不影响审核（文字里已有坐标与距离） */ }
+  }, 250);
 }
 
 let coordFixBusy = 0; // 2026-09-09 防连点
@@ -8751,12 +9180,19 @@ async function reviewCoordFix(approve) {
   if (!res.ok) { alert(res.msg || '操作失败'); return; }
   alert(res.msg);
   $('coordFixOvl').style.display = 'none';
+  cfDestroyMap();          // ⭐ 关弹窗 → 销毁地图实例（别留在后台占资源）
   curFix = null;
   // 刷新来源列表：任务详情页打开时刷新详情，否则刷新客户列表
   if ($('page-taskDetail').style.display !== 'none' && curDetailTaskId) {
     showDetail(curDetailTaskId);
   } else if ($('page-tasks').style.display !== 'none') {
     loadTasks();
+  } else if ($('page-msg') && $('page-msg').style.display !== 'none') {
+    // ⭐ 2026-09-28 晚 老板报的三个问题（审核完卡片还在 / 没显示"已审核" / 滚动消息没记录）——
+    //   **根因就是没刷新消息中心**：数据层本来就是对的（msgCenter 只查 status:'pending'，
+    //   审核完那条变 confirmed、自然不在列表里了），只是界面没重新拉。
+    //   msgRender() 内部还会顺手 refreshMsgBadge() 更新角标数字。
+    msgRender();
   } else {
     loadCustomers();
   }
@@ -9836,10 +10272,10 @@ async function applyLocalMatch() {
       <img id="photoImg" src="" style="max-width:92vw;max-height:88vh;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5);cursor:zoom-out" title="点击关闭" onclick="event.stopPropagation()">
     </div>
 
-    <!-- 消息浮窗（右上角铃铛 + 通知列表 + 叮叮提示音；2026-09-08 老板定：铃铛从右下角移动到回访工作台切换按钮右侧） -->
-    <div class="nf-panel" id="nfPanel" style="display:none">
-      <div class="np-head"><span style="font-weight:800">📬 消息中心</span><span class="np-clear" onclick="clearNotifies()">清空</span></div>
-      <div id="nfList" class="np-list"></div>
-    </div>
+    <!-- ⭐ 2026-09-28 晚 老板定：**铃铛相关整块已删**（消息改看边栏「📬 消息中心」）。
+         原来这里是 #nfMask（半透明遮罩，38% 黑）+ #nfPanel（弹窗）。
+         🔴 删掉的理由：遮罩一旦被显示出来就是**整页蒙灰**，而铃铛入口已经没了、用户没法再关掉它 →
+         索性**整块删掉**，从根本上杜绝"页面变灰"的可能。
+         ⚠️ JS 里 toggleNotify() 保留为空函数（防残留 onclick 报错）；renderNotifies() 对缺失元素本来就有 null 保护。 -->
 </body>
 </html>

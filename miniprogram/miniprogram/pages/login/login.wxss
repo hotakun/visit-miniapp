@@ -1,16 +1,21 @@
 /* 2026-09-28 按老板确认的 HTML 预览稿改版：品牌区放大居中、注册表单紧凑化、快捷录入方形按钮、游客入口收窄 */
 
-.page { min-height: 100vh; display: flex; flex-direction: column; padding: 0 22px 13px; box-sizing: border-box; }
+/* 2026-09-28 老板定：登录页底色比全局 --bg(#F6F7F9) 深一档 → #F1F3F7，让白卡更跳出来。
+   ⚠️ 只在这里覆盖，**不要改 app.wxss 的 --bg**（那会牵连全部 10 个页面）。 */
+.page { min-height: 100vh; display: flex; flex-direction: column; padding: 0 22px 13px; box-sizing: border-box; background: #F1F3F7; }
 
-/* 品牌区（所有状态共用 —— 上方留出约 1/3 屏，LOGO 与文字居中） */
-.brand { min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 4px; }
+/* 品牌区（预览稿 v3 要求②：上方留出约 1/3 屏 —— 225px；LOGO 与文字居中，输入面板整体下移） */
+.brand { min-height: 225px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 4px; }
 .logo { width: 80px; height: 80px; border-radius: 50%; box-shadow: 0 12px 28px rgba(245,83,28,.28); }
 .name { margin-top: 16px; font-size: 25px; font-weight: 800; letter-spacing: 3px; }
 .sub { margin-top: 7px; font-size: 13px; color: var(--sub); font-weight: 600; }
 .brand-line { margin-top: 14px; width: 38px; height: 3px; border-radius: 2px; background: linear-gradient(90deg,#FFB48A,#F5531C); }
 
-.tip { margin-top: 16px; font-size: 13.5px; color: var(--ink); font-weight: 700; text-align: center; }
-/* 游客体验（2026-09-08 老板定：审核/演示用） */
+/* 提示区（2026-09-28 老板定：两行；**灰度与字重跟上面「客户回访 · 新客开发」(.sub) 一致**）。
+   ⚠️ 两行是靠 wxml 里**两个 <view>** 实现的；**不要**改成"white-space:pre-line + wxml 真换行"——
+      小程序编译会把 wxml 里的换行压成空格，真机上就变回一行（2026-09-28 真机验证过，踩过）。 */
+.tip { margin-top: 16px; font-size: 13.5px; color: var(--sub); font-weight: 600; text-align: center; }
+/* 旧版的"游客入口说明条"（2026-09-08 起就没在用；文案里的"审核/演示用"已按老板要求去掉） */
 .trial-banner { margin-top: 40px; background: #EFF6FF; border: 1px solid #C9E0FA; border-radius: 12px; padding: 10px 14px; font-size: 12.5px; color: #1E5FA8; font-weight: 600; line-height: 1.6; }
 .sman.trial { border: 1.5px solid #C9E0FA; }
 .sman .tag { display: inline-block; margin-left: 8px; vertical-align: 2px; background: #E8F1FD; color: #2F80ED; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
@@ -22,25 +27,75 @@
 .sman .ph { margin-top: 2px; font-size: 12px; color: var(--sub); font-weight: 600; }
 .sman .go { font-size: 13px; color: var(--primary-deep); font-weight: 800; }
 .empty { margin-top: 16px; text-align: center; font-size: 13px; color: var(--sub); line-height: 1.7; }
-.loading { margin-top: 80px; text-align: center; color: var(--sub); font-size: 14px; }
+/* 「正在识别身份…」 · **B 修法**（2026-09-28 老板报"进登录页会闪一下，像重新加载两次"）：
+   这一态原来只有一行 14px 灰字（加 80px 上边距 ≈ 100px 高），而识别完变成注册表单（≈240px）——
+   底部「实习体验入口」是 margin-top:auto 贴底的 → 它会被表单顶下去，看着就像页面又加载了一次。
+   现在给它撑出与表单相近的高度（16 + 220 ≈ 236px），布局不再跳。 */
+.loading { margin-top: 16px; min-height: 220px; display: flex; align-items: center; justify-content: center;
+  text-align: center; color: var(--sub); font-size: 14px; }
 
-/* 注册/审核状态机（2026-09-09 老板拍板；2026-09-28 紧凑化） */
-.reg-card { margin-top: 11px; background: #fff; border-radius: 15px; padding: 13px 15px; box-shadow: 0 2px 12px rgba(31,36,48,.06); }
+/* 注册/审核状态机（2026-09-09 老板拍板）
+   2026-09-28 按老板确认的 HTML 预览稿 v3（_scratch/游客入口-完整流程-预览.html）对齐：
+   圆角 15px 卡片带阴影、输入框 1.5px 边 / 11px 圆角 / #FAFBFC 底、方形「快捷录入」按钮 76×42 / 11px 圆角。
+   ⚠️ 别再自行"简化"成 6px 圆角 / 无阴影那版（那天被老板退回）。
+   2026-09-28 老板定：阴影改**双层** —— 近处一层勾边（看着清晰）+ 远处一层投影（看着浮起），
+   比原来的 `0 2px 12px .06`（几乎看不见）明显。 */
+.reg-card { margin-top: 11px; background: #fff; border-radius: 15px; padding: 13px 15px;
+  box-shadow: 0 2px 6px rgba(31,36,48,.08), 0 12px 28px rgba(31,36,48,.14); }
 .frow { margin-bottom: 10px; }
-.frow label { display: block; font-size: 12px; color: var(--sub); font-weight: 700; margin-bottom: 5px; }
+/* 预览稿口径：label 不加 margin-bottom，改由输入框自己 margin-top:5px（在 wxml 上写 style） */
+.frow label { display: block; font-size: 12px; color: var(--sub); font-weight: 700; }
 .inp { width: 100%; height: 42px; border: 1.5px solid var(--line); border-radius: 11px; padding: 0 13px; font-size: 14.5px; box-sizing: border-box; background: #FAFBFC; }
 
-/* 「手机号 *」与「验证」两列对齐：第二列宽 = 右侧「快捷录入」按钮宽 → 「验证」左边缘与按钮左边缘对齐 */
+/* 「手机号 *」与「验证」：**「验证」左边缘与「快捷录入」按钮左边缘对齐**
+   （按钮宽写死 76px 且右贴行尾 → 这里给「验证」同样 76px + 靠右 → 左边缘自然对齐）
+   ⚠️ 改 .btn-quick 的 76px 时，这里要一起改，否则又错位（2026-09-28 踩过）。 */
 .lb-row { display: flex; align-items: baseline; margin-bottom: 5px; }
 .lb-row .c1 { flex: 1; min-width: 0; font-size: 12px; color: var(--sub); font-weight: 700; }
-.lb-row .c2 { width: 86px; flex-shrink: 0; font-size: 12px; color: #8A939C; font-weight: 700; padding-left: 8px; }
+.lb-row .c2 { flex: 0 0 76px; width: 76px; margin-left: auto; font-size: 12px; color: #8A939C; font-weight: 700; white-space: nowrap; text-align: left; }
 
-/* 手机号输入框 + 方形「快捷录入」按钮（同一行） */
-.phone-row { display: flex; align-items: center; gap: 8px; }
-.phone-row .inp { flex: 1; min-width: 0; }
-.btn-quick { flex-shrink: 0; margin: 0; width: 86px; height: 42px; line-height: 42px; padding: 0; border-radius: 11px; font-size: 13px; font-weight: 700; color: #fff; background: #07C160; }
+/* 手机号输入框 + 「快捷录入」按钮（同一行）
+   2026-09-28 老板定：按钮**宽度贴合文字**（不占死 86px），省下的宽度全给输入框。
+   ⚠️ 微信 button 在 flex 里"不吃" width:auto（默认块级 + 自带 margin-left/right:auto）→ 外面套一层 view：
+      .quick-wrap 当 flex item（宽度天然由内容决定）→ 里面的 button 再 flex:0 0 auto 跟着自己的内容走。
+   ⚠️ **千万别写成 button{width:100%}**：wrapper 的宽本来就由 button 决定 → 循环依赖，
+      小程序算不出来会回退成"满行宽"，按钮就还是撑满（2026-09-28 踩过）。
+   ⚠️ 也别去掉 .quick-wrap、别给 button 设 flex:1 / flex-grow。 */
+.phone-row { display: flex; align-items: center; margin-top: 5px; }
+.phone-row .inp { flex: 1 1 0%; min-width: 0; }
+/* 2026-09-28 老板反馈"按钮比输入框还长" → 改成**写死宽度**，不再让小程序去算 flex：
+   76px 刚好放下「快捷录入」4 个字（13px×4≈52 + 左右内边距），输入框自然就更长。
+   ⚠️ 想调宽窄只改这个数字；**别再改回 width:auto / width:100% / flex:1** ——
+      本环境里那三种都可能被算成"满行"，2026-09-28 已连踩三次。 */
+.quick-wrap { flex: 0 0 auto; display: flex; margin-left: 8px; }
+.btn-quick { flex: 0 0 auto; box-sizing: border-box; width: 76px !important; min-width: 76px !important; max-width: 76px !important; margin: 0 !important; padding: 0; height: 42px; line-height: 42px; border-radius: 11px; font-size: 13px; font-weight: 700; color: #fff; background: #07C160; display: flex !important; align-items: center; justify-content: center; white-space: nowrap; }
+.btn-quick::after { border: none; }
 .btn-quick.ok { background: #E8F8EF; color: #16A34A; }
 .btn-quick[disabled] { opacity: 1; color: #16A34A; }
+
+/* 提交申请 / 取消申请 —— 两个按钮一行（2026-09-28 老板定：左「取消申请」、右「提交申请」）
+   提交：高 42 · 圆角 10 · 15px 字（"太胖太丑"那版已收瘦）
+   取消：描边、弱化；宽度**写死 96px**（不再依赖 flex 计算） */
+/* 手机号行 ↔ 按钮行之间的**很淡分割线**（2026-09-28 老板定：居中、两端渐隐）
+   ⚠️ 和下面 .btn-row2 的 margin-top 一起算：18 + 18 = 原来那 36px，线正好落在空白正中。
+      两端渐隐靠 linear-gradient 两头透明实现（别改成 border 实线）。
+   2026-09-28 老板追加：**再减淡 50%** → .10 → **.05** */
+.sep { margin-top: 18px; height: 1px; background: linear-gradient(90deg, rgba(31,36,48,0) 0%, rgba(31,36,48,.05) 50%, rgba(31,36,48,0) 100%); }
+.btn-row2 { display: flex; align-items: center; margin-top: 18px; }
+.btn-primary { flex: 1; height: 42px; line-height: 42px; border-radius: 10px; font-size: 15px; font-weight: 700;
+  color: #fff; text-align: center; background: linear-gradient(135deg,#FF7A3D,#F5531C);
+  box-shadow: 0 4px 12px rgba(245,83,28,.22); }
+.btn-cancel { flex: 0 0 auto; box-sizing: border-box; width: 96px; height: 42px; line-height: 42px; border-radius: 10px;
+  font-size: 15px; font-weight: 700; color: var(--sub); text-align: center;
+  background: #fff; border: 1.5px solid #E3E7EC; margin-right: 10px; }
+
+/* 实习体验入口（预览稿 v3：去掉手图标、按钮收小、副文案「免注册」并入按钮内；整块贴底居中）
+   2026-09-28 老板定：整块**向上提高 20px**（离屏幕底部远一点）*/
+.trial-zone { margin-top: auto; padding-top: 10px; padding-bottom: 20px; text-align: center; }
+.trial-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12.5px; font-weight: 700; color: #1E5FA8; padding: 8px 14px;
+  background: #EFF6FF; border: 1.5px solid #C9E0FA; border-radius: 11px; }
+.trial-link .lite { font-size: 11px; font-weight: 600; color: #5B8FC7; }
 
 /* 兼容旧类名（2026-09-09 的微信一键验证按钮；现已改用 .btn-quick，保留以防别处引用） */
 .btn-phone-v { margin: 0; padding: 0 16px; height: 42px; line-height: 42px; border-radius: 11px; font-size: 14px; font-weight: 700; color: #fff; background: #07C160; }
@@ -53,16 +108,15 @@
 .dc-t { font-size: 18px; font-weight: 800; text-align: center; }
 .dc-d { margin-top: 8px; font-size: 12px; color: var(--sub); text-align: center; line-height: 1.6; }
 .btn-boss { margin-top: 12px; height: 46px; line-height: 46px; border-radius: 12px; font-size: 15px; font-weight: 700; color: #fff; background: #1F2430; text-align: center; }
-/* 审核说明（2026-09-28：按老板要求在"审核，"后换行 → 用 \n + pre-line 实现） */
-.reg-note { margin-top: 9px; font-size: 11.5px; color: var(--sub); text-align: center; line-height: 1.65; white-space: pre-line; }
+/* 审核说明（2026-09-28 老板定：改成一句话一行「提交管理员审核，通过后重开小程序即可直接进入」）
+   → 不再需要换行；**字号再小两号：11.5px → 9.5px**（老板 2026-09-28 要求） */
+.reg-note { margin-top: 9px; font-size: 9.5px; color: var(--sub); text-align: center; line-height: 1.75; }
 
 /* 开发者三身份 —— 第三个「以游客身份进入」按钮（2026-09-28；蓝色，与上面两个同尺寸排列） */
 .btn-trial { margin-top: 12px; height: 46px; line-height: 46px; border-radius: 12px; font-size: 15px; font-weight: 700; color: #fff; background: #2F80ED; text-align: center; }
 
-/* 游客体验入口（2026-09-28：按钮收窄贴合文字、居中；「免注册」并入按钮内） */
-.trial-zone { margin-top: auto; padding-top: 10px; text-align: center; }
-.trial-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 0; font-size: 12.5px; font-weight: 700; color: #1E5FA8; padding: 8px 14px; background: #EFF6FF; border: 1.5px solid #C9E0FA; border-radius: 11px; }
-.trial-link .lite { font-size: 11px; font-weight: 600; color: #5B8FC7; }
+/* （2026-09-28 清理：这一块原本还有一份重复的 .trial-zone / .trial-link / .trial-link .lite
+   —— 与上面那组新样式完全一样，已删除，免得将来改一处漏一处） */
 
 .state-card { margin-top: 40px; background: #fff; border-radius: 16px; padding: 34px 24px; text-align: center; box-shadow: 0 2px 12px rgba(31,36,48,.06); }
 .sc-ic { font-size: 44px; }

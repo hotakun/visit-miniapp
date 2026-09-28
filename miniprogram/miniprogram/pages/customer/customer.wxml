@@ -42,9 +42,12 @@
         <view class="ph">{{d.tel}}</view>
         <view class="lb">联系人：{{d.contact}}</view>
       </view>
-      <!-- ⭐ 2026-09-27：接真提交（弹层 → 精确定位 → 传照片 → coordfix 云函数 → 后台审核） -->
-      <view class="fixbtn" bindtap="openFix">
-        <text class="fi">📍</text><text>报错</text>
+      <!-- ⭐ 2026-09-28 晚老板定：这里改成「**快速记事**」入口（文字**上下两层**：上面「快速」下面「记事」），
+           尺寸仍是原来那个报错方块的 44×44。
+           · 原「📍 报错」方块**已移到下面「📍 商圈与位置」卡的小地图下方**（与「导航」并排）。
+           · 点击 = 以本客户为对象快速记一笔（记事功能开发中，先只提示）。 -->
+      <view class="notebtn" bindtap="goQuickNote">
+        <text>快速</text><text>记事</text>
       </view>
     </view>
   </view>
@@ -185,17 +188,35 @@
       <view class="subsec">📍 商圈与位置<text class="cname">{{d.name}}</text></view>
       <view class="r"><text class="k">地址</text><text class="v mut">{{d.addr}}</text></view>
       <view class="r" wx:if="{{d.region}}"><text class="k">商圈</text><text class="v">{{d.region}}</text></view>
+      <!-- ⭐ 2026-09-28 晚老板定：**商圈下方、地图上方**显示经纬度（纬度在前，项目口径）。
+           修正模式下这里显示"地图中心"的新坐标 + 与原坐标的距离（fixLat/fixLng/fixDist 由 onRegionChange 填）。
+           ⚠️ 沿革：09-25 这行在地图**下方**；09-28 晚删过一次；现在是**地图上方** —— 别再来回挪。 -->
+      <view class="r" wx:if="{{d.lat}}">
+        <text class="k">经纬度</text>
+        <text class="v mut">{{fixing ? fixLat : d.lat}}, {{fixing ? fixLng : d.lng}}<text class="dist" wx:if="{{fixing && fixDist}}">　距原位置 {{fixDist}}</text></text>
+      </view>
       <!-- 小地图（2026-09-13 老板要求加上）：以客户坐标为中心、不可拖、可缩 10~20 级、初始 16 级
            ⚠️ <map> 是原生组件，卡片折叠用的 CSS display:none 压不住它 → 必须用 wx:if 跟展开状态走
            2026-09-25 老板定：**打开 POI 标注**（enable-poi 原来是 false，地图上光秃秃的 —— 看不到餐饮/超市） -->
       <view class="cmap-wrap" wx:if="{{open.serv}}">
-        <map class="cmap"
-             latitude="{{d.lat}}" longitude="{{d.lng}}"
+        <map class="cmap" id="cmap"
+             latitude="{{centerLat || d.lat}}" longitude="{{centerLng || d.lng}}"
              scale="16" min-scale="10" max-scale="20"
-             enable-scroll="{{false}}" enable-zoom="{{true}}"
+             enable-scroll="{{fixing}}" enable-zoom="{{true}}"
              enable-rotate="{{false}}" enable-overlooking="{{false}}"
              show-location="{{false}}" enable-poi="{{true}}" markers="{{markers}}"
+             bindregionchange="onRegionChange"
              polyline="{{polyline}}"></map>
+        <!-- ⭐ 2026-09-28 晚老板定：小地图改成**凹下（内阴影）** —— 在地图**上面**叠一层透明 view 来画 inset 阴影。
+             为什么不用 .cmap-wrap 的 inset、也不用 ::after：<map> 是绝对定位铺满容器的，写在容器上的内阴影会被地图盖住；
+             而伪元素盖原生组件不如普通 view 稳（本页「聚火地图」badge 就是普通 view(z-index:9)，已验证能盖住地图）。
+             z-index 2 低于 badge 的 9 → badge 仍浮在最上；pointer-events:none → 不挡地图的缩放操作。 -->
+        <view class="cmap-in"></view>
+        <!-- ⭐ 2026-09-28 晚新增：**地图中心图钉（只在修正模式显示）** —— 固定在地图正中，表示"取的就是这个点"。
+             必须是普通 view（同 .cmap-in）；z-index 3 高于 .cmap-in(2)、低于 badge(9)；pointer-events:none 不挡拖动。
+             ⚠️ **只有一个圆点**：**圆心 = 取的那个点**（老板 2026-09-28 问"到底以什么为中心"→ 原来那根
+                细短线 .stem 已删，避免让人误以为取的是线尾）。 -->
+        <view class="cmap-pin" wx:if="{{fixing}}"><view class="dot"></view></view>
         <!-- 2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成「聚火地图」。
              去 logo 用**裁剪法**：.cmap-wrap 加 overflow:hidden，.cmap 高度多出 40px → 底部 logo 区被裁掉。
              ⚠️ wx:if 必须留在**外层 wrapper** 上（卡片折叠靠它控制显隐，原生组件用 CSS 隐藏压不住）。 -->
@@ -207,9 +228,28 @@
         </view>
       </view>
       <!-- ↑ enable-poi 打开地图上的店铺 POI（2.14.0+）；必须写 Mustache 绑定，"true" 会被当字符串真值 -->
-      <!-- 2026-09-25 老板定：这里**只留经纬度**（单独一行、不换行）；
-           原来那句「我的位置（离店约 80 米）· 步行路线」**去掉** —— 老板不要这两个信息 -->
-      <view class="coords" wx:if="{{d.lat}}">📍 纬度 {{d.lat}} · 经度 {{d.lng}}</view>
+      <!-- ⭐ 2026-09-28 晚老板定：小地图下方**不再显示经纬度**（原来那行 `.coords` 已删），
+           改成**两个精致小巧的按钮**并排：🧭 导航 / 📍 报错。
+           · 导航 = wx.openLocation 打开微信内置地图（用户可一键跳高德/百度继续导航）；无坐标时不显示这一行；
+           · 报错 = 复用原来的坐标报错弹层（openFix），入口从电话行挪到这里。 -->
+      <!-- ⭐ 2026-09-28 晚老板定：小地图下方那一行按钮（都是 28px 高的小按钮，**精致小巧**）：
+           · 左边：🧭 导航（wx.openLocation 打开微信内置地图，可一键跳高德/百度）
+                   + 📍 报错（复用原弹层 —— 老板 2026-09-28 定「两个都留」）
+           · 最右边：📍 修正 —— 点它进入**地图修正模式**：地图可拖 → 地图中心点即新坐标 →
+             上方经纬度实时显示新坐标 + 与原坐标的距离 → 点「确定」自动提交后台审核。
+             修正模式下：它变成「确定」，左边多出「取消」，导航/报错暂时隐藏。
+           无坐标（d.lat 空）时整行不显示。 -->
+      <view class="mapln" wx:if="{{d.lat}}">
+        <block wx:if="{{!fixing}}">
+          <view class="mbtn" bindtap="onNav">🧭 导航</view>
+          <view class="mbtn warn" bindtap="openFix">📍 报错</view>
+          <view class="mbtn warn ml" bindtap="startFix">修正</view>
+        </block>
+        <block wx:else>
+          <view class="mbtn ml" bindtap="cancelFix">取消</view>
+          <view class="mbtn ok" bindtap="confirmFix">确定</view>
+        </block>
+      </view>
     </view>
   </view>
 
