@@ -5,13 +5,19 @@
    2026-09-10 老板逐条反馈后修正：今日大卡回归原尺寸/原平面日期/原二维圆弧（去掉横向进度条与左下光斑），
    仅保留老板认可的渐变底色与更精细的开始按钮；其余部分不动 */
 .page {
-  padding: 20px 18px 118px; min-height: 100vh; box-sizing: border-box; position: relative;
+  padding: 8px 18px 118px; min-height: 100vh; box-sizing: border-box; position: relative;
   background:
     radial-gradient(120% 55% at 6% -8%, #FFE6D8 0%, rgba(255,230,216,0) 58%),
     radial-gradient(90% 40% at 100% 4%, #E8F1FD 0%, rgba(232,241,253,0) 60%),
     linear-gradient(180deg, #FBFCFE 0%, #EFF3F8 100%);
 }
-.head { display: flex; align-items: center; gap: 12px; padding: 8px 2px 20px; }
+/* ⭐ 2026-09-28 老板定：顶部空白太浪费 → 整块内容上移，**下方卡片也跟着上提**：
+   · .page 顶部 20px → **8px**
+   · .head 顶部 8px → **2px**
+   · .head 下间距 20px → **14px** ←（这一项决定下方卡片的位置，让卡片跟着一起上去）
+   合计：顶部那行信息上移 18px、下方卡片再上移 6px。
+   注意：这个 .head 是**业务员端与老板端共用**的，所以两端首页一起上移（保持一致）。 */
+.head { display: flex; align-items: center; gap: 12px; padding: 2px 2px 14px; }
 /* ===== 2026-09-12 老板首页右上角极小分享按钮
    ⚠️ 该按钮的定位与尺寸**全部内联写在 home.wxml 上**，本文件刻意不再保留任何相关规则。踩过的 4 个坑：
    ① 放进 .head（display:flex）→ 被当成 flex 项排到「姓名」后面（老板看到过）；
@@ -61,7 +67,7 @@
 
 /* 今日计划橙色大卡：尺寸/日期/圆弧回归原二维口径，仅保留老板认可的渐变底色与内高光 */
 .hero {
-  margin: 0 0 14px; padding: 24px 20px 22px; border-radius: 22px; color: #fff; position: relative; overflow: hidden;
+  margin: 0 0 14px; padding: 24px 20px 18px; border-radius: 22px; color: #fff; position: relative; overflow: hidden;
   background: linear-gradient(135deg, #FF9C63 0%, #F5531C 52%, #C5360A 100%);
   box-shadow: 0 2px 3px rgba(180,48,8,.25), 0 24px 46px -18px rgba(245,83,28,.62), inset 0 1px 0 rgba(255,255,255,.42);
 }
@@ -72,15 +78,47 @@
 .hero .big { font-size: 42px; font-weight: 800; line-height: 1; margin: 8px 0 6px; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(130,28,0,.30); }
 .hero .big .u { font-size: 15px; font-weight: 600; margin-left: 5px; opacity: .9; }
 .hero .emoji-big { font-size: 40px; line-height: 1.2; margin: 4px 0 2px; }
-.hero .sub { font-size: 12.5px; opacity: .92; margin-bottom: 18px; transform: translateY(10px); }
+/* ⭐ 2026-09-28 老板定：去掉「开始今天的工作」按钮 → .sub 不再需要给按钮留的 18px 下间距（卡片下方空间收上来）；
+   同时**四个状态的按钮全部去掉**（原「开始今天的工作 / 查看我的任务 / 查看全部任务」全删）→ .hero .go 样式已清理；
+   进任务列表走卡片下方的「我的任务」区（标题右侧「全部 ›」+ 任务卡本身）。 */
+.hero .sub { font-size: 11px; opacity: .92; margin-bottom: 0; transform: translateY(10px); }   /* 副文案（已完成 X 家 · 截止 X月X日）字号 11px */
 /* 环形进度：绝对定位右上（尺寸与 canvas 绘制口径保持一致 72px，不缩放） */
 .hring { position: absolute; right: 20px; top: 34px; width: 72px; height: 72px; border-radius: 50%; box-shadow: 0 12px 26px -10px rgba(110,22,0,.7); }
 /* 环内芯：凹槽质感（canvas 只画环线、本身透明，内芯在环下方可见） */
 .hring::before { content: ""; position: absolute; top: 10px; right: 10px; bottom: 10px; left: 10px; border-radius: 50%; background: linear-gradient(160deg, #F86124, #CE3607); box-shadow: inset 0 3px 7px rgba(96,18,0,.45), inset 0 -2px 4px rgba(255,255,255,.18), 0 1px 0 rgba(255,255,255,.22); }
 .ring-canvas { width: 72px; height: 72px; position: relative; }
 .hring .pct { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; z-index: 2; }
-/* 开始按钮：左下胶囊（2026-09-10 调整：更小更精细） */
-.hero .go { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #fff; background: linear-gradient(180deg, rgba(255,255,255,.32), rgba(255,255,255,.16)); box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 6px 14px -8px rgba(110,22,0,.5); }
+
+/* ===== 快捷入口（⭐ 2026-09-28 老板定：橙色大卡与「我的任务」之间的一组图标入口）=====
+   4 个入口等宽均分；图标 = 淡色渐变圆角底 + emoji（颜色各自区分：业绩橙 / 团队蓝 / 记事紫 / 新店绿）；
+   卡片质感与 .task-card 同款（外描边 0 0 0 1px + 贴地细影 + 柔光长影），保证整页风格一致。 */
+/* ⭐ 2026-09-28 老板定：**下方卡片层级要高于橙色大卡** —— .hero 是定位元素（position:relative），
+   它那圈向下的橙色柔光阴影会盖住未定位的下方卡片；给 .quick 加定位 + z-index 后，它就浮在 .hero 之上。 */
+.quick { position: relative; z-index: 1; display: flex; background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFE 100%); border-radius: 18px; padding: 4px 6px; margin: 0 0 14px; box-shadow: 0 0 0 1px rgba(23,30,44,.05), 0 1px 2px rgba(23,30,44,.05), 0 18px 34px -16px rgba(23,30,44,.26); }   /* ⭐ 2026-09-28 老板定：功能卡**上下内边距 14/12px → 4px**（只压卡片高度，图标与文字不动） */
+.qk { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.qk-ic { width: 44px; height: 44px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 21px; box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 6px 14px -8px rgba(23,30,44,.4); }
+.qk-a { background: linear-gradient(160deg, #FFE7DA, #FFD2BC); }   /* 业绩：品牌橙 */
+.qk-b { background: linear-gradient(160deg, #E3EEFF, #CFE0FF); }   /* 团队：蓝 */
+.qk-c { background: linear-gradient(160deg, #EDE7FF, #DCD1FF); }   /* 记事：紫 */
+/* 新增（新店）：**红橙色粗加号**（⭐ 2026-09-28 老板定）。不用 emoji —— emoji 自带底色、跨平台不一致；
+   这里用 CSS 画两条圆角矩形交叉，**粗细 / 颜色 / 圆角 100% 可控**；底色改成中性浅色，让加号更突出。 */
+.qk-d { background: linear-gradient(160deg, #FFFFFF, #F1F4F9); }
+.qk-plus { position: relative; width: 20px; height: 20px; --pc: #F5531C; }   /* --pc = 加号颜色（默认品牌橙） */
+.qk-plus::before, .qk-plus::after { content: ""; position: absolute; left: 50%; top: 50%; border-radius: 3px; background: var(--pc); }
+/* 颜色档（2026-09-28：临时展示用，供老板挑一个；emoji 里没有多色加号，只能靠 CSS 上色） */
+.qk-plus.p-red { --pc: #E5484D; }   /* 红 */
+.qk-plus.p-org { --pc: #F5531C; }   /* 橙（品牌色） */
+.qk-plus.p-grn { --pc: #16A34A; }   /* 绿 */
+.qk-plus.p-blu { --pc: #2B7FF3; }   /* 蓝 */
+.qk-plus::before { width: 20px; height: 6px; margin: -3px 0 0 -10px; }   /* 横杠（粗 6px） */
+.qk-plus::after { width: 6px; height: 20px; margin: -10px 0 0 -3px; }    /* 竖杠（粗 6px） */
+/* 右上角小加号（⭐ 2026-09-28 老板定）：单个红加号容易被误认成**医院红十字** →
+   在右上角叠一个小加号，整体读作「新增 / 添加」；颜色继承同一个 --pc 变量。 */
+.qk-plus-mini { position: absolute; right: -4px; top: -4px; width: 10px; height: 10px; }
+.qk-plus-mini::before, .qk-plus-mini::after { content: ""; position: absolute; left: 50%; top: 50%; border-radius: 2px; background: var(--pc); }
+.qk-plus-mini::before { width: 10px; height: 3px; margin: -1.5px 0 0 -5px; }   /* 小横杠 */
+.qk-plus-mini::after { width: 3px; height: 10px; margin: -5px 0 0 -1.5px; }    /* 小竖杠 */
+.qk-t { font-size: 12px; font-weight: 700; color: #4A5360; }
 
 /* 任务卡（2026-09-10 升级：左侧状态色条 + 双层阴影 + 立体胶囊 + 凹槽进度条） */
 .task-card { position: relative; overflow: hidden; background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFE 100%); border-radius: 18px; padding: 18px 18px 16px 24px; margin-bottom: 14px; box-shadow: 0 0 0 1px rgba(23,30,44,.05), 0 1px 2px rgba(23,30,44,.05), 0 18px 34px -16px rgba(23,30,44,.26); }

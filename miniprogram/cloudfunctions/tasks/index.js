@@ -36,6 +36,27 @@ exports.main = async (event) => {
   const { action, taskId } = event || {};
 
   const me = await db.collection('users').where({ openid: OPENID }).get();
+  // 2026-09-28：同一 openid 可能**同时绑「实习(trial)」与正式账号**（开发者点「以游客身份进入」）。
+  //   默认**正式优先**（原本直接取 data[0]，顺序不确定 —— 这里显式定序，消除随机）；
+  //   请求带 asTrial（前端实习态，见 utils/api.js）→ 把 trial 账号排到最前，下面 data[0] 一律取它。
+  {
+    const _asT = !!(event && (event.asTrial === true || event.asTrial === 'true'));
+    const _l = me.data.slice();
+    const _tr = _l.filter(x => x.trial);
+    me.data = (_asT && _tr.length) ? _tr.concat(_l.filter(x => !x.trial)) : _l.sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
+  }
+  // ⭐ 2026-09-28 老板定「游客不绑定」之后必加：openid 查不到人 **且** 请求声明自己是游客 →
+  //    拿 trialId 去库里**核对**该游客账号真实存在（role=salesman + trial=true）才认它。
+  //    ⚠️ 只信库里的数据，前端传的其他身份字段一律不采信。
+  if (!me.data.length) {
+    const _tid = String((event && event.trialId) || '');
+    const _asT2 = !!(event && (event.asTrial === true || event.asTrial === 'true'));
+    if (_asT2 && _tid) {
+      const _one = await db.collection('users').doc(_tid).get().catch(() => null);
+      const _u = _one && _one.data;
+      if (_u && _u.role === 'salesman' && _u.trial === true) me.data = [_u];
+    }
+  }
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
   const meDoc = me.data[0];
   // 老板模式（2026-09-10 老板定：管理员模式与老板模式合并——管理员（super_admin/admin）一律按老板处理，

@@ -721,12 +721,23 @@ function fallbackPts(start, ordered) {
   return startIsFirst ? coordPts : [[start.lat, start.lng], ...coordPts];
 }
 // ---------- smartSortCurDay ----------
-let planBusy = 0; // 2026-09-09 防连点：智能/手动规划 15 秒窗口锁
+// ⚠️ 2026-09-27 老板定：防连点窗口 15s → **5s**（原来太长，失败后要干等 15 秒才能重试，像"点了没反应"）
+const PLAN_LOCK_MS = 5000;
+let planBusy = 0;         // 防连点时间戳（智能/手动共用；仅在"真要发请求"时才打）
+// 2026-09-27 老板定：按钮要有**看得见的忙碌态**（变灰 + 不可点），让人明白此刻不用点
+function setPlanBusy(on) {
+  ['ntSortCapsule', 'ntManualCapsule'].forEach(function (id) {
+    const el = $(id);
+    if (!el) return;
+    if (on) { el.classList.add('busy'); el.style.opacity = '.5'; el.style.pointerEvents = 'none'; el.style.cursor = 'default'; }
+    else { el.classList.remove('busy'); el.style.opacity = ''; el.style.pointerEvents = ''; el.style.cursor = ''; }
+  });
+}
 async function smartSortCurDay() {
-  if (Date.now() - planBusy < 15000) return;
-  planBusy = Date.now();
   const d = ntCurDay;
   const list = selOf(d);
+  // ⚠️ 2026-09-27 修：**先校验、后打锁**。原来先打锁再校验 —— 没选店时弹了提示就 return，
+  //   锁却留在 15 秒内，于是"选好店立刻重试"照样没反应（这正是老板说的"要点好几次"的元凶之一）。
   if (!list.length) { showToast('第 ' + d + ' 天还没有选中店铺，无法规划'); return; }
   if (list.length === 1) {
     ntDayMeta[d] = { distanceMeters: 0, durationMin: 0, fallback: false, planMode: 'smart' };
@@ -735,8 +746,11 @@ async function smartSortCurDay() {
     showToast('第 ' + d + ' 天只有 1 家店铺，无需规划');
     return;
   }
+  if (Date.now() - planBusy < PLAN_LOCK_MS) { showToast('正在规划中，请稍候…'); return; }   // 原来静默返回，用户不知道被挡
+  planBusy = Date.now();
   const btn = $('ntSortCapsule');
   if (!btn) return;
+  setPlanBusy(true);
   btn.textContent = '⏳ 智能中…';
   try {
     const start = planOrigin(list);
@@ -768,17 +782,17 @@ async function smartSortCurDay() {
     }
   } catch (e) {
     alert('智能规划失败：' + ((e && e.message) || e));
+  } finally {
+    setPlanBusy(false);                                         // 成功/失败/异常都恢复按钮
+    btn.innerHTML = '<span class="plan-ic up">➤</span>智能';
   }
-  btn.innerHTML = '<span class="plan-ic up">➤</span>智能';
 }
 
 // ---------- manualPlanCurDay（2026-09-06 老板定：按鼠标点选顺序规划；框选批量加入的垫后） ----------
 async function manualPlanCurDay() {
-  if (Date.now() - planBusy < 15000) return;
-  planBusy = Date.now();
   const d = ntCurDay;
   const list = selOf(d); // selOf 已按 _seq（=点选顺序）排序，框选批量加入的序号靠后
-  if (!list.length) { showToast('第 ' + d + ' 天还没有选中店铺，无法规划'); return; }
+  if (!list.length) { showToast('第 ' + d + ' 天还没有选中店铺，无法规划'); return; }   // 先校验、后打锁（同上）
   if (list.length === 1) {
     ntDayMeta[d] = { distanceMeters: 0, durationMin: 0, fallback: false, planMode: 'manual' };
     renderDayTabs();
@@ -786,8 +800,11 @@ async function manualPlanCurDay() {
     showToast('第 ' + d + ' 天只有 1 家店铺，无需规划');
     return;
   }
+  if (Date.now() - planBusy < PLAN_LOCK_MS) { showToast('正在规划中，请稍候…'); return; }
+  planBusy = Date.now();
   const btn = $('ntManualCapsule');
   if (!btn) return;
+  setPlanBusy(true);
   btn.textContent = '⏳ 手动中…';
   try {
     const start = planOrigin(list);
@@ -820,8 +837,10 @@ async function manualPlanCurDay() {
     }
   } catch (e) {
     alert('手动规划失败：' + ((e && e.message) || e));
+  } finally {
+    setPlanBusy(false);
+    btn.innerHTML = '<span class="plan-ic b flip">✎</span>手动';
   }
-  btn.innerHTML = '<span class="plan-ic b flip">✎</span>手动';
 }
 
 // ===== 天数修正（老板 2026-09-06 定：天数与初始设置不同必须修正，否则不能存草稿/发送） =====

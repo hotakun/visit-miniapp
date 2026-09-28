@@ -6,4 +6,10 @@
       <text>{{item.label}}</text>
     </view>
   </view>
+  <!-- 2026-09-28 老板定：栏尾「退出」—— **只在游客身份显示**（正式业务员、老板都不显示） -->
+  <view class="tb tb-out" wx:if="{{isTrial}}" bindtap="onLogout">
+    <view class="pill">
+      <text>退出</text>
+    </view>
+  </view>
 </view>

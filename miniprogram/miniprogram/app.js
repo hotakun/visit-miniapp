@@ -66,7 +66,9 @@ App({
     this.globalData.user = null;
     wx.removeStorageSync('user');
     wx.removeStorageSync('boss_mode');
+    wx.removeStorageSync('as_trial'); // 2026-09-28：退出身份时一并清「实习态」标记（pages/login 的以游客身份进入）
     this.globalData.bossMode = false;
+    this.globalData.asTrial = false;
     this.globalData.devAuthed = false; // 2026-09-09 修复：退出身份后放行标志一并重置
     // 2026-09-10：退出身份清欢迎仪式配置缓存（下次进老板模式必重新拉云端配置）
     this.globalData.welcome = null;

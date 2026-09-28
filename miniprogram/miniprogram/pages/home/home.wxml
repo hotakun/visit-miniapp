@@ -68,25 +68,44 @@
     </view>
     <view class="hbody">
       <block wx:if="{{cardMode === 'today'}}">
-        <view class="big">{{todayTotal}}<text class="u">家</text></view>
-        <view class="sub">已完成 {{todayDone}} 家 · 还有 {{todayLeft}} 家在等你 🔥</view>
-        <view class="go" bindtap="goTodayTask">开始今天的工作 →</view>
+        <view class="big">{{todayLeft}}<text class="u">家</text></view>
+        <view class="sub">已完成 {{todayDone}} 家 🔥<text wx:if="{{heroDeadline}}"> · 截止 {{heroDeadline}}</text></view>
       </block>
       <block wx:elif="{{cardMode === 'rest'}}">
         <view class="big emoji-big">☕</view>
         <view class="sub">今日无拜访安排，休息一下</view>
-        <view class="go" bindtap="goAllTasks">查看我的任务 →</view>
       </block>
       <block wx:elif="{{cardMode === 'allDone'}}">
         <view class="big emoji-big">🎉</view>
         <view class="sub">任务全部完成，等待新任务派发</view>
-        <view class="go" bindtap="goAllTasks">查看全部任务 →</view>
       </block>
       <block wx:else>
         <view class="big emoji-big">📋</view>
         <view class="sub">等待管理员派发第一个任务</view>
-        <view class="go" bindtap="goAllTasks">查看全部任务 →</view>
       </block>
+    </view>
+  </view>
+
+  <!-- ⭐ 快捷入口（2026-09-28 老板定）：橙色大卡与「我的任务」之间的一组图标入口。
+       · 「新店」= **红橙色加号 + 右上角小加号**（单个红加号容易被误认成医院红十字 → 叠个小加号读作「新增」）
+       · 其余三个用 emoji（💰 业绩 / 👥 团队 / 📝 记事）
+       · 本期仍**只做样子**（点击弹「开发中」提示），功能待接；仅业务员端显示（老板端没有橙色大卡）。 -->
+  <view class="quick" wx:if="{{!bossMode}}">
+    <view class="qk" bindtap="goQuick" data-n="业绩">
+      <view class="qk-ic qk-a">💰</view>
+      <view class="qk-t">业绩</view>
+    </view>
+    <view class="qk" bindtap="goQuick" data-n="团队">
+      <view class="qk-ic qk-b">👥</view>
+      <view class="qk-t">团队</view>
+    </view>
+    <view class="qk" bindtap="goQuick" data-n="记事">
+      <view class="qk-ic qk-c">📒</view>
+      <view class="qk-t">记事</view>
+    </view>
+    <view class="qk" bindtap="goQuick" data-n="新店">
+      <view class="qk-ic qk-d"><view class="qk-plus"><view class="qk-plus-mini"></view></view></view>
+      <view class="qk-t">新店</view>
     </view>
   </view>
 

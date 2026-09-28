@@ -1,7 +1,7 @@
 // 云函数 login：业务员微信登录 / 首次绑定
 // 2026-09-09 老板拍板改版：正式业务员一律「注册申请 → 后台审核 → 通过后绑定 openid → 免登录进入首页」
-// 2026-09-10 老板定：实习（trial）角色永远不能绑定——原游客入口已移除，未注册微信永远看到注册表单
-// 流程：已绑定直接进；有申请=审核中/被拒绝状态；无申请=注册表单
+// 2026-09-27 老板定：**恢复「游客体验入口」**（一键以 trial 游客身份进入；2026-09-10 曾移除）
+// 流程：已绑定直接进；有申请=审核中/被拒绝状态；无申请=注册表单（附游客入口 trialId）
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -21,6 +21,7 @@ const mainInner = async (event) => {
   // → login 整体失败，手机端提示"云函数调用失败"看不到登录页；init 未执行过的新环境必踩）
   try { await db.createCollection('registrations'); } catch (e) { /* 已存在等错误忽略 */ }
   const { OPENID } = cloud.getWXContext();
+  const { bindUserId } = event || {};   // 2026-09-27 老板定：恢复「一键以游客身份进入」
 
   // 0. 管理员识别（super_admin / admin）：管理员微信打开小程序 → 直接进老板模式
   //    2026-09-10 老板定：管理员模式与老板模式合并，不再单独提示使用 Web 后台
@@ -32,25 +33,69 @@ const mainInner = async (event) => {
     return { ok: true, isAdmin: true, canBoss: true, boss: true, user: publicUser(a), welcome: await readWelcomeCfg() };
   }
 
+  // 2. 游客体验入口（**2026-09-28 老板定：只读不绑定**）
+  //    ⚠️ 原来这里是「绑定」：users.doc(bindUserId).update({ openid: OPENID }) —— 点一下游客入口就把
+  //    当前微信 openid 写进 trial 账号，属于**自动绑定**（老板 2026-09-28 判为违规：无理、而且绑定后
+  //    再也回不到注册页）。**这段写入已彻底去掉，勿再恢复。**
+  //    现在只把那个 trial 账号的**资料读出来**返回给前端，一个字都不写库；前端只留一个本地 as_trial
+  //    标记当"看数据的凭据"，退出即失效 —— 微信始终未被绑定，随时能回注册页。
+  if (event && (event.asTrialVisit === true || event.asTrialVisit === 'true')) {
+    const asTrialId = event.trialId || '';
+    let t = null;
+    if (asTrialId) {
+      const one = await users.doc(asTrialId).get().catch(() => null);
+      t = one && one.data;
+    }
+    if (!t) {   // 没传 / 传错 → 退一步取后台建的那个 trial 账号
+      const tr = await users.where({ role: 'salesman', trial: true, active: true }).limit(1).get();
+      t = tr.data[0] || null;
+    }
+    if (!t) return { ok: false, code: 'NO_TRIAL', msg: '游客入口暂不可用' };
+    if (!t.trial) return { ok: false, code: 'NOT_TRIAL', msg: '该账号不是游客账号' };
+    return { ok: true, user: publicUser(t), trial: true, bound: false };   // ← 注意：没有任何 update
+  }
+
+  // 2.5 退出游客 / 解绑（2026-09-28 老板定：底部「退出」→ 自动解绑并回登录页）
+  //     把本 openid 从所有 trial 账号上摘掉。正式账号绝不动（正式账号走注册审核，不从这里解）。
+  if (event && event.action === 'unbindTrial') {
+    const r = await users.where({ openid: OPENID, trial: true }).update({ data: { openid: '' } });
+    return { ok: true, updated: (r && r.stats && r.stats.updated) || 0 };
+  }
+
+  // 2.9 ⚠️ 旧的绑定入口已废弃（2026-09-28 老板定「必须去掉自动绑定」）
+  //     老版本小程序还会传 bindUserId —— 这里**不再执行任何写入**，只提示前端升级。
+  if (bindUserId) {
+    return { ok: false, code: 'BIND_DEPRECATED', msg: '游客入口已改为「只看不绑」，请更新小程序' };
+  }
+
   // 1. 业务员已绑定：直接返回（审核通过后 openid 已写入，免登录）
   const bound = await users.where({ openid: OPENID, active: true }).get();
   if (bound.data.length > 0) {
     // 2026-09-09 老板报障修复：同一 openid 可能同时命中「实习」与正式账号（实习可任意绑定）；
-    // 正式业务员优先——多命中时非 trial 的排在前面
-    const u = bound.data.slice().sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0))[0];
+    // 正式业务员优先——多命中时非 trial 的排在前面。
+    // 2026-09-28 修复：开发者点「以游客身份进入」时前端带 asTrial → 改为**实习(trial)优先**，
+    //   否则他会被自己的正式号顶掉（进不去实习界面）；不带 asTrial 时行为完全不变（仍正式优先）。
+    const asTrial = !!(event && (event.asTrial === true || event.asTrial === 'true'));
+    const sorted = bound.data.slice().sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
+    const u = (asTrial && sorted.find(x => x.trial)) || sorted[0];
     await users.doc(u._id).update({ data: { lastLoginAt: Date.now() } });
     // 2026-09-10 老板定：管理员一律按老板处理（口径与 tasks/visits/coordfix 云函数一致）
     const boss = ['super_admin', 'admin'].includes(u.role);
-    // 2026-09-09 开发者范宇琨双身份：dev 白名单返回 dev 标志 → 前端显示「业务员/老板」两按钮选择页
+    // 2026-09-09 开发者范宇琨双身份 → 2026-09-28 三身份（加「游客」）
     const dev = u.phone === DEV_PHONE;
+    // 2026-09-28 老板定：dev 登录时一并下发 trialId（供「开发者三身份」页的「以游客身份进入」按钮使用）
+    //   只在 dev 时查，普通业务员不产生额外开销；trialId 即后台建的那个 trial 游客账号
+    let devTrialId = '';
+    if (dev) {
+      const tr = await users.where({ role: 'salesman', trial: true, active: true }).limit(1).get();
+      devTrialId = tr.data[0] ? tr.data[0]._id : '';
+    }
     // 2026-09-10 老板定：老板模式登录顺带下发「欢迎仪式」配置（每次登录一次查询，仅老板触发）
-    if (boss) return { ok: true, boss, dev, user: publicUser(u), welcome: await readWelcomeCfg() };
-    return { ok: true, boss, dev, user: publicUser(u) };
+    // 2026-09-28 老板定：把「当前登录的是不是 trial 账号」一并告诉前端 ——
+    //   底部栏「退出」靠它判断（这样**老绑定进来的游客**也能看到并能解绑退出）
+    if (boss) return { ok: true, boss, dev, trialId: devTrialId, trial: !!u.trial, user: publicUser(u), welcome: await readWelcomeCfg() };
+    return { ok: true, boss, dev, trialId: devTrialId, trial: !!u.trial, user: publicUser(u) };
   }
-
-  // 2. 【已移除，2026-09-10 老板定：实习角色永远不能绑定】原 bindUserId 游客绑定入口删除——
-  //    未注册微信每次进来都是注册表单，随时可自己注册，不再被绑定成实习身份。
-  //    兼容：旧前端若仍传 bindUserId，一律忽略并走下方注册状态流程。
 
   // 3. 注册申请（2026-09-09 老板拍板：姓名+手机号 → 后台审核）
   if (event.action === 'register') return await register(OPENID, event);
@@ -75,8 +120,9 @@ const mainInner = async (event) => {
   if (r && r.status === 'rejected') {
     return { ok: false, code: 'REJECTED', msg: '申请未通过，可重新申请', reason: r.reason || '', reviewedAt: r.reviewedAt || 0, canReapply: true };
   }
-  // 游客入口信息（2026-09-10 老板定：实习角色永远不能绑定——不再返回 trialId，前端无游客入口）
-  return { ok: false, code: 'NEED_REGISTER', msg: '请注册后等待审核' };
+  // 游客入口信息（2026-09-27 老板定：恢复——返回 trialId，前端显示「游客体验入口」）
+  const trialRes = await users.where({ role: 'salesman', trial: true, active: true }).limit(1).get();
+  return { ok: false, code: 'NEED_REGISTER', msg: '请注册后等待审核', trialId: trialRes.data[0] ? trialRes.data[0]._id : '' };
 };
 
 // 2026-09-10 老板定：新人提交注册申请 → 服务号模板消息推送到老板/管理员微信（复用任务通知同一模板 kdgr7e7C-… 5词）

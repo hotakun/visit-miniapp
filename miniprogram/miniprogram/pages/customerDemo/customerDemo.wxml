@@ -124,7 +124,7 @@
   <!-- ===================== 🛎 服务与设施 ===================== -->
   <view class="card {{open.serv ? '' : 'collapsed'}}">
     <view class="ch" data-k="serv" bindtap="toggle">
-      <text class="ci">🛎</text><text class="t">服务与设施</text>
+      <text class="ci">🛎</text><text class="t">服务·位置</text>
       <text class="sub" wx:if="{{d.flags[1][1]}}">外卖 有</text>
       <text class="chev">⌄</text>
     </view>
@@ -144,7 +144,7 @@
           <text class="chip" wx:for="{{d.fac}}" wx:key="*this">{{item}}</text>
         </view>
       </view>
-      <view class="subsec">📍 商圈与位置</view>
+      <view class="subsec">📍 商圈与位置<text class="cname">{{d.name}}</text></view>
       <view class="r"><text class="k">地址</text><text class="v mut">{{d.addr}}</text></view>
       <view class="r" wx:if="{{d.region}}"><text class="k">商圈</text><text class="v">{{d.region}}</text></view>
       <!-- 小地图（2026-09-13 老板要求加上）：以客户坐标为中心、不可拖、可缩 10~20 级、初始 16 级

@@ -7,6 +7,12 @@ function call(name, data = {}) {
   if (app && app.globalData.bossMode && !data.boss) {
     data = Object.assign({}, data, { boss: true });
   }
+  // 2026-09-28 实习态（开发者「以游客身份进入」）：同一 openid 同时绑了「实习」+ 正式账号时，
+  //   云端据此把实习(trial)账号放在身份解析最前（见 login/tasks/visits/transcribe/coordfix）。
+  //   不带该标志时云端行为完全不变（正式优先）。
+  if (app && app.globalData.asTrial && !data.asTrial) {
+    data = Object.assign({}, data, { asTrial: true });
+  }
   return new Promise((resolve, reject) => {
     wx.cloud.callFunction({
       name,

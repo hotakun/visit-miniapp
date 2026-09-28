@@ -16,3 +16,6 @@
   color: #fff; background: linear-gradient(180deg, #FF8A50, #F5531C);
   box-shadow: 0 10px 20px -7px rgba(245,83,28,.75), inset 0 1px 0 rgba(255,255,255,.5);
 }
+/* 2026-09-28 老板定：栏尾「退出」（点了解绑 + 回登录页）。红字、不加图标（跟"修正/还原"一个路子：干净） */
+.tb-out { color: #E5484D; }
+.tb-out .pill { padding: 7px 12px; }

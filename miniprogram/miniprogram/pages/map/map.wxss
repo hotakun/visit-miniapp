@@ -77,10 +77,16 @@
    指南针用「圆环 + 旋转 45° 的小方块」拼（view 支持 border-radius / transform），白边靠多层 text-shadow。
    ⚠️ 位置（2026-09-25 老板定）：**靠左 + 抬到导航栏上方** —— 本页底部 .tabbar 是 fixed、离底 14px、高 64px
       （占 14~78px），贴底会被它挡住；bottom 由 100px 下调到 **92px**（老板看过效果后要求再往下 8px）。 */
-/* ===== 「聚火地图」标识（⭐ 2026-09-27：腾讯 logo 已恢复显示，本 badge 同时保留 → 挪到**左上角**，不再压右下角的腾讯 logo） =====
-   白底半透明胶囊，保证压在地图上也看得清；指南针 = 圆环 + 旋转 45° 小方块。 */
-.jh-badge { position: absolute; left: 8px; top: 8px; z-index: 99; pointer-events: none;
-  display: flex; align-items: center; gap: 3px;
+/* ===== 「聚火地图」标识（⭐ 2026-09-28 老板定：从左上角挪到**底部切换栏上方**）=====
+   · 定位口径：本页 .tabbar 是 fixed、离底 14px、高 64px（占 14~78px）→ badge 用 bottom:92px，
+     与下方「底部客户卡」.custcard 同一基线，正好落在切换栏之上 14px。
+   · z-index 99 → **9**：低于客户卡(10) 与 tabbar(30) —— 客户卡弹出时自然盖住 badge
+     （badge 本来就是 pointer-events:none，重叠也不会挡点击）。
+   · 白底半透明胶囊，保证压在地图上也看得清；指南针 = 圆环 + 旋转 45° 小方块。
+   · ⭐ 2026-09-28 老板定：经几轮微调后**定为 bottom: 80px**（92 → 72 → 77 → 80）
+     （底边落在 tabBar 顶 78px 之上 2px）；图案与文字为**底部对齐**（align-items: flex-end）。 */
+.jh-badge { position: absolute; left: 14px; bottom: 80px; z-index: 9; pointer-events: none;
+  display: flex; align-items: flex-end; gap: 3px;
   background: rgba(255,255,255,.94); border-radius: 8px; padding: 2px 6px; }
 .jh-compass { width: 11px; height: 11px; border: 2px solid #F5531C; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; }

@@ -1,17 +1,21 @@
 <!-- 登录 / 注册（2026-09-09 老板拍板：注册申请 → 后台审核 → 通过后免登录进入） -->
 <view class="page" wx:if="{{!user}}">
-  <view class="hero">
+  <!-- 品牌区（2026-09-28 按老板确认的 HTML 预览稿改版：LOGO 放大、居中、下方一道品牌短线） -->
+  <view class="brand">
     <image class="logo" src="{{logoUrl}}" mode="aspectFit" binderror="onLogoError"></image>
     <view class="name">聚火拜访</view>
     <view class="sub">客户回访 · 新客开发</view>
+    <view class="brand-line"></view>
   </view>
 
-  <!-- 开发者双身份选择页（2026-09-09 开发者范宇琨定：只有他的微信可见） -->
+  <!-- 开发者三身份选择页（2026-09-09 双身份 → 2026-09-28 三身份，加「游客」；只有范宇琨的微信可见） -->
   <view class="dev-card" wx:if="{{devMode}}">
-    <view class="dc-t">🧪 开发者双身份</view>
+    <view class="dc-t">🧪 开发者三身份</view>
     <view class="dc-d"><text>范宇琨 · 测试专用入口\n真实用户不会看到此页</text></view>
     <view class="btn-primary" style="margin-top:20px" bindtap="enterAsSalesman">🏃 以业务员身份进入</view>
     <view class="btn-boss" bindtap="enterAsBoss">👑 以老板身份进入</view>
+    <!-- 2026-09-28 老板定：加第三个 —— 以游客（trial）身份进入，体验与真实游客完全一致（能看、不能提交） -->
+    <view class="btn-trial" bindtap="enterAsGuest">🖐 以游客身份进入（只读体验）</view>
   </view>
 
   <view class="adminTip" wx:elif="{{adminMode}}">
@@ -39,6 +43,8 @@
       <view class="btn-primary" style="margin-top:20px" bindtap="submitReg">{{regBusy ? '提交中…' : '提交申请'}}</view>
       <view class="reg-note">提交后由管理员审核，通过后重新打开小程序即可直接进入</view>
     </view>
+    <!-- 2026-09-27 老板定：恢复「游客体验入口」（一键以 trial 游客身份进入；只读，云端硬拦提交） -->
+    <view class="trial-link" wx:if="{{trialId}}" bindtap="enterTrial">🖐 游客体验入口（审核/演示用）</view>
   </block>
 
   <!-- 审核中 -->

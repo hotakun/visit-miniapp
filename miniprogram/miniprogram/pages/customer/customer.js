@@ -169,7 +169,9 @@ function buildD(res, photoUrls, recUrls) {
   return {
     // 地址：老板 2026-09-25 定 —— **不显示省份和地级市**（浙江省金华市永康市… → 永康市…）
     name: esc(c.name), addr: stripProvCity(c.address, c.region), hours: flatHours(p.hours),
-    status: esc(p.bizStatus) || '', tel: esc(c.phone) || esc(p.phone1) || '',
+    status: esc(p.bizStatus) || '',
+    // 游客（实习）打码：后四位 ****（2026-09-08 口径「游客不能看完整电话」；maskTrialPhone 对已打码串幂等）
+    tel: api.isTrialUser() ? api.maskTrialPhone(esc(c.phone) || esc(p.phone1) || '') : (esc(c.phone) || esc(p.phone1) || ''),
     contact: esc(c.contactName) || '', hasMall: hasMall,
     listedYears: listedYears(p.listedTime),
     cat: uniqueJoin(p.cat1, p.cat2, p.cat3),
@@ -222,16 +224,12 @@ function buildD(res, photoUrls, recUrls) {
   };
 }
 
-// ⭐ 2026-09-27：默认展开规则（设计文档 §六；原来写死"备注+历史"）——
-//   ① 备注 / 拜访历史有内容 → 只展开这两张（有内容的那张才开）
-//   ② 两张都没内容、但有商城资料 → 展开「🏪 商城信息」
-//   ③ 什么都没有 → 全部收起（只剩标题栏）
+// ⭐ 2026-09-28 老板定：默认展开**固定**为「📝 管理员备注 + 🕑 拜访历史」，其它卡一律收起。
+//   （覆盖 2026-09-27 的"按内容判断"版本 —— 那版在"没备注也没历史"时会自动展开「🏪 商城信息」，
+//    老板实际看到的一直是商城信息卡打开，要求改成固定开这两张。）
+//   注：参数 d 保留（调用方仍会传），当前不再使用。
 function defaultOpen(d) {
-  const hasRemark = (d.remarks || []).length > 0;
-  const hasHist = (d.history || []).length > 0;
-  const open = { mall: false, purchase: false, rate: false, serv: false, remark: hasRemark, hist: hasHist };
-  if (!hasRemark && !hasHist && d.hasMall) open.mall = true;
-  return open;
+  return { mall: false, purchase: false, rate: false, serv: false, remark: true, hist: true };
 }
 
 const D = {
@@ -397,12 +395,8 @@ Page({
     const arr = [{
       id: 1, latitude: d.lat, longitude: d.lng,
       iconPath: '/images/pin.png', width: 26, height: 34,
-      anchor: { x: 0.5, y: 1 }, zIndex: 9, alpha: 0.6,
-      callout: {
-        content: d.name, display: 'ALWAYS',
-        color: '#1F243099', fontSize: 12, bgColor: '#FFFFFF99',
-        borderColor: '#F5531C99', borderWidth: 1, borderRadius: 8, padding: 6, textAlign: 'center'
-      }
+      anchor: { x: 0.5, y: 1 }, zIndex: 9, alpha: 0.6
+      // ⭐ 2026-09-28 老板定：**地图上不显示店家名称胶囊** → 原来那个 callout（常显店名气泡）已删除
     }];
     if (withMe && d.meLat && d.meLng) {
       arr.push({ id: 2, latitude: d.meLat, longitude: d.meLng, iconPath: '/images/locdot.png', width: 26, height: 26, anchor: { x: 0.5, y: 0.5 } });
@@ -630,7 +624,7 @@ Page({
       _id: c._id || this._cid || '',
       taskId: c.taskId || this._taskId || '',
       name: d.name || c.name || '',
-      phone: d.tel || c.phone || '',
+      phone: api.isTrialUser() ? api.maskTrialPhone(d.tel || c.phone || '') : (d.tel || c.phone || ''),
       contactName: d.contact || c.contactName || '',
       address: d.addr || c.address || '',
       lng: d.lng || c.lng || 0, lat: d.lat || c.lat || 0

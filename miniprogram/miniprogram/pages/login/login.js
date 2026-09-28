@@ -13,6 +13,7 @@ Page({
     // 注册状态机（2026-09-09 老板拍板：注册→审核→免登；拒绝可重提）
     registerMode: false, pendingMode: false, rejectedMode: false,
     name: '', phone: '', regBusy: false,
+    trialId: '',   // 2026-09-27 恢复：游客体验入口（云函数 NEED_REGISTER 时下发）
     phoneVerified: false, // 2026-09-09 老板定：微信一键验证标记（getPhoneNumber 快速验证组件）
     pendingAt: '', rejectReason: '',
     // 开发者双身份选择页（2026-09-09 开发者范宇琨定：只他自己可见）
@@ -36,7 +37,9 @@ Page({
         // 2026-09-09 开发者范宇琨双身份：显示「业务员/老板」两按钮选择页；持久化 dev 标记
         try { wx.setStorageSync('is_dev', 1); } catch (e) { /* 静默 */ }
         getApp().globalData.isDev = true;
-        this.setData({ devMode: true, devUser: res.user || null });
+        // 2026-09-09 开发者范宇琨双身份 → 2026-09-28 三身份（加「游客」）
+        // 2026-09-28：同时接收云端下发的 trialId，供「以游客身份进入」按钮使用
+        this.setData({ devMode: true, devUser: res.user || null, trialId: res.trialId || this.data.trialId || '' });
       } else if (res.ok && res.boss && res.user) {
         // 2026-09-10 老板定：老板/管理员一律直接进老板模式，跳过登录页
         getApp().setUser(res.user);
@@ -45,6 +48,9 @@ Page({
         wx.switchTab({ url: '/pages/home/home' });
       } else if (res.ok && res.user && res.user.role === 'salesman') {
         getApp().setUser(res.user);
+        // 2026-09-28 老板定：把"当前是不是 trial 账号"落到全局 —— 底部栏据此决定要不要显示「退出」
+        //   （老绑定进来的游客 res.trial=true → 也能看到「退出」并解绑；正式业务员 false → 不显示）
+        getApp().globalData.asTrial = !!res.trial;
         wx.switchTab({ url: '/pages/home/home' });
       } else if (res.ok) {
         // 兜底（仅旧版 login 云函数会走到）：业务员小程序内的管理员提示
@@ -56,9 +62,14 @@ Page({
       } else if (res.code === 'REJECTED') {
         this.setData({ rejectedMode: true, rejectReason: res.reason || '' });
       } else if (res.code === 'NEED_REGISTER' || res.code === 'NEED_BIND') {
-        // 2026-09-10 老板定：实习角色永远不能绑定——不再取 trialId（游客入口已移除），
+        // 2026-09-27 老板定：恢复「游客体验入口」→ 取 trialId（兼容旧云端：从 salesmen 里找 trial）
         // 未注册微信一律进注册表单，随时可自己注册
-        this.setData({ registerMode: true });
+        let trialId = res.trialId || '';
+        if (!trialId && Array.isArray(res.salesmen)) {
+          const tr = res.salesmen.find(s => s.trial);
+          trialId = tr ? tr._id : '';
+        }
+        this.setData({ registerMode: true, trialId });
       } else {
         api.toast(res.msg || '登录失败');
       }
@@ -144,6 +155,48 @@ Page({
   reapply() {
     this.setData({ rejectedMode: false, registerMode: true, name: '', phone: '', phoneVerified: false });
   },
+  // 2026-09-28 老板定：开发者三身份的第三个 —— 「以游客身份进入」（体验与真实游客完全一致：能看、不能提交）
+  // ⚠️ 依赖 this.data.trialId（云端在 dev 登录时一并下发；后台必须已建一个 trial 游客账号）
+  // ⚠️ 2026-09-28 老板定：**入口只读、不再绑定**（原来传 bindUserId 会把当前微信自动绑死，属违规，已去掉）
+  async enterAsGuest() {
+    if (!this.data.trialId) {
+      api.toast('还没有游客账号：后台「人员管理」新增业务员时勾上"游客(试用)"即可');
+      return;
+    }
+    try {
+      const res = await api.call('login', { asTrialVisit: true, trialId: this.data.trialId });
+      if (res.ok) {
+        getApp().setUser(res.user);
+        api.toast('已进入游客身份 ✓', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
+        setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 700);
+      } else {
+        api.toast(res.msg || '进入失败');
+      }
+    } catch (err) {
+      api.toast('进入失败，请重试');
+    }
+  },
+  // 游客体验入口（2026-09-27 老板定：恢复；审核/演示用）
+  // ⚠️ 2026-09-28 老板定：**只读不绑定** —— 原来是"一键绑实习账号"，会把当前微信**自动绑定**、
+  //    而且绑定后再也回不到注册页（老板判为违规）。现在改成"只看不绑"：云端不写库，本地只留
+  //    as_trial 标记，退出游客即失效 —— 微信始终未被绑定，随时能正常注册。
+  async enterTrial() {
+    if (!this.data.trialId) { api.toast('游客入口暂不可用'); return; }
+    try {
+      const res = await api.call('login', { asTrialVisit: true, trialId: this.data.trialId });
+      if (res.ok) {
+        getApp().setUser(res.user);
+        api.toast('已进入游客身份 ✓', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
+        setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 600);
+      } else {
+        api.toast(res.msg || '进入失败');
+        this.check();
+      }
+    } catch (err) {
+      api.toast('进入失败，请重试');
+    }
+  },
+
   // 老板模式（2026-09-09 §7.13）：boss 白名单管理员入口——全量只读+虚拟写，storage 持久
   enterBoss() {
     const app = getApp();

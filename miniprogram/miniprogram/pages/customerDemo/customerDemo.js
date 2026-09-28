@@ -107,22 +107,8 @@ Page({
         height: 34,
         anchor: { x: 0.5, y: 1 },      // 针尖对准客户坐标
         zIndex: 9,
-        alpha: 0.6,                    // 2026-09-13 老板定：针 60% 半透明
-                                       // ⚠️ 别设 0 —— alpha=0 时该 marker 的 callout 不显示
-        callout: {
-          content: D.name,             // 店名气泡
-          display: 'ALWAYS',           // 常显（不用点）
-          // 2026-09-13 老板定：名字卡 60% 半透明
-          // ⚠️ 地图颜色只认 6/8 位十六进制，8 位后两位 = alpha（不支持 rgba()）；0.6×255=153=0x99
-          color: '#1F243099',
-          fontSize: 12,
-          bgColor: '#FFFFFF99',
-          borderColor: '#F5531C99',
-          borderWidth: 1,
-          borderRadius: 8,
-          padding: 6,
-          textAlign: 'center'
-        }
+        alpha: 0.6                     // 2026-09-13 老板定：针 60% 半透明
+        // ⭐ 2026-09-28 老板定：**地图上不显示店家名称胶囊** → 原来那个 callout（常显店名气泡）已删除
       },
       {
         id: 2,

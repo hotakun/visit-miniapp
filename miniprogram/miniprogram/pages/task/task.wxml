@@ -15,7 +15,6 @@
     <view class="days-inner">
       <view class="day {{activeDay === d.day ? 'on' : ''}} {{dayDone[d.day] ? 'done' : ''}} {{ongoingDays[d.day] ? 'ong' : ''}}" wx:for="{{task.dayPlan}}" wx:for-item="d" wx:key="day" bindtap="switchDay" data-day="{{d.day}}">
         <view class="day-check" wx:if="{{ongoingDays[d.day]}}">✓</view>
-        <text class="dd" wx:if="{{d.dateLabel}}">{{d.dateLabel}}</text>
         <text class="dt">第 {{d.day}} 页</text>
         <text class="dc">{{d.customerIds.length}} 家{{dayDone[d.day] ? ' ✓' : ''}}</text>
       </view>

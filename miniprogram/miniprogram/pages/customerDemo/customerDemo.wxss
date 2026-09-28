@@ -193,12 +193,17 @@
 .hshot { flex: 1; height: 68px; border-radius: 9px; overflow: hidden; background: #F0F2F5; border: 1px solid #EFF1F5; }
 .hshot-img { width: 100%; height: 100%; display: block; }
 
-/* 商圈与位置的小地图（2026-09-13）：高 150px / 圆角 12px / 宽占满
-   2026-09-25：外面包一层 .cmap-wrap 专门做**裁剪**（overflow:hidden；高度比 map 少 40px），
-   被裁掉的正好是腾讯地图 logo/版权那一块。圆角/边框/阴影都挪到 wrapper 上，否则裁完底部两角会变方。 */
-.cmap-wrap { position: relative; width: 100%; height: 150px; margin-top: 9px; border-radius: 12px; overflow: hidden;
-  border: 1px solid #EFF1F5; box-shadow: 0 2px 8px rgba(31,36,48,.05); }
-.cmap { width: 100%; height: 100%; }   /* ⭐ 2026-09-27：改回 100%（原 +40px 是为了把腾讯 logo 裁掉，现在要恢复显示） */
+/* 商圈与位置的小地图（2026-09-13）：圆角 12px / 宽占满
+   ⭐ 2026-09-28 老板定：比例改为 **4:3**（先试过正方形 100% 太高、原 150px 又太矮）。
+   做法：容器 height:0 + **padding-top:75%** —— padding 的百分比基准是**宽度** → 高 = 宽 × 0.75（兼容性 100%，
+   不依赖 aspect-ratio）；map 不能写 height:100%（父容器高度是 0），用**绝对定位**铺满容器。
+   2026-09-25 起 wrapper 的 overflow:hidden 保留（圆角/边框/阴影挂在 wrapper 上）。 */
+/* ⭐ 2026-09-28 老板定：小地图加**描边 + 更强投影**，让地图框更立体（原来那圈边几乎看不见、阴影也很淡）。 */
+.cmap-wrap { position: relative; width: 100%; height: 0; padding-top: 75%; margin-top: 9px; border-radius: 12px; overflow: hidden;
+  border: 1px solid #D8DFE8; box-shadow: 0 6px 16px rgba(31,36,48,.16), 0 1px 3px rgba(31,36,48,.10); }
+.cmap { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }   /* 2026-09-28：随容器绝对定位铺满（父高由 padding-top 撑） */
+/* 「📍 商圈与位置」后面的店家名称（2026-09-28 老板定）：**橙色**显示更醒目（与标题同款小字，只加左间距） */
+.subsec .cname { margin-left: 6px; color: var(--primary); }
 .coords { margin-top: 6px; font-size: 11px; color: #99A2AE; text-align: right; }
 /* 图例小蓝点（跟地图上那个 marker 同色） */
 .cdot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%;
@@ -207,10 +212,14 @@
 .cwalk { display: inline-block; width: 12px; height: 3px; margin-right: 4px; border-radius: 2px;
   background: #16A34A; vertical-align: middle; }
 
-/* ===== 「聚火地图」标识（⭐ 2026-09-27：腾讯 logo 已恢复显示，本 badge 同时保留 → 挪到**左上角**，不再压右下角的腾讯 logo） =====
-   白底半透明胶囊，保证压在地图上也看得清；指南针 = 圆环 + 旋转 45° 小方块。 */
-.jh-badge { position: absolute; left: 8px; top: 8px; z-index: 99; pointer-events: none;
-  display: flex; align-items: center; gap: 3px;
+/* ===== 「聚火地图」标识（⭐ 2026-09-28 老板定（最新）：放回**小地图卡片的左下角**，跟随地图卡片移动）=====
+   · position 由 fixed 改回 **absolute** —— fixed 会钉在屏幕上（页面滚动时浮在内容上）；
+     absolute 相对 .cmap-wrap（本页 .cmap-wrap 是 position:relative）→ 贴小地图左下角、随卡片一起滚。
+   · 腾讯地图自带的 logo/审图号在**右下角**，本 badge 在**左下角**，两者互不遮挡。
+   · z-index **9**：容器内只压在地图上；弹层(80+)仍会盖住它。badge 是 pointer-events:none，不挡操作。
+   · 白底半透明胶囊；指南针 = 圆环 + 旋转 45° 小方块；图案与文字**底部对齐**（align-items: flex-end）。 */
+.jh-badge { position: absolute; left: 8px; bottom: 8px; z-index: 9; pointer-events: none;
+  display: flex; align-items: flex-end; gap: 3px;
   background: rgba(255,255,255,.94); border-radius: 8px; padding: 2px 6px; }
 .jh-compass { width: 11px; height: 11px; border: 2px solid #F5531C; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; }

@@ -1,9 +1,15 @@
-.page { min-height: 100vh; display: flex; flex-direction: column; padding: 60px 32px 40px; box-sizing: border-box; }
-.hero { display: flex; flex-direction: column; align-items: center; }
-.logo { width: 110px; height: 110px; border-radius: 50%; box-shadow: 0 12px 30px rgba(245,83,28,.25); }
-.name { margin-top: 20px; font-size: 26px; font-weight: 800; letter-spacing: 2px; }
-.sub { margin-top: 6px; font-size: 14px; color: var(--sub); font-weight: 600; }
-.tip { margin-top: 48px; font-size: 14px; color: var(--ink); font-weight: 700; text-align: center; }
+/* 2026-09-28 按老板确认的 HTML 预览稿改版：品牌区放大居中、注册表单紧凑化、快捷录入方形按钮、游客入口收窄 */
+
+.page { min-height: 100vh; display: flex; flex-direction: column; padding: 0 22px 13px; box-sizing: border-box; }
+
+/* 品牌区（所有状态共用 —— 上方留出约 1/3 屏，LOGO 与文字居中） */
+.brand { min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 4px; }
+.logo { width: 80px; height: 80px; border-radius: 50%; box-shadow: 0 12px 28px rgba(245,83,28,.28); }
+.name { margin-top: 16px; font-size: 25px; font-weight: 800; letter-spacing: 3px; }
+.sub { margin-top: 7px; font-size: 13px; color: var(--sub); font-weight: 600; }
+.brand-line { margin-top: 14px; width: 38px; height: 3px; border-radius: 2px; background: linear-gradient(90deg,#FFB48A,#F5531C); }
+
+.tip { margin-top: 16px; font-size: 13.5px; color: var(--ink); font-weight: 700; text-align: center; }
 /* 游客体验（2026-09-08 老板定：审核/演示用） */
 .trial-banner { margin-top: 40px; background: #EFF6FF; border: 1px solid #C9E0FA; border-radius: 12px; padding: 10px 14px; font-size: 12.5px; color: #1E5FA8; font-weight: 600; line-height: 1.6; }
 .sman.trial { border: 1.5px solid #C9E0FA; }
@@ -17,14 +23,27 @@
 .sman .go { font-size: 13px; color: var(--primary-deep); font-weight: 800; }
 .empty { margin-top: 16px; text-align: center; font-size: 13px; color: var(--sub); line-height: 1.7; }
 .loading { margin-top: 80px; text-align: center; color: var(--sub); font-size: 14px; }
-/* 注册/审核状态机（2026-09-09 老板拍板：注册→审核→免登；拒绝可重提） */
-.reg-card { margin-top: 24px; background: #fff; border-radius: 16px; padding: 22px 20px; box-shadow: 0 2px 12px rgba(31,36,48,.06); }
-.frow { margin-bottom: 14px; }
-.frow label { display: block; font-size: 13px; color: var(--sub); font-weight: 700; margin-bottom: 8px; }
-.inp { width: 100%; height: 46px; border: 1.5px solid var(--line); border-radius: 12px; padding: 0 14px; font-size: 15px; box-sizing: border-box; background: #FAFBFC; }
 
-/* 微信一键验证按钮（2026-09-09 老板定：getPhoneNumber 快速验证组件） */
-.btn-phone-v { margin: 0; padding: 0 16px; height: 46px; line-height: 46px; border-radius: 12px; font-size: 14px; font-weight: 700; color: #fff; background: #07C160; }
+/* 注册/审核状态机（2026-09-09 老板拍板；2026-09-28 紧凑化） */
+.reg-card { margin-top: 11px; background: #fff; border-radius: 15px; padding: 13px 15px; box-shadow: 0 2px 12px rgba(31,36,48,.06); }
+.frow { margin-bottom: 10px; }
+.frow label { display: block; font-size: 12px; color: var(--sub); font-weight: 700; margin-bottom: 5px; }
+.inp { width: 100%; height: 42px; border: 1.5px solid var(--line); border-radius: 11px; padding: 0 13px; font-size: 14.5px; box-sizing: border-box; background: #FAFBFC; }
+
+/* 「手机号 *」与「验证」两列对齐：第二列宽 = 右侧「快捷录入」按钮宽 → 「验证」左边缘与按钮左边缘对齐 */
+.lb-row { display: flex; align-items: baseline; margin-bottom: 5px; }
+.lb-row .c1 { flex: 1; min-width: 0; font-size: 12px; color: var(--sub); font-weight: 700; }
+.lb-row .c2 { width: 86px; flex-shrink: 0; font-size: 12px; color: #8A939C; font-weight: 700; padding-left: 8px; }
+
+/* 手机号输入框 + 方形「快捷录入」按钮（同一行） */
+.phone-row { display: flex; align-items: center; gap: 8px; }
+.phone-row .inp { flex: 1; min-width: 0; }
+.btn-quick { flex-shrink: 0; margin: 0; width: 86px; height: 42px; line-height: 42px; padding: 0; border-radius: 11px; font-size: 13px; font-weight: 700; color: #fff; background: #07C160; }
+.btn-quick.ok { background: #E8F8EF; color: #16A34A; }
+.btn-quick[disabled] { opacity: 1; color: #16A34A; }
+
+/* 兼容旧类名（2026-09-09 的微信一键验证按钮；现已改用 .btn-quick，保留以防别处引用） */
+.btn-phone-v { margin: 0; padding: 0 16px; height: 42px; line-height: 42px; border-radius: 11px; font-size: 14px; font-weight: 700; color: #fff; background: #07C160; }
 .btn-phone-v.ok { background: #E8F8EF; color: #16A34A; }
 .btn-phone-v[disabled] { opacity: 1; }
 .pv-hint { display: block; font-size: 11px; color: var(--sub); margin-top: 8px; line-height: 1.5; }
@@ -34,8 +53,17 @@
 .dc-t { font-size: 18px; font-weight: 800; text-align: center; }
 .dc-d { margin-top: 8px; font-size: 12px; color: var(--sub); text-align: center; line-height: 1.6; }
 .btn-boss { margin-top: 12px; height: 46px; line-height: 46px; border-radius: 12px; font-size: 15px; font-weight: 700; color: #fff; background: #1F2430; text-align: center; }
-.reg-note { margin-top: 14px; font-size: 12px; color: var(--sub); text-align: center; line-height: 1.7; }
-.trial-link { margin-top: 22px; text-align: center; font-size: 12.5px; color: #1E5FA8; font-weight: 600; padding: 10px; }
+/* 审核说明（2026-09-28：按老板要求在"审核，"后换行 → 用 \n + pre-line 实现） */
+.reg-note { margin-top: 9px; font-size: 11.5px; color: var(--sub); text-align: center; line-height: 1.65; white-space: pre-line; }
+
+/* 开发者三身份 —— 第三个「以游客身份进入」按钮（2026-09-28；蓝色，与上面两个同尺寸排列） */
+.btn-trial { margin-top: 12px; height: 46px; line-height: 46px; border-radius: 12px; font-size: 15px; font-weight: 700; color: #fff; background: #2F80ED; text-align: center; }
+
+/* 游客体验入口（2026-09-28：按钮收窄贴合文字、居中；「免注册」并入按钮内） */
+.trial-zone { margin-top: auto; padding-top: 10px; text-align: center; }
+.trial-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 0; font-size: 12.5px; font-weight: 700; color: #1E5FA8; padding: 8px 14px; background: #EFF6FF; border: 1.5px solid #C9E0FA; border-radius: 11px; }
+.trial-link .lite { font-size: 11px; font-weight: 600; color: #5B8FC7; }
+
 .state-card { margin-top: 40px; background: #fff; border-radius: 16px; padding: 34px 24px; text-align: center; box-shadow: 0 2px 12px rgba(31,36,48,.06); }
 .sc-ic { font-size: 44px; }
 .sc-t { margin-top: 12px; font-size: 18px; font-weight: 800; }
