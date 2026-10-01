@@ -1,0 +1,38 @@
+<!-- 我的记事 · 列表（2026-09-28 老板定：只存本机；铁律 WXML 只用 view / text） -->
+<view class="page">
+
+  <!-- 从客户详情页进来时的过滤条（只看这一家） -->
+  <view class="filter" wx:if="{{cname}}">
+    <text class="f-t">📌 只看这家的记事</text>
+    <text class="f-n">{{cname}}</text>
+    <text class="f-x" bindtap="clearFilter">看全部 ›</text>
+  </view>
+
+  <!-- 空态 -->
+  <view class="empty4" wx:if="{{!list.length}}">
+    <view class="e4-t">还没有记事</view>
+    <view class="e4-s">点下面「＋ 记一笔」开始；在客户详情页点「快速记事」记的，也会出现在这里</view>
+  </view>
+
+  <view class="ncard" wx:for="{{list}}" wx:key="id" bindtap="open" data-id="{{item.id}}">
+    <view class="n-t">
+      <text class="n-tt">{{item.title}}</text>
+      <text class="n-cust" wx:if="{{item.cust}}">{{item.cust}}</text>
+    </view>
+    <view class="n-x" wx:if="{{item.x}}">{{item.x}}</view>
+    <view class="thumbs" wx:if="{{item.photos.length}}">
+      <image class="th" wx:for="{{item.photos}}" wx:for-item="p" wx:key="*this" src="{{p}}" mode="aspectFill"></image>
+    </view>
+    <view class="n-m">
+      <text class="n-time">{{item.at}}</text>
+      <text wx:if="{{item.addr}}">📍 {{item.addr}}</text>
+      <text wx:if="{{item.vn}}">🎙 {{item.vn}} 段</text>
+    </view>
+  </view>
+
+  <!-- ⭐ 新建入口（2026-09-28 晚老板定）：**放画面下方、做大一点** —— 一眼看到、方便点（原来是右上角的小按钮） -->
+  <view class="newbar">
+    <view class="nb-btn" bindtap="goNew">＋ 记一笔</view>
+  </view>
+
+</view>

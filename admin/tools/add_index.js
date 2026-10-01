@@ -16,6 +16,14 @@ const IDX = [
   // ⭐ 2026-09-27 M2b：按页聚合（custPageAgg）要按 customerCode / customerId 查 → 没索引会全表扫
   { coll: 'orders', name: 'customerCode', keys: [{ name: 'customerCode', direction: '1' }] },
   { coll: 'visits', name: 'customerId',   keys: [{ name: 'customerId',   direction: '1' }] },
+  // ⭐ 2026-09-28 新增：「加新店」的识别数据（biz_index）—— 云函数按 lat/lng 范围拉附近的点，
+  //   没这个索引就会全表扫 7 万条（慢、且白费读次数）
+  { coll: 'biz_index', name: 'lat_lng', keys: [{ name: 'lat', direction: '1' }, { name: 'lng', direction: '1' }] },
+  // ⭐⭐ 2026-09-29 补上（老板报"50 米内店名电话一模一样，防重检测都毫无反应"）：
+  //   防重的 dupCheck 查的是 **`customers` 的 lat + lng 两个范围条件** —— 而这个集合一直**没有坐标索引**，
+  //   查询失败后又被 `.catch(() => ({ data: [] }))` 吞成"附近没有店"，所以怎么测都毫无反应。
+  //   对照：区域/商圈识别查的是 `biz_index`，那个有 lat_lng，所以一直是准的 —— 两个症状正好对上。
+  { coll: 'customers', name: 'lat_lng', keys: [{ name: 'lat', direction: '1' }, { name: 'lng', direction: '1' }] },
 ];
 
 (async () => {

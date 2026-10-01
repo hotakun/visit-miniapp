@@ -4,6 +4,26 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+// ===== ⭐ 2026-09-29 新增：静默吞错的"可见化"（高危1 修复，勘察报告 §F1）=====
+//   背景：全项目曾有 22 处 `.catch(() => 默认值)` 既不打日志也不抛错 ——
+//   查询失败被伪装成"没有数据"，导致「防重检测 50 米内一模一样都毫无反应」这类
+//   查不出原因的 bug（真因是 customers 缺 lat_lng 索引）。
+//   这里**不改容错行为**（默认值照旧返回，调用方契约不变），只做两件事：
+//     ① 打一条带标签的 console.error（云函数日志里能查到）
+//     ② 收进 _silentErrs（最多 30 条），便于排查
+function silentCatch(tag, fallback) {
+  return (e) => {
+    const m = (e && e.message) || String(e);
+    console.error('[silent:' + tag + '] ' + m);
+    try {
+      if (_silentErrs.length < 30) _silentErrs.push(tag + ': ' + m);
+    } catch (e2) { /* 静默 */ }
+    return fallback;
+  };
+}
+const _silentErrs = [];
+
+
 const RESULT_ENUM_MALL = ['加入商城', '需要样品', '已下单', '不愿改', '有抵触', '联系不上', '闭店·搬迁', '其他'];
 const RESULT_ENUM_NEW = [...RESULT_ENUM_MALL, '已签约商城', '未签约'];
 
@@ -41,23 +61,27 @@ exports.main = async (event) => {
   const me = await db.collection('users').where({ openid: OPENID }).get();
   // 2026-09-28：同一 openid 可能**同时绑「实习(trial)」与正式账号**（开发者点「以游客身份进入」）。
   //   默认正式优先（显式定序，消除 data[0] 的随机）；请求带 asTrial → trial 账号排最前。
+  // ⭐⭐ 2026-09-28 晚修【重大错误】：**实习声明优先于 openid 认人**
+  //   背景：开发者（范宇琨）的微信 openid 早就绑了**正式业务员账号**；而「实习体验入口」按老板口径
+  //   **不绑定 openid**。原来只在「openid 查不到人」时才拿 trialId 核对 →
+  //   他点实习进来时 openid 查到了正式账号 → **认成业务员**（老板报的正是这个）。
+  //   现在：声明实习(asTrial) 且带 trialId → **先**拿 trialId 核对（role=salesman + trial=true），
+  //   核对通过就直接用它，不再看 openid 绑的是谁。⚠️ 只信库里的数据。
   {
     const _asT = !!(event && (event.asTrial === true || event.asTrial === 'true'));
-    const _l = me.data.slice();
-    const _tr = _l.filter(x => x.trial);
-    me.data = (_asT && _tr.length) ? _tr.concat(_l.filter(x => !x.trial)) : _l.sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
-  }
-  // ⭐ 2026-09-28 老板定「游客不绑定」之后必加：openid 查不到人 **且** 请求声明自己是游客 →
-  //    拿 trialId 去库里**核对**这个游客账号真实存在（role=salesman + trial=true）才认它。
-  //    ⚠️ 只信库里的数据：trialId 仅当查询主键用，前端传的其他身份字段一律不采信。
-  //    （没有这段，不绑定之后游客会拿不到身份 → 要么报未登录、要么漏掉 TRIAL_FORBIDDEN 拦截）
-  if (!me.data.length) {
     const _tid = String((event && event.trialId) || '');
-    const _asT2 = !!(event && (event.asTrial === true || event.asTrial === 'true'));
-    if (_asT2 && _tid) {
+    let _picked = null;
+    if (_asT && _tid) {
       const _one = await db.collection('users').doc(_tid).get().catch(() => null);
       const _u = _one && _one.data;
-      if (_u && _u.role === 'salesman' && _u.trial === true) me.data = [_u];
+      if (_u && _u.role === 'salesman' && _u.trial === true) _picked = _u;
+    }
+    if (_picked) {
+      me.data = [_picked];
+    } else {
+      const _l = me.data.slice();
+      const _tr = _l.filter(x => x.trial);
+      me.data = (_asT && _tr.length) ? _tr.concat(_l.filter(x => !x.trial)) : _l.sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
     }
   }
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
@@ -245,7 +269,7 @@ async function cancelVisit(user, e, isBoss) {
 let _swCache = null, _swCacheAt = 0;
 async function getSwitchCfg() {
   if (_swCache && Date.now() - _swCacheAt < 60000) return _swCache;
-  const r = await db.collection('settings').limit(100).get().catch(() => ({ data: [] }));
+  const r = await db.collection('settings').limit(100).get().catch(silentCatch('visits·getSwitchCfg', { data: [] }));
   const m = {};
   (r.data || []).forEach(s => { m[s.key] = s.value; });
   const recRaw = Number(m.recordingDurationLimit) || 300;

@@ -105,7 +105,11 @@ async function refresh(callApi, cred) {
       //   表现为"云函数明明返回了、界面却拿不到"（本次踩过一次）。
       oc: p.oc || 0, oa: p.oa || 0, lo: p.lo || '', vc: p.vc || 0, lv: p.lv || '', vs: p.vs || 'free', vt: p.vt || ''
     }));
-    write({ v: VERSION, syncedAt: Date.now(), count: slim.length, points: slim });
+    // ⭐ 2026-09-29【方案 C】记下"同步水位"maxU —— 增量同步（custSync 的 since）用它，
+    //   比用本地时钟打点更可靠（本地时钟与云端不一定严丝合缝，会漏几秒）。
+    let maxU = 0;
+    slim.forEach(p => { if (Number(p.u) > maxU) maxU = Number(p.u); });
+    write({ v: VERSION, syncedAt: Date.now(), maxU: maxU, count: slim.length, points: slim });
     progress.phase = '完成';
     console.log(`[store] 全量刷新完成：${slim.length} 家，耗时 ${Date.now() - t0}ms`);
     return { ok: true, count: slim.length, ms: Date.now() - t0 };
@@ -142,6 +146,76 @@ function patch(patches, removeIds) {
   return { ok: true, patched: patched, removed: removed, count: points.length };
 }
 
+// ⭐⭐ 2026-09-29【方案 C】客户数据"变动检测 + 增量补"
+//   背景：手机端「加新店」建了客户 → 后台看不到（客户管理页读的是**本地缓存快照**）。
+//        老板实测：建了「菲菲杂粮煎饼」，后台「客户管理」里找不到。
+//   做法：云端建店时写 settings.custDirtyAt；这里读缓存时顺手比一下，比缓存新就拉**增量**补上。
+//   ⚠️ 全程**不阻塞**前端：由 server.js 在返回缓存**之后**异步调用，前端下次取就是新的。
+let _dirtyBusy = false;
+let _lastDirtyAt = 0;                    // 上次云端报的变动时间（避免重复处理同一个信号）
+
+// 缓存里的"同步水位"：上次已经同步到哪个 updatedAt
+function watermark(c) {
+  if (!c) return 0;
+  if (Number(c.maxU)) return Number(c.maxU);
+  return Math.max(0, Number(c.syncedAt || 0) - 5000);   // 老缓存没 maxU：留 5 秒余量，宁可多拉几条
+}
+
+// 增量补：走 custSync（只拉 updatedAt > since 的），按 _id 覆盖 / 追加
+async function syncIncremental(callApi, cred, since) {
+  const c = read();
+  if (!c || !Array.isArray(c.points)) return { ok: false, msg: '本地缓存还不存在' };
+  const t0 = Date.now();
+  const got = [];
+  let cursor = '', maxU = since;
+  for (let i = 0; i < 50; i++) {          // 最多 50 片 × 1000 条，防死循环
+    const res = JSON.parse(await callApi(Object.assign(
+      { action: 'custSync', since: since, cursor: cursor, limit: 1000 }, cred || {})));
+    if (!res || !res.ok) throw new Error((res && res.msg) || '云函数返回异常');
+    const arr = res.points || [];
+    got.push.apply(got, arr);
+    if (Number(res.maxUpdatedAt) > maxU) maxU = Number(res.maxUpdatedAt);
+    if (!res.next || !arr.length) break;
+    cursor = res.next;
+  }
+  // merge：云端返回的覆盖本地同名条；其余原样保留；云端多出来的**追加**（这正是"新建的店"）
+  const byId = {};
+  got.forEach(p => { if (p && p.i) byId[p.i] = p; });
+  const merged = [];
+  const seen = {};
+  c.points.forEach(p => {
+    if (byId[p.i]) { merged.push(byId[p.i]); seen[p.i] = 1; } else { merged.push(p); }
+  });
+  got.forEach(p => { if (p && p.i && !seen[p.i]) merged.push(p); });
+  // syncedAt 保持不动（界面「数据截至」显示的仍是上次全量时间）
+  write({ v: VERSION, syncedAt: c.syncedAt, maxU: maxU, count: merged.length, points: merged });
+  console.log(`[store] 增量补完成：云端 ${got.length} 条变动，缓存 ${c.points.length} → ${merged.length} 家，耗时 ${Date.now() - t0}ms`);
+  return { ok: true, changed: got.length, count: merged.length };
+}
+
+// 检查云端有没有变动；有就拉增量补进缓存。返回 true = 这次补了数据（前端据此重取列表）
+async function checkDirty(callApi, cred) {
+  if (_dirtyBusy) return false;                        // 正在处理，别叠
+  _dirtyBusy = true;
+  try {
+    const res = JSON.parse(await callApi(Object.assign({ action: 'custDirty' }, cred || {})));
+    const at = (res && res.ok && Number(res.at)) || 0;
+    if (!at || at <= _lastDirtyAt) return false;       // 没变动 / 同一个信号
+    _lastDirtyAt = at;
+    const since = watermark(read());
+    if (at > since) {                                  // 云端比缓存的"水位"新 → 补
+      const r = await syncIncremental(callApi, cred, since);
+      return !!(r && r.ok);
+    }
+    return false;
+  } catch (e) {
+    console.error('[store] 变动检测失败（不影响使用）：', e && e.message);
+    return false;
+  } finally {
+    _dirtyBusy = false;
+  }
+}
+
 // 启动时自动预热：当天没拉过就静默拉一次（**不阻塞服务启动**）
 function startAutoRefresh(callApi, cred) {
   const c = read();
@@ -153,4 +227,4 @@ function startAutoRefresh(callApi, cred) {
   refresh(callApi, cred).catch(() => null);
 }
 
-module.exports = { read, write, status, refresh, patch, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
+module.exports = { read, write, status, refresh, patch, checkDirty, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };

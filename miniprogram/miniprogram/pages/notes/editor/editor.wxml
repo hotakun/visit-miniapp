@@ -1,0 +1,117 @@
+<!-- 记事详情 / 编辑（2026-09-28 老板定：只存本机；铁律 WXML 只用 view / text）
+     布局口径（2026-09-28 晚老板定）：**整个记事就是一张大白卡** —— 标题 / 正文 / 照片 / 录音 / 位置 / 提醒
+     全在里面，之间用 2px 细分割线分开；**底部只留「保存」+「删除」两个小按钮**。
+     照片（2026-09-28 晚老板定）：**三个相框**（与客户详情页 .shotrow/.shot3 同口径），点空框直接拍照。 -->
+<view class="page">
+
+  <!-- 关联客户（从客户页进来 / 已关联时显示；在卡外，顶部一条） -->
+  <view class="cbar" wx:if="{{custName}}">
+    <text class="cbar-t">📌 关联客户：{{custName}}</text>
+    <text class="cbar-go" bindtap="goCustomer">回客户 ›</text>
+  </view>
+
+  <view class="card">
+
+    <!-- 标题 + 正文 -->
+    <input class="ipt-t" value="{{title}}" bindinput="onTitle" placeholder-class="ipt-ph"
+      placeholder="标题（自动带上店名，可改）" maxlength="40" />
+    <view class="txtwrap">
+      <textarea class="ipt-x" value="{{body}}" bindinput="onBody" placeholder-class="ipt-ph"
+        placeholder="想写什么写什么…" maxlength="-1"
+        auto-height show-confirm-bar="{{false}}" cursor-spacing="18"></textarea>
+    </view>
+
+    <!-- 📷 照片：三个相框（点空框拍照、点图看大图、右上 ✕ 删） -->
+    <view class="sec">
+      <view class="sec-h">
+        <text class="sec-t">📷 照片</text>
+        <text class="sec-s">{{photos.length}}/{{maxPics}} · 拍摄时自动记位置</text>
+      </view>
+      <view class="shotrow">
+        <view class="shot3 {{photos[0] ? '' : 'empty'}}"
+              data-src="{{photos[0] ? photos[0].path : ''}}"
+              bindtap="{{photos[0] ? 'previewPhoto' : 'shootOrPick'}}">
+          <image class="shot-img" wx:if="{{photos[0]}}" src="{{photos[0].path}}" mode="aspectFill"></image>
+          <view class="shot-del" wx:if="{{photos[0]}}" catchtap="delPhoto" data-id="{{photos[0].id}}">✕</view>
+          <block wx:else><text class="cam3">📷</text><text class="t3">拍照</text></block>
+        </view>
+        <view class="shot3 {{photos[1] ? '' : 'empty'}}"
+              data-src="{{photos[1] ? photos[1].path : ''}}"
+              bindtap="{{photos[1] ? 'previewPhoto' : 'shootOrPick'}}">
+          <image class="shot-img" wx:if="{{photos[1]}}" src="{{photos[1].path}}" mode="aspectFill"></image>
+          <view class="shot-del" wx:if="{{photos[1]}}" catchtap="delPhoto" data-id="{{photos[1].id}}">✕</view>
+          <block wx:else><text class="cam3">📷</text><text class="t3">拍照</text></block>
+        </view>
+        <view class="shot3 {{photos[2] ? '' : 'empty'}}"
+              data-src="{{photos[2] ? photos[2].path : ''}}"
+              bindtap="{{photos[2] ? 'previewPhoto' : 'shootOrPick'}}">
+          <image class="shot-img" wx:if="{{photos[2]}}" src="{{photos[2].path}}" mode="aspectFill"></image>
+          <view class="shot-del" wx:if="{{photos[2]}}" catchtap="delPhoto" data-id="{{photos[2].id}}">✕</view>
+          <block wx:else><text class="cam3">📷</text><text class="t3">拍照</text></block>
+        </view>
+      </view>
+      <view class="tip" wx:if="{{prepBusy}}">正在处理照片…</view>
+    </view>
+
+    <!-- 🎙 录音（入口就在这一节里：录音 / 停止） -->
+    <view class="sec">
+      <view class="sec-h">
+        <text class="sec-t">🎙 录音</text>
+        <text class="sec-s">{{audios.length}}/{{maxSegs}} · 单条 ≤{{segLimitMin}} 分钟</text>
+      </view>
+      <view class="seg" wx:for="{{audios}}" wx:key="id">
+        <view class="seg-h">
+          <view class="seg-play" catchtap="playRec" data-i="{{index}}">{{recPlayId === item.id ? '⏸' : '▶'}}</view>
+          <text class="seg-d">{{item.durText}}</text>
+          <view class="seg-a">
+            <text class="seg-tr" catchtap="transcribe" data-i="{{index}}">{{item.trStatus === 'processing' ? '转写中…' : '🎙 转文字'}}</text>
+            <text class="seg-x" catchtap="delRec" data-i="{{index}}">✕</text>
+          </view>
+        </view>
+        <view class="seg-t {{item.trStatus === 'failed' ? 'bad' : ''}}" wx:if="{{item.trText}}">{{item.trText}}</view>
+      </view>
+      <view class="recbtn {{recState === 'rec' ? 'on' : ''}}" bindtap="onRecTap">
+        {{recState === 'rec' ? ('⏹ 停止录音  ' + curText) : '🎙 录音'}}
+      </view>
+      <view class="tip" wx:if="{{recBusy}}">正在保存录音…</view>
+      <view class="tip" wx:if="{{trBusy}}">转文字只上传这一段，转完即删云端文件</view>
+    </view>
+
+    <!-- 📍 位置（入口就在这一节里：右上「重新定位」） -->
+    <view class="sec">
+      <view class="sec-h">
+        <text class="sec-t">📍 位置</text>
+        <text class="sec-s act" bindtap="locateNow">{{locBusy ? '定位中…' : '重新定位'}}</text>
+      </view>
+      <text class="loc-x {{locText ? '' : 'off'}}">{{locText ? locText : '还没有定位（进来会自动定位一次）'}}</text>
+    </view>
+
+    <!-- ⏰ 提醒（入口就在这一节里：选时间 → 写手机系统日历） -->
+    <view class="sec">
+      <view class="sec-h">
+        <text class="sec-t">⏰ 提醒</text>
+        <text class="sec-s" wx:if="{{remindText}}">{{remindText}}<text class="rm-x" bindtap="clearRemind">　取消</text></text>
+        <text class="sec-s" wx:else>到点由手机系统提醒</text>
+      </view>
+      <picker mode="multiSelector" range="{{rmRange}}" value="{{rmIdx}}"
+              bindchange="onRmPick" bindcolumnchange="onRmCol">
+        <view class="rm-btn">⏰ {{remindText ? '改时间' : '选时间（默认明天 9:00）'}}</view>
+      </picker>
+    </view>
+
+  </view>
+
+  <!-- 录音中：状态条（不是入口，是状态；浮在底部按钮条之上） -->
+  <view class="recbar" wx:if="{{recState === 'rec'}}">
+    <text class="rb-dot">⏺</text>
+    <text class="rb-now">录音中 {{curText}}</text>
+    <text class="rb-left">{{recLeftText}}</text>
+  </view>
+
+  <!-- ============ 底部：只有「删除」+「保存」两个小按钮 ============ -->
+  <view class="foot">
+    <view class="f-del" wx:if="{{!isNew}}" bindtap="askRemove">删除</view>
+    <view class="f-save {{saving ? 'off' : ''}}" bindtap="save">{{saving ? '保存中…' : '保存'}}</view>
+  </view>
+
+</view>

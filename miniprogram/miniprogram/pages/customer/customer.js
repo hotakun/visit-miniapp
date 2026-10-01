@@ -173,6 +173,8 @@ function buildD(res, photoUrls, recUrls) {
     // 游客（实习）打码：后四位 ****（2026-09-08 口径「游客不能看完整电话」；maskTrialPhone 对已打码串幂等）
     tel: api.isTrialUser() ? api.maskTrialPhone(esc(c.phone) || esc(p.phone1) || '') : (esc(c.phone) || esc(p.phone1) || ''),
     contact: esc(c.contactName) || '', hasMall: hasMall,
+    // ⭐ 2026-09-28 晚 老板定：「⏳ 待商城建档」淡色胶囊（业务员现场用「加新店」录的店，商城侧还没档案）
+    mallPending: !!c.mallPending,
     listedYears: listedYears(p.listedTime),
     cat: uniqueJoin(p.cat1, p.cat2, p.cat3),
     rank: esc(p.rank),
@@ -183,12 +185,14 @@ function buildD(res, photoUrls, recUrls) {
       ['最近浏览商城', esc(c.lastBrowseAt) ? (mdCn(c.lastBrowseAt) + (daysAgo(c.lastBrowseAt) ? '（' + daysAgo(c.lastBrowseAt) + '）' : '')) : '—']
     ],
     // ⭐ 2026-09-27：商城信息卡头小字（原 wxml 里写死「最近购买 8月24日」）——
-    //   最近购买 → 没有则 最近浏览 → 再没有 注册；未入商城直接「未加入商城」
+    //   最近购买 → 没有则 最近浏览 → 再没有 注册
+    // ⭐ 2026-09-28 晚老板定：**未加入商城就留空**（原来写「未加入商城」）——
+    //   "没有"的事不摆出来；是否已入商城由店名卡的辉光表达，不靠文字。
     mallSub: hasMall
       ? (esc(c.lastOrderAt) ? ('最近购买 ' + mdCn(c.lastOrderAt))
         : (esc(c.lastBrowseAt) ? ('最近浏览 ' + mdCn(c.lastBrowseAt))
           : (esc(c.mallJoinedAt) ? ('注册 ' + mdCn(c.mallJoinedAt)) : '')))
-      : '未加入商城',
+      : '',
     photos: photos,
     purchase: {
       total: (res.orderTotal || 0) + ' 单',
@@ -200,8 +204,10 @@ function buildD(res, photoUrls, recUrls) {
     },
     orders: ordList,
     rate: esc(p.rating) || '',
-    // ⭐ 2026-09-27：卡头小字（原来把「人均 ¥46/人」写死在 wxml 里 —— 那是演示稿的假数据）
-    rateSub: (esc(p.rating) ? (esc(p.rating) + ' 分') : '平台未收录')
+    // ⭐ 2026-09-27 卡头小字（原来把「人均 ¥46/人」写死在 wxml 里 —— 那是演示稿的假数据）
+    // ⭐ 2026-09-28 晚老板定：**没评分就留空** —— 原来这里写「平台未收录」，
+    //   会让人误以为平台没有这家店的信息（其实都有，只是这家还没评分）。有评分才显示「x 分」。
+    rateSub: (esc(p.rating) ? (esc(p.rating) + ' 分') : '')
       + (esc(p.rating) && esc(p.avgPriceText) ? (' · ' + esc(p.avgPriceText)) : ''),
     newShop: !!esc(p.newShop),      // ⭐「新店」蓝胶囊（平台"新店标签"有值就显示）
     rateTxt: esc(p.reviewCount) ? (esc(p.reviewCount) + ' 条评价' + (p.reviewCount2025 ? '（2025年 ' + esc(p.reviewCount2025) + ' 条）' : '')) : '',
@@ -335,7 +341,8 @@ Page({
     // ⭐ 2026-09-27：📍报错弹层（接 coordfix 真提交）
     fixShow: false, fixNote: '', fixShots: ['', '', ''],
     sheetShow: false,
-    viewerShow: false, viewerUrl: ''
+    viewerShow: false, viewerUrl: '',
+    notesN: 0          // ⭐ 2026-09-28：本机「我的记事」条数（只读 storage，不联网）
   },
 
   // ---------- 加载真数据（2026-09-25 新增）----------
@@ -493,10 +500,21 @@ Page({
   },
 
   // ---------- 门店照片：点空框 → 就地拍照 → **传云存储 + 写客户档案**（2026-09-27 真落库）----------
+  // 点三格 → 先问「拍照 / 从相册选」，再按来源取图（⭐ 2026-09-28 晚老板定：**页内所有"点格子拍照"统一**）
+  //   ⚠️ 不靠 `sourceType:['camera','album']` 碰运气 —— 微信各机型行为不一致
+  //      （有时弹"拍照/从相册选择"，有时直接跳相册；微信分身环境还只认一个来源）。
   takePhoto(e) {
     const i = Number(e.currentTarget.dataset.i) || 0;
+    wx.showActionSheet({
+      itemList: ['拍照', '从相册选'],
+      success: (r) => this.takePhotoBySource(i, r.tapIndex === 0 ? 'camera' : 'album'),
+      fail: () => { /* 用户取消 */ }
+    });
+  },
+  // 真正取图（原逻辑不动：上传云存储 + 写客户档案），只是来源改为按选择传入
+  takePhotoBySource(i, src) {
     wx.chooseMedia({
-      count: 1, mediaType: ['image'], sourceType: ['camera', 'album'], sizeType: ['compressed'],
+      count: 1, mediaType: ['image'], sourceType: [src], sizeType: ['compressed'],
       success: async (r) => {
         const f = (r.tempFiles || [])[0];
         if (!f || !f.tempFilePath) return;
@@ -540,12 +558,28 @@ Page({
     });
   },
 
-  // ---------- 📝 快速记事（⭐ 2026-09-28 晚老板定：电话行右侧那块 44×44 从「📍报错」改成它）----------
-  //   点它 = **以本客户为对象**快速记一笔（标题/位置/关联客户自动带好）。
-  //   ⚠️ 记事功能**尚未开发**（老板 2026-09-28：先改客户详情页做准备，再做记事）——
-  //      所以现在只提示；等记事页做好后，把这里改成「带着本客户信息跳到记事新建页」。
+  // 从记事页返回时刷新「我的记事 · N 条」（只读本机 storage，不联网）
+  onShow() { this._loadNotes(); },
+
+  // ---------- 📝 快速记事（⭐ 2026-09-28 晚老板定：电话行右侧那块 44×44）----------
+  //   点它 = **以本客户为对象**快速记一笔（标题 / 关联客户自动带好，位置进页面自动取）。
+  //   ⚠️ 记事**只存本机**（老板 2026-09-28 拍板）：文字 / 照片 / 录音都留在这台手机；
+  //      唯一上云的是「点了转文字的那一段录音」—— 落地见 pages/notes/editor/。
   goQuickNote() {
-    api.toast('记事功能开发中，马上就来');
+    const d = this.data.d || {};
+    wx.navigateTo({
+      url: '/pages/notes/editor/editor?customerId=' + (this._cid || '') + '&customerName=' + encodeURIComponent(d.name || '')
+    });
+  },
+  // ---------- 📝 我的记事（这一家本机记了几条；点进列表只看这一家）----------
+  goNotes() {
+    const d = this.data.d || {};
+    wx.navigateTo({
+      url: '/pages/notes/notes?customerId=' + (this._cid || '') + '&customerName=' + encodeURIComponent(d.name || '')
+    });
+  },
+  _loadNotes() {
+    try { this.setData({ notesN: require('../../utils/notes').countBy(this._cid || '') }); } catch (e) { /* 静默 */ }
   },
 
   // ---------- ⭐ 2026-09-28 晚：**地图修正模式**（点「📍 修正」→ 拖地图取中心点 → 确定提交审核）----------
@@ -560,7 +594,10 @@ Page({
     // ⚠️ 把"地图当前中心"也初始化成客户坐标：修正模式下 latitude 绑的是 centerLat/centerLng
     //    （若继续绑 d.lat，用户一拖地图、页面任何 setData 都会把视野**拉回**客户点 → 根本拖不动）
     this.setData({ fixing: true, centerLat: d.lat, centerLng: d.lng, fixLat: d.lat, fixLng: d.lng, fixDist: '' });
-    api.toast('拖动地图，把红点对准门店位置');
+    // ⭐ 2026-09-28 晚老板定：引导文案**不再用 wx.showToast** —— 那是屏幕正中的一个胶囊，
+    //   正好压在地图中心 + 红点上（老板："放中间很不好，挡视线"）。
+    //   改为小地图**上边缘**的页内提示条常显（wxml 的 .cmap-tip，`wx:if="{{fixing}}"`）：
+    //   只要在修正模式就一直看得见，不用靠一次性的 toast。
   },
   // 地图视野变化（拖动 / 缩放都会走这里）
   //   ⚠️ 用事件自带的 e.detail.centerLocation，**不要用 mapCtx.getCenterLocation()** ——
@@ -686,10 +723,18 @@ Page({
   },
   fixClose() { this.setData({ fixShow: false }); },
   fixNoteIn(e) { this.setData({ fixNote: e.detail.value }); },
+  // 报错弹层的三格：同样先问「拍照 / 从相册选」（与门店照片、记事页完全一致）
   fixShot(e) {
     const i = Number(e.currentTarget.dataset.i) || 0;
+    wx.showActionSheet({
+      itemList: ['拍照', '从相册选'],
+      success: (r) => this.fixShotBySource(i, r.tapIndex === 0 ? 'camera' : 'album'),
+      fail: () => { /* 用户取消 */ }
+    });
+  },
+  fixShotBySource(i, src) {
     wx.chooseMedia({
-      count: 1, mediaType: ['image'], sourceType: ['camera', 'album'], sizeType: ['compressed'],
+      count: 1, mediaType: ['image'], sourceType: [src], sizeType: ['compressed'],
       success: (r) => {
         const f = (r.tempFiles || [])[0];
         if (!f || !f.tempFilePath) return;

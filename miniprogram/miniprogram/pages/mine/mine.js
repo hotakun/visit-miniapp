@@ -81,6 +81,10 @@ Page({
       api.toast('订阅失败，请重试');
     }
   },
+  // ⭐ 2026-09-28：我的记事（**只存本机**，不上云）→ 列表页 pages/notes/notes
+  goNotes() { wx.navigateTo({ url: '/pages/notes/notes' }); },
+  // ⭐ 2026-09-29：我新加的店（自己提交的现场录入）→ 列表页 pages/myshops/myshops
+  goMyShops() { wx.navigateTo({ url: '/pages/myshops/myshops' }); },
   tapSetting() { api.toast('设置功能开发中'); },
   tapAbout() {
     // 2026-09-09 老板定：关于弹层按角色显示不同简介（业务员=跑店视角；老板=管理视角），按语义分行

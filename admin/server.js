@@ -167,7 +167,10 @@ function parseMallXls(b64) {
   const out = [];
   for (let i = headIdx + 1; i < rows.length; i++) {
     const r = rows[i];
-    const item = { mallKey: '', name: '', region: '', address: '', phone: '', addedAt: '', lastOrderAt: '', lastBrowseAt: '', tags: '', category: '', salesman: '', source: '', level: '' };
+    // ⚠️ 这 14 个字段 = 后端 MALL_FIELD_PAIRS 的**商城侧字段** —— 少一个，那条信息就整条链路都传不到。
+    //   2026-09-29 补 `mallCode`：表头映射里本来就有它，但 item 里漏了 → **客户编号一直被丢掉**；
+    //   而**订单是按 customerCode 匹配的** → 没编号的店，订单永远挂不上。
+    const item = { mallKey: '', mallCode: '', name: '', region: '', address: '', phone: '', addedAt: '', lastOrderAt: '', lastBrowseAt: '', tags: '', category: '', salesman: '', source: '', level: '' };
     cols.forEach((key, ci) => {
       if (!key) return;
       let v = r[ci];
@@ -536,6 +539,11 @@ const server = http.createServer(async (req, res) => {
     // 没有 / 不是今天的 → 触发一次后台预热（不等它），同时把现有数据先给前端
     const warming = !store.isFreshToday(c);
     if (warming) store.refresh(callApi, STORE_AUTH).catch(() => null);
+    // ⭐⭐ 2026-09-29【方案 C】顺手查"云端客户有没有变动"（手机端建店 / 后台改数据都会写这个信号）：
+    //   有变动就在后台**补增量进缓存** → 下次取就是新的 —— 老板不用再手动点「🔄 更新地图数据」。
+    //   ⚠️ 异步、**不等待**、失败只 log：本次响应仍返回现有缓存（前端靠 count 变化感知到更新）。
+    //   ⚠️ 正在预热(warming)时不查 —— 全量拉取本来就包含变动，避免两件事打架。
+    if (!warming && c) store.checkDirty(callApi, STORE_AUTH).catch(() => null);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     // ⭐ 2026-09-27：一并把预热进度带给前端（老板要看到「已准备 3.8万/6万」）
     const prog = (store.status() || {}).progress || { done: 0, total: 0, phase: '' };

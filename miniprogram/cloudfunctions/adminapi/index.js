@@ -60,7 +60,38 @@ const crypto = require('crypto');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
+
+// ===== ⭐ 2026-09-29 新增：静默吞错的"可见化"（高危1 修复，勘察报告 §F1）=====
+//   背景：全项目曾有 22 处 `.catch(() => 默认值)` 既不打日志也不抛错 ——
+//   查询失败被伪装成"没有数据"，导致「防重检测 50 米内一模一样都毫无反应」这类
+//   查不出原因的 bug（真因是 customers 缺 lat_lng 索引）。
+//   这里**不改容错行为**（默认值照旧返回，调用方契约不变），只做两件事：
+//     ① 打一条带标签的 console.error（云函数日志里能查到）
+//     ② 收进 _silentErrs（最多 30 条），便于排查
+function silentCatch(tag, fallback) {
+  return (e) => {
+    const m = (e && e.message) || String(e);
+    console.error('[silent:' + tag + '] ' + m);
+    try {
+      if (_silentErrs.length < 30) _silentErrs.push(tag + ': ' + m);
+    } catch (e2) { /* 静默 */ }
+    return fallback;
+  };
+}
+const _silentErrs = [];
+
 const $ = db.command.aggregate;   // 2026-09-26：分级聚合要用 $.sum / $.avg（custGeoAggregate）
+
+// ⭐⭐ 2026-09-29【回收站】（老板定：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」）
+//   **所有"查客户给别人看 / 做统计"的地方都要带上它** —— 否则已删客户会从列表 / 地图 / 总数里冒出来。
+//   ⚠️ MongoDB 语义：`deleted: _.neq(true)` **能匹配"字段不存在"的文档** → 老客户（没这个字段）照常命中，
+//      不会因为加了这一条就"全消失"（这个坑 2026-09-27 在 backfillMallCode 里踩过：`$ne:''` 会匹配不存在的字段，
+//      当时把 6 万家没 mallKey 的点评客户全圈了进去）。这里用 `$ne:true` 是**故意**的语义，安全。
+//   ⚠️ **订单聚合刻意不带**（老板定「订单数据等还是要纳入总额的」）—— 订单按 customerCode 走，与客户在不在回收站无关。
+const NOT_DELETED = { deleted: _.neq(true) };
+// ⚠️⚠️ **聚合（`.aggregate().match()`）专用** —— 它**不认 `db.command` 的 `_.neq()`**，必须用原生 `$ne`。
+//   用错了**不报错、只是静默不生效**（气泡数照旧含已删客户）—— 这种"错得看不出来"的最坑，所以单独列一份。
+const NOT_DELETED_AGG = { deleted: { $ne: true } };
 
 const TEMPLATE_ID = 'tCQ_Xi5OaMQ9t9-UX9NeEZ4Tv4nHJ-L1PAEVWOdDhxs';
 // 老板手机号（2026-09-09 老板定：谁用这个号码注册谁就是老板；老板账号后台不可停用/不可关老板模式/不可删除）
@@ -70,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'fieldList', 'fieldDone', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -82,16 +113,91 @@ const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'res
 //   处理完一条（采纳/忽略、同意/驳回）→ 对应记录 status 变化 → 下次查数字自动减。
 // =====================================================================================
 
+// =====================================================================================
+// ⭐ 2026-09-28 晚 老板定：**「⏳ 待商城建档」**（后台边栏独立一页）
+//   这批客户 = 业务员**现场用「加新店」建的**（customers.mallPending === true，source='field'）。
+//   他们**已经是正式客户**（能派任务 / 能拜访 / 能记笔记），只是**商城侧信息还没有** ——
+//   等以后导商城表把他们对上，就把 mallPending 去掉（本页也提供"手工取消标记"）。
+//   入参：{ page, pageSize, q }；q = 店名/电话/地址 模糊（不区分大小写）
+// =====================================================================================
+async function fieldList(event) {
+  const page = Math.max(0, Number(event.page) || 0);
+  const size = Math.min(100, Math.max(5, Number(event.pageSize) || 30));
+  const q = String(event.q || '').trim();
+
+  // ⭐ 2026-09-29 回收站：已删客户不算「待商城建档」
+  let qy = db.collection('customers').where(_.and([{ mallPending: true }, NOT_DELETED]));
+  if (q) {
+    const re = db.RegExp({ regexp: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: 'i' });
+    qy = db.collection('customers').where(_.and([
+      { mallPending: true },
+      NOT_DELETED,
+      _.or([{ name: re }, { nameRaw: re }, { phone: re }, { phone2: re }, { address: re }])
+    ]));
+  }
+  const totalRes = await qy.count().catch(() => ({ total: 0 }));
+  const res = await qy.orderBy('createdAt', 'desc').skip(page * size).limit(size).get().catch(silentCatch('adminapi·if', { data: [] }));
+
+  const list = res.data.map(c => {
+    // photos 可能是 fileID 字符串数组，也可能是 {fileID} 对象数组 —— 两种都兼容
+    let photo = '';
+    const ps = c.photos;
+    if (Array.isArray(ps) && ps.length) {
+      const f = ps[0];
+      photo = typeof f === 'string' ? f : ((f && (f.fileID || f.fileId || f.url)) || '');
+    }
+    return {
+      id: c._id,
+      name: c.name || c.nameRaw || '(未填店名)',
+      nameRaw: c.nameRaw || '',
+      phone: c.phone || c.phone2 || '',
+      address: c.address || '',
+      area: (c.region || '').split('>').pop() || c.district || '',
+      bizCircle: c.bizCircle || '',
+      lat: c.lat || 0, lng: c.lng || 0,
+      photo: photo,
+      createdByName: c.createdByName || '',
+      createdAt: c.createdAt || 0,
+      hasMall: !!(c.mallCode || c.mallKey || c.mallJoinedAt || c.orderCount)
+    };
+  });
+
+  return { ok: true, total: (totalRes && totalRes.total) || 0, page: page, pageSize: size, list: list };
+}
+
+// ⛔ 2026-09-29【老板定：这个手动"一键建档"是错的，已从前端撤掉】
+//   老板原话：「错就错在已建档这个按钮，我按下按钮就变成商城用户了，其实应该是**导入商城表格文件**才能行的；
+//              不能直接按键就改成商城用户了，但是连注册时间和关联业务员这些信息都没有，以后销售订单信息也不好匹配了。」
+//   问题本质：「已加入商城」是个**事实**，只能由**商城数据**决定。
+//             手动抹掉 mallPending 之后，注册商城时间 / 签约业务员 / 客户编号**全是空的** → 订单接不上、数据自相矛盾。
+//   正确链路：**导入商城表 → 比对对上 → 才算真正建档**
+//             （补 mallPending:false + customerType:'mall' + mallJoinedAt/mallSalesman/mallKey，见 runMallMatch / applyMallMatch）。
+//   本函数**保留但不再被前端调用**（只留作运维修数据：已人工核实确实已入商城、但商城表里没有档案的个例）。
+//   ⚠️ 「待商城建档」页上的「已建档」按钮已删除。
+async function fieldDone(event) {
+  const id = String(event.id || '');
+  if (!id) return { ok: false, msg: '缺 id' };
+  await db.collection('customers').doc(id).update({
+    data: { mallPending: false, mallPendingDoneAt: Date.now(), updatedAt: Date.now() }
+  });
+  return { ok: true };
+}
+
 // 只要"未处理数"（轻量：铃铛 + 边栏角标轮询用；不做客户/业务员名映射，只数条数）
 async function msgCount() {
   const C = (q) => q.count().then(r => (r && r.total) || 0).catch(() => 0);
-  const [coord, field, reg, task] = await Promise.all([
+  const [coord, field, reg, task, shopNew] = await Promise.all([
     C(db.collection('coord_fix_requests').where({ status: 'pending', type: _.neq('field') })),  // 坐标修正
     C(db.collection('coord_fix_requests').where({ status: 'pending', type: 'field' })),         // 现场提报
     C(db.collection('registrations').where({ status: 'pending' })),                             // 注册审核
-    C(db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }))       // 任务审核
+    C(db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) })),      // 任务审核
+    // ⭐⭐ 2026-09-29【老板定：加新店要进重点消息】
+    //   老板原话：「从建立新店开始到最后，不管滚动消息还是重点消息都没有任何通知，而且这个应该进重点消息里面。」
+    //   判据 = mallPending:true（现场录入、商城侧还没有档案）→ **导入商城表对上后自动减**
+    //   （转正逻辑见 runMallMatch / applyMallMatch：写 mallPending:false）
+    C(db.collection('customers').where(_.and([{ mallPending: true }, NOT_DELETED])))            // 现场新录的店（已删的不算）
   ]);
-  return { ok: true, coord, field, reg, task, total: coord + field + reg + task };
+  return { ok: true, coord, field, reg, task, shopNew, total: coord + field + reg + task + shopNew };
 }
 
 // 消息中心页面数据
@@ -105,10 +211,14 @@ async function msgCenter(event) {
 
   // ---------- ① 重点消息 ----------
   if (tab === 'imp') {
-    const [fRes, rRes, tRes] = await Promise.all([
+    const [fRes, rRes, tRes, sRes] = await Promise.all([
       db.collection('coord_fix_requests').where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(50).get(),
       db.collection('registrations').where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(30).get(),
-      db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }).orderBy('createdAt', 'desc').limit(30).get()
+      db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }).orderBy('createdAt', 'desc').limit(30).get(),
+      // ⭐⭐ 2026-09-29【老板定：加新店要进重点消息】现场录入的店（mallPending:true）
+      //   —— 老板报"从建立新店开始到最后，不管滚动消息还是重点消息都没有任何通知"。
+      db.collection('customers').where(_.and([{ mallPending: true }, NOT_DELETED])).orderBy('createdAt', 'desc').limit(50).get()
+        .catch(silentCatch('adminapi·msgShopNew', { data: [] }))
     ]);
     const cids = [...new Set(fRes.data.map(f => f.customerId).filter(Boolean))];
     const uids = [...new Set([].concat(fRes.data.map(f => f.salesmanId), tRes.data.map(t => t.salesmanId)).filter(Boolean))];
@@ -141,6 +251,23 @@ async function msgCenter(event) {
       kind: 'task', id: t._id, at: t.createdAt || 0, taskNo: t.taskNo || '', taskName: t.name || '',
       salesmanName: umap[t.salesmanId] ? umap[t.salesmanId].name : '', msg: '任务审核中，等待处理'
     }));
+    // ⭐⭐ 2026-09-29【老板定：加新店要进重点消息】
+    //   业务员现场建的店在这里列出 —— 老板一眼看到"谁 在什么时候 录了哪家店，还没对上商城"。
+    //   ⚠️ 这里**不给"一键建档"**（老板定：商城状态只能由导入商城表比对决定）→
+    //      前端这一条点了是**去「客户管理」看**；导入商城表对上后自动从这里消失（mallPending → false）。
+    (sRes.data || []).forEach(s => items.push({
+      kind: 'shopNew', id: s._id, at: s.createdAt || 0,
+      customerId: s._id,
+      customerName: s.nameRaw || s.name || '(未填店名)',
+      customerType: s.customerType || '',
+      salesmanName: s.createdByName || '',                 // 现场录入人（建档时存下来的名字）
+      note: s.address || '',
+      newLat: s.lat || null, newLng: s.lng || null, distance: null,
+      photos: Array.isArray(s.photos) ? s.photos : [],
+      area: s.district || '', bizCircle: s.bizCircle || '',
+      phone: s.phone || '',
+      msg: '现场新建店铺，等商城建档'
+    }));
     items.sort((a, b) => (b.at || 0) - (a.at || 0));
     return { ok: true, tab: 'imp', total: items.length, items };
   }
@@ -150,7 +277,7 @@ async function msgCenter(event) {
     .where({ startedAt: _.exists(true) })
     .orderBy('startedAt', 'desc').skip(page * size).limit(size)
     .field({ customerId: true, salesmanId: true, startedAt: true, finishedAt: true, result: true })
-    .get().catch(() => ({ data: [] }));
+    .get().catch(silentCatch('adminapi·if', { data: [] }));
   const vRows = vRes.data || [];
   const cids = [...new Set(vRows.map(v => v.customerId).filter(Boolean))];
   const uids = [...new Set(vRows.map(v => v.salesmanId).filter(Boolean))];
@@ -297,7 +424,7 @@ async function resolveNotifyOpenids(extraPhone) {
   if (extraPhone && /^\d{11}$/.test(String(extraPhone).trim())) phones.unshift(String(extraPhone).trim());
   const uniq = [...new Set(phones)];
   if (!uniq.length) return { list: [], skipped: [], phones: [] };
-  const r = await db.collection('users').where({ phone: _.in(uniq) }).limit(20).get().catch(() => ({ data: [] }));
+  const r = await db.collection('users').where({ phone: _.in(uniq) }).limit(20).get().catch(silentCatch('adminapi·resolveNotifyOpenids', { data: [] }));
   const byPhone = {};
   r.data.forEach(u => { byPhone[String(u.phone || '')] = u; });
   const list = [];
@@ -369,7 +496,7 @@ async function usageStats(event) {
         alerted = `已发送用量提醒（${toList.length} 人）`;
       }
       val.alertedMonth = month;
-      if (r.data[0]) await db.collection('settings').doc(r.data[0]._id).update({ data: { value: val, updatedAt: Date.now() } }).catch(() => null);
+      if (r.data[0]) await db.collection('settings').doc(r.data[0]._id).update({ data: { value: val, updatedAt: Date.now() } }).catch(silentCatch('adminapi·for·写入', null));
     }
   } catch (e) { /* 告警失败静默 */ }
   return {
@@ -481,6 +608,7 @@ exports.main = async (event) => {
     if (action === 'custGeoAggregate') return await custGeoAggregate(event);   // 2026-09-26：地图分级聚合（group by city/district/bizCircle）
     if (action === 'custMapPoints') return await custMapPoints(event);         // 2026-09-27：轻量客户点（分片，地图/客户管理用）
     if (action === 'custSync') return await custSync(event);                   // 2026-09-27：客户增量同步（updatedAt > since）
+    if (action === 'custDirty') return await custDirty();                      // ⭐ 2026-09-29【方案 C】数据变动信号（手机端建店后写；后台据此自动刷缓存）
     // ⚠️ 2026-09-27 补接线（老板报障「客户列表 全局态/任务状态/订单总数/订单总额/最近下单/最近拜访 全空」）：
     //   本 action 在 ACTIONS 白名单里、实现函数也有，但 **dispatch 里漏了分支** → 落到末尾兜底 `return {ok:true,pong}`
     //   → 前端拿到 ok:true 却没有 byId/byCode → 静默不填 → 六列全空、且不报错。
@@ -489,6 +617,13 @@ exports.main = async (event) => {
     // ⭐ 2026-09-28 晚：**消息中心**（边栏「📬 消息中心」+ 铃铛/角标数字，老板 2026-09-28 定）
     if (action === 'msgCount') return await msgCount(event);     // 只要"未处理数"（轻量，供角标轮询）
     if (action === 'msgCenter') return await msgCenter(event);   // 消息中心页面数据（重点消息 / 滚动消息）
+    // ⭐ 2026-09-28 晚 老板定：**「⏳ 待商城建档」**（边栏独立一页）——
+    //   业务员现场录的店（customers.mallPending === true）等商城表来对上，这里列给老板看
+    if (action === 'fieldList') return await fieldList(event);
+    if (action === 'fieldDone') return await fieldDone(event);   // 手工取消"待商城建档"标记
+    // ⭐⭐ 2026-09-29 老板定：**客户回收站**（软删 —— 删除的客户先放这里，可随时恢复）
+    if (action === 'listDeletedCustomers') return await listDeletedCustomers(event);   // 回收站列表
+    if (action === 'restoreCustomers') return await restoreCustomers(event);           // 从回收站恢复
     if (action === 'customerNames') return await customerNames(event);
     if (action === 'importCustomers') return await importCustomers(event);
     if (action === 'importMallCustomers') return await importMallCustomers(event);
@@ -599,7 +734,7 @@ async function getCustomerDetail(event) {
   let items = [];
   for (let i = 0; i < orderNoList.length; i += 20) {
     const part = await db.collection('order_items')
-      .where({ orderNo: _.in(orderNoList.slice(i, i + 20)) }).limit(500).get().catch(() => ({ data: [] }));
+      .where({ orderNo: _.in(orderNoList.slice(i, i + 20)) }).limit(500).get().catch(silentCatch('adminapi·for', { data: [] }));
     items = items.concat(part.data || []);
   }
   const linesOf = {};
@@ -617,7 +752,7 @@ async function getCustomerDetail(event) {
 
   // —— ③ 拜访（该客户全部，跨任务；带转写文字与现场照片缩略图 fileID）——
   const vRes = await db.collection('visits').where({ customerId })
-    .orderBy('createdAt', 'desc').limit(30).get().catch(() => ({ data: [] }));
+    .orderBy('createdAt', 'desc').limit(30).get().catch(silentCatch('adminapi·for', { data: [] }));
   const visits = (vRes.data || []).map(v => ({
     _id: v._id,
     taskId: v.taskId || '',
@@ -638,7 +773,7 @@ async function getCustomerDetail(event) {
   // —— ⑤ ⭐ 2026-09-27：业务员现场提报（待审核：招牌菜/设施/团购外卖）—— 后台详情页审核用（修正 008）——
   const frRes = await db.collection('coord_fix_requests')
     .where({ customerId, status: 'pending', type: 'field' })
-    .orderBy('createdAt', 'desc').limit(50).get().catch(() => ({ data: [] }));
+    .orderBy('createdAt', 'desc').limit(50).get().catch(silentCatch('adminapi·for', { data: [] }));
   const fieldReports = (frRes.data || []).map(f => ({
     _id: f._id, kind: f.kind || '', value: f.value || '',
     flagName: f.flagName || '', flagTo: !!f.flagTo,
@@ -1571,7 +1706,9 @@ async function listCustomers(event) {
   const size = Math.min(Math.max(parseInt(ev.pageSize, 10) || 50, 1), 200);
   const pg = Math.max(parseInt(ev.page, 10) || 1, 1);
 
-  const where = {};
+  // ⭐ 2026-09-29 回收站：**已删客户不进任何客户列表**
+  //   （批次模式下面用 `Object.assign({_id:...}, where)` 反查，也会自动带上这一条）
+  const where = Object.assign({}, NOT_DELETED);
   if (ev.city) where.city = String(ev.city);
   if (ev.district) where.district = String(ev.district);
   if (ev.bizCircle) where.bizCircle = String(ev.bizCircle);
@@ -1608,7 +1745,7 @@ async function listCustomers(event) {
     const cnt = await db.collection('customers').where(where).count().catch(() => ({ total: 0 }));
     total = cnt.total || 0;
     const r = await db.collection('customers').where(where)
-      .orderBy('createdAt', 'desc').skip((pg - 1) * size).limit(size).get().catch(() => ({ data: [] }));
+      .orderBy('createdAt', 'desc').skip((pg - 1) * size).limit(size).get().catch(silentCatch('adminapi·for', { data: [] }));
     rows = r.data || [];
   }
   const ids = rows.map(c => c._id);
@@ -1736,7 +1873,7 @@ async function backfillAddressFromPlat(event) {
   const limit = Math.min(Math.max(Number(event.limit) || 200, 1), 300);
   const r = await db.collection('customers').orderBy('_id', 'asc').skip(offset).limit(limit)
     .field({ address: true, phone: true, phone2: true, plat: true })
-    .get().catch(() => ({ data: [] }));
+    .get().catch(silentCatch('adminapi·backfillAddressFromPlat', { data: [] }));
   const rows = r.data || [];
   const todo = [];
   let addrN = 0, phoneN = 0, noPlat = 0;
@@ -1766,7 +1903,7 @@ async function backfillAddressFromPlat(event) {
   let fixed = 0;
   for (let i = 0; i < todo.length; i += 20) {
     await Promise.all(todo.slice(i, i + 20).map(x =>
-      db.collection('customers').doc(x.id).update({ data: Object.assign({}, x.to, { updatedAt: Date.now() }) }).catch(() => null)
+      db.collection('customers').doc(x.id).update({ data: Object.assign({}, x.to, { updatedAt: Date.now() }) }).catch(silentCatch('adminapi·for·写入', null))
     ));
     fixed += Math.min(20, todo.length - i);
   }
@@ -1854,7 +1991,9 @@ async function custMapPoints(event) {
   const e0 = event || {};
   const limit = Math.min(Math.max(Number(e0.limit) || 1000, 1), 1000);
   const cursor = String(e0.cursor || '').trim();
-  const where = cursor ? { _id: _.gt(cursor) } : {};
+  // ⭐ 2026-09-29 回收站：**已删客户不在地图上显示**（老板定「进了回收站的客户…不再地图上显示」）
+  //   custMapPoints 是全量分片 = 地图 + 后台本地缓存的数据源 → 必须在这里排除
+  const where = cursor ? _.and([{ _id: _.gt(cursor) }, NOT_DELETED]) : Object.assign({}, NOT_DELETED);
   const r = await db.collection('customers').where(where)
     .orderBy('_id', 'asc').limit(limit)
     // ⭐ 2026-09-27 M2b：字段扩到「列表层 18 项」—— 客户管理页 / 批次总表切本地缓存后，
@@ -1862,7 +2001,7 @@ async function custMapPoints(event) {
     .field({ name: true, nameRaw: true, lat: true, lng: true, city: true, district: true, bizCircle: true,
              address: true, coordSource: true, coord_status: true, mallCode: true, mallKey: true, updatedAt: true,
              createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true })
-    .get().catch(() => ({ data: [] }));
+    .get().catch(silentCatch('adminapi·custMapPoints', { data: [] }));
   const rows = r.data || [];
   const _agg = await buildAggMaps(rows);   // 6 列预聚合（与 custPageAgg 同口径）
   const points = rows.map(c => ({
@@ -1899,7 +2038,13 @@ async function custSync(event) {
   const since = Number(e0.since) || 0;
   const limit = Math.min(Math.max(Number(e0.limit) || 500, 1), 1000);
   const cursor = String(e0.cursor || '').trim();
-  const conds = [{ updatedAt: _.gt(since) }];
+  // ⭐ 2026-09-29 回收站：增量同步**也要排除已删**
+  //   ⚠️ **必须交代清楚的行为**：**删除不会通过增量同步"传"给后台** ——
+  //      客户被删时虽然 updatedAt 变了，但 `NOT_DELETED` 会把它挡住，后台**收不到这条"删除事件"**。
+  //      所以前端删完必须**自己调 `/mapPoints/patch` 的 removeIds** 把它从本地缓存摘掉（见 admin.html 的 geoDeletePicked）。
+  //      · 全量刷新（custMapPoints，同样排除了已删）→ 不会把它带回来 ✅
+  //      · **恢复**时它重新符合 `NOT_DELETED` → 会被增量同步带回来 ✅（等下一轮 15 秒保鲜轮询即可）
+  const conds = [{ updatedAt: _.gt(since) }, NOT_DELETED];
   if (cursor) conds.push({ _id: _.gt(cursor) });
   const where = conds.length > 1 ? _.and(conds) : conds[0];
   const r = await db.collection('customers').where(where)
@@ -1907,7 +2052,7 @@ async function custSync(event) {
     .field({ name: true, nameRaw: true, lat: true, lng: true, city: true, district: true, bizCircle: true,
              address: true, coordSource: true, coord_status: true, mallCode: true, mallKey: true, updatedAt: true,
              createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true })
-    .get().catch(() => ({ data: [] }));
+    .get().catch(silentCatch('adminapi·custSync', { data: [] }));
   const rows = r.data || [];
   const _aggS = await buildAggMaps(rows);   // ⭐ 2026-09-27：增量同步同样带上 6 列预聚合（口径与 custMapPoints 一致）
   let maxU = since;
@@ -1929,6 +2074,21 @@ async function custSync(event) {
     };
   }).map((p, idx) => mergeAgg(p, rows[idx]._id, rows[idx].mallCode, _aggS));
   return { ok: true, points: points, next: rows.length >= limit ? String(rows[rows.length - 1]._id) : null, maxUpdatedAt: maxU, got: rows.length };
+}
+
+// ⭐⭐ 2026-09-29【方案 C】客户数据变动信号（极轻：只读一个 settings 文档，~10ms）
+//   谁写：`tasks.newShopSubmit`（手机端「加新店」建档成功后）→ settings.custDirtyAt = 时间戳
+//   谁读：后台 `admin/store.js` 读本地缓存时顺手比一下 —— 若比缓存的 pulledAt 新，
+//        说明"手机端刚加了店 / 后台刚改了数据"，就在后台自动重拉（走 custSync 增量），老板无需手动点刷新。
+//   ⚠️ 读失败一律当"没变动"返回，绝不因此报错打断前端。
+async function custDirty() {
+  try {
+    const r = await db.collection('settings').where({ key: 'custDirtyAt' }).limit(1).get();
+    const at = (r.data && r.data.length) ? (Number(r.data[0].value) || 0) : 0;
+    return { ok: true, at: at };
+  } catch (e) {
+    return { ok: true, at: 0 };
+  }
 }
 
 // ⭐ 2026-09-27 M2b 新增：**按页聚合**（客户管理页 / 批次总表切本地缓存后，
@@ -2006,7 +2166,9 @@ async function custGeoAggregate(event) {
   const level = ['city', 'district', 'bizCircle'].indexOf(String(e0.level)) >= 0 ? String(e0.level) : 'district';
   const field = '$' + level;
   const hasBounds = ['minLat', 'maxLat', 'minLng', 'maxLng'].every(k => typeof e0[k] === 'number' && isFinite(e0[k]));
-  const where = { lat: _.exists(true), lng: _.exists(true) };   // 没坐标的客户不上地图（坐标列会显示“补标”）
+  // ⭐ 2026-09-29 回收站：**已删客户不出现在地图上**（老板定「进了回收站的客户…不再地图上显示」）
+  //   → 用聚合专用写法（见 NOT_DELETED_AGG）；注：`.match()` 里 `_.exists()` 支持，但 `_.neq()` 不行，必须原生 `$ne`
+  const where = Object.assign({ lat: _.exists(true), lng: _.exists(true) }, NOT_DELETED_AGG);   // 没坐标的客户不上地图（坐标列会显示“补标”）
   if (e0.city) where.city = String(e0.city);
   if (e0.district) where.district = String(e0.district);
   if (hasBounds) {
@@ -2039,13 +2201,15 @@ async function custGeoOptions(event) {
   let list = [];
   try {
     const r = await db.collection('customers').aggregate()
+      // ⭐ 2026-09-29 回收站：下拉选项也不该给出"只剩回收站客户"的区域（否则选了就是空表 —— 坑 D 的翻版）
+      .match(NOT_DELETED_AGG)
       .group({ _id: { c: '$city', d: '$district', b: '$bizCircle' } })
       .limit(20000)
       .end();
     list = (r.list || []).map(x => x._id || {});
   } catch (e) {
     // 聚合失败或结果为空 → 退回"只取三列"的分页扫，稳妥但慢些
-    const all = await fetchAll('customers', {}, { city: true, district: true, bizCircle: true });
+    const all = await fetchAll('customers', NOT_DELETED, { city: true, district: true, bizCircle: true });
     list = all.map(c => ({ c: c.city, d: c.district, b: c.bizCircle }));
   }
   const cities = new Map();      // city -> Set(district)
@@ -2074,7 +2238,7 @@ async function customerNames(event) {
   for (let i = 0; i < ids.length; i += 100) {
     const part = ids.slice(i, i + 100);
     const r = await db.collection('customers').where({ _id: _.in(part) })
-      .field({ name: true, nameRaw: true, mallCode: true }).limit(100).get().catch(() => ({ data: [] }));
+      .field({ name: true, nameRaw: true, mallCode: true }).limit(100).get().catch(silentCatch('adminapi·for', { data: [] }));
     (r.data || []).forEach(c => {
       rows[c._id] = { name: c.name || '', nameRaw: c.nameRaw || '', mallCode: c.mallCode || '' };
     });
@@ -2093,7 +2257,8 @@ async function importCustomers(event) {
   const now = Date.now();
 
   // 匹配池 = 现有全部客户档案，预规范化 nName/nAddr（避免匹配循环内对同一档案反复清洗字符串）
-  const pool = (await fetchAll('customers', {}, { _id: true, name: true, phone: true, address: true, region: true })).map(p => normPoolEntry(p));
+  // ⭐ 2026-09-29 回收站：**已删客户不进匹配池** —— 否则导入可能"合并"进一个躺在回收站里的客户，新数据等于看不见
+  const pool = (await fetchAll('customers', NOT_DELETED, { _id: true, name: true, phone: true, address: true, region: true })).map(p => normPoolEntry(p));
 
   // 预检：找出全部 B 级疑似冲突
   const conflicts = [];
@@ -2251,13 +2416,16 @@ async function importMallCustomers(event) {
     const r = await db.collection('mall_customers').where({ mallKey: _.in(keys.slice(i, i + 80)) }).get();
     r.data.forEach(x => { existMap[x.mallKey] = x; });
   }
-  const STATIC_FIELDS = ['name', 'region', 'address', 'phone', 'tags', 'category', 'salesman', 'source', 'level'];
+  // ⭐ 2026-09-29：**与 MALL_FIELD_PAIRS 对齐（14 项）** —— 补 mallCode。
+  //   mallCode（客户编号）是**订单匹配的钥匙**（orders.customerCode），以前解析端和这里都漏了它。
+  const STATIC_FIELDS = ['mallCode', 'name', 'region', 'address', 'phone', 'tags', 'category', 'salesman', 'source', 'level'];
   const toAdd = [];
   const toUpdate = [];
   customers.forEach(c => {
     const key = String(c.mallKey || '').trim();
     const doc = {
-      mallKey: key, name: String(c.name || '').trim(), region: String(c.region || '').trim(),
+      mallKey: key, mallCode: String(c.mallCode || '').trim(),
+      name: String(c.name || '').trim(), region: String(c.region || '').trim(),
       address: String(c.address || '').trim(), phone: String(c.phone || '').trim(),
       addedAt: c.addedAt || '', lastOrderAt: c.lastOrderAt || '', lastBrowseAt: c.lastBrowseAt || '',
       tags: c.tags || '', category: c.category || '', salesman: c.salesman || '',
@@ -2296,6 +2464,48 @@ async function importMallCustomers(event) {
   return { ok: true, added: toAdd.length, updated, ...matchRes };
 }
 
+// ⭐⭐ 2026-09-29【老板定：**商城库里的字段，有信息就全倒过来**】
+//   老板原话：「就是库里这 13 个，只要有信息就倒过来」+「商城优先 —— 商城有值就写上（覆盖现场填的）」。
+//   背景：原来只倒 7 个（mallKey / addedAt / salesman / level / source / lastOrderAt / lastBrowseAt），
+//         **漏了 name / region / address / phone / tags / category** —— 同一件事两套口径（比对认领 vs 刷新按钮）。
+//   这张表是**唯一真相**：商城库字段名 → 客户档案落点。
+//   ⚠️ 必须与 `admin/server.js` 的 MALL_HEADER_ALIAS（商城表解析，13 列）**保持一致** ——
+//      那边少解析一列，这边就倒不出东西（链路是：Excel → mall_customers → customers）。
+const MALL_FIELD_PAIRS = [
+  ['mallKey',      'mallKey'],        // 商城系统 Key（认领关系的根）
+  ['mallCode',     'mallCode'],       // ⭐ 客户编号（如 c347 / AA021）—— **订单按 customerCode 匹配，缺了它订单永远挂不上**
+  ['addedAt',      'mallJoinedAt'],   // 注册商城时间
+  ['name',         'name'],           // 店名（商城值优先）
+  ['region',       'region'],         // 地区
+  ['address',      'address'],        // 公司地址
+  ['phone',        'phone'],          // 联系电话
+  ['salesman',     'mallSalesman'],   // 业务负责人（签约业务员，原值照抄，不许改成真人名）
+  ['level',        'mallLevel'],      // 等级
+  ['source',       'mallSource'],     // 来源（落点沿用现口径 mallSource）
+  ['tags',         'mallTags'],       // 客户标签
+  ['category',     'mallCategory'],   // 客户分类
+  ['lastOrderAt',  'lastOrderAt'],    // 最后下单
+  ['lastBrowseAt', 'lastBrowseAt']    // 最后浏览商城
+];
+// ⚠️⚠️ **绝不覆盖字段（硬拦）** —— 老板 2026-09-29 明确：「**经纬度要以现场为准**」。
+//   理由：商城坐标是"注册时填的地址 / 商城侧地图定位"；**业务员现场采的才是真的到过那个点**。
+//   所以坐标及其状态/来源**永远由现场（业务员）说了算**，商城表倒多少次都不许碰。
+//   这道拦截是**安全网**：正常走不到（MALL_FIELD_PAIRS 里本来就没有坐标字段），
+//   但它保证"以后有人往表里加了 lat —— 也不会把现场坐标冲掉"。
+const MALL_NO_TOUCH = ['lat', 'lng', 'wgsLat', 'wgsLng', 'coord_status', 'coordSource', 'coordUpdatedAt', 'coordFixReviewedAt'];
+// 从商城档案抽出"该写进客户档案的字段"。
+// ⚠️ **商城值为空 → 不覆盖**（否则会把客户已有的地址/电话抹成空）。
+function mallFieldsFrom(m) {
+  const out = {};
+  MALL_FIELD_PAIRS.forEach(pair => {
+    const v = m[pair[0]];
+    if (v === undefined || v === null || String(v) === '') return;
+    if (MALL_NO_TOUCH.indexOf(pair[1]) >= 0) return;   // ⚠️ 坐标类字段一律不碰（见上）
+    out[pair[1]] = v;
+  });
+  return out;
+}
+
 // 独立比对认领（2026-09-08 批次化：batchId 存在=仅比对/认领该批次成员；缺省=全量回访客户）
 async function runMallMatch(event) {
   const { fileName, batchId } = event || {};
@@ -2305,15 +2515,40 @@ async function runMallMatch(event) {
   try { await db.createCollection('import_batches'); } catch (e) { /* 已存在 */ }
 
   // 回访客户与商城库比对（电话→名称→地址，三档）；批次模式只取该批次成员
+  // ⚠️ 必须把 source 取出来 —— 下面要区分"现场录入的店"（source:'field'）
+  // ⭐ 2026-09-29：**带上 MALL_FIELD_PAIRS 的全部落点字段** ——
+  //   同 key 分支要按落点逐字段 diff，少 fetch 一个字段就会把它当成"变了"而重复写（或反过来漏写）。
+  const V_FIELDS = { phone: true, phone2: true, name: true, address: true, region: true,
+                     mallKey: true, mallCode: true,
+                     lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true,
+                     mallSource: true, mallLevel: true, mallSalesman: true,
+                     mallTags: true, mallCategory: true,
+                     source: true };
   let visitCusts;
   if (batchId) {
     const members = await fetchAll('batch_members', { batchId }, { customerId: true });
     const ids = members.map(m => m.customerId);
-    visitCusts = ids.length ? await fetchAll('customers', { _id: _.in(ids), customerType: 'mall' }, { phone: true, phone2: true, name: true, address: true, mallKey: true, lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true, mallSource: true, mallLevel: true, mallSalesman: true }) : [];
+    // ⭐ 2026-09-29 回收站：已删客户**不参与比对**（躺在回收站里的店不该被"认领"回来）
+    visitCusts = ids.length ? await fetchAll('customers', _.and([{ _id: _.in(ids), customerType: 'mall' }, NOT_DELETED]), V_FIELDS) : [];
   } else {
-    visitCusts = await fetchAll('customers', { customerType: 'mall' }, { phone: true, phone2: true, name: true, address: true, mallKey: true, lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true, mallSource: true, mallLevel: true, mallSalesman: true });
+    visitCusts = await fetchAll('customers', _.and([{ customerType: 'mall' }, NOT_DELETED]), V_FIELDS);
   }
-  const mallAll = await fetchAll('mall_customers', {}, { phone: true, name: true, address: true, mallKey: true, addedAt: true, lastOrderAt: true, lastBrowseAt: true, source: true, level: true, salesman: true });
+  // ⭐⭐ 2026-09-29【老板定：**导入商城内有关这个客户的档案，才算建档**】
+  //   原来只比对 `customerType:'mall'` → **现场录入的店（customerType:'new' + source:'field'）根本不在范围内**
+  //   → 它们**永远对不上商城** → 唯一出口只剩「待商城建档」页那个手动按钮
+  //   → 一按就把 mallPending 抹掉、可注册时间/关联业务员/编号**全是空的**，以后销售订单也接不上
+  //     （老板原话："不能直接按键就改成商城用户了"）。
+  //   现在把 `source:'field'` 的店**也纳入比对** —— 导入商城表后真对上了，才算真正建档。
+  const fieldCusts = await fetchAll('customers', _.and([{ source: 'field' }, NOT_DELETED]), V_FIELDS);
+  const _seenV = {};
+  visitCusts.forEach(v => { _seenV[v._id] = 1; });
+  fieldCusts.forEach(v => { if (!_seenV[v._id]) visitCusts.push(v); });
+  // ⭐ 2026-09-29：商城库字段**取全（14 个）** —— mallFieldsFrom 要按 MALL_FIELD_PAIRS 逐个抽
+  const mallAll = await fetchAll('mall_customers', {}, {
+    mallKey: true, mallCode: true, name: true, region: true, address: true, phone: true,
+    addedAt: true, lastOrderAt: true, lastBrowseAt: true,
+    tags: true, category: true, salesman: true, source: true, level: true
+  });
   // 预规范化：双重循环内不再对同一字符串反复清洗（曾 15 万次 pair × 4 次正则清洗超时 -601008）
   const mallPool = mallAll.map(m => ({ m, nName: normName(m.name), nAddr: normAddr(m.address) }));
   const vPool = visitCusts.map(v => ({
@@ -2336,20 +2571,26 @@ async function runMallMatch(event) {
     if (best.score >= 75 && best.mall) {
       const m = best.mall;
       autoMatched++;
-      autoUpdates.push({
-        v,
-        data: {
-          mallKey: m.mallKey,
-          mallJoinedAt: m.addedAt || '',
-          lastOrderAt: m.lastOrderAt || '',
-          lastBrowseAt: m.lastBrowseAt || '',
-          mallSource: m.source || '',
-          mallLevel: m.level || '',
-          mallSalesman: m.salesman || '',
-          mallMatchScore: best.score,
-          mallMatchedAt: now
-        }
+      // ⭐⭐ 2026-09-29【老板定：商城库 13 个字段**有信息就全倒**】
+      //   老板原话：「就是库里这 13 个，只要有信息就倒过来」+「商城优先 —— 商城有值就写上」
+      //            +「但是经纬度要以现场为准」。
+      //   所以：① 统一用 mallFieldsFrom(m) 抽（含 name / region / address / phone / mallTags / mallCategory）；
+      //        ② 坐标类字段**永不入表**（硬拦在 mallFieldsFrom 里，见 MALL_NO_TOUCH）。
+      const _data = Object.assign(mallFieldsFrom(m), {
+        mallMatchScore: best.score,
+        mallMatchedAt: now
       });
+      // ⭐⭐ 2026-09-29【老板定：**导入商城内有关这个客户的档案，才算建档**】
+      //   现场录入的店（source:'field'）一旦在商城里对上 → **这才算真正建档**：
+      //   置 mallPending:false + customerType:'mall' —— 此刻**注册商城时间 / 关联（签约）业务员 / 客户编号**全都齐了，
+      //   以后的销售订单也接得上。
+      //   （以前靠「待商城建档」页那个手动按钮抹标记 —— 已按老板要求去掉，见 fieldDone 注释）
+      if (v.source === 'field') {
+        _data.mallPending = false;
+        _data.customerType = 'mall';
+        _data.mallPendingDoneAt = now;
+      }
+      autoUpdates.push({ v, data: _data });
     } else if (best.score >= 45 && best.mall) {
       pendingList.push({
         customerId: v._id, customerName: v.name,
@@ -2360,8 +2601,9 @@ async function runMallMatch(event) {
       });
     }
   });
-  // 认领写入策略：未认领→全量写入；同一 mallKey→仅动态字段刷新（静态字段 diff 才写）；换人→全量更新
-  const MALL_STATIC = ['mallKey', 'mallJoinedAt', 'mallSource', 'mallLevel', 'mallSalesman'];
+  // 认领写入策略：未认领→全量写入；同一 mallKey→**按 MALL_FIELD_PAIRS 逐字段 diff**；换人→全量更新
+  // ⭐ 2026-09-29 改：原来只 diff 5 个手写的静态字段（MALL_STATIC），漏了 name/region/address/phone/tags/category
+  //   → 表现成"同一家店明明改了标签/分类，比对跑完却什么都没更新"。现在统一按映射表逐字段比，**与全量写入同一口径**。
   const BATCH = 50;
   for (let i = 0; i < autoUpdates.length; i += BATCH) {
     await Promise.all(autoUpdates.slice(i, i + BATCH).map(async ({ v, data }) => {
@@ -2372,9 +2614,10 @@ async function runMallMatch(event) {
       }
       if (oldMallKey === data.mallKey) {
         const upd = {};
-        if (String(v.lastOrderAt || '') !== data.lastOrderAt) upd.lastOrderAt = data.lastOrderAt;
-        if (String(v.lastBrowseAt || '') !== data.lastBrowseAt) upd.lastBrowseAt = data.lastBrowseAt;
-        MALL_STATIC.forEach(f => { if (String(v[f] || '') !== String(data[f] || '')) upd[f] = data[f]; });
+        Object.keys(data).forEach(cf => {
+          if (cf === 'mallMatchScore' || cf === 'mallMatchedAt') return;   // 这两个每次都写，不参与 diff
+          if (String(v[cf] || '') !== String(data[cf] || '')) upd[cf] = data[cf];
+        });
         if (Object.keys(upd).length) {
           if (upd.lastOrderAt || upd.lastBrowseAt) dynamicRefreshed++;
           await db.collection('customers').doc(v._id).update({ data: Object.assign({}, upd, { updatedAt: Date.now() }) });   // 2026-09-27 补
@@ -2412,7 +2655,13 @@ async function runMallMatch(event) {
 // ===== 本地比对支持（2026-09-08 老板定：比对在浏览器本地跑，云端只拉库/写结果，防 30s 超时） =====
 // 拉全量商城库（比对源；字段裁剪到比对+认领所需）
 async function listMallLibrary(event) {
-  const malls = await fetchAll('mall_customers', {}, { phone: true, name: true, address: true, mallKey: true, addedAt: true, lastOrderAt: true, lastBrowseAt: true, source: true, level: true, salesman: true });
+  // ⭐ 2026-09-29：**商城库字段取全（14 个）** —— 本地比对认领后要按 MALL_FIELD_PAIRS 整批倒进客户档案，
+  //   少取一个（如 mallCode / tags / category / region）就会变成"浏览器比对 和 云端比对 结果不一样"。
+  const malls = await fetchAll('mall_customers', {}, {
+    mallKey: true, mallCode: true, name: true, region: true, address: true, phone: true,
+    addedAt: true, lastOrderAt: true, lastBrowseAt: true,
+    tags: true, category: true, salesman: true, source: true, level: true
+  });
   return { ok: true, count: malls.length, malls };
 }
 
@@ -2430,24 +2679,33 @@ async function applyMallMatch(event) {
   let autoMatched = 0, dynamicRefreshed = 0, staticChangedCnt = 0;
   if (claimList.length) {
     const ids = [...new Set(claimList.map(c => c.customerId))];
-    const custRows = await fetchAll('customers', { _id: _.in(ids) }, { mallKey: true, lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true, mallSource: true, mallLevel: true, mallSalesman: true });
+    // ⚠️ 带上 source —— 认领的是"现场录入的店"时要顺手把 mallPending 结掉（与 runMallMatch 同口径）
+    // ⚠️ 带上 source + MALL_FIELD_PAIRS 的全部落点 —— 逐字段 diff 要用（少一个就会误判"变了"）
+    const custRows = await fetchAll('customers', { _id: _.in(ids) }, {
+      mallKey: true, mallCode: true, lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true,
+      mallSource: true, mallLevel: true, mallSalesman: true, mallTags: true, mallCategory: true,
+      name: true, region: true, address: true, phone: true, phone2: true, source: true
+    });
     const cMap = {};
     custRows.forEach(c => { cMap[c._id] = c; });
-    const MALL_STATIC = ['mallKey', 'mallJoinedAt', 'mallSource', 'mallLevel', 'mallSalesman'];
     await runPool(claimList, 15, async ({ customerId, mall, score }) => {
       const v = cMap[customerId];
       if (!v) return;
-      const data = {
-        mallKey: mall.mallKey,
-        mallJoinedAt: mall.addedAt || '',
-        lastOrderAt: mall.lastOrderAt || '',
-        lastBrowseAt: mall.lastBrowseAt || '',
-        mallSource: mall.source || '',
-        mallLevel: mall.level || '',
-        mallSalesman: mall.salesman || '',
+      // ⭐⭐ 2026-09-29【老板定：商城库 13 个字段**有信息就全倒**，不是只倒 7 个】
+      //   与 runMallMatch **完全同口径**：统一走 mallFieldsFrom（含 name / region / address / phone / mallTags / mallCategory）；
+      //   坐标类字段永不入表（硬拦在 mallFieldsFrom 里 —— 老板定：「经纬度要以现场为准」）。
+      const data = Object.assign(mallFieldsFrom(mall), {
         mallMatchScore: Number(score) || 0,
         mallMatchedAt: now
-      };
+      });
+      // ⭐⭐ 2026-09-29【老板定：导入商城档案才算建档】—— 与 runMallMatch **完全同口径**：
+      //   本地比对认领（浏览器里跑）这条路也必须把"现场录入的店"转正，
+      //   否则会出现"云端自动比对能转正、本地认领不能"的不一致。
+      if (v.source === 'field') {
+        data.mallPending = false;
+        data.customerType = 'mall';
+        data.mallPendingDoneAt = now;
+      }
       autoMatched++;
       const oldMallKey = v.mallKey || '';
       if (!oldMallKey) { await db.collection('customers').doc(customerId).update({ data: Object.assign({}, data, { updatedAt: Date.now() }) }); return; }   // 2026-09-27 补
@@ -2455,7 +2713,11 @@ async function applyMallMatch(event) {
         const upd = {};
         if (String(v.lastOrderAt || '') !== data.lastOrderAt) upd.lastOrderAt = data.lastOrderAt;
         if (String(v.lastBrowseAt || '') !== data.lastBrowseAt) upd.lastBrowseAt = data.lastBrowseAt;
-        MALL_STATIC.forEach(f => { if (String(v[f] || '') !== String(data[f] || '')) upd[f] = data[f]; });
+        // ⭐ 2026-09-29：改成**按落点逐字段 diff**（原来只比 5 个手写字段，漏了 name/region/address/phone/tags/category）
+        Object.keys(data).forEach(cf => {
+          if (cf === 'mallMatchScore' || cf === 'mallMatchedAt') return;   // 每次都写，不参与 diff
+          if (String(v[cf] || '') !== String(data[cf] || '')) upd[cf] = data[cf];
+        });
         if (Object.keys(upd).length) {
           if (upd.lastOrderAt || upd.lastBrowseAt) dynamicRefreshed++;
           await db.collection('customers').doc(customerId).update({ data: Object.assign({}, upd, { updatedAt: Date.now() }) });   // 2026-09-27 补
@@ -2495,30 +2757,27 @@ async function applyMallMatch(event) {
 // ===== 从商城更新客户信息（2026-09-25 老板定：做成按钮 —— 先预览、确认后才写、且只写白名单字段）=====
 // 背景：原先的「商城比对认领」（runMallMatch / applyMallMatch）是**自动**跑的，老板要的是**可控**：
 //   点一下先看"将更新 N 家 / 共 M 个字段（逐字段 from → to）"，确认后**才**写。
-// 白名单（老板 2026-09-25 选定"最全"档）—— 左侧是商城库 mall_customers 的字段名，右侧是客户档案 customers 的字段名：
-const REFRESH_MAP = [
-  ['lastOrderAt', 'lastOrderAt'],   // 最近下单时间
-  ['lastBrowseAt', 'lastBrowseAt'], // 最近浏览时间
-  ['address', 'address'],           // 地址
-  ['phone', 'phone'],               // 电话
-  ['region', 'region'],             // 区域
-  ['level', 'mallLevel'],           // 商城等级（两边字段名不同）
-  ['salesman', 'mallSalesman'],     // 签约业务员（商城侧）
-  ['source', 'mallSource'],
-  ['tags', 'mallTags'],
-  ['category', 'mallCategory']
-];
-// ⚠️ 刻意**不在白名单里**（客户自己的资料，绝不能被商城覆盖）：
-//   name（店名）、lat/lng（坐标）、coord_status / coordSource（坐标状态与来源）、remark（客户备注）、
-//   photos（现场照片）、batchIds（批次归属）、status、customerType、以及 plat 里**人工录入**的内容。
+// ⭐⭐ 2026-09-29 老板定：白名单**与比对认领同源** —— 不再各写一份。
+//   老板原话：「就是库里这 13 个，只要有信息就倒过来」+「商城优先」+「但是经纬度要以现场为准」。
+//   原来这里是**手写的第二份清单**（10 项，且漏了 name / addedAt）→ 两套口径必然漂移
+//   （表现：自动比对倒得全、点这个按钮反而倒得少）。本次合并成**一张表**（MALL_FIELD_PAIRS）。
+const REFRESH_MAP = MALL_FIELD_PAIRS;
+// ⚠️ **绝不被商城覆盖的**（客户自己的资料 / 现场事实）：
+//   · lat / lng / coord_status / coordSource ← 坐标（老板定：「**经纬度要以现场为准**」）
+//   · remark（客户备注）、photos（现场照片）、batchIds（批次归属）、status、customerType
+//   · plat 里**人工录入**的内容（招牌菜 / 设施等，来自业务员现场提报）
+//   —— 坐标类由 MALL_NO_TOUCH 在 mallFieldsFrom 里**代码级硬拦**；plat 不在 MALL_FIELD_PAIRS 里，天然不碰。
 // ⚠️ `plat`（平台画像：评分/口味环境服务/菜品/设施/图片…）**不在商城库里** —— 它来自大众点评，
 //   只在导入 customers 分片时写入，所以本入口拿不到、也不动它（要更新 plat 走分片导入）。
 async function refreshFromMall(event) {
   const doApply = !!(event && event.apply);   // 不传 apply = 只预览，绝不写库
-  const custs = await fetchAll('customers', {}, {
-    _id: true, mallKey: true, name: true,
-    address: true, phone: true, phone2: true, region: true,
-    lastOrderAt: true, lastBrowseAt: true, mallLevel: true, mallSalesman: true,
+  // ⚠️ 字段要与 MALL_FIELD_PAIRS 的**落点**对齐（少一个 → diff 时误判"变了"）
+  // ⭐ 2026-09-29 回收站：已删客户**不参与"从商城更新"**（免得它没在列表里、却偷偷被改）
+  const custs = await fetchAll('customers', NOT_DELETED, {
+    _id: true, mallKey: true, mallCode: true, name: true, region: true,
+    address: true, phone: true, phone2: true,
+    lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true,
+    mallLevel: true, mallSalesman: true,
     mallSource: true, mallTags: true, mallCategory: true
   });
   const malls = await fetchAll('mall_customers', {}, {});
@@ -4125,12 +4384,27 @@ async function listCustomerBatches(event) {
   //   改法：「入批客户集合」直接复用上面已经拉到的 batch_members（数量=入批客户数，远小于全库），
   //        全库总数改用 count()（一次请求），未分批数 = 全库总数 − 入批客户数。
   const memberIds = new Set(members.map(m => m.customerId));
+  // ⭐ 2026-09-29 回收站：**客户总数不含已删客户**（老板定「进了回收站的客户，不再纳入客户总数」）
+  //   ⚠️ 未分批数 = 客户总数 − 入批客户数 → **入批数也必须排除已删**，否则会算出偏小的未分批数
+  //      （下面的 `aliveMemberIds` 就是干这个的；`Math.max(0,…)` 只是最后兜底，不该靠它）。
   let totalCustomers = 0;
-  try { totalCustomers = (await db.collection('customers').count()).total || 0; } catch (e) { totalCustomers = memberIds.size; }
-  const unbatched = Math.max(0, totalCustomers - memberIds.size);
+  try { totalCustomers = (await db.collection('customers').where(NOT_DELETED).count()).total || 0; } catch (e) { totalCustomers = memberIds.size; }
+  // ⭐ 2026-09-29 回收站：**入批客户里也要排除已删** —— 否则 `客户总数(不含已删) − 入批数(含已删)` 会把未分批数算小。
+  //   按 _id 分批查（主键索引，很快）；已删客户**依旧留在 batch_members 里**（恢复后批次归属照旧）。
+  const aliveMemberIds = new Set();
+  {
+    const _arr = [...memberIds];
+    for (let i = 0; i < _arr.length; i += 100) {
+      const part = await fetchAll('customers',
+        _.and([{ _id: _.in(_arr.slice(i, i + 100)) }, NOT_DELETED]), { _id: true });
+      part.forEach(c => aliveMemberIds.add(c._id));
+    }
+  }
+  const unbatched = Math.max(0, totalCustomers - aliveMemberIds.size);
   // 全部批次汇总（2026-09-09 老板定：顶部工具卡统计区；客户级去重——客户可属多个批次，Σ 各批 stats 会重复计数）
   // 口径与批次卡一致：in_task=当前有 published/reviewing 任务的客户；free=非任务中；visited=有正常拜访记录的客户
-  const memberArr = [...memberIds];
+  // ⭐ 2026-09-29：**汇总只算未删的**（已删客户不该出现在任何"客户数"里）
+  const memberArr = [...aliveMemberIds];
   const summary = {
     total: memberArr.length,
     in_task: memberArr.filter(id => inTaskSet.has(id)).length,
@@ -4177,43 +4451,130 @@ async function removeCustomerFromBatch(event) {
   return { ok: true, msg: '已从批次中移除（客户档案保留）' };
 }
 
-// 彻底删除所选客户（2026-09-24 老板定）：未分批详情页勾选后「彻底删除」，删除客户档案本身（不可恢复）
-// 规则（老板拍板）：**有订单或拜访记录的客户一律拒删**，返回 blocked 让前端逐条提示；
-// 只有"既没拜访、也没订单"的客户才真删。云存储文件不用管 —— 没拜访就不可能有照片/录音。
-// 注：orders 集合目前是空骨架（销售订单导入尚未落地），此校验面向未来；将来导入订单时须用 customerId 关联。
+// ⭐⭐ 2026-09-29 老板定：**改成「回收站」（软删）**，不再真删。
+//   老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」
+//           +「可以进回收站，但是不能彻底删除」
+//           +「进了回收站的客户，不再纳入客户总数（订单数据等还是要纳入总额的），不再地图上显示」
+//   做法：**只打标记，不删任何数据** ——
+//     · `deleted:true` + `deletedAt` + `deletedBy`
+//     · 列表 / 地图 / 客户总数 / 待商城建档 / 重点消息 **一律排除**
+//     · **订单聚合刻意不排除**（订单按 customerCode 走，与客户是否在回收站无关）→ 总额不会凭空变小
+//     · 恢复 = 去掉标记（关联的拜访 / 照片 / 备注 **原地不动，一条不丢**）
+//   ⚠️ 与旧版的差别：**旧版查 visits/orders，有就拒删** —— 老板 2026-09-29 改为**都能进回收站**；
+//      「有订单/拜访 → 不能**彻底**删除」的保护**留给以后的"统一清理"**（那时才需要查这两张表）。
+//   ⭐⭐ 但**任务中的客户一条都不能删**（老板 2026-09-29 定，见下）。
 async function deleteCustomers(event) {
   const ids = Array.isArray(event.customerIds) ? event.customerIds.filter(Boolean) : [];
   if (!ids.length) return { ok: false, code: 'BAD_ARG', msg: '没有选择客户' };
-  const deleted = [];
+  const now = Date.now();
+  const by = (event._admin && event._admin.name) || '管理员';
+
+  // ⭐⭐ 2026-09-29 老板定：**任务中的客户不能被删除**
+  //   老板原话：「删除任务中的客户就提示"XX客户正在任务中，不能删除"就行了。所以，任务中的客户不能被删除。」
+  //   为什么必须拦（**一条拦截解决两个问题**）：
+  //     ① 任务进度分母是 `tasks.customerIds`，手机端任务客户列表也要显示它 —— 删了 → **进度永远到不了 100%**；
+  //     ② 若它正好在「拜访中」，还会卡住"同一任务只允许 1 家拜访中"的拦截 → **业务员开不了新拜访**。
+  //   拦在这里，两个问题一起消失，而且**完全不用动任务数据**（比"删时从任务摘引用"干净得多）。
+  //   口径与 listCustomers / custPageAgg 的"任务中"**完全一致**：published / reviewing **且未过期**。
+  const _today = todayStr();
+  const _liveTasks = await fetchAll('tasks', { status: _.in(['published', 'reviewing']) },
+    { customerIds: true, name: true, taskNo: true, deadline: true });
+  const _inTask = {};   // customerId -> { name, taskNo }（取第一个命中的任务）
+  _liveTasks.forEach(t => {
+    if (t.deadline && String(t.deadline) <= _today) return;   // 已过期 → 不算"任务中"
+    (t.customerIds || []).forEach(id => {
+      if (!_inTask[id]) _inTask[id] = { name: t.name || '', taskNo: t.taskNo || '' };
+    });
+  });
+
+  const moved = [];
   const blocked = [];
   for (const id of ids) {
     const c = await db.collection('customers').doc(id).get().catch(() => null);
     if (!c || !c.data) { blocked.push({ id, name: '', reason: '客户不存在' }); continue; }
-    const name = c.data.name || '';
-    // ① 有拜访记录 → 拒删
-    const vis = await db.collection('visits').where({ customerId: id }).limit(1).get();
-    if (vis.data.length) { blocked.push({ id, name, reason: '有拜访记录' }); continue; }
-    // ② 有订单记录 → 拒删
-    const ord = await db.collection('orders').where({ customerId: id }).limit(1).get();
-    if (ord.data.length) { blocked.push({ id, name, reason: '有订单记录' }); continue; }
-    deleted.push(id);
-  }
-  if (!deleted.length) {
-    return { ok: true, deleted: 0, blocked, msg: `所选 ${ids.length} 家都有订单或拜访记录，未删除` };
-  }
-  // 顺带清掉批次成员（未分批的正常没有，保险起见）
-  const mem = await fetchAll('batch_members', { customerId: _.in(deleted) }, { customerId: true });
-  for (let i = 0; i < mem.length; i += 50) {
-    await Promise.all(mem.slice(i, i + 50).map(m => db.collection('batch_members').doc(m._id).remove()));
-  }
-  for (let i = 0; i < deleted.length; i += 50) {
-    await Promise.all(deleted.slice(i, i + 50).map(d => db.collection('customers').doc(d).remove()));
+    const nm = c.data.name || c.data.nameRaw || '';
+    // ① 任务中 → 拒删（老板 2026-09-29 定）
+    if (_inTask[id]) {
+      const t = _inTask[id];
+      const tag = t.name ? ('（' + t.name + (t.taskNo ? ' · ' + t.taskNo : '') + '）') : '';
+      blocked.push({ id, name: nm, reason: '正在任务中' + tag + '，不能删除' });
+      continue;
+    }
+    if (c.data.deleted === true) { blocked.push({ id, name: nm, reason: '已在回收站' }); continue; }
+    await db.collection('customers').doc(id).update({
+      data: { deleted: true, deletedAt: now, deletedBy: by, updatedAt: now }
+    });
+    moved.push({ id, name: nm });
   }
   return {
     ok: true,
-    deleted: deleted.length,
+    soft: true,
+    deleted: moved.length,
+    deletedIds: moved.map(x => x.id),
     blocked,
-    msg: blocked.length ? `已彻底删除 ${deleted.length} 家；${blocked.length} 家有记录未能删除` : `已彻底删除 ${deleted.length} 家`
+    msg: blocked.length
+      ? `已移入回收站 ${moved.length} 家（${blocked.length} 家未处理）`
+      : `已移入回收站 ${moved.length} 家`
+  };
+}
+
+// ⭐ 2026-09-29 新增：**回收站列表**（客户档案里 deleted:true 的那些）
+//   入参：{ page, pageSize, q }（q = 店名/电话/地址 模糊；与「待商城建档」同一套界面习惯）
+//   ⚠️ 只读，不动任何数据；回收站里的客户**不计入客户总数**（客户总数在 listCustomerBatches 里已排除）。
+async function listDeletedCustomers(event) {
+  const e0 = event || {};
+  const page = Math.max(0, Number(e0.page) || 0);
+  const size = Math.min(100, Math.max(5, Number(e0.pageSize) || 30));
+  const q = String(e0.q || '').trim();
+  let qy = db.collection('customers').where({ deleted: true });
+  if (q) {
+    const re = db.RegExp({ regexp: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: 'i' });
+    qy = db.collection('customers').where(_.and([
+      { deleted: true },
+      _.or([{ name: re }, { nameRaw: re }, { phone: re }, { phone2: re }, { address: re }])
+    ]));
+  }
+  const totalRes = await qy.count().catch(() => ({ total: 0 }));
+  const res = await qy.orderBy('deletedAt', 'desc').skip(page * size).limit(size)
+    .get().catch(silentCatch('adminapi·listDeletedCustomers', { data: [] }));
+  const list = (res.data || []).map(c => ({
+    id: c._id,
+    name: c.name || c.nameRaw || '(未填店名)',
+    nameRaw: c.nameRaw || '',
+    phone: c.phone || c.phone2 || '',
+    address: c.address || '',
+    area: c.district || '',
+    bizCircle: c.bizCircle || '',
+    source: c.source || '',
+    mallPending: c.mallPending === true,
+    deletedAt: c.deletedAt || 0,
+    deletedBy: c.deletedBy || '',
+    createdAt: c.createdAt || 0
+  }));
+  return { ok: true, total: (totalRes && totalRes.total) || 0, page, pageSize: size, list };
+}
+
+// ⭐ 2026-09-29 新增：**从回收站恢复**（去掉 deleted 标记 —— 客户档案与关联数据一直都在，一条不丢）
+//   入参：{ customerIds: [...] }   出参：{ ok, restored, restoredIds, msg }
+async function restoreCustomers(event) {
+  const ids = Array.isArray(event.customerIds) ? event.customerIds.filter(Boolean) : [];
+  if (!ids.length) return { ok: false, code: 'BAD_ARG', msg: '没有选择客户' };
+  const now = Date.now();
+  const done = [];
+  for (const id of ids) {
+    const c = await db.collection('customers').doc(id).get().catch(() => null);
+    if (!c || !c.data) continue;
+    if (c.data.deleted !== true) continue;          // 本来就不在回收站 → 跳过
+    await db.collection('customers').doc(id).update({
+      data: { deleted: false, restoredAt: now, restoredBy: (event._admin && event._admin.name) || '管理员', updatedAt: now }
+    });
+    done.push(id);
+  }
+  return {
+    ok: true,
+    restored: done.length,
+    restoredIds: done,
+    msg: `已从回收站恢复 ${done.length} 家（回到客户列表，批次归属 / 拜访记录 / 照片都还在）`
   };
 }
 

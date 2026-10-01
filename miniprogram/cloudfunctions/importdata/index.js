@@ -63,7 +63,7 @@ async function runPool(items, size, fn) {
   return out;
 }
 
-const COLL = { customers: 'customers', orders: 'orders', order_items: 'order_items' };
+const COLL = { customers: 'customers', orders: 'orders', order_items: 'order_items', biz_index: 'biz_index' };
 
 // 按幂等键找已存在的档案，返回 { id, doc }（找不到返回 null）
 //   doc = 云端已有整条档案 —— 「点评导入」要靠它判断哪些字段已有值（有值就让位，见 upsertOne）
@@ -71,6 +71,13 @@ const COLL = { customers: 'customers', orders: 'orders', order_items: 'order_ite
 //     点评表里同名店极多（沙县小吃有 342 个不同 shopuuid），只有 shopuuid 才是铁证。
 async function findExisting(type, row, mode) {
   const pick = (r) => (r.data.length ? { id: r.data[0]._id, doc: r.data[0] } : null);
+  // ⭐ 2026-09-28 新增：biz_index（「加新店」的区域/商圈识别数据）——**用文档 _id 做幂等**
+  //   导入脚本按序号生成 _id（b0、b1…）→ 重复导入不会翻倍（第二次走 upsertOne 的 update 分支）
+  if (type === 'biz_index') {
+    if (!row._id) return null;
+    const r = await db.collection('biz_index').doc(String(row._id)).get().catch(() => null);
+    return (r && r.data) ? { id: String(row._id), doc: r.data } : null;
+  }
   if (type === 'customers') {
     if (row.mallKey) {
       const hit = pick(await db.collection('customers').where({ mallKey: row.mallKey }).limit(1).get());

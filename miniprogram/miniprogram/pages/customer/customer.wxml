@@ -19,6 +19,8 @@
       <text class="nm">{{d.name}}</text>
       <text class="tag new" wx:if="{{d.newShop}}">新店</text>
       <text class="tag old" wx:if="{{d.listedYears >= 3}}">收录 {{d.listedYears}} 年</text>
+      <!-- ⭐ 2026-09-28 晚 老板定：「⏳ 待商城建档」（业务员现场用「加新店」录的店，商城侧还没有档案） -->
+      <text class="tag pend" wx:if="{{d.mallPending}}">⏳ 待商城建档</text>
     </view>
     <view class="meta">
       <view class="mline">
@@ -45,10 +47,19 @@
       <!-- ⭐ 2026-09-28 晚老板定：这里改成「**快速记事**」入口（文字**上下两层**：上面「快速」下面「记事」），
            尺寸仍是原来那个报错方块的 44×44。
            · 原「📍 报错」方块**已移到下面「📍 商圈与位置」卡的小地图下方**（与「导航」并排）。
-           · 点击 = 以本客户为对象快速记一笔（记事功能开发中，先只提示）。 -->
+           · 点击 = **以本客户为对象写一条记事**（标题带店名、关联客户已挂好）；
+             记事**只存本机**（老板 2026-09-28 拍板），落地见 pages/notes/editor/。 -->
       <view class="notebtn" bindtap="goQuickNote">
         <text>快速</text><text>记事</text>
       </view>
+    </view>
+
+    <!-- ⭐ 本机「我的记事 · N 条」（2026-09-28）：**真在本机记过事才出现** ——
+         0 条时旁边就是「快速记事」，不重复占位（老板要简洁）；点它进列表只看这一家。 -->
+    <view class="noterow" wx:if="{{notesN > 0}}" bindtap="goNotes">
+      <text class="nr-ic">📝</text>
+      <text class="nr-t">我的记事 · {{notesN}} 条</text>
+      <text class="nr-go">查看 ›</text>
     </view>
   </view>
 
@@ -60,13 +71,12 @@
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
-      <!-- ⭐ 2026-09-27：未入商城 → 淡灰空态（📷 门店照片三格照常在，见下） -->
-      <view class="empty4" wx:if="{{!d.hasMall}}">
-        <text class="e4i">🏪</text>
-        <text class="e4t">这家还没加入商城</text>
-        <text class="e4s">到店可以推动加入（拜访结果里选「加入商城」）</text>
-      </view>
-      <block wx:else>
+      <!-- ⭐ 2026-09-28 晚老板定：**未加入商城就什么都不摆** ——
+           注册商城时间 / 签约业务员 / 最近下单 / 最近浏览 这些"肯定没有"，没有就不显示出来；
+           只留下面的「📷 门店照片」三格，业务员照样能加照片。
+           （原来是"没有也说一句"：「这家还没加入商城／到店可以推动加入（拜访结果里选加入商城）」→ 删）
+           ⚠️ 所以 `wx:if` 挂 hasMall；未入商城由店名卡的辉光表达，不靠文字。 -->
+      <block wx:if="{{d.hasMall}}">
         <view class="r" wx:for="{{d.mallRows}}" wx:key="*this">
           <text class="k">{{item[0]}}</text>
           <text class="v {{item[0] === '最近下单' ? 'warn' : ''}}">{{item[1]}}</text>
@@ -129,13 +139,10 @@
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
-      <!-- ⭐ 2026-09-27：平台没收录评分 → 淡灰空态（招牌菜照常可录，见下） -->
-      <view class="empty4" wx:if="{{!d.rate}}">
-        <text class="e4i">📊</text>
-        <text class="e4t">平台没有收录这家的评分</text>
-        <text class="e4s">到店主要聊供货和推广，别把"没评分"当缺点</text>
-      </view>
-      <block wx:else>
+      <!-- ⭐ 2026-09-28 晚老板定：**没评分就什么都不说** ——
+           原来这里写「平台没有收录这家的评分／别把"没评分"当缺点」，会让人误以为平台没有这家店的信息
+           （其实都有，只是这家还没评分）→ 空态整块删掉：**有评分才显示评分**，没评分就直接进下面的招牌菜。 -->
+      <block wx:if="{{d.rate}}">
         <view class="rate">
           <text class="num">{{d.rate}}</text><text class="of">/5</text>
           <text class="txt">{{d.rateTxt}}</text>
@@ -217,6 +224,10 @@
              ⚠️ **只有一个圆点**：**圆心 = 取的那个点**（老板 2026-09-28 问"到底以什么为中心"→ 原来那根
                 细短线 .stem 已删，避免让人误以为取的是线尾）。 -->
         <view class="cmap-pin" wx:if="{{fixing}}"><view class="dot"></view></view>
+        <!-- ⭐ 2026-09-28 晚老板定：修正模式的引导提示**贴小地图上边缘**。
+             原来用的是 wx.showToast —— 屏幕正中一个胶囊，正好压住地图中心与红点（挡视线）。
+             必须是普通 view 才能盖在原生 <map> 上（同 .cmap-in / .cmap-pin / .jh-badge）。 -->
+        <view class="cmap-tip" wx:if="{{fixing}}">拖动地图，把红点对准门店位置</view>
         <!-- 2026-09-25 老板定：手机端地图也要去掉腾讯 logo/版本号、换成「聚火地图」。
              去 logo 用**裁剪法**：.cmap-wrap 加 overflow:hidden，.cmap 高度多出 40px → 底部 logo 区被裁掉。
              ⚠️ wx:if 必须留在**外层 wrapper** 上（卡片折叠靠它控制显隐，原生组件用 CSS 隐藏压不住）。 -->

@@ -1,0 +1,265 @@
+/* 加新店（2026-09-28 新增）—— ⭐ 2026-09-29 重组为**四步流程**
+   视觉照 _scratch/newshop-steps-demo.html（老板逐条打磨定稿的那版）；尺寸用 px。
+
+   结构：
+     .page（纵向 flex 满屏）
+       .body → .pane ×4（一次只显示一个；2/3/4 可滚）
+       .foot（上一步 / N/4 步骤 / 下一步›  ← 三格，永远在底部）
+   ⚠️ 第 1 步（定位）不用卡片：地图撑满，信息行与按钮排**通栏白底**。 */
+.page { height: 100vh; display: flex; flex-direction: column; background: var(--bg); box-sizing: border-box; }
+
+.body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 11px 11px 0; }
+.pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.pane.hide { display: none; }
+#pane2, #pane3, #pane4 { overflow-y: auto; }
+#pane1 { overflow: hidden; margin: -11px -11px 0; }        /* 抵消 .body 内边距，让地图贴到边 */
+
+/* 提示里要强调的字（⚠️ 别用 Markdown 的 ** ** —— wxml 会原样显示出来） */
+.hl { font-weight: 700; color: #22262E; }
+
+/* ============ ① 第 1 步：定位（通栏白底，不用卡片） ============ */
+.geo { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: #fff; }
+.geohead { display: flex; align-items: center; gap: 7px; padding: 9px 12px 7px; flex: 0 0 auto;
+  border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 800; color: #14663A; }
+.geohead .st { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #6B7688; background: #F1F3F7;
+  border: 1px solid #E4E8EF; border-radius: 999px; padding: 2px 8px; }
+.geohead .st.run { color: #1D5FA8; background: #EAF2FD; border-color: #CFE0F8; }     /* 采点中 */
+.geohead .st.tune { color: #B3261E; background: #FDECEC; border-color: #F3C9C4; }    /* 微调中 */
+.geohead .st.ok { color: #14663A; background: #EAF6EE; border-color: #CBE8D6; }      /* 已采用 */
+
+/* 地图：flex:1 吃掉"标题栏以下、按钮以上"的全部剩余高度（照演示稿 330px 那种撑满感）
+   ⚠️ 高度必须是 100%（不能像以前那样裁剪）—— 腾讯 logo/审图号要留在右下角（合规） */
+.cmap-wrap { position: relative; flex: 1 1 auto; min-height: 120px; overflow: hidden; }
+.cmap { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+/* 微调模式的中心红点（普通 view 才能盖在原生 map 上） */
+.cmap-pin { position: absolute; left: 50%; top: 50%; z-index: 3; width: 0; height: 0; pointer-events: none; }
+.cmap-pin .dot { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%;
+  background: #E5484D; border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(229, 72, 77, .28); }
+/* 提示胶囊：**左上角 + 白底 60% 透明**（老板 2026-09-29：原来正中黑底太难看） */
+.cmap-tip { position: absolute; left: 8px; top: 8px; z-index: 4;
+  background: rgba(255, 255, 255, .6); color: #5B6472; font-size: 10.5px; font-weight: 700;
+  padding: 3px 9px; border-radius: 6px; box-shadow: 0 1px 4px rgba(31, 36, 48, .1);
+  white-space: nowrap; pointer-events: none; }
+
+/* 状态行（唯一一句在变的文字） */
+.gostate { flex: 0 0 auto; padding: 8px 12px; font-size: 11.5px; font-weight: 700; line-height: 1.6;
+  background: #F1F3F7; color: #6B7688; border-top: 1px solid var(--line); }
+.gostate.run { background: #FFF8E8; color: #8A6412; }
+.gostate.tune { background: #FDECEC; color: #B3261E; }
+.gostate.ok { background: #EAF6EE; color: #14663A; }
+
+/* 三个来源各一行：手机=蓝字 / 卫星=绿字 / 微调=红字；被采用的那行高亮 + 打「已采用」 */
+.rows { flex: 0 0 auto; padding: 5px 12px 2px; background: #fff; border-top: 1px solid var(--line); }
+.rows .row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; }
+.rows .row .k { flex: 0 0 60px; font-size: 10.5px; font-weight: 800; color: #8A93A1; }
+.rows .row .v { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: #22262E;
+  line-height: 1.55; word-break: break-all; }
+.rows .row .v.mut { color: #A3ABB8; font-weight: 600; }
+.rows .row .v.bl { color: #1F63C4; }      /* 📱 手机定位 */
+.rows .row .v.gp { color: #14663A; }      /* 📡 北斗卫星 */
+.rows .row .v.rd { color: #B3261E; }      /* ✎ 手动手动微调 */
+.rows .row.on { background: #F7FAFF; border-radius: 8px; margin: 1px -6px; padding-left: 6px; padding-right: 6px; }
+.rows .row .adopted-tag { flex: 0 0 auto; font-size: 10px; font-weight: 800; color: #fff;
+  background: #2FB86A; padding: 1px 6px; border-radius: 999px; }
+
+/* 按钮：三排，每排「左=去采集 / 右=去采用」，左右同色
+   ⚠️ 每排用 padding 而不是 margin —— margin 会露出底下的灰底，看着"一栏一栏"（老板 2026-09-29 提过） */
+.geobtns { flex: 0 0 auto; display: flex; gap: 8px; padding: 6px 12px 0; background: #fff; }
+.geobtns.last { padding-bottom: 34px; }        /* 最后一排留白，免得跟底部按钮混在一起 */
+.gb { flex: 1; text-align: center; border-radius: 11px; padding: 11px 0; font-size: 12.5px; font-weight: 700; }
+.gb.blue { background: linear-gradient(135deg, #3E8BF8, #2F7DF6); color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(47, 125, 246, .75); }
+.gb.green { background: linear-gradient(135deg, #2FB86A, #1E9E5A); color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(30, 158, 90, .8); }
+.gb.green.stop { background: linear-gradient(135deg, #E5484D, #C0392B);
+  box-shadow: 0 8px 16px -8px rgba(229, 72, 77, .8); }
+.gb.red { background: linear-gradient(135deg, #E5484D, #C0392B); color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(229, 72, 77, .8); }
+.gb.ghost { background: #F5F7FA; color: #5B6472; border: 1px solid #E9EDF3; }
+.gb.ghost.blue { color: #1F63C4; border-color: #CFE0F8; }
+.gb.ghost.green { color: #14663A; border-color: #CBE8D6; }
+.gb.ghost.red { color: #B3261E; border-color: #F3C9C4; }
+.gb.off { opacity: .42; }
+.gb.busy { opacity: .6; }
+
+/* ============ ② 防重复提示（三态；在第 2 步表单上方） ============ */
+.dup { border-radius: 12px; padding: 10px 12px; font-size: 11.5px; line-height: 1.7; margin-bottom: 11px;
+  display: flex; flex-direction: column; gap: 6px; }
+.dup.ok { background: #EAF6EE; border: 1px solid #CBE8D6; color: #14663A; }
+.dup.warn { background: #FFF8E8; border: 1px solid #F3E2BE; color: #8A6412; }
+.dup.bad { background: #FDECEC; border: 1px solid #F3C9C4; color: #B3261E; }
+/* ⭐ 2026-09-29：**引导卡**（中性蓝，**不是错误**）——
+   手动点了「防重检测」但还没填好店名/电话时给指引，别让人以为出了错 */
+.dup.tips { background: #F1F5FF; border: 1px solid #BFD3F5; color: #1F63C4; }
+.dup.tips .d-q { color: #1F63C4; }
+/* 🔧 防重调试面板（老板 2026-09-29）—— 深底等宽小字，只给排查用；确认没问题后整块删掉 */
+.dupdbg { background: #22262E; color: #D6DEEA; border-radius: 10px; padding: 9px 11px; margin-bottom: 11px;
+  font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; line-height: 1.75; }
+.dupdbg .dd-t { display: block; font-size: 11px; font-weight: 800; color: #FFD166; margin-bottom: 4px; }
+.dupdbg .dd-l { display: block; word-break: break-all; }
+.dup .d-t { font-weight: 800; font-size: 12px; }
+.dup .d-c { background: rgba(255, 255, 255, .62); border-radius: 9px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 2px; }
+.dup .d-n { font-weight: 800; font-size: 12.5px; color: #22262E; }
+.dup .d-l { font-size: 11px; color: #5B6472; }
+.dup .d-q { font-weight: 700; }
+.dup .d-btns { display: flex; gap: 8px; }
+.dup .d-b { flex: 1; text-align: center; padding: 8px 0; border-radius: 10px; font-weight: 700; font-size: 12px;
+  background: #1E9E5A; color: #fff; }
+.dup .d-b.ghost { background: #fff; color: #5B6472; border: 1px solid #E9EDF3; }
+.dup.bad .d-b { background: #B3261E; }
+
+/* 防重检测按钮那一排 */
+.dbtn-row { display: flex; align-items: center; gap: 9px; margin-top: 4px; }
+.dbtn { flex: 0 0 auto; padding: 9px 14px; border-radius: 11px; font-size: 12.5px; font-weight: 700;
+  background: #F1F5FF; border: 1px solid #BFD3F5; color: #1F63C4; }
+.dbtip { flex: 1; min-width: 0; font-size: 10.5px; color: #A3ABB8; line-height: 1.5; }
+/* ⭐ 前端版本标识（「防重 v3」）—— 一眼看出小程序体验版更新了没有 */
+.dbtip .dv { margin-left: 5px; color: #C3CAD6; font-weight: 700; }
+
+/* ============ ③ 卡 / 行 / 细分割线（第 2/3/4 步的卡片用） ============ */
+.card { background: #fff; border-radius: 16px; padding: 13px 15px; margin-bottom: 11px;
+  border: 1px solid #EFF1F5; box-shadow: 0 2px 8px rgba(31, 36, 48, .05); }
+.cardh { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; color: #3F4757;
+  margin-bottom: 4px; }
+.must { color: #E5484D; font-weight: 800; }
+.row { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid #F4F6F9; }
+.row:last-child { border-bottom: 0; }
+.row .rl { flex: 0 0 58px; font-size: 12.5px; color: #5B6472; font-weight: 700; }
+.row .ri { flex: 1; min-width: 0; font-size: 13.5px; color: #22262E; }
+.rph { color: #A3ABB8; font-size: 12.5px; }
+.rpick { display: flex; align-items: center; font-size: 13.5px; color: #22262E; }
+.rpick .arw { margin-left: auto; color: #C3CAD6; font-size: 14px; }
+/* 细分割线：margin 用负值让它通到卡边（演示稿口径） */
+.sep { height: 0; border-top: 2px solid #EDF1F7; margin: 12px -15px; }
+
+/* 营业时间：两个**整点下拉**（老板 2026-09-29 定：手机上点开就是上下滚动）
+   ⚠️ 宽度写死 —— 原生 picker 会跟着内容变宽，之前老板嫌"太长难看" */
+.row .tm-sel { flex: 0 0 auto; width: 74px; font-size: 13px; font-weight: 700; color: #22262E; }
+.row .tm-dash { flex: 0 0 auto; color: #C3CAD6; }
+
+/* 附近商圈候选 */
+.cands { margin-top: 8px; }
+.cands .cd-h { font-size: 11px; color: #8A93A1; }
+.cands .cd-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; }
+.cd { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: #F5F7FA; border: 1px solid #E9EDF3; color: #5B6472; }
+.cd.on { background: #FFF1EA; border-color: #FFDCCB; color: var(--primary-deep); }
+
+/* ============ ④ 招牌菜（第 3 步） ============ */
+.note { width: 100%; box-sizing: border-box; min-height: 68px; margin-top: 6px; padding: 10px 12px;
+  background: #F7F8FA; border: 1px solid #EEF0F3; border-radius: 11px; font-size: 13px; line-height: 1.7; }
+/* 实时拆出来的招牌菜胶囊 */
+.dishout { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dishout .dh { font-size: 10.5px; color: #A3ABB8; }
+.dchip { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: #FFF1EA; border: 1px solid #FFDCCB; color: var(--primary-deep); }
+
+/* 服务与设施（9 组多选胶囊） */
+.fg-h { font-size: 11.5px; font-weight: 800; color: #7A8494; margin: 10px 0 6px; }
+.fg-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.fg { font-size: 11.5px; padding: 5px 10px; border-radius: 999px; background: #F5F7FA;
+  border: 1px solid #E9EDF3; color: #5B6472; }
+.fg.on { background: #EAF6EE; border-color: #CBE8D6; color: #14663A; font-weight: 700; }
+
+/* ============ ⑤ 拍照三格（与客户详情页同口径） ============ */
+.shotrow { display: flex; gap: 8px; margin-top: 9px; }
+.shot3 { position: relative; flex: 1; height: 80px; border-radius: 10px; overflow: hidden; background: #F0F2F5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.shot3.empty { background: #FAFBFD; border: 1px dashed #D6DEEA; }
+.shot-img { width: 100%; height: 100%; display: block; }
+.cam3 { font-size: 19px; line-height: 1; opacity: .7; }
+.t3 { font-size: 10px; color: #94A0B2; font-weight: 700; margin-top: 3px; }
+.tip { margin-top: 8px; font-size: 11px; color: #8A93A1; line-height: 1.7; }
+
+/* ============ 🎙 录音（2026-09-29 重做：老板说原来那块绿色渐变"好丑好丑"，照微信语音的形态）
+     · 录制条 = 白底细边的扁条；录制符号 = **红圈 + 中间一个红点**（老板指定）
+     · 录音中 = 红圈红点脉动 + 波形柱跳动 + 实时计时
+     · 录完 = 一段一行（序号 / 波形 / 时长 / ▶听 / 删），外面套淡底细框的小条
+     · ⚠️ 老板 2026-09-29：**不要转文字**了、**最多 3 段** */
+.recbar { display: flex; align-items: center; gap: 9px; margin-top: 9px; padding: 0 12px; height: 46px;
+  background: #fff; border: 1px solid #E1E7F0; border-radius: 12px; }
+.recbar.on { border-color: #F3C9C4; background: #FFFBFB; }
+.recdot { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #E5484D;
+  display: flex; align-items: center; justify-content: center; }
+.recdot::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #E5484D; }
+.recbar.on .recdot { animation: recblink 1s infinite; }
+@keyframes recblink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.82); } }
+.recbar .tx { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: #22262E; }
+.recbar .sub { flex: 0 0 auto; font-size: 10.5px; color: #A3ABB8; }
+.recbar .stop { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: #B3261E; }
+/* 波形：8 根柱子，录音中会跳（真机上按真实情况显示） */
+.wave { display: flex; align-items: center; gap: 2px; height: 22px; }
+.wave .bar { width: 3px; border-radius: 2px; background: #C8D6E5; height: 6px; }
+.wave.live .bar { background: #2FB86A; animation: recwv .9s infinite ease-in-out; }
+.wave.live .bar:nth-child(2) { animation-delay: .1s; }
+.wave.live .bar:nth-child(3) { animation-delay: .2s; }
+.wave.live .bar:nth-child(4) { animation-delay: .3s; }
+.wave.live .bar:nth-child(5) { animation-delay: .4s; }
+.wave.live .bar:nth-child(6) { animation-delay: .5s; }
+.wave.live .bar:nth-child(7) { animation-delay: .6s; }
+.wave.live .bar:nth-child(8) { animation-delay: .7s; }
+@keyframes recwv { 0%, 100% { height: 5px; } 50% { height: 20px; } }
+
+/* 已录段列表 */
+.reclist { margin-top: 9px; border-top: 1px solid #F4F6F9; padding-top: 8px; }
+.rl-sum { font-size: 10.5px; color: #A3ABB8; margin-bottom: 6px; }
+.recrow { display: flex; align-items: center; gap: 8px; padding: 7px 9px; margin-top: 6px;
+  background: #FBFCFE; border: 1px solid #EFF3F8; border-radius: 10px; }
+.recrow .rn { flex: 0 0 14px; font-size: 10.5px; font-weight: 800; color: #A3ABB8; }
+.recrow .sec { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: #5B6472;
+  font-family: ui-monospace, Consolas, monospace; }
+/* 听键在最左、删键在最右（老板 2026-09-29：挨太近容易误触） */
+.recrow .play { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  background: #EAF2FD; color: #1F63C4; border: 1px solid #CFE0F8; }
+.recrow .del { flex: 0 0 auto; margin-left: auto; width: 22px; height: 22px; box-sizing: border-box;
+  border-radius: 50%; border: 1.5px solid #F3C9C4; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #E5484D; }
+
+/* ============ ⑥ 卡片的「外圈辉光」（老板 2026-09-29：两张重点卡都要有一圈）
+     · 🤝 加入商城意愿 = 红（原来就有）
+     · 📷 拍照        = 蓝（新加的；第 4 步里这两张卡挨着，同色会分不清） ============ */
+.card.wish { border: 1.5px solid #F3C9C4; box-shadow: 0 4px 16px -8px rgba(229, 72, 77, .45); }
+.card.shot { border: 1.5px solid #CFE0F8; box-shadow: 0 4px 16px -8px rgba(47, 125, 246, .45); }
+.wrow { display: flex; gap: 8px; margin-top: 8px; }
+/* 未选中：浅灰底 + 灰字 */
+.w { flex: 1; text-align: center; padding: 10px 0; border-radius: 11px; font-size: 12.5px; font-weight: 700;
+  background: #F5F7FA; border: 1px solid #E9EDF3; color: #5B6472; }
+/* ⭐ 2026-09-29 老板："选中之后变化的颜色要比现在更深一些，清晰地表达出被选中了"
+   → 从「淡底 + 深字」改成**实色底 + 白字**（原来底色太浅，跟未选中的浅灰拉不开差距，看着像没选中）
+   三个各一色：已登记=绿 / 待定=橙 / 不愿意=红 */
+.w.on.yes { background: #1E9E5A; border-color: #1E9E5A; color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(30, 158, 90, .55); }
+.w.on.mid { background: #E8890C; border-color: #E8890C; color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(232, 137, 12, .55); }
+.w.on.no { background: #D93A32; border-color: #D93A32; color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(217, 58, 50, .55); }
+
+/* ============ 底部：上一步 / 步骤 / 下一步（三格；不随步骤移位） ============ */
+.foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  background: #fff; border-top: 1px solid var(--line); }
+.foot .fbtn { height: 38px; border-radius: 10px; border: 0; font-size: 14px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.foot .ghost { flex: 0 0 auto; padding: 0 14px; background: #F5F7FA; color: #5B6472; border: 1px solid #E9EDF3; }
+.foot .ghost.hid { visibility: hidden; }        /* ⚠️ 用 visibility 保留宽度 —— 否则步骤字会左右跳 */
+.foot .main { flex: 1; max-width: 52%; background: linear-gradient(135deg, #FF7A3D, #F5531C); color: #fff;
+  box-shadow: 0 6px 14px -6px rgba(245, 83, 28, .45); }
+.foot .main.off { opacity: .5; box-shadow: none; }
+.foot .stepnow { flex: 1 1 auto; text-align: center; font-size: 10.5px; font-weight: 700; color: #8A93A1;
+  line-height: 1.3; }
+.foot .stepnow .n { display: block; font-size: 12px; color: var(--primary-deep); font-weight: 800; }
+
+/* ============ 提交成功页 ============ */
+.done { position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 90; background: rgba(31, 36, 48, .5);
+  display: flex; align-items: center; justify-content: center; padding: 0 22px; }
+.done-box { width: 100%; max-width: 320px; background: #fff; border-radius: 18px; padding: 22px 18px 16px;
+  text-align: center; }
+.done-ic { font-size: 34px; }
+.done-t { margin-top: 6px; font-size: 17px; font-weight: 800; }
+.done-s { margin-top: 8px; font-size: 12.5px; color: #5B6472; line-height: 1.8; text-align: left; }
+.done-s .br { display: block; height: 6px; }
+.done-btns { display: flex; gap: 9px; margin-top: 16px; }
+.done-btns .db { flex: 1; height: 42px; border-radius: 11px; display: flex; align-items: center;
+  justify-content: center; font-size: 13.5px; font-weight: 700; background: var(--primary); color: #fff; }
+.done-btns .db.ghost { background: #F5F7FA; color: #5B6472; border: 1px solid #E9EDF3; }

@@ -33,6 +33,9 @@
         <view class="ic" style="background:var(--primary-tint)">🔔</view>新任务提醒<text wx:if="{{mpBound}}" style="font-size:11px;color:#18A058;font-weight:700;margin-left:6px">服务号已开通</text>
         <view class="sw {{subOn ? 'on' : ''}}" id="subSwitch"></view>
       </view>
+      <view class="mi" bindtap="goNotes"><view class="ic" style="background:#FFF7ED">📝</view>我的记事<view class="arrow">›</view></view>
+      <!-- ⭐ 2026-09-29 新增：我新加的店（只列自己提交的现场录入；点卡片进去能改） -->
+      <view class="mi" bindtap="goMyShops"><view class="ic" style="background:#EAF6EE">🏪</view>我新加的店<view class="arrow">›</view></view>
       <view class="mi" bindtap="tapSetting"><view class="ic" style="background:#EFF1F4">⚙️</view>设置<view class="arrow">›</view></view>
       <view class="mi" bindtap="tapAbout"><view class="ic" style="background:#EFF1F4">ℹ️</view>关于聚火拜访<view class="arrow">›</view></view>
       <view class="mi" bindtap="exitIdentity"><view class="ic" style="background:#FFF0ED">🚪</view>退出身份<view class="arrow">›</view></view>

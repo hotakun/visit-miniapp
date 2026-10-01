@@ -1,0 +1,427 @@
+<!-- 加新店（2026-09-28 新增）—— ⭐ 2026-09-29 重组为**四步流程**
+     业务员现场给还没在库里的店建档。老板 2026-09-28 拍板：
+       ① 电话**选填**（填了就按"同电话 = 铁证"拦；没填只做同名提示）
+       ② 提交后**直接进客户列表** ＋ 后台备一份「现场录入 · 待商城建档」
+       ③ 区域与商圈**都自动填**（可改）④ **店面照必拍**
+     老板 2026-09-29 拍板（四步）：
+       1 📍 定位   必填 = 已采用一个点位（手机 / 北斗卫星 / 微调 三选一，要手点「✓ 采用」）
+       2 🏪 门店信息  必填 = 店名 + 地址；防重检测**只由按钮触发**，结果显示在表单上方
+       3 🍜 品类与设施  无必填
+       4 📷 现场证据  店面照必拍；录音 ≤3 段、**不做转文字**；＋ 加入商城意愿、备注 → 提交
+     ⚠️ 四个步骤**同一个页面切换显示**（hidden），数据不丢。
+     ⚠️ 铁律：WXML 只用 view / text（禁 HTML 标签；<br> 曾致白屏）。要换行写两个 view。
+     口径：_scratch/newshop-steps-demo.html（老板逐条打磨定稿） -->
+<view class="page">
+
+  <view class="body">
+
+    <!-- ============================================================
+         第 1 步：📍 定位（不用卡片；地图撑满、信息行与按钮排通栏白底）
+         ⭐ 三来源各自独立、互不覆盖（v4 口径，老板真机多轮反馈后定稿）：
+           📱 手机定位（蓝） / 📡 北斗卫星（绿） / ✎ 手动微调（红）
+         最后点「✓ 采用…」决定用哪个 —— 被采用的点正常显示、略大，另外两个半透明。
+         ⭐ 微调的特别之处：**已定下的点（tunLat）在重新微调时"留在原地不动"**，
+           拖动只改"候选"（tunCand*，由地图正中的红图钉表示），点「✓ 采用微调」才落定。
+         ============================================================ -->
+    <view class="pane" id="pane1" hidden="{{step !== 1}}">
+      <view class="geo">
+        <view class="geohead">
+          <text>📍 定位</text>
+          <text class="st {{adopted ? 'ok' : (mode === 'capturing' ? 'run' : (mode === 'tuning' ? 'tune' : ''))}}">{{adopted ? ('已采用 · ' + (adopted === 'phone' ? '手机定位' : (adopted === 'gps' ? '北斗卫星' : '手动微调'))) : (mode === 'capturing' ? '采点中…' : (mode === 'tuning' ? '微调中' : '还没取坐标'))}}</text>
+        </view>
+
+        <!-- 地图：永远在（采点中绿点跟着"候选"实时移动，本身就是进度反馈）
+             兜底中心 = 金华市中心，免得"还没定位"时地图空白 -->
+        <view class="cmap-wrap">
+          <map class="cmap" id="gmap"
+               latitude="{{mapLat || 29.0783}}" longitude="{{mapLng || 119.6474}}"
+               markers="{{markers}}"
+               scale="17" min-scale="10" max-scale="20"
+               enable-scroll="{{mode === 'tuning'}}" enable-zoom="{{true}}"
+               enable-rotate="{{false}}" enable-overlooking="{{false}}"
+               show-location="{{false}}" enable-poi="{{true}}"
+               bindregionchange="onRegionChange"></map>
+          <!-- 微调模式：正中红图钉 = "要取的就是这个点"（必须是普通 view 才能盖在原生 map 上）
+               ⚠️ 它是"候选"的可视化；**已定下的那个红点 marker 仍留在原地** -->
+          <view class="cmap-pin" wx:if="{{mode === 'tuning'}}"><view class="dot"></view></view>
+          <view class="cmap-tip" wx:if="{{mode === 'tuning'}}">拖动地图，把红点对准门店位置</view>
+          <view class="cmap-tip" wx:elif="{{!phoneLat && !gpsLat && !tunLat && mode !== 'capturing'}}">等待定位…</view>
+          <view class="cmap-tip" wx:elif="{{adopted && mode === 'idle'}}">实色 = 已采用（这个位置会提交）</view>
+        </view>
+
+        <!-- 状态行（唯一一句在变的文字） -->
+        <view class="gostate {{adopted ? 'ok' : (mode === 'capturing' ? 'run' : (mode === 'tuning' ? 'tune' : ''))}}">
+          <block wx:if="{{mode === 'capturing'}}">📡 采点中 —— {{gpsSummary || gpsText || '正在搜索设备…'}}（绿点在动，还没收敛）</block>
+          <block wx:elif="{{mode === 'tuning'}}">✎ 微调中 —— 拖动地图把红点对准门口{{tunDist ? '（挪了 ' + tunDist + '）' : ''}}；点「✓ 采用微调」落定{{tunLat ? '（原来那个位置先留在原地）' : ''}}</block>
+          <block wx:elif="{{adopted}}">✅ 已采用{{adopted === 'phone' ? '手机定位' : (adopted === 'gps' ? '北斗卫星' : '手动微调')}} —— 想换就点另一个「✓ 采用」</block>
+          <block wx:elif="{{phoneLat || gpsLat || tunLat}}">⏳ 已经有定位点，请点下面「✓ 采用…」选定用哪个</block>
+          <block wx:else>⏳ 还没取坐标 —— 点「📱 手机定位」拿个大概，或「📡 北斗卫星」拿准的</block>
+        </view>
+
+        <!-- 三个来源各一行：手机=蓝字 / 卫星=绿字 / 微调=红字；被采用的那行高亮 + 打「已采用」 -->
+        <view class="rows">
+          <view class="row {{adopted === 'phone' ? 'on' : ''}}">
+            <text class="k">手机定位</text>
+            <text class="v {{phoneLat ? 'bl' : 'mut'}}">{{phoneLat ? (phoneLat + ', ' + phoneLng + '（' + phoneAcc + '）') : '— 还没定'}}</text>
+            <text class="adopted-tag" wx:if="{{adopted === 'phone'}}">已采用</text>
+          </view>
+          <view class="row {{adopted === 'gps' ? 'on' : ''}}">
+            <text class="k">北斗卫星</text>
+            <text class="v {{(gpsLat || pendLat) ? 'gp' : 'mut'}}">{{mode === 'capturing' ? (gpsSummary || gpsText || '正在搜索…') : (gpsLat ? (gpsLat + ', ' + gpsLng) : '— 还没采')}}</text>
+            <text class="adopted-tag" wx:if="{{adopted === 'gps'}}">已采用</text>
+          </view>
+          <!-- ⭐ 微调这行：**微调中显示"正在拖的候选"**（含挪了多远）；平时显示"已定下的那个点" -->
+          <view class="row {{adopted === 'tune' ? 'on' : ''}}">
+            <text class="k">手动微调</text>
+            <text class="v {{(tunLat || tunCandLat) ? 'rd' : 'mut'}}">{{mode === 'tuning' ? (tunCandLat ? (tunCandLat + ', ' + tunCandLng + (tunDist ? '（挪了 ' + tunDist + '）' : '')) : '拖动地图选位置…') : (tunLat ? (tunLat + ', ' + tunLng) : '— 没用过')}}</text>
+            <text class="adopted-tag" wx:if="{{adopted === 'tune'}}">已采用</text>
+          </view>
+        </view>
+
+        <!-- ⚠️ 三个「采用」的灰/亮**只看"这个来源有没有值"，不看 adopted** ——
+             否则"之前采用过、现在又刷新 / 重新微调"时，按钮会被误判成灰的、让人以为不能点
+             （老板 2026-09-29 报："按了微调位置，采用微调还是半透明"）。 -->
+        <!-- 第 1 行：手机定位 → 采用手机 -->
+        <view class="geobtns">
+          <view class="gb blue {{locBusy ? 'busy' : ''}}" bindtap="locateNow">{{locBusy ? '定位中…' : '📱 手机定位'}}</view>
+          <view class="gb ghost blue {{phoneLat ? '' : 'off'}}" bindtap="adoptPhone">✓ 采用手机</view>
+        </view>
+        <!-- 第 2 行：北斗采点 → 采用卫星 -->
+        <view class="geobtns">
+          <view class="gb green {{capOn ? 'stop' : ''}}" bindtap="tapCap">{{capOn ? '⏹ 停止' : '📡 北斗卫星'}}</view>
+          <view class="gb ghost green {{pendLat ? '' : 'off'}}" bindtap="adoptGpsCapture">✓ 采用卫星</view>
+        </view>
+        <!-- 第 3 行：微调位置 → 采用微调（最后一排，底部多留白，免得跟下面按钮混在一起） -->
+        <view class="geobtns last">
+          <view class="gb red {{((phoneLat || gpsLat || tunLat) && mode !== 'tuning') ? '' : 'off'}}" bindtap="startTune">✎ 微调位置</view>
+          <view class="gb ghost red {{(mode === 'tuning' && tunCandLat) ? '' : 'off'}}" bindtap="adoptTune">✓ 采用微调</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ============================================================
+         第 2 步：🏪 门店信息
+         ⚠️ 防重结果区在最上方，**点了「防重检测」按钮才出现**，没点之前整块不显示
+         ============================================================ -->
+    <view class="pane" id="pane2" hidden="{{step !== 2}}">
+
+      <!-- 🔧 防重调试面板（老板 2026-09-29）——
+           把内部状态直接摆在界面上，不用再靠我推测。
+           ⭐⭐ 2026-09-29 老板定：**先隐藏**（原话「先隐藏，以后可能还会用」）——
+             由 newshop.js 的 `showDupDebug` 开关控制（当前 false）。
+             **代码一行没删**：把它改成 true，面板立刻回来（事件打点也一起恢复）。 -->
+      <view class="dupdbg" wx:if="{{showDupDebug}}">
+        <text class="dd-t">🔧 防重调试</text>
+        <text class="dd-l">doDup 执行 {{dupDbgRuns}} 次 · dupShow={{dupShow}} · dupChecked={{dupChecked}} · dupBusy={{dupBusy}}</text>
+        <text class="dd-l">dupTip={{dupTip || '空'}} · blk={{blk ? '有' : '空'}} · same={{same ? '有' : '空'}} · near={{near ? '有' : '空'}}</text>
+        <text class="dd-l">dupErr={{dupErr || '空'}}</text>
+        <text class="dd-l">事件（新→旧）：</text>
+        <text class="dd-l" wx:for="{{dupDbgEvts}}" wx:key="*this">· {{item}}</text>
+      </view>
+
+      <!-- ⭐ 2026-09-29：**引导卡**（中性蓝，**不是错误**）——
+           手动点了「防重检测」但还没填好店名/电话时给指引；
+           ⚠️ 自动跑的那次（进第 2 步 / 采用点位后的 silent 检测）**不会出现这张卡** -->
+      <view class="dup tips" wx:if="{{dupShow && dupTip}}">
+        <text class="d-t">📝 {{dupTip === 'noCoord' ? '先回第 1 步定个位置' : '先填好店名和电话，再来查重'}}</text>
+        <view class="d-c">
+          <text class="d-l">· 店名 —— 照门头上的写，别用简称</text>
+          <text class="d-l">· 电话 —— 手机 / 座机都行，填了才查得出</text>
+          <text class="d-l">· 地址 —— 尽量写到门牌号</text>
+        </view>
+        <text class="d-q">{{dupTip === 'noCoord' ? '回第 1 步点一个「✓ 采用」定好位置，再回来查。' : '都填好后点下面的「🔍 防重检测」—— 会查附近 200 米有没有重复的店。'}}</text>
+      </view>
+      <!-- ⚠️⚠️ 附近查询失败（2026-09-29 加）：**必须显示出来** ——
+           以前云端把查询错误吞成"附近没店"，才会出现"50 米内一模一样都毫无反应"却看不出原因 -->
+      <view class="dup bad" wx:elif="{{dupShow && dupErr}}">
+        <text class="d-t">⚠️ 附近没查成，这次结果不可信</text>
+        <view class="d-c">
+          <text class="d-l">{{dupErr}}</text>
+          <text class="d-l">先别急着建，把这句话发给管理员；也可以稍后重试。</text>
+        </view>
+      </view>
+      <!-- 同电话 = 铁证 → 拦（表单锁灰、不能下一步、提交也拦） -->
+      <view class="dup bad" wx:elif="{{dupShow && blk}}">
+        <text class="d-t">⚠️ 这家店已经在客户库里了</text>
+        <view class="d-c">
+          <text class="d-n">{{blk.name}}</text>
+          <text class="d-l">{{blk.hasMall ? '已入商城' : '未入商城'}} · 距你 {{blk.dist}} 米</text>
+          <text class="d-l" wx:if="{{blk.address}}">{{blk.address}}</text>
+          <text class="d-l">电话 {{blk.phoneMask}} —— 和你填的一模一样</text>
+        </view>
+        <view class="d-b" bindtap="openDup">打开这家客户 ›</view>
+      </view>
+      <!-- 仅同名 → 提示、不拦 -->
+      <view class="dup warn" wx:elif="{{dupShow && same}}">
+        <text class="d-t">🔎 附近有一家同名店铺</text>
+        <view class="d-c">
+          <text class="d-n">{{same.name}}</text>
+          <text class="d-l">{{same.hasMall ? '已入商城' : '未入商城'}} · 距你 {{same.dist}} 米</text>
+          <text class="d-l" wx:if="{{same.address}}">{{same.address}}</text>
+          <text class="d-l">电话 {{same.phoneMask}}（{{same.phoneSame ? '和你填的一样' : '和你填的不一样'}}）</text>
+        </view>
+        <text class="d-q">是不是同一家？</text>
+        <view class="d-btns">
+          <view class="d-b ghost" bindtap="openDup">是，打开它</view>
+          <view class="d-b" bindtap="ignoreSame">不是，继续新建</view>
+        </view>
+      </view>
+      <!-- ⭐ 2026-09-29 新增：**疑似重复**（店名高度相似 / 电话近似）→ 黄卡预警，但**不拦**，
+           业务员确认过就能继续建。
+           （老板实测报的："名字几乎一样、座机号也近似，结果防重检测毫无反应"） -->
+      <view class="dup warn" wx:elif="{{dupShow && near}}">
+        <text class="d-t">🔎 附近有一家很像的店，先确认一下</text>
+        <view class="d-c">
+          <text class="d-n">{{near.name}}</text>
+          <text class="d-l">{{near.hasMall ? '已入商城' : '未入商城'}} · 距你 {{near.dist}} 米<text wx:if="{{near.nameSim}}"> · 店名相似 {{near.nameSim}}%</text></text>
+          <text class="d-l" wx:if="{{near.address}}">{{near.address}}</text>
+          <text class="d-l">电话 {{near.phoneMask}}<text wx:if="{{near.phoneNear}}">（和你填的很像）</text></text>
+        </view>
+        <text class="d-q">是同一家吗？</text>
+        <view class="d-btns">
+          <view class="d-b ghost" bindtap="openDup">打开这家看看</view>
+          <view class="d-b" bindtap="ignoreSame">不是，继续建</view>
+        </view>
+      </view>
+      <!-- 查过、没撞上 -->
+      <view class="dup ok" wx:elif="{{dupShow && dupChecked}}">
+        <text>🔎 附近 200 米内没有同名 / 同电话的店，可以直接建</text>
+        <!-- ⚠️ 附近店特别多（超过 300 家）时补一句，免得"真有漏掉"时让人误以为一定没有 -->
+        <text class="d-l" wx:if="{{dupTruncated}}">⚠️ 这附近店铺特别多（已扫 300 家仍未扫完），若有遗漏请以现场为准。</text>
+      </view>
+      <!-- ⭐⭐ 兜底卡【老板 2026-09-29 定的铁律：**点了检测就必须出一张卡**】——
+           正常情况下走不到这里；一旦走到，说明有分支没覆盖，这张卡负责把它暴露出来 -->
+      <view class="dup bad" wx:elif="{{dupShow}}">
+        <text class="d-t">⚠️ 没有拿到结果</text>
+        <view class="d-c">
+          <text class="d-l">检测已跑完，但没有任何可显示的内容。</text>
+          <text class="d-l">这属于代码有分支没覆盖 —— 请把这句话发给管理员排查。</text>
+        </view>
+      </view>
+
+      <!-- 必填：店名 / 电话 / 地址 -->
+      <view class="card">
+        <view class="cardh">🏪 门店信息</view>
+
+        <view class="row">
+          <text class="rl">店名<text class="must"> *</text></text>
+          <input class="ri" value="{{name}}" bindinput="onName" placeholder="门头上的店名"
+            placeholder-class="rph" maxlength="40" />
+        </view>
+        <view class="row">
+          <text class="rl">电话</text>
+          <input class="ri" type="number" value="{{phone}}" bindinput="onPhone" placeholder="填了能防止重复建"
+            placeholder-class="rph" maxlength="11" />
+        </view>
+        <view class="row">
+          <text class="rl">地址<text class="must"> *</text></text>
+          <input class="ri" value="{{address}}" bindinput="onAddress" placeholder="尽可能写到门牌 / 路口"
+            placeholder-class="rph" maxlength="60" />
+        </view>
+
+        <!-- 防重检测：**只由这个按钮触发**（老板 2026-09-29 定：不自动查、不边打字边查） -->
+        <view class="dbtn-row">
+          <view class="dbtn" bindtap="doDup">{{dupBusy ? '对比中…' : '🔍 防重检测'}}</view>
+          <!-- ⭐ 2026-09-29：末尾那枚「防重 v7」是**前端版本标识** ——
+               用来一眼确认小程序体验版到底更新了没有（改防重相关界面就 +1）。
+               **看不到它 = 还是旧版**，不用再靠行为反推。
+               v4 = 双保险兜底（js finally + wxml 末卡）
+               v5 = onNameBlur 不再隐藏结果区 + 结果区改常驻（进第 2 步就有引导卡）
+               v6 = 加【防重调试面板】+ 事件打点（用来判定 tap/blur 顺序）
+               v7 = 收 dupTruncated（附近店超 300 家时绿卡里补一句"可能有遗漏"） -->
+          <text class="dbtip">按店名 / 电话查附近 200 米，看看有没有已经建过的<text class="dv">防重 v7</text></text>
+        </view>
+      </view>
+
+      <!-- 区域与商圈（按坐标自动识别，可改） -->
+      <view class="card">
+        <view class="cardh">📍 区域与商圈</view>
+        <view class="row">
+          <text class="rl">区域</text>
+          <picker mode="selector" range="{{areaList}}" value="{{areaIdx}}" bindchange="onArea">
+            <view class="rpick">{{area || '选区域'}}<text class="arw">›</text></view>
+          </picker>
+        </view>
+        <view class="row">
+          <text class="rl">商圈</text>
+          <input class="ri" value="{{bizCircle}}" bindinput="onBiz" placeholder="按坐标自动填，可改" placeholder-class="rph" maxlength="20" />
+        </view>
+        <view class="cands" wx:if="{{cands.length}}">
+          <text class="cd-h">附近商圈（点一下填入）：</text>
+          <view class="cd-row">
+            <text class="cd {{bizCircle === item.biz ? 'on' : ''}}" wx:for="{{cands}}" wx:key="biz"
+              bindtap="pickBiz" data-biz="{{item.biz}}">{{item.biz}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 选填 -->
+      <view class="card">
+        <view class="cardh">选填</view>
+        <view class="row">
+          <text class="rl">联系人</text>
+          <input class="ri" value="{{contact}}" bindinput="onContact" placeholder="老板 / 店长称呼" placeholder-class="rph" maxlength="20" />
+        </view>
+        <!-- 营业时间：两个**整点下拉**（老板 2026-09-29 定：手机上点开就是上下滚动）
+             ⚠️ 只选整点 —— 用 time 选择器要选"时 + 分"共 4 次，太烦 -->
+        <view class="row">
+          <text class="rl">营业时间</text>
+          <picker mode="selector" range="{{hourList}}" value="{{hourIdx1}}" bindchange="onHour1">
+            <view class="tm-sel">{{hour1}}</view>
+          </picker>
+          <text class="tm-dash">—</text>
+          <picker mode="selector" range="{{hourList}}" value="{{hourIdx2}}" bindchange="onHour2">
+            <view class="tm-sel">{{hour2}}</view>
+          </picker>
+        </view>
+      </view>
+
+      <view class="tip">区域和商圈是按第 1 步的坐标自动识别的 —— 不对可以直接改。</view>
+    </view>
+
+    <!-- ============================================================
+         第 3 步：🍜 品类与设施（无必填）
+         ============================================================ -->
+    <view class="pane" id="pane3" hidden="{{step !== 3}}">
+      <view class="card">
+        <view class="cardh">🍜 品类</view>
+        <view class="row">
+          <text class="rl">品类</text>
+          <picker mode="multiSelector" range="{{catRange}}" value="{{catIdx}}"
+            bindchange="onCat" bindcolumnchange="onCatCol">
+            <view class="rpick">{{catText || '选品类（大 / 中 / 小）'}}<text class="arw">›</text></view>
+          </picker>
+        </view>
+      </view>
+
+      <!-- 招牌菜：自由输入，用「、，；」隔开；输入时实时拆成胶囊显示
+           ⚠️ 复用客户详情页的"招牌菜"字段（写 customers.platManual.dishes，与现场提报同落点） -->
+      <view class="card">
+        <view class="cardh">⭐ 招牌菜</view>
+        <textarea class="note" value="{{dishRaw}}" bindinput="onDish"
+          placeholder="比如：红烧肉、白切鸡、酸菜鱼（用「、」或「，」隔开）"
+          placeholder-class="rph" maxlength="-1" auto-height show-confirm-bar="{{false}}" cursor-spacing="18"></textarea>
+        <view class="dishout">
+          <text class="dh" wx:if="{{!dishes.length}}">还没填</text>
+          <text class="dchip" wx:for="{{dishes}}" wx:key="*this">{{item}}</text>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="cardh">🛎 服务与设施</view>
+        <block wx:for="{{facGroups}}" wx:key="key" wx:for-item="g">
+          <view class="fg-h">{{g.title}}</view>
+          <view class="fg-row">
+            <text class="fg {{item.on ? 'on' : ''}}" wx:for="{{g.items}}" wx:key="v" wx:for-item="item"
+              bindtap="toggleFac" data-g="{{g.key}}" data-v="{{item.v}}">{{item.v}}</text>
+          </view>
+        </block>
+      </view>
+    </view>
+
+    <!-- ============================================================
+         第 4 步：📷 现场证据（店面照必拍 + 录音 + 意愿 + 备注）
+         ============================================================ -->
+    <view class="pane" id="pane4" hidden="{{step !== 4}}">
+
+      <!-- 拍照（第一张 = 门面照，必拍）
+           ⭐ 2026-09-29 老板：这张卡要跟「🤝 加入商城意愿」一样有一圈辉光（用蓝色区分） -->
+      <view class="card shot">
+        <view class="cardh">📷 拍照<text class="must"> * 店面照必拍</text></view>
+        <view class="shotrow">
+          <view class="shot3 {{photos[0] ? '' : 'empty'}}" bindtap="shoot" data-i="0">
+            <image class="shot-img" wx:if="{{photos[0]}}" src="{{photos[0]}}" mode="aspectFill"></image>
+            <block wx:else><text class="cam3">📷</text><text class="t3">拍照</text></block>
+          </view>
+          <view class="shot3 {{photos[1] ? '' : 'empty'}}" bindtap="shoot" data-i="1">
+            <image class="shot-img" wx:if="{{photos[1]}}" src="{{photos[1]}}" mode="aspectFill"></image>
+            <block wx:else><text class="cam3">📷</text><text class="t3">拍照</text></block>
+          </view>
+          <view class="shot3 {{photos[2] ? '' : 'empty'}}" bindtap="shoot" data-i="2">
+            <image class="shot-img" wx:if="{{photos[2]}}" src="{{photos[2]}}" mode="aspectFill"></image>
+            <block wx:else><text class="cam3">📷</text><text class="t3">拍照</text></block>
+          </view>
+        </view>
+        <view class="tip" wx:if="{{photoBusy}}">正在处理照片…</view>
+        <view class="tip" wx:elif="{{!photos[0]}}">第一张请拍<text class="hl">门面照</text>（含店招）—— 这以后是核对这家店真假的凭据</view>
+      </view>
+
+      <!-- 🎙 录音（选填；≤3 段 / 单条跟后台档位 / 合计 30 分钟封顶；**不做转文字**） -->
+      <view class="card">
+        <view class="cardh">🎙 录音</view>
+        <!-- 录制条：点一下开始录 / 再点一下停；符号 = 红圈 + 中间红点 -->
+        <view class="recbar {{recOn ? 'on' : ''}}" bindtap="toggleRec">
+          <view class="recdot"></view>
+          <text class="tx">{{recOn ? ('正在录音 · ' + curText) : (recs.length ? '再录一段' : '按下开始录音')}}</text>
+          <view class="wave {{recOn ? 'live' : ''}}">
+            <view class="bar"></view><view class="bar"></view><view class="bar"></view><view class="bar"></view>
+            <view class="bar"></view><view class="bar"></view><view class="bar"></view><view class="bar"></view>
+          </view>
+          <text class="{{recOn ? 'stop' : 'sub'}}">{{recOn ? '⏹ 停止' : '最长 5 分钟'}}</text>
+        </view>
+        <view class="tip" wx:if="{{recBusy}}">正在上传录音…</view>
+        <!-- 已录段：一段一行（听键在最左、删键在最右） -->
+        <view class="reclist" wx:if="{{recs.length}}">
+          <text class="rl-sum">已录 {{recs.length}} 段 · 合计 {{recTotal}} / 30:00</text>
+          <view class="recrow" wx:for="{{recs}}" wx:key="id">
+            <text class="rn">{{index + 1}}</text>
+            <view class="play" bindtap="playRec" data-id="{{item.id}}">{{playingId === item.id ? '■ 停' : '▶ 听'}}</view>
+            <view class="wave">
+              <view class="bar"></view><view class="bar"></view><view class="bar"></view>
+              <view class="bar"></view><view class="bar"></view><view class="bar"></view>
+            </view>
+            <text class="sec">{{item.secText}}</text>
+            <view class="del" bindtap="delRec" data-id="{{item.id}}">✕</view>
+          </view>
+        </view>
+        <view class="tip" wx:elif="{{recEnabled}}">最多 3 段 · 录完可以试听，不满意直接删掉重录</view>
+        <view class="tip" wx:else>后台已关闭录音</view>
+      </view>
+
+      <!-- 🤝 加入商城意愿 -->
+      <view class="card wish">
+        <view class="cardh">🤝 加入商城意愿</view>
+        <view class="wrow">
+          <text class="w {{wish === 'registered' ? 'on yes' : ''}}" bindtap="pickWish" data-v="registered">已登记</text>
+          <text class="w {{wish === 'pending' ? 'on mid' : ''}}" bindtap="pickWish" data-v="pending">待定，再谈</text>
+          <text class="w {{wish === 'no' ? 'on no' : ''}}" bindtap="pickWish" data-v="no">不愿意</text>
+        </view>
+      </view>
+
+      <!-- 📝 备注 -->
+      <view class="card">
+        <view class="cardh">📝 备注</view>
+        <textarea class="note" value="{{note}}" bindinput="onNote" placeholder="现场了解到的，写一句（可留空）"
+          placeholder-class="rph" maxlength="-1" auto-height show-confirm-bar="{{false}}" cursor-spacing="18"></textarea>
+      </view>
+    </view>
+
+  </view>
+
+  <!-- ============ 底部：上一步 / 步骤 / 下一步（四个步骤共用，永远在底部） ============ -->
+  <!-- ⚠️ 第 1 步的「上一步」用 visibility 隐藏而不是 display:none —— 要保留它的宽度，
+       否则中间的「N/4」居中点会变、切步骤时左右跳（老板 2026-09-29 提的） -->
+  <view class="foot">
+    <view class="fbtn ghost {{step === 1 ? 'hid' : ''}}" bindtap="prevStep">‹ 上一步</view>
+    <view class="stepnow">
+      <text class="n">{{step}}/4</text>
+      <text>{{stepName}}</text>
+    </view>
+    <!-- 文案由 JS 的 mainTxt 给（第 4 步=「提交」；编辑模式=「保存」/「保存中…」） -->
+    <view class="fbtn main {{canNext ? '' : 'off'}}" bindtap="nextStep">{{mainTxt}}</view>
+  </view>
+
+  <!-- ============ 提交成功 ============ -->
+  <view class="done" wx:if="{{doneShow}}">
+    <view class="done-box">
+      <view class="done-ic">✅</view>
+      <view class="done-t">已提交</view>
+      <view class="done-s">「{{doneName}}」已进你的客户列表，现在就能再拜访、记笔记。<text class="br"></text>同时进了后台的「现场录入 · 待商城建档」，等商城表导入时自动对上。</view>
+      <view class="done-btns">
+        <view class="db ghost" bindtap="goCustomer">看这位客户</view>
+        <view class="db" bindtap="again">再录一家</view>
+      </view>
+    </view>
+  </view>
+
+</view>

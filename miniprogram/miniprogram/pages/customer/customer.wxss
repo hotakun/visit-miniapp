@@ -17,6 +17,8 @@
 .hrow1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .nm { font-size: 21px; font-weight: 800; line-height: 1.3; color: var(--ink); }
 .tag.old { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 999px; background: #FDECEC; color: #C0392B; }
+/* ⭐ 2026-09-28 晚 老板定：「⏳ 待商城建档」淡色胶囊 —— 业务员现场录的店，商城侧还没有档案 */
+.tag.pend { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 999px; background: #F1F3F7; color: #6B7688; }
 .meta { margin-top: 9px; }
 .mline { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; color: var(--sub); padding: 3px 0; }
 .mline .ic { flex: 0 0 auto; }
@@ -39,8 +41,20 @@
 .notebtn { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px; background: #FFF1EA; color: var(--primary);
   font-size: 11px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; }
 
+/* ⭐ 本机「我的记事 · N 条」行（2026-09-28）：只在本机真记过事时才渲染 */
+.noterow { display: flex; align-items: center; gap: 7px; margin-top: 11px; padding-top: 11px;
+  border-top: 1px solid var(--line); }
+.noterow .nr-ic { flex: 0 0 auto; font-size: 13px; }
+.noterow .nr-t { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.noterow .nr-go { flex: 0 0 auto; font-size: 11.5px; color: var(--primary); font-weight: 700; }
+
 /* ===================== 通用卡 ===================== */
+/* ⭐ 2026-09-28 晚老板定：**每张卡压在上一张垂下来的阴影之上**
+   —— 原来店名卡那个下投影（0 18px 34px -20px）会落到「🏪 商城信息」卡面上，看着像卡面脏了一块。
+   做法：卡片 position:relative + z-index:1 → DOM 越靠后层级越高，阴影自然落在**下一张卡底下**。
+   ⚠️ 所以底部的 .fab-wrap（「开始拜访」浮动按钮）必须显式给更高的 z-index，否则会被卡片盖住。 */
 .card { margin-top: 11px; background: #fff; border-radius: 16px; overflow: hidden;
+  position: relative; z-index: 1;
   box-shadow: 0 1px 2px rgba(31,36,48,.04), 0 10px 24px -14px rgba(31,36,48,.16); }
 .ch { display: flex; align-items: center; gap: 7px; padding: 10px 15px; border-bottom: 2px solid #EDF1F7; }
 .ci { flex: 0 0 auto; }
@@ -168,7 +182,8 @@
 .htxt.samp { color: #8A93A1; font-size: 12px; font-weight: 600; }
 
 /* ===================== 底部悬浮按钮 ===================== */
-.fab-wrap { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 14px 22px;
+/* ⚠️ z-index 必须**高于 .card(1)**：卡片提了层级之后，不写这句滚动时「开始拜访」会被卡片盖住 */
+.fab-wrap { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 14px 22px; z-index: 20;
   display: flex; justify-content: center; pointer-events: none; }
 .fab { height: 48px; padding: 0 32px; border-radius: 24px; background: linear-gradient(135deg, var(--primary), #FF7A45);
   color: #fff; font-size: 15px; font-weight: 800; letter-spacing: .5px; display: flex; align-items: center; justify-content: center;
@@ -275,6 +290,13 @@
    ⚠️ **只有这一个圆点，圆心就是"取的那个点"**（= 容器正中心，见 left/top:50%）。
       圆点下面原来还挂了一根细短线（.stem），容易让人误以为"取的是线尾" → 2026-09-28 晚按老板要求**删掉**。 */
 .cmap-pin { position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 3; pointer-events: none; }
+/* 修正模式的引导提示（⭐ 2026-09-28 晚老板定）：**贴小地图上边缘**，别放屏幕中间挡视线。
+   原来用的是 wx.showToast（屏幕正中一个胶囊，正好压在红点上）；改成页内提示条后**只要在修正模式就一直可见**。
+   z-index 4：高于图钉(3)、低于「聚火地图」badge(9)；pointer-events:none 不挡拖动。 */
+.cmap-tip { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); z-index: 4;
+  max-width: 88%; padding: 5px 12px; border-radius: 999px; box-sizing: border-box;
+  background: rgba(31, 36, 48, .78); color: #fff; font-size: 11.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .cmap-pin .dot { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%;
   background: #F5531C; border: 2.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 /* 「📍 商圈与位置」后面的店家名称（2026-09-28 老板定）：**橙色**显示更醒目（与标题同款小字，只加左间距） */

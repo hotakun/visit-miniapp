@@ -145,21 +145,27 @@ exports.main = async (event) => {
   const meRes = await db.collection('users').where({ openid: OPENID }).get();
   // 2026-09-28：同一 openid 可能**同时绑「实习(trial)」与正式账号**（开发者点「以游客身份进入」）。
   //   默认正式优先（显式定序，消除 data[0] 的随机）；请求带 asTrial → trial 账号排最前。
+  // ⭐⭐ 2026-09-28 晚修【重大错误】：**实习声明优先于 openid 认人**
+  //   背景：开发者（范宇琨）的微信 openid 早就绑了**正式业务员账号**；而「实习体验入口」按老板口径
+  //   **不绑定 openid**。原来只在「openid 查不到人」时才拿 trialId 核对 →
+  //   他点实习进来时 openid 查到了正式账号 → **认成业务员**（老板报的正是这个）。
+  //   现在：声明实习(asTrial) 且带 trialId → **先**拿 trialId 核对（role=salesman + trial=true），
+  //   核对通过就直接用它，不再看 openid 绑的是谁。⚠️ 只信库里的数据。
   {
     const _asT = !!(e && (e.asTrial === true || e.asTrial === 'true'));
-    const _l = meRes.data.slice();
-    const _tr = _l.filter(x => x.trial);
-    meRes.data = (_asT && _tr.length) ? _tr.concat(_l.filter(x => !x.trial)) : _l.sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
-  }
-  // ⭐ 2026-09-28 老板定「游客不绑定」之后必加：openid 查不到人 **且** 请求声明自己是游客 →
-  //    拿 trialId 去库里**核对**该游客账号真实存在（role=salesman + trial=true）才认它。
-  if (!meRes.data.length) {
     const _tid = String((e && e.trialId) || '');
-    const _asT2 = !!(e && (e.asTrial === true || e.asTrial === 'true'));
-    if (_asT2 && _tid) {
+    let _picked = null;
+    if (_asT && _tid) {
       const _one = await db.collection('users').doc(_tid).get().catch(() => null);
       const _u = _one && _one.data;
-      if (_u && _u.role === 'salesman' && _u.trial === true) meRes.data = [_u];
+      if (_u && _u.role === 'salesman' && _u.trial === true) _picked = _u;
+    }
+    if (_picked) {
+      meRes.data = [_picked];
+    } else {
+      const _l = meRes.data.slice();
+      const _tr = _l.filter(x => x.trial);
+      meRes.data = (_asT && _tr.length) ? _tr.concat(_l.filter(x => !x.trial)) : _l.sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
     }
   }
   const me = meRes.data[0];

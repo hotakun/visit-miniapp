@@ -1,0 +1,44 @@
+<!-- 我新加的店（2026-09-29 新增）—— 「我的」页 → 我的记事 下面进来的
+     只列**我自己**提交的现场录入（source:'field'）。
+     卡片显示：店名 / 提交时间 / 提交人 / 状态（就用现成的 mallPending：待商城建档 / 已对上商城）
+     ⭐ 点一下 → 用「加新店」页**预填编辑**（改完直接生效）
+     ⚠️ 铁律：WXML 只用 view / text（禁 HTML 标签） -->
+<view class="page">
+
+  <view class="hd">
+    <view class="hd-t">🏪 我新加的店</view>
+    <view class="hd-s" wx:if="{{loaded}}">共 {{total}} 家{{total ? '' : ' · 还没有'}}</view>
+    <view class="hd-s" wx:else>加载中…</view>
+  </view>
+
+  <!-- 空态 -->
+  <view class="empty" wx:if="{{loaded && !list.length}}">
+    <view class="e-ic">🏪</view>
+    <view class="e-t">还没加过新店</view>
+    <view class="e-s">在首页点「加新店」现场建档，提交后就会出现在这里，还能回来改。</view>
+  </view>
+
+  <!-- 卡片列表 -->
+  <view class="shopcard" wx:for="{{list}}" wx:key="id" bindtap="openShop" data-id="{{item.id}}">
+    <view class="r1">
+      <text class="nm">{{item.name}}</text>
+      <text class="st {{item.mallPending ? 'wait' : 'ok'}}">{{item.mallPending ? '待商城建档' : '已对上商城'}}</text>
+    </view>
+    <view class="r2" wx:if="{{item.addrLine}}">{{item.addrLine}}</view>
+    <view class="r3">
+      <text class="t">{{item.timeText}}</text>
+      <text wx:if="{{item.createdByName}}">　提交人 {{item.createdByName}}</text>
+    </view>
+    <view class="r4">
+      <text wx:if="{{item.photoCount}}">📷 {{item.photoCount}}</text>
+      <text wx:if="{{item.audioCount}}">　🎙 {{item.audioCount}}</text>
+      <text class="go">点一下改内容 ›</text>
+    </view>
+  </view>
+
+  <!-- 加载更多 -->
+  <view class="more" wx:if="{{hasMore}}" bindtap="loadMore">{{loadingMore ? '加载中…' : '加载更多'}}</view>
+  <view class="bot" wx:elif="{{list.length}}">没有更多了</view>
+  <view class="pad"></view>
+
+</view>

@@ -575,10 +575,12 @@ Page({
     }
     this.setData({ loading: false });
   },
-  // ⭐ 2026-09-28 老板定：首页快捷入口（业绩 / 团队 / 记事 / 新店）—— **本期只做样子**，先给点击反馈。
-  //   后续接功能时的落点：业绩=个人业绩与提成｜团队=多级管理（我的下级）｜记事=备忘｜新店=新客开发
+  // ⭐ 2026-09-28 老板定：首页快捷入口（业绩 / 团队 / 记事 / 新店）—— **「记事」「新店」已落地**；
+  //   其余两个仍只给点击反馈。后续落点：业绩=个人业绩与提成｜团队=多级管理（我的下级）
   goQuick(e) {
     const n = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.n) || '';
+    if (n === '记事') { wx.navigateTo({ url: '/pages/notes/notes' }); return; }
+    if (n === '新店') { wx.navigateTo({ url: '/pages/newshop/newshop' }); return; }   // ⭐ 加新店：现场给新店建档
     api.toast((n ? '「' + n + '」' : '该功能') + '开发中，敬请期待');
   },
   goTodayTask() {

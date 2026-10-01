@@ -4,6 +4,26 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+// ===== ⭐ 2026-09-29 新增：静默吞错的"可见化"（高危1 修复，勘察报告 §F1）=====
+//   背景：全项目曾有 22 处 `.catch(() => 默认值)` 既不打日志也不抛错 ——
+//   查询失败被伪装成"没有数据"，导致「防重检测 50 米内一模一样都毫无反应」这类
+//   查不出原因的 bug（真因是 customers 缺 lat_lng 索引）。
+//   这里**不改容错行为**（默认值照旧返回，调用方契约不变），只做两件事：
+//     ① 打一条带标签的 console.error（云函数日志里能查到）
+//     ② 收进 _silentErrs（最多 30 条），便于排查
+function silentCatch(tag, fallback) {
+  return (e) => {
+    const m = (e && e.message) || String(e);
+    console.error('[silent:' + tag + '] ' + m);
+    try {
+      if (_silentErrs.length < 30) _silentErrs.push(tag + ': ' + m);
+    } catch (e2) { /* 静默 */ }
+    return fallback;
+  };
+}
+const _silentErrs = [];
+
+
 // ===== 2026-09-11 批 3：云调用用量自建统计（与 adminapi / visits 写同一份 settings.usageCounter；攒批落库）=====
 let _ucCount = 0, _ucAt = 0;
 function ucMonth(ts) {
@@ -35,26 +55,40 @@ exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
   const { action, taskId } = event || {};
 
+  // ===== ⭐⭐ 2026-09-29 新增：免鉴权自检接口（专为排查"防重检测没反应"）=====
+  //   一次调用同时回答三件事，免得再来回猜：
+  //     ① 云端这份代码到底是不是最新的（看 code 版本戳 CODE_VER）
+  //     ② customers 的 lat/lng 范围查询能不能跑通（顺带验证索引有没有生效）
+  //     ③ 指定坐标附近到底有几家店、分别是谁、每家的坐标是多少
+  //   ⚠️ 刻意放在**鉴权之前** —— 排查时可能没有登录态；它**只读**、不写任何数据。
+  if (action === 'selfCheck') return await selfCheck(event);
+
   const me = await db.collection('users').where({ openid: OPENID }).get();
   // 2026-09-28：同一 openid 可能**同时绑「实习(trial)」与正式账号**（开发者点「以游客身份进入」）。
   //   默认**正式优先**（原本直接取 data[0]，顺序不确定 —— 这里显式定序，消除随机）；
   //   请求带 asTrial（前端实习态，见 utils/api.js）→ 把 trial 账号排到最前，下面 data[0] 一律取它。
+  // ⭐⭐ 2026-09-28 晚修【重大错误】：**实习声明优先于 openid 认人**
+  //   背景：开发者（范宇琨）的微信 openid 早就绑了**正式业务员账号**；而「实习体验入口」按老板口径
+  //   **不绑定 openid**。原来这里只在「openid 查不到人」时才拿 trialId 核对 →
+  //   他点实习进来时 openid 查到了正式账号 → **认成业务员 → 看到业务员的任务**（老板报的正是这个）。
+  //   现在：只要请求声明实习(asTrial) 且带 trialId，就**先**拿 trialId 去库里核对
+  //   （role=salesman + trial=true）；核对通过 → **直接用它**，不再看 openid 绑的是谁。
+  //   ⚠️ 只信库里的数据；核对不过 / 没带实习声明 → 完全维持原逻辑（正式优先，显式定序消除随机）。
   {
     const _asT = !!(event && (event.asTrial === true || event.asTrial === 'true'));
-    const _l = me.data.slice();
-    const _tr = _l.filter(x => x.trial);
-    me.data = (_asT && _tr.length) ? _tr.concat(_l.filter(x => !x.trial)) : _l.sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
-  }
-  // ⭐ 2026-09-28 老板定「游客不绑定」之后必加：openid 查不到人 **且** 请求声明自己是游客 →
-  //    拿 trialId 去库里**核对**该游客账号真实存在（role=salesman + trial=true）才认它。
-  //    ⚠️ 只信库里的数据，前端传的其他身份字段一律不采信。
-  if (!me.data.length) {
     const _tid = String((event && event.trialId) || '');
-    const _asT2 = !!(event && (event.asTrial === true || event.asTrial === 'true'));
-    if (_asT2 && _tid) {
+    let _picked = null;
+    if (_asT && _tid) {
       const _one = await db.collection('users').doc(_tid).get().catch(() => null);
       const _u = _one && _one.data;
-      if (_u && _u.role === 'salesman' && _u.trial === true) me.data = [_u];
+      if (_u && _u.role === 'salesman' && _u.trial === true) _picked = _u;
+    }
+    if (_picked) {
+      me.data = [_picked];
+    } else {
+      const _l = me.data.slice();
+      const _tr = _l.filter(x => x.trial);
+      me.data = (_asT && _tr.length) ? _tr.concat(_l.filter(x => !x.trial)) : _l.sort((a, b) => (a.trial ? 1 : 0) - (b.trial ? 1 : 0));
     }
   }
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
@@ -84,8 +118,526 @@ exports.main = async (event) => {
   // ⭐ 2026-09-27 新增：业务员给客户档案补**门店照片**（详情页三个相框，点空框现场拍 → 云存储 → 写档案）
   //   权限：登录业务员即可写（照片全公司共享，现场拍本就该业务员做）
   if (action === 'saveCustPhoto') return await saveCustPhoto(salesmanId, event);
+  // ⭐ 2026-09-28 新增：「加新店」——业务员**现场**给还没在库里的店建档（演示稿 _scratch/加新店-演示.html）
+  //   newShopCheck  = 防重复（200 米内同电话/同名）+ 区域&商圈自动识别（近邻加权投票）
+  //   newShopSubmit = 建档（customers 一条，标 source:'field' + mallPending:true → 后台「现场录入·待商城建档」）
+  if (action === 'newShopCheck') return await newShopCheck(event);
+  if (action === 'newShopSubmit') return await newShopSubmit(salesmanId, event);
+  // ⭐ 2026-09-29 新增：「我的 → 我新加的店」三个接口
+  //   myNewShops    = 拉**我自己**提交的现场录入（source:'field'）→ 列表卡片
+  //                   （状态就用现成的 mallPending：true=待商城建档 / false=已对上商城）
+  //   newShopDetail = 拉单条，给「加新店」页**预填编辑**用
+  //   updateNewShop = 改完**直接生效**（老板 2026-09-29 定：不设复核队列、不留痕）
+  if (action === 'myNewShops') return await myNewShops(salesmanId, event);
+  if (action === 'newShopDetail') return await newShopDetail(salesmanId, event, isBoss);
+  if (action === 'updateNewShop') return await updateNewShop(salesmanId, event);
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
+
+// =====================================================================================
+// ⭐ 2026-09-28 新增：「加新店」两个接口（业务员现场给还没在库里的店建档）
+//   演示稿：_scratch/加新店-演示.html ＋ 加新店-防重复-演示.html
+//   老板 2026-09-28 拍板：① 电话**选填**（填了就按"同电话 = 铁证"拦；没填只做同名提示）
+//                        ② 提交后**直接进客户列表** ＋ 后台备一份「现场录入 · 待商城建档」
+//                        ③ 区域与商圈**都自动填**（可手改）
+//   数据 biz_index.json（69,733 条：坐标＋行政区＋商圈，金华全域 9 区县 / 198 商圈），
+//     由 TMP 大众点评表生成（脚本 _scratch/_gen_newshop_data.py）。
+//   识别算法：**半径内按 1/距离 加权投票**（区域用"行政区"、商圈用 regionName），取前 3 候选
+//     —— 与 _scratch/loo2_biz.py 留一验证口径一致（R=100m / 权重 1/d / 前 3 覆盖 99.4%）。
+// =====================================================================================
+// ⭐ 2026-09-28 晚改：识别数据从「云函数包内的 biz_index.json」改成**云端数据库集合 biz_index**
+//   —— ① 云函数包瘦身（部署不用再传 3.45MB）② 以后扩城市不受云函数 10MB 上传上限限制。
+//   数据由 `admin/tools/import_biz_index.js` 导入（69733 条；_id = b0、b1… 幂等可重跑）。
+const BIZ_RADIUS = 100;   // 识别半径（米）—— 留一验证的最佳值
+const DUP_RADIUS = 200;   // 防重复"附近"半径（米）—— 演示稿口径
+
+// 按 lat/lng 范围拉附近的点（走 biz_index 的 lat_lng 复合索引）
+async function pullNear(lat, lng, d) {
+  const r = await db.collection('biz_index')
+    .where({ lat: _.gt(lat - d).and(_.lt(lat + d)), lng: _.gt(lng - d).and(_.lt(lng + d)) })
+    .field({ lat: true, lng: true, area: true, biz: true })
+    .limit(1000).get().catch(silentCatch('tasks·pullNear', { data: [] }));
+  return r.data || [];
+}
+
+// 近邻加权投票 → { hit, area, bizCircle, cands:[{area,biz,w}] }
+//   ⚠️ 2026-09-28 晚起改成 **async**（数据在数据库里了）—— 调用处必须 await
+async function geoVote(lat, lng) {
+  // 范围先给 ±165 米（0.0015°），足够覆盖 100 米识别半径；拉满 1000 条就收缩范围重拉一次
+  let d = 0.0015;
+  let pts = await pullNear(lat, lng, d);
+  if (pts.length >= 1000) {
+    d = 0.0008;
+    pts = await pullNear(lat, lng, d);
+  }
+  const areaW = {}, pairW = {};
+  let hit = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (!p || !p.lat || !p.lng) continue;        // ⚠️ 跳过空坐标（源数据里有）
+    const dd = haversine(lat, lng, p.lat, p.lng);
+    if (dd > BIZ_RADIUS) continue;
+    hit++;
+    const w = 1 / Math.max(dd, 8);                // 8 米兜底：避免 d→0 时权重爆炸
+    if (p.area) areaW[p.area] = (areaW[p.area] || 0) + w;
+    if (p.biz) { const k = p.area + '|' + p.biz; pairW[k] = (pairW[k] || 0) + w; }
+  }
+  const cands = Object.keys(pairW).map(k => {
+    const a = k.split('|');
+    return { area: a[0], biz: a[1], w: Math.round(pairW[k] * 100) / 100 };
+  }).sort((x, y) => y.w - x.w).slice(0, 3);
+  let area = '', best = 0;
+  Object.keys(areaW).forEach(k => { if (areaW[k] > best) { best = areaW[k]; area = k; } });
+  return { hit, area, bizCircle: cands[0] ? cands[0].biz : '', cands };
+}
+
+function normName(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
+function maskPhone(p) {
+  const s = String(p || '').trim();
+  return s.length >= 7 ? (s.slice(0, 3) + '****' + s.slice(-4)) : s;
+}
+function mdCn(ts) {
+  const d = new Date((ts || Date.now()) + 8 * 3600 * 1000);
+  return d.getUTCMonth() + 1 + '月' + d.getUTCDate() + '日';
+}
+
+// ===== ⭐ 2026-09-29 新增：防重的**模糊匹配**（老板实测报的 bug）=====
+//   老板原话："故意移动定位点到盛武肥牛店旁边，输入名字几乎一样的店铺、座机号也近似，
+//             结果防重检测毫无反应" —— 根因是老实现只做 `===` 精确匹配，
+//             "盛武肥牛" vs "盛武肥牛店"、"…8888" vs "…888 8" 全都测不出来。
+//   现在分三档：
+//     block   电话**完全一致** → 铁证，拦（保持原行为，老板 2026-09-28 定）
+//     sameName 店名**归一化后完全一致** → 提示（保持原行为）
+//     suspect  店名**高度相似** 或 电话**近似** → ⭐ 新增：预警但**不拦**（用户可以确认后继续建）
+const NAME_TAIL = /(分店|门店|总店|旗舰店|有限公司|有限责任公司|公司|中心|广场|商场|超市|餐厅|饭店|酒楼|大排档|小吃|快餐|店|馆|楼|城|铺|行|家|号)$/;
+
+// 店名归一化：全角→半角、去括号内容、去标点空格、**剥掉"店/馆/楼…"这类通用后缀**
+function nameNorm(s) {
+  let t = String(s == null ? '' : s);
+  t = t.replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)); // 全角→半角
+  t = t.replace(/[（(][^）)]*[）)]/g, '');                        // 去括号里的内容（如"(高镇商业区店)"）
+  t = t.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');               // 只留中文/字母/数字
+  for (let i = 0; i < 3; i++) {                                   // 最多剥 3 层通用后缀
+    const n = t.replace(NAME_TAIL, '');
+    if (n === t) break;
+    t = n;
+  }
+  return t;
+}
+// 编辑距离（Levenshtein）—— 只在 200 米内最多 50 条上算，性能无所谓
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = new Array(n + 1), cur = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    }
+    const tmp = prev; prev = cur; cur = tmp;
+  }
+  return prev[n];
+}
+// 店名相似度 0~1（归一化后算；一方包含另一方也算高相似）
+function nameSim(a, b) {
+  const x = nameNorm(a), y = nameNorm(b);
+  if (!x || !y) return 0;
+  if (x === y) return 1;
+  const L = Math.max(x.length, y.length);
+  let sim = 1 - lev(x, y) / L;
+  // 短的那个被长的完全包含（"肥牛" vs "盛武肥牛"）→ 抬高一点，但仍要求短串别太短
+  const short = x.length <= y.length ? x : y, long = x.length <= y.length ? y : x;
+  if (short.length >= 3 && long.indexOf(short) >= 0) sim = Math.max(sim, short.length / long.length * 0.5 + 0.5);
+  return Math.max(0, Math.min(1, sim));
+}
+// 电话归一化：只留数字，剥掉 +86 / 86 前缀
+function phoneNorm(p) {
+  let t = String(p == null ? '' : p).replace(/\D/g, '');
+  if (t.length > 11 && t.indexOf('86') === 0) t = t.slice(2);
+  return t;
+}
+// ⭐⭐ 2026-09-29 新增【老板当场指出】：
+//   **业务员照门头抄电话，绝不会自己加区号** —— 库里存 `0579-82177093`、业务员填 `82177093`，
+//   **这就是同一个号**，应该直接**拦住**（红卡），不能只给个"疑似"提示。
+//   所以比较电话一律用这个 **phoneKey()**（把区号剥掉），而不是原始的 phoneNorm()。
+//   规则：
+//     · 手机号（11 位、1 开头）→ 原样
+//     · 座机带区号（0 开头，如 0579 / 0571 / 021）→ 剥掉区号，留本地号（82177093）
+//     · 座机不带区号 → 原样
+function phoneKey(p) {
+  let t = phoneNorm(p);
+  if (!t) return '';
+  if (t.length === 11 && t.charAt(0) === '1') return t;      // 手机号：原样
+  if (t.charAt(0) === '0' && t.length > 8) {                 // 座机带区号：0 + 区号
+    // ⚠️ 区号位数**不能一概而论**：010（北京）/ 02x（021~029 沪穗津等）是 **3 位**；
+    //    其余（0579 金华、0571 杭州…）是 **4 位**。
+    //    写成 `^0\d{2,3}` 会**贪婪剥掉 4 位** → `021-62888888` 被剥成 `2888888`（错）。
+    t = t.replace(/^0(?:10|2\d|[3-9]\d{2})/, '');
+  }
+  if (t.length > 11) t = t.slice(-11);                       // 兜底：异常长号取后 11 位
+  return t;
+}
+// 电话"近似"：**去区号后相同** / 后 8 位相同 / 只差 1 位（长度也要接近）
+function phoneNear(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const A = phoneKey(a), B = phoneKey(b);
+  if (A && B && A === B) return true;                        // ⭐ 去区号后同号（82177093 == 0579-82177093）
+  const x = a.length > 11 ? a.slice(-11) : a;
+  const y = b.length > 11 ? b.slice(-11) : b;
+  if (x === y) return true;
+  if (x.length >= 8 && y.length >= 8 && x.slice(-8) === y.slice(-8)) return true;   // 尾号 8 位一致
+  if (Math.min(x.length, y.length) >= 7 && Math.abs(x.length - y.length) <= 1 && lev(x, y) <= 1) return true;
+  return false;
+}
+
+// 相似度门槛：≥0.72 算"疑似同名"（"盛武肥牛" vs "盛武肥牛店" 归一化后是 1.0，稳过）
+const NAME_SUSPECT = 0.72;
+
+// ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
+//   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
+const CODE_VER = '2026-09-29-2400';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）
+
+// ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
+//   入参（全可选）：{ lat, lng, name, phone, radius }
+//   出参：{ ok, ver, radius, nearCount, near[], queryOK, queryErr, dup }
+//     · ver     —— 云端代码版本戳（跟本地对不上 = 没重传）
+//     · near    —— 该坐标附近（默认 200 米）的店，按距离升序，带距离和坐标
+//     · queryOK —— 坐标范围查询能不能跑通（false 说明索引/语法还有问题）
+//     · dup     —— 顺手跑一次真实防重（传了 name/phone 时）
+async function selfCheck(event) {
+  const e = event || {};
+  const out = { ok: true, ver: CODE_VER };
+  const lat = Number(e.lat), lng = Number(e.lng);
+  if (!lat || !lng) { out.msg = '没传 lat/lng，只回了版本号'; return out; }
+  const R = Math.min(Math.max(Number(e.radius) || DUP_RADIUS, 10), 5000);
+  out.radius = R;
+  out.at = { lat: lat, lng: lng };
+  const dLat = R / 111000;
+  const dLng = R / (111000 * Math.cos(lat * Math.PI / 180) || 1);
+  try {
+    const r = await db.collection('customers')
+      .where({ lat: _.gt(lat - dLat).and(_.lt(lat + dLat)), lng: _.gt(lng - dLng).and(_.lt(lng + dLng)) })
+      .field({ name: true, nameRaw: true, phone: true, phone2: true, lat: true, lng: true })
+      .limit(100).get();
+    const rows = r.data || [];
+    out.queryOK = true;
+    out.nearCount = rows.length;
+    out.near = rows.map(c => ({
+      name: c.nameRaw || c.name || '', phone: maskPhone(c.phone),
+      dist: Math.round(haversine(lat, lng, c.lat, c.lng)), lat: c.lat, lng: c.lng
+    })).sort((a, b) => a.dist - b.dist);
+  } catch (err) {
+    out.queryOK = false;
+    out.queryErr = (err && err.message) || String(err);
+  }
+  if (e.name || e.phone) {
+    out.dup = await dupCheck(lat, lng, String(e.name || ''), String(e.phone || ''), '');
+  }
+  return out;
+}
+
+// 防重复：200 米内找"同电话"（铁证，拦）、"同名"、以及**疑似重复**（⭐ 2026-09-29 新增）
+//   电话口径（老板 2026-09-28 定）：**只在填了电话时**才查这一档；没填就跳过
+//   ⭐ 2026-09-29：多一个 excludeId —— **编辑已有店铺时要排除自己**，
+//      否则"改完再点防重检测"会把自己的那条记录当成疑似重复。
+async function dupCheck(lat, lng, name, phone, excludeId) {
+  const dLat = DUP_RADIUS / 111000;
+  const dLng = DUP_RADIUS / (111000 * Math.cos(lat * Math.PI / 180) || 1);
+  // ⚠️⚠️ 2026-09-29 修【真凶 · 第三次】：老板报"我就站在店旁边、库里有同名的，却说没有"。
+  //   ① 先修的：`.catch(() => ({ data: [] }))` 把查询失败伪装成"附近没有店"（已改成 try/catch + 回传 err）
+  //   ② 再修的：索引缺失（customers 的 lat_lng 已补）
+  //   ③ **本次真凶**：`.limit(50)` —— **商圈核心 200 米内可能有 80+ 家店**，
+  //      只取 50 条、又**没有排序** → 目标店很可能根本没进这 50 条 → 表现成"明明在旁边却说没有"。
+  //      实测：金东区万达广场那个坐标 **200 米内有 81 家**。现在改成分批拉到 300 条。
+  let near;
+  try {
+    const rows = [];
+    const PAGE = 100;                 // ⚠️ 云开发单次查询上限就是 100
+    const MAX = 300;                  // 最多拉 300 条（200 米内极少超过；超了会在下面标 truncated）
+    for (let sk = 0; sk < MAX; sk += PAGE) {
+      const part = await db.collection('customers')
+        .where({ lat: _.gt(lat - dLat).and(_.lt(lat + dLat)), lng: _.gt(lng - dLng).and(_.lt(lng + dLng)) })
+        .field({ name: true, nameRaw: true, phone: true, phone2: true, address: true, lat: true, lng: true,
+                 mallKey: true, customerType: true })
+        .skip(sk).limit(PAGE).get();
+      const arr = (part && part.data) || [];
+      for (const r of arr) rows.push(r);
+      if (arr.length < PAGE) break;   // 已经取完
+    }
+    near = { data: rows, truncated: rows.length >= MAX };
+  } catch (e) {
+    return { block: null, sameName: null, suspect: null, err: '附近查询失败：' + ((e && e.message) || e) };
+  }
+  // ⭐ 用 phoneKey（**去区号**）—— 业务员照门头抄电话不会写区号，
+  //   `82177093` 与库里的 `0579-82177093` 必须视为**同号** → 走 block（红卡拦住）
+  const p0 = phoneKey(phone);
+  const skipId = String(excludeId || '');
+  let block = null, sameName = null, suspect = null;
+  (near.data || []).forEach(c => {
+    if (skipId && c._id === skipId) return;          // ⚠️ 排除自己（编辑模式）
+    const d = Math.round(haversine(lat, lng, c.lat, c.lng));
+    if (d > DUP_RADIUS) return;
+    const info = {
+      id: c._id, name: c.nameRaw || c.name || '', address: c.address || '', dist: d,
+      phoneMask: maskPhone(c.phone), hasMall: !!(c.mallKey || c.customerType === 'mall'),
+      phoneSame: false, phoneNear: false, nameSim: 0
+    };
+    // ---- ① 电话（都用 phoneKey 比：**去区号后相同 = 同号**）----
+    if (p0) {
+      const cp1 = phoneKey(c.phone), cp2 = phoneKey(c.phone2);
+      if ((cp1 && cp1 === p0) || (cp2 && cp2 === p0)) {
+        info.phoneSame = true;
+        if (!block) block = info;
+      } else if (phoneNear(p0, cp1) || phoneNear(p0, cp2)) {
+        info.phoneNear = true;
+      }
+    }
+    // ---- ② 店名（归一化后算相似度）----
+    const sim = Math.max(nameSim(name, c.name), nameSim(name, c.nameRaw));
+    info.nameSim = Math.round(sim * 100);          // 存百分比，前端好显示
+    if (sim >= 0.999) {
+      if (!sameName) sameName = info;
+    } else if (sim >= NAME_SUSPECT || info.phoneNear) {
+      // 疑似：取**最像**的那条（相似度高者优先，其次距离近的）
+      if (!suspect || sim > suspect.nameSim / 100 || (sim === suspect.nameSim / 100 && d < suspect.dist)) suspect = info;
+    }
+  });
+  // truncated=true 表示"附近店多到 300 条上限了"，可能仍有遗漏 → 前端会额外提示一句
+  return { block, sameName, suspect, truncated: !!(near && near.truncated) };
+}
+
+// 查重 + 自动识别（前端改完店名/电话可以再调一次）
+async function newShopCheck(event) {
+  const e = event || {};
+  const lat = Number(e.lat), lng = Number(e.lng);
+  if (!lat || !lng) return { ok: false, code: 'NO_COORD', msg: '先采点：没有坐标，查重和自动识别都做不了' };
+  const g = await geoVote(lat, lng);         // ⚠️ 数据在数据库里了 → 必须 await
+  // ⚠️ excludeId：编辑模式（带 ?id= 进来）会传 → **把自己排除**，免得"改完点防重检测"报自己疑似重复
+  const dup = await dupCheck(lat, lng, String(e.name || ''), String(e.phone || ''), String(e.excludeId || ''));
+  // ⭐ 2026-09-28 晚：顺带把「录音单条上限 / 录音开关 / 照片上限」带回去 ——
+  //   新店页**没有任务**，拿不到任务上快照的这几个配置；从 settings 读，前端就不必写死（后台一改就跟着变）。
+  const cfg = await loadSettings();
+  return {
+    ok: true, hit: g.hit, area: g.area, bizCircle: g.bizCircle, cands: g.cands,
+    block: dup.block, sameName: dup.sameName,
+    suspect: dup.suspect || null,        // ⭐ 2026-09-29：疑似重复（店名高度相似 / 电话近似）—— 只预警、不拦
+    dupErr: dup.err || '',               // ⚠️ 附近查询失败时带回原因（不再被吞成"附近没店"）
+    // ⚠️ 附近店多到 300 条上限了 → 可能还有没扫到的，前端补一句提醒
+    dupTruncated: !!dup.truncated,
+    recLimit: cfg.recordingDurationLimit, recEnabled: cfg.recEnabled, photoLimit: cfg.photoLimit
+  };
+}
+
+// 建档（老板定：直接进客户列表 ＋ 后台备一份「现场录入 · 待商城建档」）
+async function newShopSubmit(salesmanId, event) {
+  const e = event || {};
+  const lat = Number(e.lat), lng = Number(e.lng);
+  const name = String(e.name || '').trim();
+  const phone = String(e.phone || '').trim();
+  const address = String(e.address || '').trim();
+  if (!lat || !lng) return { ok: false, code: 'NO_COORD', msg: '还没有坐标：先采点' };
+  if (!name) return { ok: false, code: 'NO_NAME', msg: '请填店名' };
+  if (!address) return { ok: false, code: 'NO_ADDR', msg: '请填地址' };
+  const photos = (Array.isArray(e.photos) ? e.photos : []).filter(Boolean);
+  if (!photos.length) return { ok: false, code: 'NO_PHOTO', msg: '店面照必拍：先拍一张门面照' };   // 老板 2026-09-28 定
+  // 提交前**再查一次**（填写到提交有时间差，别人可能刚建过同一家）
+  const dup = await dupCheck(lat, lng, name, phone);
+  if (dup.block) return { ok: false, code: 'DUP_PHONE', msg: '这家店已经在客户库里了（电话一致）', dup: dup.block };
+
+  const g = await geoVote(lat, lng);         // ⚠️ 同上：必须 await
+  const area = String(e.area || '').trim() || g.area || '';
+  const bizCircle = String(e.bizCircle || '').trim() || g.bizCircle || '❓ 未划分商圈';
+  const me = await db.collection('users').doc(salesmanId).get().catch(() => null);
+  const now = Date.now();
+  const note = String(e.note || '').trim();
+  const doc = {
+    name: name,
+    nameRaw: name,                                    // 原值留底（详情页/后台展示口径）
+    phone: phone,
+    phone2: String(e.phone2 || '').trim(),
+    address: address,
+    contactName: String(e.contactName || '').trim(),
+    hours: String(e.hours || '').trim(),
+    // 三层骨架（与 importdata.deriveGeo 同一口径）
+    city: '金华市',
+    district: area,
+    bizCircle: bizCircle,
+    region: area ? ('浙江省>金华市>' + area) : '',
+    // 坐标：**GCJ-02 入库**（地图直接可用）；现场采的 **WGS-84 原值也留底**
+    lat: lat, lng: lng,
+    wgsLat: Number(e.wgsLat) || 0, wgsLng: Number(e.wgsLng) || 0,
+    coordSource: 'field',                              // 坐标来源：现场采集（后台坐标列显示"采集"）
+    coordStatus: 'ok',
+    // 品类三级 + 服务与设施
+    cat1: String(e.cat1 || '').trim(), cat2: String(e.cat2 || '').trim(), cat3: String(e.cat3 || '').trim(),
+    flags: (e.flags && typeof e.flags === 'object') ? e.flags : {},    // 外卖 / 团购
+    fac: Array.isArray(e.fac) ? e.fac.filter(Boolean) : [],
+    mallWish: String(e.mallWish || ''),                // 加入商城意愿：registered / pending / no
+    photos: photos,                                     // 现场照 fileID（前端已上传云存储）
+    audios: Array.isArray(e.audios) ? e.audios : [],
+    remarks: note ? [{ d: mdCn(now), t: note }] : [],
+    // ⭐ 2026-09-29 新增：招牌菜（现场录入）→ customers.platManual.dishes
+    //   落点刻意与「客户详情页 → 现场提报 → 后台采纳」**完全一致**：
+    //   customer.js 的 buildD 会把 platManual.dishes 和平台抓的 customers.dishes 合并显示，
+    //   所以客户详情页**一个字都不用改**，建完档立刻能看到招牌菜。
+    platManual: (function () {
+      const ds = (Array.isArray(e.dishes) ? e.dishes : [])
+        .map(x => String(x || '').trim()).filter(Boolean).slice(0, 30);
+      return ds.length ? { dishes: ds } : {};
+    })(),
+    customerType: 'new',                                // 未加入商城
+    source: 'field',                                    // ⭐ 现场录入（后台筛"现场录入·待商城建档"靠它）
+    mallPending: true,                                  // ⭐ 待商城建档（商城表导入时自动对上）
+    createdBy: salesmanId,
+    createdByName: (me && me.data && me.data.name) || '',
+    createdAt: now, updatedAt: now
+  };
+  const add = await db.collection('customers').add({ data: doc });
+  // ⭐⭐ 2026-09-29【方案 C】建店成功后**发一个"客户有变动"的信号**
+  //   背景：后台「🏪 客户管理 / 📦 批次管理」为提速改读**本地缓存快照**（admin/store.js），
+  //        手机端新建的店不在快照里 → 老板在后台**看不到**（老板实测："菲菲杂粮煎饼"找不到）。
+  //   做法：往 settings 写一条 `custDirtyAt = 当前时间`；后台读缓存时顺手比一下这个时间戳，
+  //        比缓存新就在后台**自动重拉**，老板无需任何手动操作。
+  //   ⚠️ 失败**不影响建店**（只 log、不抛）—— 缓存晚一点更新而已，丢了这单才是大事。
+  try {
+    const dr = await db.collection('settings').where({ key: 'custDirtyAt' }).limit(1).get();
+    if (dr.data && dr.data.length) {
+      await db.collection('settings').doc(dr.data[0]._id).update({ data: { value: now, updatedAt: now } });
+    } else {
+      await db.collection('settings').add({ data: { key: 'custDirtyAt', value: now, updatedAt: now } });
+    }
+  } catch (err) { console.error('[custDirtyAt] 写变动信号失败：', err); }
+  return { ok: true, customerId: add._id, area: area, bizCircle: bizCircle };
+}
+
+// =====================================================================================
+// ⭐ 2026-09-29 新增：「我的 → 我新加的店」（老板定：状态就用现成的 mallPending；改动直接生效）
+//   ① myNewShops    拉**我自己**提交的现场录入 → 列表卡片（店名 / 提交时间 / 提交人 / 状态）
+//   ② newShopDetail 拉单条 → 给「加新店」页**预填编辑**
+//   ③ updateNewShop 改完**直接生效**（不设复核队列、不留痕；只允许改自己提交的）
+//   状态口径：**就用现成的 mallPending** —— true=待商城建档 / false=已对上商城（商城表导入时自动翻）
+// =====================================================================================
+const SHOP_PAGE_MAX = 50;
+
+async function myNewShops(salesmanId, event) {
+  const e = event || {};
+  const size = Math.min(Math.max(Number(e.size) || 20, 1), SHOP_PAGE_MAX);
+  const skip = Math.max(Number(e.skip) || 0, 0);
+  const w = { source: 'field', createdBy: salesmanId };      // 只看**我自己**建的
+  const col = db.collection('customers');
+  const [cnt, res] = await Promise.all([
+    col.where(w).count().catch(() => ({ total: 0 })),
+    col.where(w).orderBy('createdAt', 'desc').skip(skip).limit(size).get().catch(silentCatch('tasks·myNewShops', { data: [] }))
+  ]);
+  const total = cnt.total || 0;
+  const list = (res.data || []).map(c => ({
+    id: c._id,
+    name: c.name || c.nameRaw || '(没填店名)',
+    area: c.district || '',
+    bizCircle: c.bizCircle || '',
+    address: c.address || '',
+    createdAt: c.createdAt || 0,
+    createdByName: c.createdByName || '',
+    mallPending: c.mallPending !== false,                    // 默认按"待商城建档"看
+    photoCount: Array.isArray(c.photos) ? c.photos.length : 0,
+    audioCount: Array.isArray(c.audios) ? c.audios.length : 0
+  }));
+  return { ok: true, total: total, list: list, hasMore: (skip + list.length) < total };
+}
+
+async function newShopDetail(salesmanId, event, isBoss) {
+  const id = String((event && event.id) || '');
+  if (!id) return { ok: false, code: 'BAD_ARG', msg: '缺少 id' };
+  const r = await db.collection('customers').doc(id).get().catch(() => null);
+  const c = r && r.data;
+  if (!c) return { ok: false, code: 'NOT_FOUND', msg: '找不到这家店' };
+  // 只允许编辑**自己**提交的（老板模式只看不改，免得误动业务员的数据）
+  if (c.createdBy !== salesmanId) {
+    return { ok: false, code: 'FORBIDDEN', msg: isBoss ? '老板模式不修改业务员提交的店' : '只能修改自己提交的店' };
+  }
+  const pm = c.platManual || {};
+  return {
+    ok: true,
+    shop: {
+      id: c._id,
+      name: c.name || '', phone: c.phone || '', address: c.address || '',
+      contactName: c.contactName || '', hours: c.hours || '',
+      area: c.district || '', bizCircle: c.bizCircle || '',
+      cat1: c.cat1 || '', cat2: c.cat2 || '', cat3: c.cat3 || '',
+      lat: c.lat || '', lng: c.lng || '', wgsLat: c.wgsLat || '', wgsLng: c.wgsLng || '',
+      fac: Array.isArray(c.fac) ? c.fac : [],
+      flags: (c.flags && typeof c.flags === 'object') ? c.flags : {},
+      dishes: Array.isArray(pm.dishes) ? pm.dishes : [],
+      mallWish: c.mallWish || '',
+      note: (Array.isArray(c.remarks) && c.remarks[0] && c.remarks[0].t) || '',
+      photos: Array.isArray(c.photos) ? c.photos : [],
+      audios: Array.isArray(c.audios) ? c.audios : [],
+      mallPending: c.mallPending !== false,
+      createdAt: c.createdAt || 0, createdByName: c.createdByName || ''
+    }
+  };
+}
+
+async function updateNewShop(salesmanId, event) {
+  const e = event || {};
+  const id = String(e.id || '');
+  if (!id) return { ok: false, code: 'BAD_ARG', msg: '缺少 id' };
+  const cur = await db.collection('customers').doc(id).get().catch(() => null);
+  if (!cur || !cur.data) return { ok: false, code: 'NOT_FOUND', msg: '找不到这家店' };
+  if (cur.data.createdBy !== salesmanId) return { ok: false, code: 'FORBIDDEN', msg: '只能修改自己提交的店' };
+
+  const lat = Number(e.lat), lng = Number(e.lng);
+  if (!lat || !lng) return { ok: false, code: 'NO_COORD', msg: '还没有坐标：先回第 1 步定位' };
+  const name = String(e.name || '').trim();
+  const address = String(e.address || '').trim();
+  const phone = String(e.phone || '').trim();
+  if (!name) return { ok: false, code: 'NO_NAME', msg: '请填店名' };
+  if (!address) return { ok: false, code: 'NO_ADDR', msg: '请填地址' };
+  // 改完再查一次重；⚠️ 传 id **排除自己**（否则"什么都没改"也会被自己拦住）
+  const dup = await dupCheck(lat, lng, name, phone, id).catch(() => null);
+  if (dup && dup.block) {
+    return { ok: false, code: 'DUP_PHONE', msg: '这家店已经在客户库里了（电话一致）', dup: dup.block };
+  }
+
+  const g = await geoVote(lat, lng);
+  const area = String(e.area || '').trim() || g.area || '';
+  const bizCircle = String(e.bizCircle || '').trim() || g.bizCircle || '❓ 未划分商圈';
+  const now = Date.now();
+  const note = String(e.note || '').trim();
+  const dishes = (Array.isArray(e.dishes) ? e.dishes : [])
+    .map(x => String(x || '').trim()).filter(Boolean).slice(0, 30);
+  const pm = Object.assign({}, cur.data.platManual || {});
+  if (dishes.length) pm.dishes = dishes; else delete pm.dishes;
+
+  const data = {
+    name: name, nameRaw: name, phone: phone, address: address,
+    contactName: String(e.contactName || '').trim(),
+    hours: String(e.hours || '').trim(),
+    district: area, bizCircle: bizCircle,
+    region: area ? ('浙江省>金华市>' + area) : '',
+    lat: lat, lng: lng,
+    wgsLat: Number(e.wgsLat) || 0, wgsLng: Number(e.wgsLng) || 0,
+    coordSource: 'field', coordStatus: 'ok',
+    cat1: String(e.cat1 || '').trim(), cat2: String(e.cat2 || '').trim(), cat3: String(e.cat3 || '').trim(),
+    flags: (e.flags && typeof e.flags === 'object') ? e.flags : {},
+    fac: Array.isArray(e.fac) ? e.fac.filter(Boolean) : [],
+    mallWish: String(e.mallWish || ''),
+    platManual: pm,
+    updatedAt: now                    // ⭐ 后台本地缓存的增量同步靠它
+  };
+  if (Array.isArray(e.photos)) data.photos = e.photos.filter(Boolean);
+  if (Array.isArray(e.audios)) data.audios = e.audios;
+  if (note) {
+    const rs = Array.isArray(cur.data.remarks) ? cur.data.remarks.slice() : [];
+    data.remarks = rs.length ? rs.map((r, i) => (i === 0 ? { d: r.d, t: note } : r)) : [{ d: mdCn(now), t: note }];
+  }
+
+  await db.collection('customers').doc(id).update({ data: data });
+  return { ok: true, customerId: id, area: area, bizCircle: bizCircle };
+}
 
 // ⭐ 2026-09-27 新增：门店照片落库（设计文档 §四：平台图打底 + 现场拍覆盖 —— 这里只管"现场拍"那一半）
 //   入参：{ customerId, fileID, thumbID?, index? }   出参：{ ok, photos }
@@ -102,7 +654,7 @@ async function saveCustPhoto(salesmanId, event) {
   while (old.length < 3) old.push(null);
   old[index] = { fileID: fileID, thumbID: thumbID, by: salesmanId || '', at: Date.now() };
   const photos = old.filter(Boolean);
-  await db.collection('customers').doc(customerId).update({ data: { photos: photos, updatedAt: Date.now() } }).catch(() => null);
+  await db.collection('customers').doc(customerId).update({ data: { photos: photos, updatedAt: Date.now() } }).catch(silentCatch('tasks·saveCustPhoto·写入', null));
   return { ok: true, photos: photos, msg: '已保存到客户档案 ✓' };
 }
 
@@ -861,7 +1413,7 @@ async function custDetail(salesmanId, event, isBoss) {
   let items = [];
   for (let i = 0; i < orderNoList.length; i += 20) {
     const r = await db.collection('order_items')
-      .where({ orderNo: _.in(orderNoList.slice(i, i + 20)) }).limit(500).get().catch(() => ({ data: [] }));
+      .where({ orderNo: _.in(orderNoList.slice(i, i + 20)) }).limit(500).get().catch(silentCatch('tasks·for', { data: [] }));
     items = items.concat(r.data || []);
   }
   const linesOf = {};   // 单号 → 商品行数
@@ -879,7 +1431,7 @@ async function custDetail(salesmanId, event, isBoss) {
 
   // —— ③ 拜访历史（该客户全部，跨任务；带转写文字与现场照片缩略图 fileID）——
   const vRes = await db.collection('visits').where({ customerId })
-    .orderBy('createdAt', 'desc').limit(30).get().catch(() => ({ data: [] }));
+    .orderBy('createdAt', 'desc').limit(30).get().catch(silentCatch('tasks·for', { data: [] }));
   const visits = (vRes.data || []).map(v => ({
     _id: v._id,
     taskId: v.taskId || '',
@@ -904,7 +1456,7 @@ async function custDetail(salesmanId, event, isBoss) {
   //   2026-09-25 老板定：详情页底部的「开始拜访」按钮，如果这家正在拜访中 → 变成**蓝色「拜访中」**。
   //   单独查一次（不复用上面那 30 条：ongoing 是"当前状态"，不该受历史条数限制）。
   const ongRes = await db.collection('visits')
-    .where({ customerId, status: 'ongoing' }).limit(1).get().catch(() => ({ data: [] }));
+    .where({ customerId, status: 'ongoing' }).limit(1).get().catch(silentCatch('tasks·for', { data: [] }));
   const visitOngoing = !!(ongRes.data && ongRes.data.length);
 
   // —— ④ 管理员备注（新 → 旧）——
@@ -913,7 +1465,7 @@ async function custDetail(salesmanId, event, isBoss) {
 
   // —— ⑤ 现场提报（待审核：招牌菜 / 设施 / 团购外卖）—— 手机端在对应位置显示「（待审核）」（修正 008）——
   const fr = await db.collection('coord_fix_requests')
-    .where({ customerId, status: 'pending', type: 'field' }).limit(50).get().catch(() => ({ data: [] }));
+    .where({ customerId, status: 'pending', type: 'field' }).limit(50).get().catch(silentCatch('tasks·for', { data: [] }));
   const fieldReports = (fr.data || []).map(f => ({
     _id: f._id, kind: f.kind || '', value: f.value || '', flagName: f.flagName || '', flagTo: !!f.flagTo
   }));
@@ -934,7 +1486,9 @@ async function custDetail(salesmanId, event, isBoss) {
         'mallJoinedAt', 'lastOrderAt', 'lastBrowseAt', 'mallSalesman', 'mallLevel', 'mallSource',
         'salesman', 'level', 'orderCount', 'buyFreq', 'avgPrice', 'source', 'mallTags', 'mallCategory', 'mallType',
         'customerType', 'batchIds', 'remark', 'platShopUuid', 'platMatched', 'lastVisitAt', 'createdAt',
-        'plat', 'platManual', 'photos', 'remarks'];
+        'plat', 'platManual', 'photos', 'remarks',
+        // ⭐ 2026-09-28 晚：现场录入的「待商城建档」标记（手机端据此显示「⏳ 待商城建档」淡色胶囊）
+        'mallPending'];
       const o = {};
       KEEP.forEach(k => { if (c[k] !== undefined) o[k] = c[k]; });
       return o;
@@ -975,7 +1529,7 @@ async function fetchAllPaged(coll, where, field) {
     let q = db.collection(coll);
     if (where && typeof where === 'object' && Object.keys(where).length) q = q.where(where);
     if (field && typeof field === 'object' && Object.keys(field).length) q = q.field(field);
-    const r = await q.skip(skip).limit(1000).get().catch(() => ({ data: [] }));
+    const r = await q.skip(skip).limit(1000).get().catch(silentCatch('tasks·while', { data: [] }));
     out.push(...(r.data || []));
     if (!r.data || r.data.length < 1000) break;
     skip += 1000;

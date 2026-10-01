@@ -38,7 +38,9 @@ if (!cfg.appid || !cfg.appsecret || !cfg.envId) {
     process.exit(1);
   }
   const body = Object.assign({ action, username: a4 ? a3 : (a3 && a3.charAt(0) !== '{' ? a3 : 'qingyan'), password: a4 || '123456' }, extra);
-  const r = await (await fetch(`https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=${t.access_token}&env=${cfg.envId}&name=adminapi`, {
+  // ⭐ 2026-09-29：云函数名可用环境变量 CF 覆盖（默认 adminapi）—— 排查 tasks.selfCheck 时要调 tasks
+  const CFNAME = String(process.env.CF || 'adminapi').trim() || 'adminapi';
+  const r = await (await fetch(`https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=${t.access_token}&env=${cfg.envId}&name=${CFNAME}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   })).json();
   if (r.errcode) {
@@ -48,6 +50,6 @@ if (!cfg.appid || !cfg.appsecret || !cfg.envId) {
   }
   let out = r.resp_data;
   try { out = JSON.parse(out); } catch (e) { /* 原样打印 */ }
-  console.log('===== adminapi.' + action + ' 返回 =====');
+  console.log('===== ' + CFNAME + '.' + action + ' 返回 =====');
   console.log(typeof out === 'string' ? out : JSON.stringify(out, null, 2));
 })();

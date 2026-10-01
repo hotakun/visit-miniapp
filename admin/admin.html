@@ -677,17 +677,21 @@ tr.row-off td:not(.keep){opacity:.4}
     <div class="grp">工作台</div>
     <div class="ni dis" title="开发中">📊 仪表盘</div>
     <div class="ni on" data-p="tasks" onclick="nav('tasks')">🧭 任务管理</div>
-    <!-- ⭐ 2026-09-28 晚 老板定：**消息中心**（放在「任务管理」下面）——
-         角标数字 = **未处理的重点消息条数**（坐标修正/现场提报/注册审核/任务审核），
-         **实时查出来的**，所以后台关着期间产生的消息也不会漏（治"漏铃铛/漏语音"）。
-         ⚠️ 只有**在消息中心里处理完**才会减 —— 点开铃铛不再清零（原来 toggleNotify 里 nfUnread=0 已去掉）。 -->
-    <div class="ni" data-p="msg" onclick="nav('msg')">📬 消息中心<span class="nav-badge" id="msgNavBadge" hidden>0</span></div>
     <div class="ni dis" title="开发中">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
     <div class="ni" data-p="customers" onclick="nav('customers')">🗃️ 批次管理</div>
     <div class="ni" data-p="geo" onclick="nav('geo')">🏪 客户管理</div>
+    <!-- ⭐ 2026-09-28 晚 老板定：「⏳ 待商城建档」独立一页 ——
+         业务员现场用「加新店」录的店，商城侧还没有档案（customers.mallPending === true），
+         列出来给老板看；以后导商城表时把它们对上、去掉标记。 -->
+    <div class="ni" data-p="field" onclick="nav('field')">⏳ 待商城建档</div>
     <div class="ni" data-p="import" onclick="nav('import')">📥 导入信息</div>
     <div class="ni" data-p="track" onclick="nav('track')">🌐 战况监控</div>
+    <!-- ⭐ 2026-09-28 晚 老板定：**消息中心**（先定"放任务管理下面"，当晚又定：**改放到「战况监控」下面**）——
+         角标数字 = **未处理的重点消息条数**（坐标修正/现场提报/注册审核/任务审核），
+         **实时查出来的**，所以后台关着期间产生的消息也不会漏（治"漏铃铛/漏语音"）。
+         ⚠️ 只有**在消息中心里处理完**才会减 —— 点开铃铛不再清零（原来 toggleNotify 里 nfUnread=0 已去掉）。 -->
+    <div class="ni" data-p="msg" onclick="nav('msg')">📬 消息中心<span class="nav-badge" id="msgNavBadge" hidden>0</span></div>
     <div class="grp">系统</div>
     <div class="ni" data-p="people" onclick="nav('people')">👥 人员管理<span class="nav-badge" id="peopleNavBadge" hidden>0</span></div>
     <div class="ni dis" title="开发中">💾 数据备份</div>
@@ -703,6 +707,12 @@ tr.row-off td:not(.keep){opacity:.4}
         <span class="mall-last" id="mallLastAt">上次导入：—</span>
       </div>
       <div class="top-right">
+        <!-- ⭐⭐ 2026-09-29 老板定：**客户回收站**（位置：切换工作台的左边）——
+             老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」。
+             ⚠️ **只在「🏪 客户管理」页显示**（别的页切换没意义）—— 靠 nav() 里的开关控制。
+             ⚠️ 它和工具条上的「🗑 删除」是配套的：删除 = 移进回收站（软删），这里能看、能恢复。 -->
+        <button id="geoTrashBtn" onclick="geoTrashOpen()" title="已删除的客户先放这里，随时可以恢复"
+          style="display:none;height:26px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:var(--sub);font-family:inherit;white-space:nowrap;margin-right:8px">🗑 回收站</button>
         <div class="wb-tag" onclick="showWb()" id="wbTag">🔥 回访工作台 ▾</div>
         <!-- ⭐ 2026-09-28 晚 老板定：**去掉铃铛** —— 有了边栏「📬 消息中心」（带角标、点卡片能直接审核），
              原来这个只能弹"通知列表"的 🔔 就画蛇添足了。
@@ -1192,6 +1202,14 @@ tr.row-off td:not(.keep){opacity:.4}
                （批次卡那条老链路「批次 → 选客户 + 选业务员 → 建任务」完全不变，只是多一个建批次的入口） -->
           <button onclick="geoMakeBatch()" title="把已勾选的客户建成一个批次（建完后去「批次管理」的批次卡里派单）"
             style="height:26px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:var(--primary-deep);font-family:inherit;white-space:nowrap">📦 建立批次</button>
+          <!-- ⭐⭐ 2026-09-29 老板定：**删除 = 移入回收站**（软删，可恢复）
+               老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」。
+               ⚠️ 不再真删：只打标记；客户总数 / 地图都不算它，**订单金额照旧计入**；随时能在「🗑 回收站」恢复。 -->
+          <button onclick="geoDeletePicked()" title="把勾选的客户移入回收站（可以恢复）"
+            style="height:26px;border:1px solid #F3C9C9;background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:var(--danger);font-family:inherit;white-space:nowrap">🗑 删除</button>
+          <!-- ⭐ 2026-09-29 回收站视图专用按钮（由 updateGeoTrashPicked() 控制显隐；客户列表里它是隐藏的） -->
+          <button id="geoTrashRestoreBtn" onclick="geoRestorePicked()" title="把勾选的客户从回收站恢复"
+            style="display:none;height:26px;border:1px solid #C9E3CB;background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:#14663A;font-family:inherit;white-space:nowrap">↩ 恢复所选</button>
           <span style="width:10px"></span>
           <span class="lb">城市</span>
           <select id="gfCity" onchange="geoFilterChange('gfCity')" class="gsel"></select>
@@ -1407,6 +1425,40 @@ tr.row-off td:not(.keep){opacity:.4}
           <button class="btn primary" onclick="decideConflict('new')">新建独立客户</button>
           <button class="btn" style="background:var(--green-tint);color:var(--green)" onclick="decideConflict('merge')">合并进选中档案</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ⭐ 2026-09-28 晚 老板定：**「⏳ 待商城建档」**（边栏独立一页）——
+         业务员现场用「加新店」录的店（customers.mallPending === true）：
+         他们已经是正式客户（能派任务 / 能拜访），只是**商城侧还没有档案**，
+         等以后导商城表来对上；也可以在这一页手工「已建档」。 -->
+    <div id="page-field" style="display:none">
+      <style>
+        .fl-bar { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+        .fl-bar .fl-cnt { font-size:12.5px; color:var(--sub); font-weight:700; }
+        .fl-row { display:flex; gap:12px; align-items:flex-start; background:#fff; border:1px solid #EFF1F5;
+          border-radius:12px; padding:10px 12px; box-shadow:0 2px 8px rgba(31,36,48,.05); }
+        .fl-ph { flex:0 0 auto; width:78px; height:58px; border-radius:9px; object-fit:cover; background:#F0F2F5; }
+        .fl-ph.ph { display:flex; align-items:center; justify-content:center; font-size:10.5px; color:#A3ABB8; }
+        .fl-mid { flex:1; min-width:0; }
+        .fl-nm { font-size:13.5px; font-weight:800; color:#22262E; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+        .fl-sub { font-size:12px; color:#5B6472; margin-top:2px; word-break:break-all; }
+        .fl-sub.mut { color:#94A0B2; font-size:11.5px; }
+        .fl-tag { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; }
+        .fl-tag.ok { background:#EAF6EE; color:#14663A; }
+        .fl-tag.pend { background:#F1F3F7; color:#6B7688; }
+        .fl-act { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; }
+      </style>
+      <div class="title-bar"><span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span></div>
+      <div class="fl-bar">
+        <input id="fieldQ" class="ginp" style="width:220px" placeholder="店名 / 电话 / 地址"
+          onkeydown="if(event.key==='Enter')fieldSearch()">
+        <button class="btn ghost btn-sm" onclick="fieldSearch()">🔍 搜索</button>
+        <button class="btn ghost btn-sm" onclick="loadFieldList()">刷新</button>
+        <span class="fl-cnt" id="fieldCount">—</span>
+      </div>
+      <div class="card" style="padding:0">
+        <div id="fieldList" class="np-list" style="padding:10px"><div class="np-empty">加载中…</div></div>
       </div>
     </div>
 
@@ -2337,15 +2389,17 @@ function curPurposeId() {
 function nav(p) {
   stopDetailTimer('');
   document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === p));
-  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import', 'geo', 'msg'].forEach(id => { $('page-' + id).style.display = 'none'; });   // ⭐ 2026-09-28 晚：加了 'msg'（消息中心）
+  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import', 'geo', 'msg', 'field'].forEach(id => { $('page-' + id).style.display = 'none'; });   // ⭐ 2026-09-28 晚：加了 'msg'（消息中心）/'field'（待商城建档）
   // ⭐ 2026-09-26 老板定：**客户管理页（原名「地域管理」）的表格跟着窗口走** —— 放开 .main 的 max-width:1200px，
   //    其他页保持原样（1200px 上限）。窗口多宽，表格就铺多宽。
   const mainEl = document.querySelector('main.main');
   if (mainEl) mainEl.style.maxWidth = (p === 'geo') ? 'none' : '';
-  const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理', msg: '消息中心' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
-  if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (p === 'msg' ? '待处理的重点消息 · 业务员动态流水' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台'))); }
+  const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理', msg: '消息中心', field: '待商城建档' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
+  if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (p === 'msg' ? '待处理的重点消息 · 业务员动态流水' : (p === 'field' ? '业务员现场录入 · 等商城表来对上' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台')))); }
   // ⭐ 2026-09-28 晚 老板定：进入消息中心 → 实时拉数据（**不是"读过了就清零"**）
   if (p === 'msg') loadMsgCenter();
+  // ⭐ 2026-09-28 晚：「⏳ 待商城建档」页 → 拉一次列表
+  if (p === 'field') loadFieldList();
   // 顶部导航：仅回访工作台的**批次管理**页（内部 id=customers）显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
   $('topActions').style.display = (p === 'customers' && curMode === 'mall') ? 'flex' : 'none';
   if (p === 'customers') {
@@ -2383,7 +2437,15 @@ function nav(p) {
     loadTasks();
   }
   if (p === 'customers') { if (curMode === 'new') loadCustomers(); else loadBatches(); }
-  if (p === 'geo') loadGeoPage();   // 2026-09-26 新增
+  // ⭐ 2026-09-29 回收站：进「🏪 客户管理」页时**必须回到客户列表**
+  //   （不能停在上次离开时的回收站视图 —— 否则页名叫"客户管理"、看到的却是回收站）
+  //   ⚠️ 这里**只重置状态、不调 geoTrashExit()** —— 那个函数内部会再调 loadGeoPage()，会重复加载一遍
+  if (p === 'geo') {
+    if (geoTrashMode) { geoTrashMode = false; geoTrashPicked = {}; geoTrashCache = []; }
+    loadGeoPage();   // 2026-09-26 新增
+  }
+  // 「🗑 回收站」按钮**只在「🏪 客户管理」页出现**
+  { const tb = $('geoTrashBtn'); if (tb) tb.style.display = (p === 'geo') ? '' : 'none'; }
   if (p === 'people') loadPeople();
   if (p === 'settings') loadSettings();
   if (p === 'import') initImportPage();
@@ -6702,7 +6764,7 @@ async function loadLastMallImport() {
 //     —— 库里到 6 万家也秒开，翻页 0 请求
 //   · 订单/拜访/任务状态/报错待审 这几列要查别的表 → 按**当前页**调一次 custPageAgg（≤200 家，很快）
 //   · 写后回写（M3）：改完（备注/坐标/字段/删除/建批次）调 /mapPoints/patch，把改动同步进本地缓存文件
-let custLocal = null;          // { syncedAt, points: [...], err? } —— 一次会话读一次
+let custLocal = null;          // { syncedAt, count, points: [...], err? } —— 一次会话读一次
 let custLocalLoading = null;   // 并发保护（同时多个调用只发一次请求）
 async function ensureCustLocal(force) {
   if (custLocal && !force) return custLocal;
@@ -6710,14 +6772,38 @@ async function ensureCustLocal(force) {
   custLocalLoading = (async () => {
     try {
       const r = await fetch('/mapPoints', { cache: 'no-store' }).then(x => x.json());
-      custLocal = { syncedAt: r.syncedAt || 0, points: r.points || [], warming: !!r.warming, progress: r.progress || null };
+      custLocal = { syncedAt: r.syncedAt || 0, count: r.count || (r.points || []).length, points: r.points || [], warming: !!r.warming, progress: r.progress || null };
     } catch (e) {
-      custLocal = { syncedAt: 0, points: [], err: String((e && e.message) || e) };
+      custLocal = { syncedAt: 0, count: 0, points: [], err: String((e && e.message) || e) };
     }
     custLocalLoading = null;
+    custKeepAlive();                       // ⭐ 第一次取数后启动"保鲜"轮询（幂等，只启一次）
     return custLocal;
   })();
   return custLocalLoading;
+}
+
+// ⭐⭐ 2026-09-29【方案 C】缓存"保鲜"
+//   老板实测：手机端建了「菲菲杂粮煎饼」，后台「🏪 客户管理」里找不到。
+//   原因：客户管理 / 批次管理页读的是**本地缓存快照**，手机端新建的店不在快照里。
+//   链路：手机端建店 → 云端写 settings.custDirtyAt → 后台 /mapPoints 顺手补增量（**条数会变**）
+//        → 这里每 15 秒问一次**极轻的** /mapPoints/status（几 KB，绝不重拉 22MB 客户点），
+//          发现条数变了就作废本地快照 + **就地重绘**当前页 → 老板什么都不必点。
+let _custKeepAlive = null;
+function custKeepAlive() {
+  if (_custKeepAlive) return;
+  _custKeepAlive = setInterval(async () => {
+    try {
+      const s = await fetch('/mapPoints/status', { cache: 'no-store' }).then(x => x.json());
+      const n = (s && s.count) || 0;
+      if (!custLocal || !n || !custLocal.count) return;
+      if (n === custLocal.count) return;                      // 没变，什么都不做
+      custLocal = null;                                       // 作废快照 → 下次取新的
+      const vis = el => el && el.style && el.style.display !== 'none';
+      if (vis(document.getElementById('page-geo')) && typeof loadGeoPage === 'function') loadGeoPage();
+      else if (vis(document.getElementById('page-customers')) && typeof loadCustomers === 'function') loadCustomers(curBatchId, curBatchName);
+    } catch (e) { /* 网络抖动忽略，下次再问 */ }
+  }, 15000);
 }
 // 从本地点生成三层下拉选项（坑 D 教训：选项必须来自数据，不能写死）
 function custGeoFromPoints(points) {
@@ -7022,6 +7108,14 @@ function geoToggleSort(key) {
 async function loadGeoPage() {
   const tbody = $('geoTbody');
   if (!tbody) return;
+  // ⭐ 2026-09-29 回收站：**进客户列表就一定退出回收站状态**（含把被回收站藏起来的两个按钮还回来）
+  //   放在这里是因为它是"唯一入口" —— 不管从 nav() 还是别的地方调 loadGeoPage()，状态都会被重置干净
+  if (geoTrashMode) { geoTrashMode = false; geoTrashPicked = {}; geoTrashCache = []; }
+  { const mb = document.querySelector('button[onclick="geoMakeBatch()"]'); if (mb) mb.style.display = '';
+    const db2 = document.querySelector('button[onclick="geoDeletePicked()"]'); if (db2) db2.style.display = '';
+    const rb = $('geoTrashRestoreBtn'); if (rb) rb.style.display = 'none';
+    // 顶栏按钮也恢复成「🗑 回收站」（它是进/出同一个按钮）
+    const tb = $('geoTrashBtn'); if (tb) { tb.textContent = '🗑 回收站'; tb.title = '已删除的客户先放这里，随时可以恢复'; } }
   loadGeoOptions();
   tbody.innerHTML = '<tr><td colspan="16" class="loading">加载中…</td></tr>';
   // ⭐ 2026-09-27 M2b：**改读本地缓存** —— 筛选/排序/分页全在本地算（6 万家也秒开、翻页 0 查询）；
@@ -7190,6 +7284,175 @@ async function geoMakeBatch() {
   geoClearPicked();   // 建完清空勾选，避免误操作
 }
 
+// ⭐⭐ 2026-09-29 新增【老板要求补：删除客户】
+//   勾选 → 「🗑 删除」→ 二次确认（列出店名）→ 调 adminapi.deleteCustomers
+//   ⚠️ 云端**自带保护**：**有拜访记录 / 有订单记录的客户会被拒删** ——
+//      不是静默跳过，会把原因带回（blocked[]），这里如实显示给老板看。
+//   ⚠️ 删完**同步清掉本地缓存**（M3 写后回写），否则列表里还挂着这条。
+async function geoDeletePicked() {
+  const ids = Object.keys(geoPicked);
+  if (!ids.length) { alert('请先在表格里勾选要删除的客户（可点表头方框全选本页）'); return; }
+  // 取店名（本地缓存里就有）—— 确认框里列出来，免得删错
+  const byId = {};
+  ((custLocal && custLocal.points) || []).forEach(p => { byId[p.i] = p; });
+  const names = ids.map(id => { const p = byId[id]; return '· ' + ((p && (p.nr || p.n)) ? (p.nr || p.n) : id); });
+  const preview = names.slice(0, 10).join('\n') + (names.length > 10 ? '\n· …等共 ' + names.length + ' 家' : '');
+  if (!confirm('🗑 把这 ' + ids.length + ' 家客户移入回收站？\n\n' + preview
+    + '\n\n· 只是**移入回收站** —— 不在客户列表 / 地图上显示\n· 客户总数不再算它们（订单金额照旧计入）\n· 随时可在「🗑 回收站」里恢复，**一条数据都不丢**')) return;
+  let res;
+  try { res = await api('deleteCustomers', { customerIds: ids }); }
+  catch (e) { alert('移入回收站失败：' + ((e && e.message) || e)); return; }
+  if (!res || !res.ok) { alert((res && res.msg) || '移入回收站失败'); return; }
+  // ① 本地缓存同步移除：移进回收站的 = 勾选里**没被 blocked 的**那些
+  //   ⚠️ 必须显式 removeIds —— 已删客户**不会**通过增量同步传给后台（见 adminapi.custSync 的说明）；
+  //      而全量刷新（custMapPoints）**已排除它们**，所以从缓存摘掉之后不会再回来。
+  const blockedIds = {};
+  ((res.blocked) || []).forEach(b => { if (b && b.id) blockedIds[b.id] = 1; });
+  const goneIds = ids.filter(id => !blockedIds[id]);
+  if (goneIds.length) custPatchLocal([], goneIds);
+  geoClearPicked();
+  await loadGeoPage();
+  // ② 如实汇报
+  let msg = '🗑 已移入回收站 ' + (res.deleted || 0) + ' 家（可在「🗑 回收站」里恢复）';
+  if (res.blocked && res.blocked.length) {
+    const lines = res.blocked.slice(0, 10).map(b => '· ' + (b.name || b.id || '（无店名）') + ' —— ' + (b.reason || '未处理'));
+    msg += '\n\n⚠️ 以下 ' + res.blocked.length + ' 家**没动**：\n' + lines.join('\n')
+      + (res.blocked.length > 10 ? '\n· …' : '');
+  }
+  alert(msg);
+}
+
+// ⭐⭐ 2026-09-29 老板定：**客户回收站**（软删）
+//   老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」
+//          +「只做恢复，不做彻底删除」→ 本轮**不提供彻底删除**入口
+//   入口：顶栏「🗑 回收站」按钮（「切换工作台」左边，**只在客户管理页显示**）
+//   ⚠️ 列表**走云端**（`listDeletedCustomers`）—— 已删客户**不在本地缓存里**（custMapPoints 已排除它们）
+let geoTrashMode = false;
+let geoTrashPicked = {};
+let geoTrashPage = 0;
+let geoTrashQ = '';
+let geoTrashCache = [];       // 当前页数据（恢复时要按 id 取店名）
+
+// 顶栏按钮：**进 / 出都是它**（再点一次就回客户列表 —— 免得用户找不到"返回"入口）
+function geoTrashOpen() {
+  if (geoTrashMode) { geoTrashExit(); return; }
+  geoTrashMode = true;
+  geoTrashPicked = {};
+  geoTrashPage = 0;
+  geoTrashQ = '';
+  const q = $('gfQ'); if (q) q.value = '';
+  geoTrashRender();
+}
+
+// 退出回收站 → 回客户列表（nav() 离开 geo 页时也会调它）
+function geoTrashExit() {
+  geoTrashMode = false;
+  geoTrashPicked = {};
+  geoTrashCache = [];
+  loadGeoPage();
+}
+
+async function geoTrashRender() {
+  const tbody = $('geoTbody');
+  const thead = $('geoThead');
+  if (!tbody) return;
+  // 表头换成回收站的列（跟客户表不一样：没有批次/订单那几列）
+  if (thead) thead.innerHTML = '<tr>'
+    + '<th style="width:22px;text-align:center"><input type="checkbox" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle" onchange="geoTrashCheckAll(this.checked)"></th>'
+    + '<th class="lft">店名</th><th>电话</th><th class="lft">地址</th><th>区域 / 商圈</th>'
+    + '<th>来源</th><th>删除时间</th><th>删除人</th><th>操作</th></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="loading">加载中…</td></tr>';
+  const r = await api('listDeletedCustomers', { page: geoTrashPage, pageSize: 50, q: geoTrashQ });
+  if (!r || !r.ok) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">读取回收站失败：' + esc((r && r.msg) || '请稍后重试') + '</td></tr>';
+    return;
+  }
+  geoTrashCache = r.list || [];
+  const title = $('geoTitle'); if (title) title.textContent = '🗑 客户回收站';
+  // 顶栏按钮切成"返回"（同一个按钮进 / 出）
+  { const tb = $('geoTrashBtn'); if (tb) { tb.textContent = '← 返回客户列表'; tb.title = '回到客户列表'; } }
+  const stat = $('geoStat'); if (stat) stat.textContent = '共 ' + (r.total || 0) + ' 家（移入回收站的客户不计入客户总数、不在地图上显示）';
+  if (!geoTrashCache.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">'
+      + (geoTrashQ ? '没搜到' : '回收站是空的 —— 在客户列表勾选后点「🗑 删除」就会放到这里')
+      + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = geoTrashCache.map(c => {
+    const on = geoTrashPicked[c.id] ? ' checked' : '';
+    const geo = [c.area, c.bizCircle].filter(Boolean).join(' · ') || '—';
+    const when = c.deletedAt ? msgT(c.deletedAt) : '—';
+    const src = c.source === 'field' ? '现场录入' : (c.mallPending ? '待商城建档' : '导入');
+    return '<tr class="' + (geoTrashPicked[c.id] ? 'picked' : '') + '">'
+      + '<td style="text-align:center"><input type="checkbox" class="rowchk" style="cursor:pointer;accent-color:#F5531C;width:14px;height:14px;vertical-align:middle"' + on
+      + ' onchange="geoTrashPick(\'' + c.id + '\', this.checked)"></td>'
+      + '<td class="lft"><b>' + esc(c.nameRaw || c.name) + '</b></td>'
+      + '<td>' + esc(c.phone || '—') + '</td>'
+      + '<td class="lft"><span class="addr">' + esc(c.address || '—') + '</span></td>'
+      + '<td>' + esc(geo) + '</td>'
+      + '<td>' + src + '</td>'
+      + '<td>' + esc(when) + '</td>'
+      + '<td>' + esc(c.deletedBy || '—') + '</td>'
+      + '<td><button class="tbtn" onclick="geoRestoreOne(\'' + c.id + '\')">恢复</button></td>'
+      + '</tr>';
+  }).join('');
+  updateGeoTrashPicked();
+}
+
+function geoTrashPick(id, on) {
+  if (on) geoTrashPicked[id] = 1; else delete geoTrashPicked[id];
+  const tr = document.querySelector('#geoTbody input.rowchk[onchange*="' + id + '"]');
+  if (tr && tr.closest) { const row = tr.closest('tr'); if (row) row.className = on ? 'picked' : ''; }
+  updateGeoTrashPicked();
+}
+function geoTrashCheckAll(on) {
+  (geoTrashCache || []).forEach(c => { if (on) geoTrashPicked[c.id] = 1; else delete geoTrashPicked[c.id]; });
+  document.querySelectorAll('#geoTbody input.rowchk').forEach(b => { b.checked = !!on; });
+  document.querySelectorAll('#geoTbody tr').forEach(tr => { tr.className = on ? 'picked' : ''; });
+  updateGeoTrashPicked();
+}
+function updateGeoTrashPicked() {
+  const el = $('geoPicked'); if (!el) return;
+  const n = Object.keys(geoTrashPicked).length;
+  el.textContent = n ? ('已选 ' + n + ' 家') : '';
+  // 借用客户表那个「建立批次 / 删除」的位置放「恢复」—— 回收站模式下这两个按钮没意义，藏起来
+  const mb = document.querySelector('button[onclick="geoMakeBatch()"]');
+  const db = document.querySelector('button[onclick="geoDeletePicked()"]');
+  if (mb) mb.style.display = 'none';
+  if (db) db.style.display = 'none';
+  const rb = $('geoTrashRestoreBtn');
+  if (rb) { rb.style.display = n ? '' : 'none'; rb.textContent = '↩ 恢复所选（' + n + '）'; }
+}
+
+// 恢复：单个 / 批量（都走同一个接口）
+async function geoRestoreOne(id) {
+  await geoRestoreIds([id]);
+}
+async function geoRestorePicked() {
+  const ids = Object.keys(geoTrashPicked);
+  if (!ids.length) { alert('先勾选要恢复的客户'); return; }
+  await geoRestoreIds(ids);
+}
+async function geoRestoreIds(ids) {
+  if (!ids.length) return;
+  const byId = {}; (geoTrashCache || []).forEach(c => { byId[c.id] = c; });
+  const names = ids.map(id => '· ' + ((byId[id] && byId[id].name) || id));
+  const preview = names.slice(0, 10).join('\n') + (names.length > 10 ? '\n· …等共 ' + names.length + ' 家' : '');
+  if (!confirm('↩ 把这 ' + ids.length + ' 家从回收站恢复？\n\n' + preview
+    + '\n\n· 会重新出现在客户列表 / 地图上\n· 批次归属、拜访记录、照片**都还在**')) return;
+  let res;
+  try { res = await api('restoreCustomers', { customerIds: ids }); }
+  catch (e) { alert('恢复失败：' + ((e && e.message) || e)); return; }
+  if (!res || !res.ok) { alert((res && res.msg) || '恢复失败'); return; }
+  // 恢复后：本地缓存里没有它们（custMapPoints 之前排除了）→ **作废快照，下次重新取**
+  //   ⚠️ 云端 custSync 会把恢复的客户当"改动过"带回来（它们重新符合 NOT_DELETED），
+  //      所以就算不等全量刷新，15 秒后的增量补也会把它们补回缓存；这里作废只是让它**立刻**出现
+  custLocal = null;
+  geoTrashPicked = {};
+  alert(res.msg || ('已恢复 ' + ids.length + ' 家'));
+  await geoTrashRender();
+}
+
 // ⭐ 2026-09-26 老板定：「已选 N 家」右边的 ✕ = **一键取消全部选择**
 function geoClearPicked() {
   geoPicked = {};                                                          // 清空内存里的选择
@@ -7211,7 +7474,10 @@ function geoFilterChange(id) {
 
 function geoSearch() {
   const qEl = $('gfQ');
-  geoF.q = qEl ? String(qEl.value || '').trim() : '';
+  const _q = qEl ? String(qEl.value || '').trim() : '';
+  // ⭐ 2026-09-29 回收站：在回收站视图里搜索 → 搜的是**已删客户**（走云端 listDeletedCustomers）
+  if (geoTrashMode) { geoTrashQ = _q; geoTrashPage = 0; geoTrashRender(); return; }
+  geoF.q = _q;
   geoF.page = 1;
   loadGeoPage();
 }
@@ -8484,6 +8750,65 @@ function loadMsgCenter() {
   msgRender();
 }
 
+// =====================================================================================
+// ⭐ 2026-09-28 晚 老板定：「⏳ 待商城建档」（边栏独立一页）
+//   这批 = 业务员**现场用「加新店」录的店**（customers.mallPending === true）——
+//   他们已经是正式客户（能派任务 / 能拜访 / 能记笔记），只是**商城侧还没有档案**，
+//   等以后导商城表把他们对上（也可以在这一页手工取消标记）。
+// =====================================================================================
+let fieldPage = 0, fieldQ = '';
+
+function loadFieldList() {
+  fieldPage = 0; fieldQ = '';
+  const box = $('fieldQ'); if (box) box.value = '';
+  fieldRender();
+}
+function fieldSearch() {
+  const box = $('fieldQ'); fieldQ = box ? box.value.trim() : '';
+  fieldPage = 0; fieldRender();
+}
+async function fieldRender(append) {
+  const list = $('fieldList'); if (!list) return;
+  if (!append) list.innerHTML = '<div class="np-empty">加载中…</div>';
+  const r = await api('fieldList', { page: fieldPage, pageSize: 30, q: fieldQ });
+  if (!r || !r.ok) { list.innerHTML = '<div class="np-empty">加载失败：' + ((r && r.msg) || '请稍后重试') + '</div>'; return; }
+  const rows = (r.list || []).map(c => {
+    const photo = c.photo
+      ? '<img class="fl-ph" src="' + c.photo + '" onerror="this.style.display=\'none\'">'
+      : '<div class="fl-ph ph">无照片</div>';
+    const mall = c.hasMall ? '<span class="fl-tag ok">商城已有档案</span>' : '<span class="fl-tag pend">商城还没档案</span>';
+    const when = c.createdAt ? msgT(c.createdAt) : '';
+    const geo = c.lat ? (Number(c.lat).toFixed(6) + ', ' + Number(c.lng).toFixed(6)) : '无坐标';
+    return '<div class="fl-row">' + photo + '<div class="fl-mid">'
+      + '<div class="fl-nm">' + c.name + ' ' + mall + '</div>'
+      + '<div class="fl-sub">' + ([c.area, c.bizCircle].filter(Boolean).join(' · ') || '区域未填') + ' · ' + (c.phone || '无电话') + '</div>'
+      + '<div class="fl-sub">' + (c.address || '无地址') + '</div>'
+      + '<div class="fl-sub mut">' + (c.createdByName ? c.createdByName + ' 录' : '现场录入') + (when ? ' · ' + when : '') + ' · ' + geo + '</div>'
+      + '</div><div class="fl-act">'
+      + '<button class="btn ghost btn-sm" onclick="fieldOpen(\'' + String(c.name).replace(/'/g, '') + '\')">去客户管理看</button>'
+      // ⛔ 2026-09-29 老板定：**删掉「已建档」按钮** ——
+      //   「已加入商城」是**事实**，只能由**导入商城表比对**决定；手动抹标记会让注册时间/签约业务员/编号全空、订单接不上。
+      //   这些店现在会在**导入商城表后自动转正**（adminapi.runMallMatch / applyMallMatch）。
+      + '</div></div>';
+  }).join('');
+  if (append) list.insertAdjacentHTML('beforeend', rows);
+  else {
+    list.innerHTML = rows || '<div class="np-empty">' + (fieldQ ? '没搜到' : '还没有现场录入的店 —— 业务员在手机上用「加新店」录了就会出现在这里') + '</div>';
+    const cnt = $('fieldCount'); if (cnt) cnt.textContent = (r.total || 0) + ' 家';
+  }
+}
+// 跳到「🏪 客户管理」页并用店名搜它（gfQ = 那一页的搜索框）
+function fieldOpen(name) {
+  nav('geo');
+  setTimeout(() => { const q = $('gfQ'); if (q) { q.value = name; geoSearch(); } }, 80);
+}
+// 手工取消「待商城建档」标记
+async function fieldDone(id, name) {
+  if (!confirm('把「' + name + '」标记为已商城建档？\n\n它仍留在客户库里，只是不再出现在这一页。')) return;
+  const r = await api('fieldDone', { id: id });
+  if (r && r.ok) { alert('已标记：' + name); fieldRender(); } else { alert((r && r.msg) || '失败'); }
+}
+
 // ⭐ 2026-09-28 晚：**不再用 Tab 切换** —— 老板定"两张卡并排"（左滚动 / 右重点），
 //   所以原来的 switchMsgTab() 已删除（它引用的 mtab-imp / mtab-roll 元素也一并没了）。
 function msgLoadMore() { msgPage++; msgRender(true); }
@@ -8596,6 +8921,26 @@ function msgImpCard(it) {
           onmouseout="this.style.transform='none';this.style.color='var(--primary)';this.style.textShadow='none'"
           onclick="nav('people')">去审核（跳人员管理）›</span>
       </div></div>`;
+  }
+  // ⭐⭐ 2026-09-29【老板定：加新店要进重点消息】
+  //   业务员现场建的店（还没对上商城）—— 点卡片**去「客户管理」看**（这里不给"一键建档"：
+  //   商城状态只能由导入商城表比对决定；对上商城后这条会自动消失）。
+  if (it.kind === 'shopNew') {
+    const geo = (it.area || it.bizCircle) ? ((it.area || '') + (it.bizCircle ? ' · ' + it.bizCircle : '')) : '区域未填';
+    return `<div class="card" style="padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="fieldOpen('${String(it.customerName).replace(/'/g, '')}')">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="pill" style="background:#FFF6E5;color:#B97A0B;font-weight:700">🏪 加新店</span>
+        <b style="font-size:14.5px">${esc(it.customerName)}</b>
+        <span style="margin-left:auto;color:var(--sub);font-size:12px">${t}</span>
+      </div>
+      <div class="sb-d" style="margin-top:6px">${who} 现场录入 · ${esc(geo)}${it.phone ? ' · ' + esc(it.phone) : ''}${it.note ? ' · ' + esc(it.note) : ''}</div>
+      <div style="margin-top:8px">
+        <span style="display:inline-block;color:var(--primary);font-weight:700;font-size:13px;cursor:pointer;
+          transition:transform .15s,color .15s,text-shadow .15s"
+          onmouseover="this.style.transform='translateX(2px)';this.style.color='#D93E0E';this.style.textShadow='0 1px 2px rgba(245,83,28,.28)'"
+          onmouseout="this.style.transform='none';this.style.color='var(--primary)';this.style.textShadow='none'">点击卡片 → 去「客户管理」看 ›</span>
+      </div>
+    </div>`;
   }
   return `<div class="card" style="padding:14px 16px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -10242,7 +10587,25 @@ function decideLocalPending(idx, action) {
 async function applyLocalMatch() {
   const r = localMatchResult;
   if (!r) return;
-  const toMall = m => ({ mallKey: m.mallKey, addedAt: m.addedAt || '', lastOrderAt: m.lastOrderAt || '', lastBrowseAt: m.lastBrowseAt || '', source: m.source || '', level: m.level || '', salesman: m.salesman || '' });
+  // ⭐⭐ 2026-09-29：**商城库 13 个字段全带上**（老板定：「就是库里这 13 个，只要有信息就倒过来」）。
+  //   ⚠️ 原来只传 7 个 → 本地认领倒进客户档案的就比云端自动比对**少 6 项**（name/region/address/phone/tags/category）。
+  //   ⚠️ **坐标（lat/lng）刻意不带** —— 老板定「经纬度要以现场为准」，云端 mallFieldsFrom 另有一道硬拦。
+  const toMall = m => ({
+    mallKey: m.mallKey || '',
+    mallCode: m.mallCode || '',
+    addedAt: m.addedAt || '',
+    name: m.name || '',
+    region: m.region || '',
+    address: m.address || '',
+    phone: m.phone || '',
+    salesman: m.salesman || '',
+    level: m.level || '',
+    source: m.source || '',
+    tags: m.tags || '',
+    category: m.category || '',
+    lastOrderAt: m.lastOrderAt || '',
+    lastBrowseAt: m.lastBrowseAt || ''
+  });
   const claims = r.autoRows.map(a => ({ customerId: a.customerId, mall: toMall(a.mall), score: a.score }));
   r.pendingRows.forEach((p, i) => {
     if (localPendingDecisions[i] === 'claim') claims.push({ customerId: p.customerId, mall: toMall(p.mall), score: p.score });

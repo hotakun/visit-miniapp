@@ -9,7 +9,11 @@
     "pages/mine/mine",
     "pages/tasks-all/tasks-all",
     "pages/bossWar/bossWar",
-    "pages/customerDemo/customerDemo"
+    "pages/customerDemo/customerDemo",
+    "pages/notes/notes",
+    "pages/notes/editor/editor",
+    "pages/newshop/newshop",
+    "pages/myshops/myshops"
   ],
   "window": {
     "navigationBarBackgroundColor": "#F5531C",
