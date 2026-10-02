@@ -170,7 +170,9 @@ exports.main = async (event) => {
   }
   const me = meRes.data[0];
   if (!me) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
-  const isBoss = ['super_admin', 'admin'].includes(me.role);
+  // ⭐ 2026-09-30：老板兼业务员以业务员身份时，转写要**真落库**（不再走"演示：未保存"）—— 同 tasks/visits 口径
+  const asSalesman = !!(e && (e.asSalesman === true || e.asSalesman === 'true')) && me.alsoSalesman === true;
+  const isBoss = !asSalesman && ['super_admin', 'admin'].includes(me.role);
   if (me.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能使用该功能' };
 
   if (action === 'start') return await start(me, isBoss, e);

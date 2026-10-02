@@ -17,6 +17,11 @@ const DEV_PHONE = '13067737286';
 
 // login 主流程（2026-09-10 容错加固：外层 exports.main 统一兜底，任何未预料异常都返回可读文案）
 const mainInner = async (event) => {
+  // ⭐ 2026-10-01：**版本戳**（只读、免鉴权）—— 专门用来判断"云端这份 login 到底有没有重传"。
+  //   用法：`CF=login node admin/tools/run_adminapi.js ver`
+  //     · 返回 `{ ok:true, ver:'2026-10-01', hasAlsoSalesman:true }` → **已重传**（含「老板兼业务员」逻辑）
+  //     · 返回 NEED_REGISTER / 别的东西 → **云端还是旧代码**（三身份页必然出不来）
+  if (event && event.action === 'ver') return { ok: true, ver: '2026-10-01', hasAlsoSalesman: true };
   // 集合自愈（2026-09-09 老板报障修复：registrations 未建时 69 行查询抛 -502005
   // → login 整体失败，手机端提示"云函数调用失败"看不到登录页；init 未执行过的新环境必踩）
   try { await db.createCollection('registrations'); } catch (e) { /* 已存在等错误忽略 */ }
@@ -25,10 +30,21 @@ const mainInner = async (event) => {
 
   // 0. 管理员识别（super_admin / admin）：管理员微信打开小程序 → 直接进老板模式
   //    2026-09-10 老板定：管理员模式与老板模式合并，不再单独提示使用 Web 后台
+  //    ⭐ 2026-09-30 新增：**老板兼业务员**（users.alsoSalesman === true）—— 老板朱小利要亲自带队
+  //      跑样板，也要能以**真业务员**的身份接单/拜访（拜访真落库、进统计），所以他能声明
+  //      「以业务员身份进入」：这时**不进老板模式**，云端按业务员认人。
+  //      ⚠️ **只信库里的 alsoSalesman 标记**（前端声明只能"降权"、不可能提权）—— 与实习入口同一路数。
+  const asSalesmanAsk = !!(event && (event.asSalesman === true || event.asSalesman === 'true'));
   const adminRes = await users.where({ openid: OPENID, active: true, role: _.in(['super_admin', 'admin']) }).get();
   if (adminRes.data.length > 0) {
     const a = adminRes.data[0];
     await users.doc(a._id).update({ data: { lastLoginAt: Date.now() } });
+    if (a.alsoSalesman === true) {
+      // 老板兼业务员：前端给「三身份选择页」（业务员 / 老板 / 游客）—— 游客入口需要 trialId
+      const trId = await findTrialId();
+      if (asSalesmanAsk) return { ok: true, boss: false, asSalesman: true, trialId: trId, user: publicUser(a) };
+      return { ok: true, isAdmin: true, canBoss: true, boss: true, alsoSalesman: true, trialId: trId, user: publicUser(a), welcome: await readWelcomeCfg() };
+    }
     // 2026-09-10 老板定：管理员模式不再单独存在——管理员微信打开小程序直接进老板模式（与老板同一套页面与权限）
     return { ok: true, isAdmin: true, canBoss: true, boss: true, user: publicUser(a), welcome: await readWelcomeCfg() };
   }
@@ -367,5 +383,17 @@ function maskPhone(p) {
 function publicUser(u) {
   // star：业务员星级（2026-09-24 老板定：**0.5 ~ 5 共 10 档**，步长 0.5 —— **新人进来默认半星**，没有"未评"）
   //       存量账号没有 star 字段 → 一律按 0.5（半星）兜底，保证每个人都有星级
-  return { _id: u._id, name: u.name, phone: u.phone, role: u.role, trial: !!u.trial, star: Number(u.star || 0.5) };
+  // alsoSalesman：⭐ 2026-09-30 —— **老板兼业务员**（朱小利）。手机端据它显示「三身份选择页」，
+  //       并决定「以业务员身份进入」时是否给云端带 asSalesman 声明（只有它的人带才有意义）。
+  return { _id: u._id, name: u.name, phone: u.phone, role: u.role, trial: !!u.trial, star: Number(u.star || 0.5),
+           alsoSalesman: !!u.alsoSalesman };
+}
+
+// ⭐ 2026-09-30：后台建的那个「实习/游客」账号的 _id（三身份选择页的「以游客身份进入」按钮要用）
+//   ⚠️ 查不到一律返回空串（前端按钮会自动隐藏），绝不阻断登录
+async function findTrialId() {
+  try {
+    const tr = await users.where({ role: 'salesman', trial: true, active: true }).limit(1).get();
+    return tr.data[0] ? tr.data[0]._id : '';
+  } catch (e) { return ''; }
 }

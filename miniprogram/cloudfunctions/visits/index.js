@@ -89,8 +89,10 @@ exports.main = async (event) => {
   // 老板模式（2026-09-10 老板定：管理员模式与老板模式合并——管理员（super_admin/admin）一律按老板处理，
   // 不再看 boss 白名单字段；手机号=15055492888 为老板本人，字段保留仅作历史兜底）
   // 2026-09-09 开发者范宇琨双身份：dev 白名单（13067737286）且请求带 boss 标志 → 按老板处理（写操作全虚拟）
-  const isBoss = ['super_admin', 'admin'].includes(meUser.role)
-    || (meUser.phone === '13067737286' && event && event.boss === true);
+  // ⭐ 2026-09-30：**老板兼业务员**（alsoSalesman）声明「以业务员身份进入」→ 按业务员认人（同 tasks 口径）
+  const asSalesman = !!(event && (event.asSalesman === true || event.asSalesman === 'true')) && meUser.alsoSalesman === true;
+  const isBoss = !asSalesman && (['super_admin', 'admin'].includes(meUser.role)
+    || (meUser.phone === '13067737286' && event && event.boss === true));
 
   if (action === 'submit') return await submit(meUser, event, isBoss);
   if (action === 'start') return await start(meUser, event, isBoss);

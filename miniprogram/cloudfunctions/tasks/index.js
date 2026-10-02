@@ -96,8 +96,12 @@ exports.main = async (event) => {
   // 老板模式（2026-09-10 老板定：管理员模式与老板模式合并——管理员（super_admin/admin）一律按老板处理，
   // 不再看 boss 白名单字段；手机号=15055492888 为老板本人，字段保留仅作历史兜底）
   // 2026-09-09 开发者范宇琨双身份：dev 白名单（13067737286）且请求带 boss 标志 → 按老板处理（全量只读+虚拟写）
-  const isBoss = ['super_admin', 'admin'].includes(meDoc.role)
-    || (meDoc.phone === '13067737286' && event && event.boss === true);
+  // ⭐ 2026-09-30：**老板兼业务员**（alsoSalesman）声明「以业务员身份进入」→ 这次请求**按业务员认人**
+  //   （isBoss=false：看自己的任务、拜访真落库、进统计）。老板朱小利要亲自带队跑样板就靠它。
+  //   ⚠️ 声明只会"降权"（老板→业务员），不可能提权；且必须库里 alsoSalesman === true 才认。
+  const asSalesman = !!(event && (event.asSalesman === true || event.asSalesman === 'true')) && meDoc.alsoSalesman === true;
+  const isBoss = !asSalesman && (['super_admin', 'admin'].includes(meDoc.role)
+    || (meDoc.phone === '13067737286' && event && event.boss === true));
   const salesmanId = meDoc._id;
 
   if (action === 'list') return await list(salesmanId, isBoss);
@@ -298,7 +302,7 @@ const NAME_SUSPECT = 0.72;
 
 // ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
 //   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
-const CODE_VER = '2026-09-29-2400';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）
+const CODE_VER = '2026-10-01-0100';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）；1001=加 alsoSalesman 声明（老板兼业务员）
 
 // ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
 //   入参（全可选）：{ lat, lng, name, phone, radius }
@@ -671,7 +675,9 @@ async function bossBoard(salesmanId, isBoss) {
   const now = Date.now();
   const [lRes, smRes] = await Promise.all([
     db.collection('salesman_locations').where({ type: 'latest' }).get(),
-    db.collection('users').where({ role: 'salesman', active: true, trial: _.neq(true) }).field({ _id: true }).get()
+    // ⭐ 2026-09-30：**老板兼业务员**（alsoSalesman）也纳入统计 —— 老板定「他按真业务员算」
+    //   （他亲自带队跑样板，拜访/任务要进老板看板）。实习(trial) 照旧排除。
+    db.collection('users').where(_.and([{ active: true, trial: _.neq(true) }, _.or([{ role: 'salesman' }, { alsoSalesman: true }])])).field({ _id: true }).get()
   ]);
   const realIds = new Set(smRes.data.map(u => u._id));
   let online = 0, ongoing = 0;
@@ -691,7 +697,8 @@ async function bossWar(isBoss) {
   const now = Date.now();
   const [uRes, lRes] = await Promise.all([
     // 2026-09-09 老板定：战况地图不显示实习（trial 游客账号）的任何信息
-    db.collection('users').where({ role: 'salesman', active: true, trial: _.neq(true) }).field({ name: true, phone: true }).get(),
+    // ⭐ 2026-09-30：老板兼业务员（alsoSalesman）要显示（他按真业务员算，见 bossBoard 同口径）
+    db.collection('users').where(_.and([{ active: true, trial: _.neq(true) }, _.or([{ role: 'salesman' }, { alsoSalesman: true }])])).field({ name: true, phone: true }).get(),
     db.collection('salesman_locations').where({ type: 'latest' }).get()
   ]);
   const lMap = {};

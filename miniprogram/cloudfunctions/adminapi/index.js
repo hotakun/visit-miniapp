@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'fieldList', 'fieldDone', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'fieldList', 'fieldDone', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -643,6 +643,7 @@ exports.main = async (event) => {
     if (action === 'listSalesmen') return await listSalesmen(event);
     if (action === 'listAdmins') return await listAdmins(event);
     if (action === 'setUserBoss') return await setUserBoss(event);
+    if (action === 'setUserAlsoSalesman') return await setUserAlsoSalesman(event);   // ⭐ 2026-09-30 老板兼业务员开关
     if (action === 'addSalesman') return await addSalesman(event);
     if (action === 'addAdmin') return await addAdmin(event);
     if (action === 'setUserActive') return await setUserActive(event);
@@ -1293,7 +1294,8 @@ async function createTask(event) {
     if (!b || !b.data) return { ok: false, code: 'NOT_FOUND', msg: '客户批次不存在，请刷新后重试' };
   }
   const salesRes = await db.collection('users').doc(salesmanId).get().catch(() => null);
-  if (!salesRes || !salesRes.data || salesRes.data.role !== 'salesman') {
+  // ⭐ 2026-09-30：**老板兼业务员**（alsoSalesman）也可以被派单（他按真业务员算，与 listSalesmen 同口径）
+  if (!salesRes || !salesRes.data || (salesRes.data.role !== 'salesman' && salesRes.data.alsoSalesman !== true)) {
     return { ok: false, code: 'BAD_SALESMAN', msg: '业务员不存在' };
   }
   const sm = salesRes.data;
@@ -1475,7 +1477,7 @@ async function reassignTask(event) {
   if (newSalesmanId === t.salesmanId) return { ok: false, code: 'SAME', msg: '已是该业务员的任务' };
   const smRes = await db.collection('users').doc(newSalesmanId).get().catch(() => null);
   const sm = smRes && smRes.data;
-  if (!sm || sm.role !== 'salesman' || sm.active === false) return { ok: false, code: 'BAD_SALESMAN', msg: '业务员不存在或已停用' };
+  if (!sm || (sm.role !== 'salesman' && sm.alsoSalesman !== true) || sm.active === false) return { ok: false, code: 'BAD_SALESMAN', msg: '业务员不存在或已停用' };
   const busy = await db.collection('tasks').where({ salesmanId: newSalesmanId, status: _.in(['published', 'reviewing']) }).count();
   if (busy.total > 0) return { ok: false, code: 'HAS_TASK', msg: '该业务员已有进行中任务，不能接改派' };
   const logs = withLog(t, { at: Date.now(), by: (event._admin && event._admin.name) || '系统', role: 'admin', type: 'reassign', detail: { from: t.salesmanName || '', to: sm.name } });
@@ -3191,7 +3193,11 @@ function fmtHM(ts) {
 
 async function listSalesmen(event) {
   // 返回全部业务员（含停用，便于人员管理页启停）；新建任务下拉由前端过滤 active
-  const res = await db.collection('users').where({ role: 'salesman' }).orderBy('createdAt', 'asc').get();
+  // ⭐ 2026-09-30：**老板兼业务员**（users.alsoSalesman，朱小利）也要出现在这里 —— 否则后台派单**选不到他**；
+  //   他按真业务员算（接单 / 拜访 / 进统计），与真业务员完全一致。
+  const res = await db.collection('users')
+    .where(_.or([{ role: 'salesman' }, { alsoSalesman: true }]))
+    .orderBy('createdAt', 'asc').get();
   // 进行中/审核中的业务员（有任务不可再被选；done 后可重新派发）
   const tRes = await db.collection('tasks').where({ status: _.in(['published', 'reviewing']) }).field({ salesmanId: true }).limit(100).get();
   const busy = {};
@@ -3243,6 +3249,8 @@ async function listAdmins(event) {
     admins: res.data.map(a => ({
       _id: a._id, name: a.name, username: a.username, role: a.role,
       active: a.active !== false, boss: a.boss === true,
+      // ⭐ 2026-10-01 补：老板「兼业务员」标记 —— **不带它，后台那一列永远显示"未开启"**（点了按钮也看不出变化）
+      alsoSalesman: a.alsoSalesman === true,
       phone: a.phone || '', lastLoginAt: a.lastLoginAt || 0,
       // 2026-09-10 老板定：新人注册通知走服务号 → 管理员也支持服务号绑定（人员管理显示绑定状态）
       mpOpenidMask: a.mpOpenid ? String(a.mpOpenid).slice(0, 8) + '…' + String(a.mpOpenid).slice(-6) : ''
@@ -3262,6 +3270,24 @@ async function setUserBoss(event) {
   if (u.phone === BOSS_PHONE && !boss) return { ok: false, code: 'FORBIDDEN', msg: '老板账号不可停用老板模式' };
   await db.collection('users').doc(userId).update({ data: { boss: !!boss } });
   return { ok: true, msg: boss ? '已启用老板模式' : '已停用老板模式' };
+}
+
+// ⭐ 2026-09-30 老板（朱小利）定：**老板兼业务员** —— 他也要「三身份入口」（业务员 / 老板 / 游客），
+//   而且要能像真业务员一样**被派单、跑任务、提拜访**（老板定：**按真业务员算** —— 进统计、进战况地图）。
+//   开启后：① 后台「选业务员」下拉会出现他（listSalesmen / createTask / reassignTask 均已放行）
+//           ② 手机端登录后显示「三身份选择页」（login 下发 alsoSalesman）
+//           ③ 选「以业务员身份进入」时前端带 asSalesman 声明 → 云端按业务员认人（isBoss=false）
+//   ⚠️ 只对管理员账号有意义（真业务员本来就是业务员，不需要这个标记）。
+//   入参：{ userId, on }   出参：{ ok, msg }
+async function setUserAlsoSalesman(event) {
+  const { userId, on } = event || {};
+  if (!userId) return { ok: false, code: 'BAD_ARG', msg: '缺少用户' };
+  const uRes = await db.collection('users').doc(userId).get().catch(() => null);
+  const u = uRes && uRes.data;
+  if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
+  if (!['super_admin', 'admin'].includes(u.role)) return { ok: false, code: 'FORBIDDEN', msg: '仅管理员账号可设为「老板兼业务员」' };
+  await db.collection('users').doc(userId).update({ data: { alsoSalesman: !!on } });
+  return { ok: true, msg: on ? '已开启「老板兼业务员」：他可用业务员身份接单跑任务' : '已关闭「老板兼业务员」' };
 }
 
 // ===== 注册审核（2026-09-09 老板拍板：登录改「注册→后台审核→通过后免登进入」） =====
