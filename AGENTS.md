@@ -12,13 +12,13 @@
 > （**PowerShell 5.x 不认 `&&`**，会报「标记"&&"不是此版本中的有效语句分隔符」；PowerShell 7+ 才支持。）
 > 给老板的命令**先想清楚他在哪个终端**；拿不准就**优先给 Git Bash 版**（项目原本就用它）。
 
-- 后台启动：双击 `admin/启动管理后台.bat`（**固定 8581**；8080 被 EnterpriseDB Apache 占用，8081 被 Windows 排除端口段占用）；或 `cd admin && PORT=8581 node server.js`；依赖 xlsx（`npm install`）；语音另需 `pip install edge-tts`
-- 后台地址：**http://localhost:8581**
+- 后台启动：双击 `admin/启动管理后台.bat`（**端口 18080**；2026-10-01 从 8581 换过来 —— 8581 落进了 Windows **保留端口段 8523~8622**，监听被系统拒绝（`EACCES`），服务根本起不来；`netsh int ipv4 show excludedportrange protocol=tcp` 可查当前保留段）；或 `cd admin && PORT=18080 node server.js`；依赖 xlsx（`npm install`）；语音另需 `pip install edge-tts`
+- 后台地址：**http://localhost:18080**
 - 语法检查：`node --check <file>`（云函数/页面 JS 全量）；admin.html 内嵌 JS 必须用 python 提取 `<script>…</script>` 后 `node --check`（sed 在 CRLF 下不可靠）
 - 壳程序编译（Git Bash 用 `-` 前缀防 MSYS 转义）：`csc -target:winexe -platform:x64 -win32icon:icon.ico -r:lib/Microsoft.Web.WebView2.Core.dll -r:lib/Microsoft.Web.WebView2.WinForms.dll`；exe 被占用时先关后台再复制
 - 打包：`python make_packages.py`（packager/，重要节点才打，见 Conventions）
 - 部署：开发者工具逐个右键云函数「上传并部署：云端安装依赖」；小程序改动必须重新上传（体验版/正式版）
-- 语音缓存接口：`curl -X POST http://localhost:8581/tts -H "Content-Type: application/json" -d '{"name":"范宇琨","type":"review"}'`（type=coordfix 为坐标报错文案）
+- 语音缓存接口：`curl -X POST http://localhost:18080/tts -H "Content-Type: application/json" -d '{"name":"范宇琨","type":"review"}'`（type=coordfix 为坐标报错文案）
 - 调后台接口（含中文一律 UTF-8 文件 + `curl --data-binary @file`，命令行中文必乱码）
 
 ## Architecture
@@ -71,6 +71,11 @@
   · 提醒走 `wx.addPhoneCalendar` 写**手机系统日历** —— ⚠️ **要真正生效需在 `app.json` 的 `requiredPrivateInfos` 声明 `addPhoneCalendar` 并重新提审**（合规动作，**等老板点头**；本轮没动，失败时只把提醒时间记进记事并提示）。
   · 详见 `_scratch/记事功能-说明.md`；交付前自查：`python -X utf8 _scratch\notes_selfcheck.py`（只读：语法 / JSON / 行尾 / WXML 配对）。
 - **客户筛选与分辨是老板长期重点，涉及改动主动提醒优化**
+- ⭐ **「老板兼业务员」= `users.alsoSalesman`（2026-09-30 老板朱小利定；已开发完成待部署）** —— 老板要「三身份入口」（🏃 业务员 / 👑 老板 / 🖐 游客），并且**要能被派单、亲自带队跑样板**；老板追加口径「**业务员他按照真实的**」（= 他跑出来的拜访/任务**进统计、进战况**，**与实习 trial 相反**）。
+  · **机制**：给管理员账号开 `alsoSalesman: true` → ① 后台「选业务员」下拉**出现他**（`listSalesmen` / `createTask` / `reassignTask` 已放行）② 手机端登录显示 **「🧑💼 身份选择」页** ③ 选业务员 → 前端置 `globalData.asSalesman`（storage 持久）→ **每个云函数请求带 `asSalesman: true`** → 云端 `isBoss` **降为 false**（看自己的任务、拜访**真落库**、进统计）。
+  · ⚠️ **`asSalesman` 声明只降权、绝不提权**，且云端**必须 `users.alsoSalesman === true` 才认**（只信库里的数据，与实习 trial 同一路数）；⚠️ 与 `bossMode` **互斥**（进老板/游客身份、`clearUser()` 都会清掉）。
+  · **改动 10 个文件**：`login` / `tasks`（含 bossBoard·bossWar 的"真实业务员集合"**纳入他**）/ `visits` / `transcribe` / `adminapi`（+ 新 action `setUserAlsoSalesman`，**坑 32**：ACTIONS 白名单要同步补）/ `app.js` / `utils/api.js` / `pages/login/*`（三身份页，`devKind` 区分"开发者三身份"/"身份选择"两套文案）/ `home.js`·`mine.js`·`tasks-all.js`（放行条件）/ `admin.html`（人员管理 · 管理员列表加「🧑💼 兼业务员」开关）。
+  · ⚠️ **部署**：重传 `login`/`tasks`/`visits`/`transcribe`/`adminapi` 5 个云函数 → 重启后台 + `Ctrl+F5` → 上传体验版 → **后台开他的开关**（人员管理 → 管理员 → 「🧑💼 兼业务员」）。详见 `项目交接-当前进度.md` **§0.0z5**。
 - ⭐ **客户删除 = 回收站（软删，2026-09-29 老板定）** —— 老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」「可以进回收站，但是**不能彻底删除**」「进了回收站的客户，**不再纳入客户总数**（订单数据等**还是要纳入总额**的），**不再地图上显示**」。
   · **做法**：`adminapi.deleteCustomers` **不再真删**，只写 `deleted:true` + `deletedAt` + `deletedBy`（**数据一条不丢**；恢复 = 去掉标记，**批次归属 / 拜访 / 照片原地不动**）。
   · **入口**：顶栏「🗑 回收站」按钮（**「切换工作台」左边**，**只在「🏪 客户管理」页显示**；**进 / 出是同一个按钮**，进去后文字变「← 返回客户列表」）。
