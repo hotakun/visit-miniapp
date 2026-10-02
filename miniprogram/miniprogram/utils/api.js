@@ -7,6 +7,12 @@ function call(name, data = {}) {
   if (app && app.globalData.bossMode && !data.boss) {
     data = Object.assign({}, data, { boss: true });
   }
+  // ⭐ 2026-09-30 老板兼业务员（朱小利）的「业务员身份」：本地标记置位时，所有请求带 asSalesman，
+  //   云端（tasks/visits/transcribe/login）据此**把 isBoss 降为 false** → 看自己的任务、拜访真落库、
+  //   进统计（老板定：他按真业务员算）。⚠️ 与 bossMode 互斥；云端还要求 users.alsoSalesman === true 才认。
+  if (app && app.globalData.asSalesman && !data.asSalesman) {
+    data = Object.assign({}, data, { asSalesman: true });
+  }
   // 2026-09-28 实习态（实习/游客入口）：**两个字段都要带**，各云函数认的名字不同 ——
   //   · asTrial      → 业务云函数（tasks/visits/transcribe/coordfix）的"兜底认人"
   //   · asTrialVisit → login 云函数的只读实习分支

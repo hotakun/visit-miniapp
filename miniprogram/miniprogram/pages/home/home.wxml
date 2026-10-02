@@ -60,6 +60,10 @@
     <view class="de-ar">›</view>
   </view>
 
+  <!-- ⭐ 2026-10-01 临时自检（B2）：**只在老板模式显示**。用来确认"手机跑的包是哪一版 + 云端 login 返回了什么"。
+       看到这行（哪怕内容是"自检位未捕获"）= **包是新版**；整行都没有 = 手机上的包还是旧的。老板验完可删。 -->
+  <view wx:if="{{bossMode}}" style="text-align:center;font-size:10px;color:#9AA3AE;margin:2px 0 8px">{{dbg || 'B2 · 自检位未捕获（包已是新版）'}}</view>
+
   <view class="hero" wx:if="{{!bossMode}}">
     <view class="h1">{{dateText}}</view>
     <view class="hring" wx:if="{{cardMode === 'today'}}">

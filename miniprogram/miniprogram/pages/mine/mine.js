@@ -18,7 +18,9 @@ Page({
       return;
     }
     const u = app.globalData.user;
-    if (!u || u.role !== 'salesman') {
+    // ⭐ 2026-09-30：老板兼业务员（alsoSalesman）以业务员身份进入时同样放行
+    //   （云端已按 asSalesman 声明把 isBoss 降为 false）
+    if (!u || (u.role !== 'salesman' && !(u.alsoSalesman && app.globalData.asSalesman))) {
       wx.redirectTo({ url: '/pages/login/login' });
       return;
     }

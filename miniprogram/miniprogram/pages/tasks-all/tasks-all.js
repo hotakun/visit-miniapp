@@ -15,7 +15,8 @@ Page({
     }
     this._shown = true;
     const u = app.globalData.user;
-    if (!u || u.role !== 'salesman') {
+    // ⭐ 2026-09-30：老板兼业务员以业务员身份进入时同样放行（同 home / mine 口径）
+    if (!u || (u.role !== 'salesman' && !(u.alsoSalesman && app.globalData.asSalesman))) {
       wx.redirectTo({ url: '/pages/login/login' });
       return;
     }

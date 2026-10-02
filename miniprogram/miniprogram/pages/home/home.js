@@ -238,9 +238,12 @@ Page({
   onShareAppMessage() {
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false },
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false,
+    // ⭐ 2026-10-01 临时自检（B2）：老板首页显示"本包版本 + 云端 login 返回的关键字段"
+    dbg: '' },
   onShow() {
     const app = getApp();
+    try { this.setData({ dbg: (app.globalData && app.globalData.dbg) || '' }); } catch (e0) { /* 静默 */ }
     // 2026-09-10：自定义 Tab 栏选中态（首页=0；tab 页常驻后切页不再重建底部栏）
     try { const tb = this.getTabBar && this.getTabBar(); if (tb) tb.setTab(0, !!app.globalData.bossMode); } catch (e) { /* 低版本基础库忽略 */ }
     if (!this._revFn) {
@@ -277,7 +280,9 @@ Page({
       this.maybePlayWelcome(); // 2026-09-10 老板定：老板欢迎仪式（频率/时长/风格后台可配）
       return;
     }
-    if (!u || u.role !== 'salesman') {
+    // ⭐ 2026-09-30：老板兼业务员（alsoSalesman）以业务员身份进入时同样放行 ——
+    //   云端已按 asSalesman 声明把 isBoss 降为 false（看自己的任务、拜访真落库、进统计）
+    if (!u || (u.role !== 'salesman' && !(u.alsoSalesman && app.globalData.asSalesman))) {
       wx.redirectTo({ url: '/pages/login/login' });
       return;
     }
@@ -312,7 +317,11 @@ Page({
     if (app.globalData.asTrial) return;
     api.call('login', {})
       .then(res => {
-        if (res && res.ok && res.user && res.user.role === 'salesman') {
+        // ⭐ 2026-09-30：老板兼业务员以业务员身份时，复核也要认（login 返回的是 role=admin + alsoSalesman；
+        //   否则星级/改名在这条路径上刷新不到 —— 不会被踢，但拿不到最新身份）
+        const _okSs = !!(res && res.ok && res.user &&
+          (res.user.role === 'salesman' || (res.user.alsoSalesman && app.globalData.asSalesman)));
+        if (_okSs) {
           // 云端确认仍是业务员 → 更新本地身份（后台改名/角色调整同步生效；**星级也在这一步刷新**）
           app.setUser(res.user);
           this.setData({ starText: this._starText(res.user.star) });

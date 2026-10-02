@@ -8,6 +8,9 @@ App({
     APP_VERSION: '0.9.16', // 版本号（2026-09-24：与后台 admin.html 一致；后台新增「星级」列 + 手机端首页姓名右边显示星级）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
+    // ⭐ 2026-09-30 老板兼业务员（朱小利）：声明「这次以业务员身份用」→ 所有云函数请求自动带 asSalesman，
+    //   云端据此把 isBoss 降为 false（看自己的任务、拜访真落库、进统计）。与 bossMode 互斥、storage 持久。
+    asSalesman: false,
     welcome: null, // 老板欢迎仪式配置（2026-09-10：login 云函数下发，缺失用默认 每天第一次/3秒/金色）
     welcomePending: false, // 欢迎仪式配置请求在途（home 页播放前短暂等待，超时用默认）
     refFrom: '' // 推荐人（2026-09-24）：从分享链接 ?ref=<分享者 users._id> 带进来，注册时随申请提交
@@ -26,6 +29,8 @@ App({
     if (u) this.globalData.user = u;
     // 老板模式持久恢复（2026-09-09 §7.13：管理员微信点「进入老板模式」后保持）
     this.globalData.bossMode = !!wx.getStorageSync('boss_mode');
+    // ⭐ 2026-09-30 老板兼业务员（朱小利）：业务员身份标记同样持久（重开小程序仍是业务员视角）
+    this.globalData.asSalesman = !!wx.getStorageSync('as_salesman');
     // 开发者双身份标记恢复（2026-09-09 开发者范宇琨：登录云函数确认后持久，登录页据此显示两按钮选择页）
     this.globalData.isDev = !!wx.getStorageSync('is_dev');
     // devAuthed：会话级放行标志（2026-09-09 修复：选过身份后本次运行期内 TAB 来回切换不再被弹回登录页；
@@ -67,8 +72,10 @@ App({
     wx.removeStorageSync('user');
     wx.removeStorageSync('boss_mode');
     wx.removeStorageSync('as_trial'); // 2026-09-28：退出身份时一并清「实习态」标记（pages/login 的以游客身份进入）
+    wx.removeStorageSync('as_salesman'); // ⭐ 2026-09-30：一并清「老板兼业务员的业务员身份」标记
     this.globalData.bossMode = false;
     this.globalData.asTrial = false;
+    this.globalData.asSalesman = false; // ⭐ 2026-09-30
     this.globalData.devAuthed = false; // 2026-09-09 修复：退出身份后放行标志一并重置
     // 2026-09-10：退出身份清欢迎仪式配置缓存（下次进老板模式必重新拉云端配置）
     this.globalData.welcome = null;
@@ -78,6 +85,13 @@ App({
     this.globalData.bossMode = !!v;
     if (v) wx.setStorageSync('boss_mode', 1);
     else wx.removeStorageSync('boss_mode');
+  },
+  // ⭐ 2026-09-30 老板兼业务员（朱小利）：「以业务员身份进入」标记（与 bossMode 互斥；登录页选身份时设置）
+  //   置位后 utils/api.js 会给每个云函数请求带 asSalesman，云端据此把 isBoss 降为 false
+  setAsSalesman(v) {
+    this.globalData.asSalesman = !!v;
+    if (v) wx.setStorageSync('as_salesman', 1);
+    else wx.removeStorageSync('as_salesman');
   },
 
   // ===== 审核观察员：有审核中任务才 15 秒轮询等待审批结果；无则停止（维持现状） =====

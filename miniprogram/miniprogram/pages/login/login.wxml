@@ -10,8 +10,8 @@
 
   <!-- 开发者三身份选择页（2026-09-09 双身份 → 2026-09-28 三身份，加「游客」；只有范宇琨的微信可见） -->
   <view class="dev-card" wx:if="{{devMode}}">
-    <view class="dc-t">🧪 开发者三身份</view>
-    <view class="dc-d"><text>范宇琨 · 测试专用入口\n真实用户不会看到此页</text></view>
+    <view class="dc-t">{{devTitle}}</view>
+    <view class="dc-d"><text>{{devDesc}}</text></view>
     <view class="btn-primary" style="margin-top:20px" bindtap="enterAsSalesman">🏃 以业务员身份进入</view>
     <view class="btn-boss" bindtap="enterAsBoss">👑 以老板身份进入</view>
     <!-- 2026-09-28 老板定：加第三个 —— 以游客（trial）身份进入，体验与真实游客完全一致（能看、不能提交） -->

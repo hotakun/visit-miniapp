@@ -22,7 +22,14 @@ Page({
     phoneVerified: false, // 2026-09-09 老板定：微信一键验证标记（getPhoneNumber 快速验证组件）
     pendingAt: '', rejectReason: '',
     // 开发者双身份选择页（2026-09-09 开发者范宇琨定：只他自己可见）
-    devMode: false, devUser: null
+    // ⭐ 2026-09-30：这张卡**也给「老板兼业务员」用**（朱小利）—— devKind 区分两套文案：
+    //   'dev' = 范宇琨（开发者三身份）／'boss' = 老板兼业务员的三身份（业务员 / 老板 / 游客）
+    devMode: false, devUser: null, devKind: 'dev',
+    devTitle: '🧪 开发者三身份',
+    devDesc: '范宇琨 · 测试专用入口\\n真实用户不会看到此页',
+    // ⭐ 2026-10-01 临时自检（B2）：把"手机跑的哪一版 + 云端 login 返回了什么"直接显示在页面底部。
+    //   看到这行 `B2 | ...` 就说明**小程序确实是新版**；看不到 → 手机上的包还是旧的。
+    dbg: ''
   },
   // 2026-09-28 老板报"进登录页会闪一下" · **A 修法**：
   //   logoUrl 原来只在 onShow 里设，而 onShow 比首帧晚 → 第一帧 logo 是空的、下一帧才冒出来（闪一下）。
@@ -35,7 +42,9 @@ Page({
     this.setData({ logoUrl: app.globalData.logoUrl });
     // 2026-09-09 开发者范宇琨双身份：dev 永远走选择页（不自动进业务员首页）
     if (app.globalData.isDev) { this.check(); return; }
-    if (app.globalData.user && app.globalData.user.role === 'salesman') {
+    // ⭐ 2026-09-30：老板兼业务员以业务员身份进入后，重开小程序直接回首页（不再走选择页）
+    const u0 = app.globalData.user;
+    if (u0 && (u0.role === 'salesman' || (u0.alsoSalesman && app.globalData.asSalesman))) {
       wx.switchTab({ url: '/pages/home/home' });
       return;
     }
@@ -44,13 +53,36 @@ Page({
   async check() {
     try {
       const res = await api.call('login');
+      // ⭐ 2026-10-01 临时自检（B2）：把关键字段显示到页面底部 —— 一眼定位是"包旧"还是"云端没返回 alsoSalesman"
+      try {
+        const _dbg = 'B2 | ok=' + !!(res && res.ok) + ' boss=' + !!(res && res.boss)
+          + ' also=' + (res && res.alsoSalesman) + ' dev=' + !!(res && res.dev);
+        this.setData({ dbg: _dbg });
+        getApp().globalData.dbg = _dbg;   // ⭐ 同时存全局：老板首页会显示它（登录页一闪而过看不到）
+      } catch (e2) { /* 静默 */ }
       if (res.ok && res.dev) {
         // 2026-09-09 开发者范宇琨双身份：显示「业务员/老板」两按钮选择页；持久化 dev 标记
         try { wx.setStorageSync('is_dev', 1); } catch (e) { /* 静默 */ }
         getApp().globalData.isDev = true;
         // 2026-09-09 开发者范宇琨双身份 → 2026-09-28 三身份（加「游客」）
         // 2026-09-28：同时接收云端下发的 trialId，供「以游客身份进入」按钮使用
-        this.setData({ devMode: true, devUser: res.user || null, trialId: res.trialId || this.data.trialId || '' });
+        this.setData({ devMode: true, devKind: 'dev', devTitle: '🧪 开发者三身份',
+          devDesc: '范宇琨 · 测试专用入口\\n真实用户不会看到此页',
+          devUser: res.user || null, trialId: res.trialId || this.data.trialId || '' });
+      } else if (res.ok && res.asSalesman && res.user) {
+        // ⭐ 2026-09-30 老板兼业务员（朱小利）：选了「以业务员身份进入」→ 直接按业务员进首页
+        //   （云端已按 asSalesman 声明把 isBoss 降为 false；拜访真落库、进统计）
+        getApp().setUser(res.user);
+        getApp().setAsSalesman(true);
+        getApp().setBossMode(false);
+        getApp().globalData.asTrial = false;
+        wx.switchTab({ url: '/pages/home/home' });
+      } else if (res.ok && res.boss && res.user && res.alsoSalesman) {
+        // ⭐ 2026-09-30 老板兼业务员：首次进来 / 没选过身份 → 显示「三身份选择页」
+        //   （业务员 → enterAsSalesman；老板 → enterAsBoss；游客 → enterAsGuest）
+        this.setData({ devMode: true, devKind: 'boss', devTitle: '🧑💼 身份选择',
+          devDesc: ((res.user && res.user.name) || '老板') + ' · 老板兼业务员',
+          devUser: res.user || null, trialId: res.trialId || this.data.trialId || '' });
       } else if (res.ok && res.boss && res.user) {
         // 2026-09-10 老板定：老板/管理员一律直接进老板模式，跳过登录页
         getApp().setUser(res.user);
@@ -186,7 +218,7 @@ Page({
     // ④ 清全局状态
     const app = getApp();
     const g = app.globalData || {};
-    g.asTrial = false; g.bossMode = false; g.devAuthed = false; g.refFrom = '';
+    g.asTrial = false; g.bossMode = false; g.asSalesman = false; g.devAuthed = false; g.refFrom = '';
     if (typeof app.clearUser === 'function') { try { app.clearUser(); } catch (e) { /* 静默 */ } }
     wx.hideLoading();
     // ⑤ 退出 → 重进登录页（页面栈清干净，回到最初状态）
@@ -216,7 +248,7 @@ Page({
       if (res.ok) {
         getApp().setUser(res.user);
         // 2026-09-28 老板定：文案里**不再带 ✓** —— success 图标本身就是个大勾，右边再跟一个 ✓ 是重复
-        api.toast('已进入游客身份', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.globalData.trialId = this.data.trialId; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('trial_id', this.data.trialId); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
+        api.toast('已进入游客身份', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.globalData.trialId = this.data.trialId; _a.setBossMode(false); _a.setAsSalesman(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('trial_id', this.data.trialId); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 700);
       } else {
         api.toast(res.msg || '进入失败');
@@ -236,7 +268,7 @@ Page({
       if (res.ok) {
         getApp().setUser(res.user);
         // 2026-09-28 老板定：文案里**不再带 ✓**（success 图标已是大勾）—— 这是老板实际点的那条路径
-        api.toast('已进入游客身份', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.globalData.trialId = this.data.trialId; _a.setBossMode(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('trial_id', this.data.trialId); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
+        api.toast('已进入游客身份', 'success'); const _a = getApp(); _a.globalData.asTrial = true; _a.globalData.trialId = this.data.trialId; _a.setBossMode(false); _a.setAsSalesman(false); _a.globalData.devAuthed = true; try { wx.setStorageSync('as_trial', 1); wx.setStorageSync('trial_id', this.data.trialId); wx.setStorageSync('dev_session', 1); } catch (e2) { /* 静默 */ }
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 600);
       } else {
         api.toast(res.msg || '进入失败');
@@ -266,6 +298,9 @@ Page({
     const u = this.data.devUser;
     if (!u) { this.check(); return; }
     const app = getApp();
+    // ⭐ 2026-09-30 老板兼业务员（朱小利）：带 alsoSalesman 的人要**声明以业务员身份进入**
+    //   （api.js 会给每个云函数请求带 asSalesman → 云端 isBoss 降为 false，按真业务员认人）
+    app.setAsSalesman(!!(u && u.alsoSalesman));
     app.setBossMode(false);
     app.setUser(u);
     app.globalData.devAuthed = true; // 会话级放行：本次运行期 TAB 来回切换不弹回登录页
@@ -286,6 +321,7 @@ Page({
     }
     app.setUser(u);
     app.setBossMode(true);
+    app.setAsSalesman(false); // ⭐ 2026-09-30：进老板身份 → 清「业务员身份」标记（两者互斥）
     app.globalData.devAuthed = true; // 会话级放行：本次运行期 TAB 来回切换不弹回登录页
     try { wx.setStorageSync('dev_session', 1); } catch (e) { /* 静默 */ }
     wx.switchTab({ url: '/pages/home/home' });
