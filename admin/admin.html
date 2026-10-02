@@ -1810,7 +1810,7 @@ tr.row-off td:not(.keep){opacity:.4}
           <tbody id="smTbody"></tbody>
         </table>
         <table class="tbl" id="ptable1" style="display:none">
-          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>当前状态</th><th>状态</th><th>服务号</th><th style="width:150px;text-align:center">👑 老板</th><th style="width:110px;text-align:center">操作</th></tr></thead>
+          <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>当前状态</th><th>状态</th><th>服务号</th><th style="width:230px;text-align:center">👑 老板 / 🧑💼 兼业务员</th><th style="width:110px;text-align:center">操作</th></tr></thead>
           <tbody id="adTbody"></tbody>
         </table>
         <!-- 注册审核（2026-09-09 老板拍板：登录改「注册→后台审核→通过后免登进入」） -->
@@ -8700,7 +8700,7 @@ async function loadPeople() {
         <td>${adminActiveHtml(a)}</td>
         <td>${a.role === 'super_admin' ? '<span class="pill green">启用</span>' : toggleHtml(a._id, a.active)}</td>
         <td>${mpBindCell(a)}</td>
-        <td style="text-align:center;white-space:nowrap">${a.boss ? `<span class="pill" style="background:#1F2430;color:#fff">👑 老板</span> <button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserBoss('${a._id}',false)">停用</button>` : `<button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserBoss('${a._id}',true)">👑 启用老板</button>`}</td>
+        <td style="text-align:center;white-space:nowrap">${a.boss ? `<span class="pill" style="background:#1F2430;color:#fff">👑 老板</span> <button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserBoss('${a._id}',false)">停用</button>` : `<button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserBoss('${a._id}',true)">👑 启用老板</button>`} ${a.alsoSalesman ? `<span class="pill" style="background:#0E7490;color:#fff">🧑💼 兼业务员</span> <button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserAlsoSalesman('${a._id}',false)">停用</button>` : `<button class="btn ghost" style="height:24px;font-size:11px;white-space:nowrap;padding:0 8px" onclick="setUserAlsoSalesman('${a._id}',true)">🧑💼 兼业务员</button>`}</td>
         <td>${a.role === 'super_admin' ? '<span style="color:#C4CAD1;font-size:12px">—</span>' : `<button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="deleteUser('${a._id}','${esc(a.name)}')">删除</button>`}</td>
       </tr>`;
     }).join('')
@@ -8711,6 +8711,17 @@ async function loadPeople() {
 async function setUserBoss(userId, on) {
   if (on && !window.confirm('启用老板模式？该管理员微信打开小程序将可进入老板页面（全量查看+演示操作）。')) return;
   const res = await api('setUserBoss', { userId, boss: on });
+  alert(res.msg || '操作失败');
+  refreshPeople();
+}
+
+// ⭐ 2026-09-30 老板（朱小利）定：**兼业务员**开关 —— 开启后他能像真业务员一样**被派单、跑任务、提拜访**
+//   （老板定：**按真业务员算** —— 进统计、进战况地图）。手机端登录后会出现「业务员 / 老板 / 游客」三身份选择页；
+//   选「以业务员身份进入」时云端按业务员认人（isBoss=false，拜访真落库）。
+//   ⚠️ 开启后他会出现在「新建任务 / 批次派单」的业务员下拉里（listSalesmen 已放行）。
+async function setUserAlsoSalesman(userId, on) {
+  if (on && !window.confirm('开启「老板兼业务员」？他的微信会出现身份选择（业务员/老板/游客），选业务员时可按真业务员被派单、跑任务、提拜访（计入统计与战况）。')) return;
+  const res = await api('setUserAlsoSalesman', { userId, on });
   alert(res.msg || '操作失败');
   refreshPeople();
 }

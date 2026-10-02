@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
-const PORT = process.env.ADMIN_PORT || 8581;
+const PORT = process.env.ADMIN_PORT || 18080;
 const USER = process.env.ADMIN_USER || 'qingyan';
 const PWD = process.env.ADMIN_PWD || '123456';
 const CHUNK = 90000; // 必须与云函数 adminapi 的 DIST_CHUNK 一致

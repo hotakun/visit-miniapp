@@ -445,7 +445,7 @@ public class ShellForm : Form
         {
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = node;
-            psi.Arguments = "server.js --port=8581 --no-browser";
+            psi.Arguments = "server.js --port=18080 --no-browser";
             psi.WorkingDirectory = dir;
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
