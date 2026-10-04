@@ -34,6 +34,22 @@ public class ShellForm : Form
     {
         Text = "聚火拜访 · 管理后台";
         FormBorderStyle = FormBorderStyle.None;
+        // ⭐ 2026-10-03 修（老板报「任务栏图标是色块方块」）：
+        //   **无边框窗体在 .NET 下必须显式设置 Icon** —— 不设的话任务栏/Alt-Tab 会用
+        //   「框架默认图标」（就是那个带色块的方块）；而资源管理器看 exe 图标却是正常的，
+        //   因为那是 exe 资源、跟窗口图标是两回事。
+        //   优先用编译时嵌进来的图标资源（多尺寸，任务栏/大图标都清晰）；取不到再从 exe 提取。
+        try
+        {
+            System.Reflection.Assembly asm = System.Reflection.Assembly.GetExecutingAssembly();
+            bool got = false;
+            using (Stream st = asm.GetManifestResourceStream("icon.ico"))
+            {
+                if (st != null) { Icon = new Icon(st); got = true; }
+            }
+            if (!got) Icon = Icon.ExtractAssociatedIcon(asm.Location);
+        }
+        catch { /* 取不到就用系统默认，不影响使用 */ }
         StartPosition = FormStartPosition.Manual;
         // 初始尺寸/位置（2026-09-08 定稿）：工作区百分比 + 手动居中。
         // 自适应任何分辨率/DPI 缩放（老板 2560×1440@225%、文员 2880×1800@200%），永不盖任务栏；
