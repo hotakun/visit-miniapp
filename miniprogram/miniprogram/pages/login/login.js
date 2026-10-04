@@ -26,10 +26,7 @@ Page({
     //   'dev' = 范宇琨（开发者三身份）／'boss' = 老板兼业务员的三身份（业务员 / 老板 / 游客）
     devMode: false, devUser: null, devKind: 'dev',
     devTitle: '🧪 开发者三身份',
-    devDesc: '范宇琨 · 测试专用入口\\n真实用户不会看到此页',
-    // ⭐ 2026-10-01 临时自检（B2）：把"手机跑的哪一版 + 云端 login 返回了什么"直接显示在页面底部。
-    //   看到这行 `B2 | ...` 就说明**小程序确实是新版**；看不到 → 手机上的包还是旧的。
-    dbg: ''
+    devDesc: '范宇琨 · 测试专用入口\\n真实用户不会看到此页'
   },
   // 2026-09-28 老板报"进登录页会闪一下" · **A 修法**：
   //   logoUrl 原来只在 onShow 里设，而 onShow 比首帧晚 → 第一帧 logo 是空的、下一帧才冒出来（闪一下）。
@@ -53,13 +50,6 @@ Page({
   async check() {
     try {
       const res = await api.call('login');
-      // ⭐ 2026-10-01 临时自检（B2）：把关键字段显示到页面底部 —— 一眼定位是"包旧"还是"云端没返回 alsoSalesman"
-      try {
-        const _dbg = 'B2 | ok=' + !!(res && res.ok) + ' boss=' + !!(res && res.boss)
-          + ' also=' + (res && res.alsoSalesman) + ' dev=' + !!(res && res.dev);
-        this.setData({ dbg: _dbg });
-        getApp().globalData.dbg = _dbg;   // ⭐ 同时存全局：老板首页会显示它（登录页一闪而过看不到）
-      } catch (e2) { /* 静默 */ }
       if (res.ok && res.dev) {
         // 2026-09-09 开发者范宇琨双身份：显示「业务员/老板」两按钮选择页；持久化 dev 标记
         try { wx.setStorageSync('is_dev', 1); } catch (e) { /* 静默 */ }

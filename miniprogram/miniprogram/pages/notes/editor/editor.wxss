@@ -1,3 +1,17 @@
+/* ⭐ 2026-10-02 老板定：**本页（记事详情/编辑）采用暖色亮色方案** ——
+   取自参考文件 `D:\WFR\warm-notes\warm-notes.html` 的**亮色变量组**（它的暗色组不用）。
+   即：暖米纸底 + 极暖白卡 + 赤陶橙 + 暖深褐字。
+   ⚠️ 只在本页 `.page` 作用域里覆盖变量，**不动全局 app.wxss**，其它页面完全不受影响。
+   ⚠️ 顶部导航栏颜色**不动**（走全局默认，见 editor.json 未设导航栏色）。
+   想回退：`_scratch/backup-editor-wxss.20261002` 是改动前的备份。 */
+.page {
+  --bg: #fdf4e7;        /* --paper 暖米纸（页面底） */
+  --primary: #d1603d;   /* --accent 赤陶橙（主色：按钮 / 强调） */
+  --ink: #3a2a1e;       /* --ink 暖深褐（正文） */
+  --sub: #6f5a48;       /* --ink-soft 暖褐（次要文字） */
+  --line: #ecdcc6;      /* --line 暖米色分割线 */
+}
+
 /* 记事详情 / 编辑（2026-09-28 老板定：只存本机）
    视觉：暖白底 + 纯白卡 + 品牌橙；尺寸用 px（与其它页一致）
    布局（2026-09-28 晚老板定）：
@@ -9,63 +23,63 @@
 .page { padding: 14px 14px 84px; background: var(--bg); min-height: 100vh; box-sizing: border-box; }
 
 /* 关联客户条（在卡外，顶部一条） */
-.cbar { display: flex; align-items: center; gap: 7px; background: #FFF7F2; border: 1px solid #F7E4D8;
+.cbar { display: flex; align-items: center; gap: 7px; background: #fdf3ea; border: 1px solid #f4e1d1;
   border-radius: 12px; padding: 9px 12px; margin-bottom: 11px; }
-.cbar .cbar-t { flex: 1; min-width: 0; font-size: 12.5px; color: #B4441B; font-weight: 700;
+.cbar .cbar-t { flex: 1; min-width: 0; font-size: 12.5px; color: #b5482c; font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cbar .cbar-go { flex: 0 0 auto; font-size: 12px; color: var(--primary); font-weight: 700; }
 
 /* ============ 一整张大白卡 ============ */
-.card { margin-top: 11px; background: #fff; border-radius: 16px; overflow: hidden;
+.card { margin-top: 11px; background: #fffdf8; border-radius: 16px; overflow: hidden;
   box-shadow: 0 1px 2px rgba(31, 36, 48, .04), 0 10px 24px -14px rgba(31, 36, 48, .16); }
 .card:first-child { margin-top: 0; }
 
 /* 标题 + 正文 */
 .ipt-t { padding: 13px 15px; font-size: 17px; font-weight: 700; color: var(--ink);
-  border-bottom: 2px solid #EDF1F7; }
+  border-bottom: 2px solid #eadfc9; }
 .txtwrap { padding: 11px 15px 13px; }
 .ipt-x { width: 100%; box-sizing: border-box; min-height: 110px; padding: 11px 13px;
-  background: #F7F8FA; border: 1px solid #EEF0F3; border-radius: 12px;
+  background: #fdf1e0; border: 1px solid #ecdcc6; border-radius: 12px;
   font-size: 14.5px; color: var(--ink); line-height: 1.7; }
 .ipt-ph { color: #A3ABB8; }
 
 /* 小节（照片 / 录音 / 位置 / 提醒）：细分割线通到卡边 */
-.sec { padding: 11px 15px 13px; border-top: 2px solid #EDF1F7; }
+.sec { padding: 11px 15px 13px; border-top: 2px solid #eadfc9; }
 .sec-h { display: flex; align-items: center; gap: 7px; }
 .sec-t { flex: 0 0 auto; font-size: 13px; font-weight: 800; }
 .sec-s { margin-left: auto; min-width: 0; font-size: 11px; color: var(--sub); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sec-s.act { color: var(--primary); }
-.sec-s .rm-x { color: #A8B0BC; font-weight: 600; }
-.tip { margin-top: 7px; font-size: 11.5px; color: #8A93A1; }
+.sec-s .rm-x { color: #a6907a; font-weight: 600; }
+.tip { margin-top: 7px; font-size: 11.5px; color: #8f7a66; }
 
 /* 照片：三个相框（老板 2026-09-28 定，与客户详情页 .shotrow/.shot3 同口径：
    三格等宽、高 80px、圆角 10px、空框虚线 + 📷 拍照；点空框直接拍照） */
 .shotrow { display: flex; gap: 8px; margin-top: 9px; }
-.shot3 { position: relative; flex: 1; height: 80px; border-radius: 10px; overflow: hidden; background: #F0F2F5;
+.shot3 { position: relative; flex: 1; height: 80px; border-radius: 10px; overflow: hidden; background: #f6e8d6;
   display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.shot3.empty { background: #FAFBFD; border: 1px dashed #D6DEEA; }
+.shot3.empty { background: #fffaf3; border: 1px dashed #d9c8ad; }
 .shot-img { width: 100%; height: 100%; display: block; }
 .shot-del { position: absolute; right: 0; top: 0; width: 20px; height: 20px; border-radius: 0 0 0 8px;
-  background: rgba(20, 24, 32, .58); color: #fff; font-size: 11px; text-align: center; line-height: 20px; z-index: 2; }
+  background: rgba(20, 24, 32, .58); color: #fffdf8; font-size: 11px; text-align: center; line-height: 20px; z-index: 2; }
 .cam3 { font-size: 19px; line-height: 1; opacity: .7; }
 .t3 { font-size: 10px; color: #94A0B2; font-weight: 700; margin-top: 3px; }
 
 /* 录音：段列表 + 录音按钮 */
-.seg { margin-top: 9px; padding: 9px 11px; border-radius: 11px; background: #F7F8FA; border: 1px solid #EEF0F3; }
+.seg { margin-top: 9px; padding: 9px 11px; border-radius: 11px; background: #fdf1e0; border: 1px solid #ecdcc6; }
 .seg .seg-h { display: flex; align-items: center; gap: 9px; }
 .seg .seg-play { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--primary);
-  color: #fff; font-size: 11px; text-align: center; line-height: 26px; }
+  color: #fffdf8; font-size: 11px; text-align: center; line-height: 26px; }
 .seg .seg-d { font-size: 12.5px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .seg .seg-a { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .seg .seg-tr { font-size: 11.5px; color: var(--primary); font-weight: 700; }
-.seg .seg-x { font-size: 12px; color: #A8B0BC; }
-.seg .seg-t { margin-top: 7px; padding-top: 7px; border-top: 1px dashed #E3E7ED; font-size: 12.5px;
+.seg .seg-x { font-size: 12px; color: #a6907a; }
+.seg .seg-t { margin-top: 7px; padding-top: 7px; border-top: 1px dashed #e0c9ac; font-size: 12.5px;
   color: var(--sub); line-height: 1.6; }
 .seg .seg-t.bad { color: #C0392B; }
 .recbtn { margin-top: 9px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-  background: #F3F6F2; border: 1px solid #E3EDE3; color: #1E7A47; font-size: 14px; font-weight: 800; }
-.recbtn.on { background: #FDECE8; border-color: #F6CFC4; color: #B4441B; }
+  background: #f4f2e8; border: 1px solid #e3e2d2; color: #1E7A47; font-size: 14px; font-weight: 800; }
+.recbtn.on { background: #fbe4dc; border-color: #eecbbd; color: #b5482c; }
 
 /* 位置 */
 .loc-x { display: block; margin-top: 8px; font-size: 13px; color: var(--ink);
@@ -74,22 +88,22 @@
 
 /* 提醒 */
 .rm-btn { margin-top: 8px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
-  background: #F7F8FA; border: 1px solid #EEF0F3; color: var(--ink); font-size: 13px; font-weight: 700; }
+  background: #fdf1e0; border: 1px solid #ecdcc6; color: var(--ink); font-size: 13px; font-weight: 700; }
 
 /* 录音中：状态条（浮在底部按钮条之上 —— 它是状态，不是入口） */
 .recbar { position: fixed; left: 0; right: 0; bottom: calc(56px + env(safe-area-inset-bottom)); z-index: 21;
-  display: flex; align-items: center; gap: 8px; padding: 9px 15px; background: #FDECE8;
-  border-top: 1px solid #F6CFC4; font-size: 12.5px; color: #B4441B; font-weight: 700; }
-.recbar .rb-dot { color: #E5484D; }
+  display: flex; align-items: center; gap: 8px; padding: 9px 15px; background: #fbe4dc;
+  border-top: 1px solid #eecbbd; font-size: 12.5px; color: #b5482c; font-weight: 700; }
+.recbar .rb-dot { color: #c0392b; }
 .recbar .rb-now { font-variant-numeric: tabular-nums; }
-.recbar .rb-left { margin-left: auto; color: #8A93A1; font-weight: 600; }
+.recbar .rb-left { margin-left: auto; color: #8f7a66; font-weight: 600; }
 
 /* ============ 底部：只有「删除」+「保存」两个小按钮 ============ */
 .foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; align-items: center;
   justify-content: flex-end; gap: 10px;
-  padding: 9px 14px calc(9px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--line); }
-.foot .f-del { height: 38px; padding: 0 16px; border-radius: 10px; border: 1px solid #F0D5D2; color: #D0453F;
+  padding: 9px 14px calc(9px + env(safe-area-inset-bottom)); background: #fffdf8; border-top: 1px solid var(--line); }
+.foot .f-del { height: 38px; padding: 0 16px; border-radius: 10px; border: 1px solid #eed9d0; color: #D0453F;
   font-size: 13.5px; font-weight: 700; display: flex; align-items: center; }
-.foot .f-save { height: 38px; padding: 0 24px; border-radius: 10px; background: var(--primary); color: #fff;
+.foot .f-save { height: 38px; padding: 0 24px; border-radius: 10px; background: var(--primary); color: #fffdf8;
   font-size: 13.5px; font-weight: 700; display: flex; align-items: center; }
 .foot .f-save.off { opacity: .6; }

@@ -94,6 +94,14 @@
           </block>
         </view>
       </view>
+      <!-- ⭐ 2026-10-03：「加新店」现场录的音（customers.audios）—— 业务员建店时录的，老板 / 同事也能听。
+           样式直接复用拜访历史那套（.hrec/.hplay/.hrec-t/.hrec-bar，暖底圆角，视觉一致）；
+           没有录音时 d.siteRec 为 null → 整块不出现（不留空位）。 -->
+      <view class="hrec" wx:if="{{d.siteRec}}">
+        <view class="hplay" bindtap="playSiteRec">{{d.siteRec.playing ? '❚❚' : '▶'}}</view>
+        <text class="hrec-t">现场录音 {{d.siteRec.dur}}</text>
+        <view class="hrec-bar"><view class="hrec-i" style="width:{{d.siteRec.pct}}%"></view></view>
+      </view>
     </view>
   </view>
 

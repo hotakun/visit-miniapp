@@ -113,10 +113,15 @@ Page({
     } else {
       // ⚠️ 2026-09-28 修 bug：客户页「快速记事」把店名放在 URL 里带过来，**必须解码**
       //   （不解码就显示成 %E8%83%A1%E8%AE%B0… 那种"乱码"—— 老板报的就是这个）。
-      //   客户 id 兜底：URL 没带就从上一页塞的 storage `curCustomer` 取（与客户页同一套兜底）。
-      const cc = wx.getStorageSync('curCustomer') || {};
-      const cid = notes.qs(q2.customerId) || cc._id || '';
-      const cname = notes.qs(q2.customerName) || cc.name || '';
+      //   ⭐ 2026-10-02 修 bug（老板报）：**去掉 `curCustomer` 兜底** ——
+      //   原来 URL 没带 customerId 时会去读 storage 的 `curCustomer`（拜访页留下的"当前客户"），
+      //   结果从【记事列表 →「＋ 记一笔」】新建记事时，**会被硬塞进上一次拜访的那家客户**
+      //   （老板实测：新建的记事又跑到「镇雄老味道」那家去了）。
+      //   现在**只认 URL 参数**：带了才关联客户，没带就是"不关联客户的自由记事"。
+      //   （三个入口本来都自带参数：客户页「快速记事」、列表页在客户筛选态下的「记一笔」都带；
+      //     看全部态下的「记一笔」不带 —— 那本来就**不该**关联任何客户。）
+      const cid = notes.qs(q2.customerId) || '';
+      const cname = notes.qs(q2.customerName) || '';
       const d = notes.draft({ customerId: cid, customerName: cname });
       this.setData(Object.assign(base, {
         isNew: true, id: d.id, at: d.at,
