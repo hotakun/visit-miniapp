@@ -312,7 +312,7 @@ const NAME_SUSPECT = 0.72;
 
 // ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
 //   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
-const CODE_VER = '2026-10-03-1100';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）；1001=加 alsoSalesman 声明（老板兼业务员）；1100=selfCheck 支持 excludeId（后台防重复核用）
+const CODE_VER = '2026-10-05-0100';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）；1001=加 alsoSalesman 声明（老板兼业务员）；1100=selfCheck 支持 excludeId（后台防重复核用）；0100=自由拜访（nearbyCustomers 分圈取最近500 + walkRoute 步行路线 + 自由拜访卡 CRUD + _logTrip + 集合自愈）
 
 // ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
 //   入参（全可选）：{ lat, lng, name, phone, radius, excludeId }
