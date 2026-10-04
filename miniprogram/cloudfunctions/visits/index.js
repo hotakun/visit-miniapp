@@ -122,35 +122,77 @@ async function saveTrText(user, e, isBoss) {
   return { ok: true, text, editedAt: Date.now(), msg: '已保存' };
 }
 
+// ⭐ 2026-10-03 自由拜访：以**真实拜访记录**为准重算某张卡的 customerIds
+//   —— 卡片上的「已拜访 N 家」= 这个数组的长度（**按客户去重**：同一家跑几次都算 1 家）。
+//   ⚠️ 只统计**已提交**的拜访（status != ongoing）→ 取消拜访后记录被删，家数自然减少。
+//   ⚠️ 客户后来被删进回收站时，列表页会自动跳过（这里不特殊处理，保证数据简单）。
+async function _resyncFreeTrip(tripId) {
+  if (!tripId) return;
+  try {
+    const ids = [];
+    for (let sk = 0; sk < 1000; sk += 100) {
+      const part = await db.collection('visits')
+        .where({ freeTripId: tripId, status: _.neq('ongoing') })
+        .field({ customerId: true }).skip(sk).limit(100).get();
+      const arr = (part && part.data) || [];
+      for (const r of arr) if (r.customerId) ids.push(r.customerId);
+      if (arr.length < 100) break;
+    }
+    const uniq = Array.from(new Set(ids));
+    await db.collection('free_trips').doc(tripId).update({ data: { customerIds: uniq, updatedAt: Date.now() } });
+  } catch (err) { /* 重算失败不影响拜访本身 */ }
+}
+
 // 拜访中：业务员进入拜访页（开始计时）即上报，后台可见"拜访中"状态
 async function start(user, e, isBoss) {
   const { taskId, customerId } = e;
-  if (!taskId || !customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务或客户' };
-  // 任务归属校验
-  const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
-  const task = taskRes && taskRes.data;
-  if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
-  if (!['published', 'reviewing'].includes(task.status)) return { ok: false, code: 'TASK_DONE', msg: '任务已结束，无法再拜访' };
-  if (task.status === 'published' && task.deadline && String(task.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
-  if (!(task.customerIds || []).includes(customerId)) return { ok: false, code: 'CUST_NOT_IN_TASK', msg: '客户不在该任务中' };
+  // ⭐ 2026-10-03 自由拜访：归属哪张「自由拜访卡」（由 tasks/freeTripList 建卡得到；没有就为空）
+  const freeTripId = String(e.freeTripId || '');
+  // ⭐ 2026-10-02 老板定（选 A）：**支持「无任务拜访」（自由拜访）** ——
+  //   场景：手机端「加新店」现场建的店**不属于任何任务**，建完要能立刻去拜访。
+  //   规则：**taskId 为空 = 自由拜访** → 跳过"任务归属/状态/客户在任务里"三项校验，
+  //        但仍然校验客户存在、且今天这家店没有别的拜访中（下面的 ong 检查，本来就与任务无关）。
+  const freeVisit = !taskId;
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  // ⚠️ 2026-10-04【对抗性检查补】归属卡要**验明正身**：
+  //   原来直接拿 event.freeTripId 落库 → 业务员可以伪造别人的卡 id 把拜访"记到别人账上"。
+  //   规则：卡必须存在、且**属于自己**；不合法就当作"无卡自由拜访"（不报错，别挡着业务员干活）。
+  let tripId = '';
+  if (freeTripId) {
+    const tr = await db.collection('free_trips').doc(freeTripId).get().catch(() => null);
+    const t = tr && (tr.data && (Array.isArray(tr.data) ? tr.data[0] : tr.data));
+    if (t && t.salesmanId === user._id) tripId = freeTripId;
+  }
+  if (!freeVisit) {
+    // ↓↓↓ 原有任务校验，一字未改 ↓↓↓
+    const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+    const task = taskRes && taskRes.data;
+    if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+    if (!['published', 'reviewing'].includes(task.status)) return { ok: false, code: 'TASK_DONE', msg: '任务已结束，无法再拜访' };
+    if (task.status === 'published' && task.deadline && String(task.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
+    if (!(task.customerIds || []).includes(customerId)) return { ok: false, code: 'CUST_NOT_IN_TASK', msg: '客户不在该任务中' };
+  }
   // 老板模式（2026-09-09 §7.13）：不建拜访中记录、不发闹钟、不占单开名额——返回假 visitId 走本地演示流程
   if (isBoss) return { ok: true, already: 'new', visitId: 'boss_' + Date.now(), boss: true };
 
   const date = todayStr();
   // 任务内单开检查（2026-09-04 老板定）：放最前——任何客户（含已拜访的二次拜访）在他人拜访中时一律拦截
-  const others = await db.collection('visits')
-    .where({ taskId, status: 'ongoing', visitedAt: date, customerId: _.neq(customerId) })
-    .limit(1).get();
-  if (others.data.length) {
-    const o = others.data[0];
-    const cRes = await db.collection('customers').doc(o.customerId).get().catch(() => null);
-    return {
-      ok: false,
-      code: 'ONGOING_OTHERS',
-      ongoingName: (cRes && cRes.data && cRes.data.name) || '另一家',
-      msg: `「${(cRes && cRes.data && cRes.data.name) || '另一家'}」还未完成拜访，请先完成或取消`,
-      ongoingCustomerId: o.customerId
-    };
+  // ⚠️ 2026-10-02：**只对任务内拜访生效** —— 自由拜访不占任务单开名额（它本就不属任何任务）
+  if (!freeVisit) {
+    const others = await db.collection('visits')
+      .where({ taskId, status: 'ongoing', visitedAt: date, customerId: _.neq(customerId) })
+      .limit(1).get();
+    if (others.data.length) {
+      const o = others.data[0];
+      const cRes = await db.collection('customers').doc(o.customerId).get().catch(() => null);
+      return {
+        ok: false,
+        code: 'ONGOING_OTHERS',
+        ongoingName: (cRes && cRes.data && cRes.data.name) || '另一家',
+        msg: `「${(cRes && cRes.data && cRes.data.name) || '另一家'}」还未完成拜访，请先完成或取消`,
+        ongoingCustomerId: o.customerId
+      };
+    }
   }
   // 已有拜访中记录则忽略（已拜访客户二次拜访同样创建新拜访中记录——2026-09-06 老板定：
   // 删除原"已完成则不覆盖"分支，让二次拜访也走完整拜访中状态，蓝色提示体系/历史卡片/计时全部生效）
@@ -163,7 +205,7 @@ async function start(user, e, isBoss) {
   const startedAt = Date.now();
   await db.collection('visits').add({
     data: {
-      customerId, taskId, salesmanId: user._id, salesmanName: user.name,
+      customerId, taskId: taskId || '', freeTripId: tripId, salesmanId: user._id, salesmanName: user.name,
       visitedAt: date, startedAt, status: 'ongoing', result: '', text: '', samples: '',
       remindAt: startedAt + (visitLimit - 300) * 1000,
       autoCancelAt: startedAt + visitLimit * 1000,
@@ -178,7 +220,8 @@ async function start(user, e, isBoss) {
 // 超时到点时云端据此双态处理：有草稿→自动提交；无草稿→自动取消
 async function saveDraft(user, e, isBoss) {
   const { taskId, customerId, result, text, samples } = e;
-  if (!taskId || !customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务或客户' };
+  // ⭐ 2026-10-02：自由拜访（无任务）也允许提交 —— 只要求 customerId
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
   // 结果枚举校验（2026-09-08 审查修复：防非法值经草稿→超时自动提交写库）
   const rr = String(result || '');
   if (rr && !RESULT_ENUM_NEW.includes(rr)) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
@@ -251,18 +294,23 @@ async function reportTrack(user, e, isBoss) {
 // 取消拜访（2026-09-04 老板定稿）：直接删除本次拜访记录，不留任何痕迹（像没来过一样）；客户仍为待回访；无需定位，任何地方可取消
 async function cancelVisit(user, e, isBoss) {
   const { taskId, customerId } = e;
-  if (!taskId || !customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务或客户' };
-  const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
-  const task = taskRes && taskRes.data;
-  if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+  // ⭐ 2026-10-02：自由拜访（无任务）也能取消 —— 只要求 customerId；任务校验仅在任务内拜访时做
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  if (taskId) {
+    const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+    const task = taskRes && taskRes.data;
+    if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+  }
   if (isBoss) return { ok: true, boss: true, msg: '已取消本次拜访，该客户仍为待回访' }; // 老板演示：无记录可删，直接假成功
   const date = todayStr();
   const ong = await db.collection('visits')
-    .where({ customerId, taskId, visitedAt: date, status: 'ongoing', salesmanId: user._id })
+    .where({ customerId, taskId: taskId || '', visitedAt: date, status: 'ongoing', salesmanId: user._id })
     .get();
   if (!ong.data.length) return { ok: false, code: 'NO_ONGOING', msg: '没有进行中的拜访，无需取消' };
   const doc = ong.data[0];
   await db.collection('visits').doc(doc._id).remove();
+  // ⭐ 2026-10-03 自由拜访：取消 = 记录被删 → 卡片「已拜访 N 家」要跟着减少
+  await _resyncFreeTrip(String(e.freeTripId || doc.freeTripId || ''));
   return { ok: true, visitId: doc._id, msg: '已取消本次拜访，该客户仍为待回访' };
 }
 
@@ -291,13 +339,17 @@ async function submit(user, e, isBoss) {
   if (user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
   const { taskId, customerId, result, text = '', samples = '', durationSeconds = 0, lat, lng, photos, audio, audios } = e;
 
-  // 1. 任务归属校验
-  const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
-  const task = taskRes && taskRes.data;
-  if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
-  if (!['published', 'reviewing'].includes(task.status)) return { ok: false, code: 'TASK_DONE', msg: '任务已结束，无法再拜访' };
-  if (task.status === 'published' && task.deadline && String(task.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
-  if (!(task.customerIds || []).includes(customerId)) return { ok: false, code: 'CUST_NOT_IN_TASK', msg: '客户不在该任务中' };
+  // 1. 任务归属校验（⭐ 2026-10-02：**自由拜访没有任务 → 整段跳过**）
+  let task = null;
+  if (taskId) {
+    const taskRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+    task = taskRes && taskRes.data;
+    if (!task || (task.salesmanId !== user._id && !isBoss)) return { ok: false, code: 'TASK_FORBIDDEN', msg: '任务不存在或不属于你' };
+    if (!['published', 'reviewing'].includes(task.status)) return { ok: false, code: 'TASK_DONE', msg: '任务已结束，无法再拜访' };
+    if (task.status === 'published' && task.deadline && String(task.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
+  }
+  // ⭐ 2026-10-02：**自由拜访没有任务 → 跳过"客户在任务里"这条校验**
+  if (taskId && !(task.customerIds || []).includes(customerId)) return { ok: false, code: 'CUST_NOT_IN_TASK', msg: '客户不在该任务中' };
 
   // 2. 客户类型与结果集校验
   const cRes = await db.collection('customers').doc(customerId).get().catch(() => null);
@@ -349,7 +401,7 @@ async function submit(user, e, isBoss) {
   let skipLoc = false;
   if (e.skipLoc) {
     const ongChk = await db.collection('visits')
-      .where({ customerId, taskId, visitedAt: date, status: 'ongoing', salesmanId: user._id })
+      .where({ customerId, taskId: taskId || '', visitedAt: date, status: 'ongoing', salesmanId: user._id })
       .get();
     const o = ongChk.data[0];
     if (!o || !o.autoCancelAt || Number(o.autoCancelAt) > Date.now()) {
@@ -377,8 +429,15 @@ async function submit(user, e, isBoss) {
   }
 
   // 6. 写入（有"拜访中"记录则升级为完成，避免同日双记录）
+  // ⚠️ 2026-10-04【对抗性检查补】submit 也要验归属卡（同 start，别让拜访记到别人卡上）
+  let subTripId = '';
+  if (e.freeTripId) {
+    const tr = await db.collection('free_trips').doc(String(e.freeTripId)).get().catch(() => null);
+    const t = tr && (tr.data && (Array.isArray(tr.data) ? tr.data[0] : tr.data));
+    if (t && t.salesmanId === user._id) subTripId = String(e.freeTripId);
+  }
   const doc = {
-    taskId, customerId, salesmanId: user._id, salesmanName: user.name,
+    taskId: taskId || '', freeTripId: subTripId, customerId, salesmanId: user._id, salesmanName: user.name,
     visitedAt: date, result, text, samples,
     durationSeconds, submitLat: lat || null, submitLng: lng || null,
     distanceToCustomer: distance ? Math.round(distance) : null,
@@ -397,6 +456,9 @@ async function submit(user, e, isBoss) {
     doc._id = add._id;
   }
 
+  // ⭐ 2026-10-03 自由拜访：拜访成功 → 把客户加进该卡的 customerIds（去重，见 _resyncFreeTrip）
+  await _resyncFreeTrip(doc.freeTripId);
+
   // 2026-09-11 M2b：把「提交前已点过『开始转录』」的转写记录回填 visitId
   // （按 fileID 精确匹配，不误关联别的拜访；失败不影响提交，后台仍可按客户查看）
   if (au.length) {
@@ -407,7 +469,7 @@ async function submit(user, e, isBoss) {
         if (t.visitId === doc._id) continue;
         await db.collection('transcripts').doc(t._id).update({
           data: {
-            visitId: doc._id, taskId, customerId,
+            visitId: doc._id, taskId: taskId || '', customerId,
             salesmanId: user._id, salesmanName: user.name, updatedAt: Date.now()
           },
         });
@@ -420,14 +482,17 @@ async function submit(user, e, isBoss) {
   }
 
   // 7. 任务流程档案留痕（2026-09-08 老板定：单次拜访提交也记录进后台流程档案）
+  // ⭐ 2026-10-02：**自由拜访没有任务 → 无需留痕，整段跳过**
   try {
-    const t2 = await db.collection('tasks').doc(taskId).get();
-    const tlogs = Array.isArray(t2.data.logs) ? t2.data.logs : [];
-    tlogs.push({
-      at: Date.now(), by: user.name || '业务员', role: 'salesman', type: 'visit',
-      detail: { customerId, name: customer.name || '', result, text: String(text || '').slice(0, 30) }
-    });
-    await db.collection('tasks').doc(taskId).update({ data: { logs: tlogs } });
+    if (taskId) {
+      const t2 = await db.collection('tasks').doc(taskId).get();
+      const tlogs = Array.isArray(t2.data.logs) ? t2.data.logs : [];
+      tlogs.push({
+        at: Date.now(), by: user.name || '业务员', role: 'salesman', type: 'visit',
+        detail: { customerId, name: customer.name || '', result, text: String(text || '').slice(0, 30) }
+      });
+      await db.collection('tasks').doc(taskId).update({ data: { logs: tlogs } });
+    }
   } catch (e) { /* 日志失败不阻断拜访提交 */ }
 
   return { ok: true, visitId: doc._id, msg: '已提交 ✓' };

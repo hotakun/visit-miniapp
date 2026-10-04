@@ -14,7 +14,9 @@
     "pages/notes/editor/editor",
     "pages/newshop/newshop",
     "pages/myshops/myshops"
-  ],
+  ,
+    "pages/freevisit/freevisit",
+    "pages/freevisit/map"],
   "window": {
     "navigationBarBackgroundColor": "#F5531C",
     "navigationBarTitleText": "聚火拜访",

@@ -6,8 +6,8 @@
 <view class="page">
 
   <view class="hd">
-    <view class="hd-t">🏪 我新加的店</view>
-    <view class="hd-s" wx:if="{{loaded}}">共 {{total}} 家{{total ? '' : ' · 还没有'}}</view>
+    <view class="hd-t">🏪 加新店</view>
+    <view class="hd-s" wx:if="{{loaded}}">我加过的店 · 共 {{total}} 家</view>
     <view class="hd-s" wx:else>加载中…</view>
   </view>
 
@@ -15,14 +15,21 @@
   <view class="empty" wx:if="{{loaded && !list.length}}">
     <view class="e-ic">🏪</view>
     <view class="e-t">还没加过新店</view>
-    <view class="e-s">在首页点「加新店」现场建档，提交后就会出现在这里，还能回来改。</view>
+    <view class="e-s">点下面的「＋ 加新店」现场建档，提交后就会出现在这里，还能回来改。</view>
   </view>
 
   <!-- 卡片列表 -->
   <view class="shopcard" wx:for="{{list}}" wx:key="id" bindtap="openShop" data-id="{{item.id}}">
     <view class="r1">
       <text class="nm">{{item.name}}</text>
-      <text class="st {{item.mallPending ? 'wait' : 'ok'}}">{{item.mallPending ? '待商城建档' : '已对上商城'}}</text>
+      <!-- ⭐ 2026-10-03 老板定：这张卡是「**我自己现场采集的店**」，胶囊固定显示「新店采集」。
+           原来拿 mallPending 二值判断显示"待商城建档 / 已对上商城" —— 但 mallPending 的 false
+           **有两种来源**：① 真导入商城表比对上了 ② 被旧的「手工已建档」点掉（那个按钮 09-29 已删，
+           可历史数据留下了 false 却没写任何商城字段）→ 后者明明没对上商城，卡片却报"已对上商城"
+           （老板 2026-10-03 实测报障就是这个）。
+           ⚠️ "是否已对上商城"是**老板后台**关心的事（判据看 customerType==='mall' / mallKey），
+              不该摆到业务员这张卡上。 -->
+      <text class="st new">新店采集</text>
     </view>
     <view class="r2" wx:if="{{item.addrLine}}">{{item.addrLine}}</view>
     <view class="r3">
@@ -34,11 +41,20 @@
       <text wx:if="{{item.audioCount}}">　🎙 {{item.audioCount}}</text>
       <text class="go">点一下改内容 ›</text>
     </view>
+    <!-- ⭐ 2026-10-02 老板定：卡片右边加「开始拜访」—— 建完店能立刻去拜访（走无任务拜访）
+         ⚠️ 必须 catchtap（阻止冒泡），否则会同时触发卡片本身的"编辑" -->
+    <view class="fv" catchtap="goVisit" data-id="{{item.id}}">开始拜访</view>
   </view>
 
   <!-- 加载更多 -->
   <view class="more" wx:if="{{hasMore}}" bindtap="loadMore">{{loadingMore ? '加载中…' : '加载更多'}}</view>
-  <view class="bot" wx:elif="{{list.length}}">没有更多了</view>
+
   <view class="pad"></view>
+
+  <!-- ⭐ 2026-10-02 老板定：**吸底固定的「＋ 加新店」** —— 位置与样式跟「我的记事」的「＋ 记一笔」
+       完全一致（fixed 悬在屏幕底部；白底 + 虚线橙边橙字，不是橙色实心） -->
+  <view class="newbar">
+    <view class="nb-btn" bindtap="goAdd">＋ 加新店</view>
+  </view>
 
 </view>

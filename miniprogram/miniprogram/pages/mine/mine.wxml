@@ -34,8 +34,8 @@
         <view class="sw {{subOn ? 'on' : ''}}" id="subSwitch"></view>
       </view>
       <view class="mi" bindtap="goNotes"><view class="ic" style="background:#FFF7ED">📝</view>我的记事<view class="arrow">›</view></view>
-      <!-- ⭐ 2026-09-29 新增：我新加的店（只列自己提交的现场录入；点卡片进去能改） -->
-      <view class="mi" bindtap="goMyShops"><view class="ic" style="background:#EAF6EE">🏪</view>我新加的店<view class="arrow">›</view></view>
+      <!-- ⭐ 2026-10-02 老板定：**「我新加的店」入口从「我的」页移除** ——
+           现在从首页「加新店」直接进那个列表（pages/myshops），这里不再单列一条。 -->
       <view class="mi" bindtap="tapSetting"><view class="ic" style="background:#EFF1F4">⚙️</view>设置<view class="arrow">›</view></view>
       <view class="mi" bindtap="tapAbout"><view class="ic" style="background:#EFF1F4">ℹ️</view>关于聚火拜访<view class="arrow">›</view></view>
       <view class="mi" bindtap="exitIdentity"><view class="ic" style="background:#FFF0ED">🚪</view>退出身份<view class="arrow">›</view></view>

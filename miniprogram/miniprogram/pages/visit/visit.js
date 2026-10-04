@@ -96,7 +96,7 @@ Page({
     this.isDemo = !!c.demo;
     if (this.isDemo) { this.beginTimer(c); return; }
     // 开始拜访：云端校验（任务内单开：其他家还在拜访中会拦截）
-    api.call('visits', { action: 'start', taskId: c.taskId, customerId: c._id }).then(res => {
+    api.call('visits', { action: 'start', taskId: c.taskId, customerId: c._id, freeTripId: c.freeTripId || '' }).then(res => {
       if (res && res.code === 'ONGOING_OTHERS') {
         // 大弹窗提示（不再用 toast）：停留至用户点击「知道了」，避免一闪而过
         // 2026-09-13：弹窗改三段式（店名一行 / 还在拜访中… 一行 / 提示两行居中）→ 这里只取店名
@@ -170,7 +170,7 @@ Page({
       if (this.data.result) {
         const durationSeconds = Math.floor((Date.now() - this.t0) / 1000);
         const res = await api.call('visits', {
-          action: 'submit', taskId: c.taskId, customerId: c._id,
+          action: 'submit', taskId: c.taskId, customerId: c._id, freeTripId: c.freeTripId || '',
           result: this.data.result, text: this.data.text, samples: this.data.samples,
           durationSeconds, skipLoc: true
         });
@@ -624,7 +624,7 @@ Page({
       const res = await api.call('visits', {
         action: 'submit',
         taskId: this.data.c.taskId,
-        customerId: this.data.c._id,
+        customerId: this.data.c._id, freeTripId: this.data.c.freeTripId || '',
         result: this.data.result,
         text: this.data.text,
         samples: this.data.samples,
@@ -651,8 +651,10 @@ Page({
         const pool = PRAISE[this.data.result] || ['辛苦啦！拜访已提交 ✓'];
         const line = pool[Math.floor(Math.random() * pool.length)];
         api.toast(line, 'success');
-        // 提示后自动回任务详情页（回退两层：拜访记录页 → 客户详情页）
-        setTimeout(() => wx.navigateBack({ delta: 2 }), 900);
+        // ⭐ 2026-10-02：回去的层数按场景区分 ——
+        //   任务内拜访：回退两层（拜访记录页 → 客户详情页，原有行为）
+        //   自由拜访（从「我的 → 我新加的店」来）：只回一层，回到那个列表
+        setTimeout(() => wx.navigateBack(this.data.c.taskId ? { delta: 2 } : {}), 900);
       } else if (res.code === 'TOO_FAR') {
         // 证据已上传完成：重试自动复用（_evPhotos/_evAudios 保留），不重复传
         api.toast(`距客户 ${res.distance} 米，超限`);

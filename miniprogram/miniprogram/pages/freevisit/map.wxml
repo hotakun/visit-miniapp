@@ -1,0 +1,63 @@
+<!-- 自由拜访地图页（2026-10-03）
+     ⚠️ 铁律：小程序一个页面只放一个 <map>；WXML 只用 view/text（禁 div/br）
+     ⚠️ 地图标识：左上「聚火地图」badge + 右下腾讯 logo/审图号（合规，**不能去掉**） -->
+<view class="page">
+
+  <map class="mp" id="mp" show-location="{{true}}" markers="{{markers}}" circles="{{circles}}"
+       polyline="{{polyline}}"
+       latitude="{{centerLat}}" longitude="{{centerLng}}" scale="{{mapScale}}"
+       bindmarkertap="onMarkerTap"></map>
+
+  <!-- 聚火地图 badge（左上角避让腾讯 logo） -->
+  <view class="jh-badge">
+    <view class="jh-compass"><view class="jh-needle"></view></view>
+    <view class="jh-word">聚火地图</view>
+  </view>
+
+  <!-- ⭐ 右上角三个浮动控件（横向一行、精致小巧）—— 老板 2026-10-03 定 -->
+  <view class="maptools">
+    <view class="mt" bindtap="onLoc">⌖</view>
+    <view class="mt" bindtap="onFit">⛶</view>
+    <view class="mt wide {{showName ? 'on' : ''}}" bindtap="onToggleName">🏷 店名</view>
+  </view>
+
+  <!-- 出圈提示条（固定态才可能出圈） -->
+  <view class="outtip" wx:if="{{outOfRange}}">⚠️ 你已在范围外</view>
+
+  <!-- 客户小卡（点地图上的点弹出） -->
+  <view class="card" wx:if="{{sel}}">
+    <!-- ⭐ 2026-10-04 老板要的：右上角加关闭；否则这张卡只能靠去点别处关 -->
+    <view class="c-x" bindtap="closeCard">✕</view>
+    <view class="c-n">{{sel.name}}</view>
+    <view class="c-a">{{sel.address}}</view>
+    <view class="c-d">距我 {{sel.dist}} 米 · {{sel.stateText}}</view>
+    <view class="c-b">
+      <view class="cb" bindtap="onRoute">🧭 步行路径</view>
+      <view class="cb" bindtap="onNav">🚗 行车导航</view>
+      <view class="cb" bindtap="onDetail">📋 详情&拜访</view>
+    </view>
+  </view>
+
+  <!-- 底部工具栏 -->
+  <view class="toolbar">
+    <view class="t-loc">📍 中心：<text class="t-loc-v">{{areaText}}</text></view>
+
+    <view class="ranges {{locked ? 'lock' : ''}}">
+      <view class="rg {{radius === 200 ? 'on' : ''}}" data-r="200" bindtap="onRange">200m</view>
+      <view class="rg {{radius === 500 ? 'on' : ''}}" data-r="500" bindtap="onRange">500m</view>
+      <view class="rg {{radius === 1000 ? 'on' : ''}}" data-r="1000" bindtap="onRange">1km</view>
+      <view class="rg {{radius === 2000 ? 'on' : ''}}" data-r="2000" bindtap="onRange">2km</view>
+      <!-- ⚠️⚠️ 2026-10-04 临时档位：老板测试用（想看远处的客户点），**测完必须删掉这一行** -->
+      <view class="rg {{radius === 400000 ? 'on' : ''}}" data-r="400000" bindtap="onRange">400km</view>
+    </view>
+
+    <view class="t-cnt">🏪 附近 <text class="t-num">{{nearCount}}</text> 家 · 其中去过 <text class="t-num">{{visitedCount}}</text> 家</view>
+
+    <view class="btns">
+      <view class="tb {{locked ? 'dis' : ''}}" bindtap="onRefresh">🔄 刷新</view>
+      <view class="tb" bindtap="onLock">📌 {{locked ? '解除固定' : '固定范围'}}</view>
+      <view class="tb prim" bindtap="onMakeTrip">➕ 建立自由任务</view>
+    </view>
+  </view>
+
+</view>

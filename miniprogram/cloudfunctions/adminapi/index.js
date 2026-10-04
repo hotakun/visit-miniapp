@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'fieldList', 'fieldDone', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -172,16 +172,11 @@ async function fieldList(event) {
 //             手动抹掉 mallPending 之后，注册商城时间 / 签约业务员 / 客户编号**全是空的** → 订单接不上、数据自相矛盾。
 //   正确链路：**导入商城表 → 比对对上 → 才算真正建档**
 //             （补 mallPending:false + customerType:'mall' + mallJoinedAt/mallSalesman/mallKey，见 runMallMatch / applyMallMatch）。
-//   本函数**保留但不再被前端调用**（只留作运维修数据：已人工核实确实已入商城、但商城表里没有档案的个例）。
-//   ⚠️ 「待商城建档」页上的「已建档」按钮已删除。
-async function fieldDone(event) {
-  const id = String(event.id || '');
-  if (!id) return { ok: false, msg: '缺 id' };
-  await db.collection('customers').doc(id).update({
-    data: { mallPending: false, mallPendingDoneAt: Date.now(), updatedAt: Date.now() }
-  });
-  return { ok: true };
-}
+// ⛔⛔ 2026-10-03【老板定：删掉】`fieldDone` 函数**已彻底删除**（连同 dispatch 与 ACTIONS 条目）——
+//   它只写 `mallPending:false` + `mallPendingDoneAt`、**一个商城字段都不写**，是"**假对上商城**"的唯一制造者：
+//   手机端「我新加的店」卡片据此把它显示成「已对上商城」，可它从没匹配过商城（老板实测报障的那家就是）。
+//   ⚠️ 以后遇到"确实已入商城、但商城表里没有档案"的个例，走**导入商城表比对**这条路，不要复活这个函数。
+
 
 // 只要"未处理数"（轻量：铃铛 + 边栏角标轮询用；不做客户/业务员名映射，只数条数）
 async function msgCount() {
@@ -347,6 +342,34 @@ async function msgCenter(event) {
       });
     });
   } catch (e) { /* 注册流水取不到不影响主流程 */ }
+  // ⭐ 2026-10-04 自由拜访「大操作」（建卡 / 结束 / 唤醒 / 删除）进滚动消息
+  //   （老板要："这些大的操作后台的滚动消息要有提示"）
+  //   ⚠️ 只在**第 0 页**并入 —— 滚动消息是时间倒序 + 分页的，自由拜访日志量小、最近一批够看；
+  //      若也参与 skip/limit 会让分页计数跟其它来源打架。
+  if (page === 0) {
+    try {
+      const tr = await db.collection('free_trip_logs')
+        .orderBy('at', 'desc').limit(50).get()
+        .catch(() => ({ data: [] }));
+      (tr.data || []).forEach(g => {
+        const area = [g.district, g.bizCircle].filter(Boolean).join(' · ') || '未划分商圈';
+        const act = g.action === 'create' ? '建立自由拜访卡'
+          : g.action === 'pause' ? '结束自由拜访卡'
+            : g.action === 'resume' ? '唤醒自由拜访卡'
+              : g.action === 'delete' ? '删除自由拜访卡' : '自由拜访卡';
+        const cnt = g.visitedCount ? ('（已拜访 ' + g.visitedCount + ' 家）') : '';
+        list.push({
+          id: 'ft-' + (g.tripId || '') + '-' + (g.at || 0) + '-' + g.action,
+          kind: 'freeTrip',
+          at: g.at || 0,
+          salesmanName: g.salesmanName || '业务员',
+          customerId: '',
+          customerName: '',
+          text: (g.salesmanName || '业务员') + ' ' + act + ' · ' + area + cnt
+        });
+      });
+    } catch (e) { /* 日志读不到不影响其它消息 */ }
+  }
   list.sort((a, b) => (b.at || 0) - (a.at || 0));
   return { ok: true, tab: 'roll', page, pageSize: size, hasMore: vRows.length >= size, items: list };
 }
@@ -608,7 +631,12 @@ exports.main = async (event) => {
     if (action === 'custGeoAggregate') return await custGeoAggregate(event);   // 2026-09-26：地图分级聚合（group by city/district/bizCircle）
     if (action === 'custMapPoints') return await custMapPoints(event);         // 2026-09-27：轻量客户点（分片，地图/客户管理用）
     if (action === 'custSync') return await custSync(event);                   // 2026-09-27：客户增量同步（updatedAt > since）
-    if (action === 'custDirty') return await custDirty();                      // ⭐ 2026-09-29【方案 C】数据变动信号（手机端建店后写；后台据此自动刷缓存）
+    if (action === 'custDirty') return await custDirty();
+    if (action === 'listShareImages') return await listShareImages();
+    if (action === 'saveShareImages') return await saveShareImages(event);
+    if (action === 'listFreeTrips') return await listFreeTrips(event);    // ⭐ 2026-10-03 后台：自由拜访卡列表（可按业务员筛）
+    if (action === 'deleteFreeTrip') return await deleteFreeTrip(event);
+    if (action === 'freeTripDetailAdmin') return await freeTripDetailAdmin(event);  // ⭐ 2026-10-03 后台：看这张卡去过的店  // ⭐ 2026-10-03 后台：删自由拜访卡（只删归类，拜访记录保留）                      // ⭐ 2026-09-29【方案 C】数据变动信号（手机端建店后写；后台据此自动刷缓存）
     // ⚠️ 2026-09-27 补接线（老板报障「客户列表 全局态/任务状态/订单总数/订单总额/最近下单/最近拜访 全空」）：
     //   本 action 在 ACTIONS 白名单里、实现函数也有，但 **dispatch 里漏了分支** → 落到末尾兜底 `return {ok:true,pong}`
     //   → 前端拿到 ok:true 却没有 byId/byCode → 静默不填 → 六列全空、且不报错。
@@ -620,7 +648,6 @@ exports.main = async (event) => {
     // ⭐ 2026-09-28 晚 老板定：**「⏳ 待商城建档」**（边栏独立一页）——
     //   业务员现场录的店（customers.mallPending === true）等商城表来对上，这里列给老板看
     if (action === 'fieldList') return await fieldList(event);
-    if (action === 'fieldDone') return await fieldDone(event);   // 手工取消"待商城建档"标记
     // ⭐⭐ 2026-09-29 老板定：**客户回收站**（软删 —— 删除的客户先放这里，可随时恢复）
     if (action === 'listDeletedCustomers') return await listDeletedCustomers(event);   // 回收站列表
     if (action === 'restoreCustomers') return await restoreCustomers(event);           // 从回收站恢复
@@ -638,6 +665,10 @@ exports.main = async (event) => {
     if (action === 'listCustomerVisits') return await listCustomerVisits(event);
     if (action === 'transcribeVisit') return await transcribeVisit(event);
     if (action === 'transcribeUsage') return await transcribeUsage(event);
+    if (action === 'transcribeCustAudio') return await transcribeCustAudio(event);   // ⭐ 2026-10-03：「加新店」录音转写（现场证据）
+    if (action === 'pollCustAudioText') return await pollCustAudioText(event);       // ⭐ 2026-10-03：取转写结果并回写客户档案
+    if (action === 'deleteCustAudio') return await deleteCustAudio(event);           // ⭐ 2026-10-03：删录音文件（有文字则保留文字）
+    if (action === 'saveCustAudioText') return await saveCustAudioText(event);       // ⭐ 2026-10-03：改转写文字（纠错）
     if (action === 'reviewFinishRequest') return await reviewFinishRequest(event);
     if (action === 'getLastMallImport') return await getLastMallImport(event);
     if (action === 'listSalesmen') return await listSalesmen(event);
@@ -692,6 +723,7 @@ exports.main = async (event) => {
     if (action === 'getCustomerDetail') return await getCustomerDetail(event);        // 2026-09-25：客户详情页聚合查询
     if (action === 'updateCustomerCoords') return await updateCustomerCoords(event);  // 2026-09-25：后台改坐标（直接生效）
     if (action === 'updateCustomerFields') return await updateCustomerFields(event);  // 2026-09-25：后台改客户资料
+    if (action === 'dupCheckCust') return await dupCheckCust(event);                  // ⭐ 2026-10-03：后台「防重检测」（复核用，只读）
     // ⚠️ 2026-09-27 改：原来这里返回 `{ ok:true, pong }` —— 任何"白名单有、dispatch 漏接线"的 action 都会被伪装成
     //   "调用成功但没有数据"（前端静默、不报错，极难发现，本次客户列表六列全空就是这么来的）。改为一律明确报错。
     return { ok: false, code: 'BAD_ACTION', msg: '未知操作：' + action };
@@ -706,7 +738,14 @@ exports.main = async (event) => {
 // `updateCustomerCoords` —— 后台管理员改坐标 **直接生效**（老板 09-24 定：不搞"待审核"那套），
 //   同时写 coordSource='admin' 与 coordUpdatedAt，供详情页显示来源标签 / 距上个坐标。
 // `updateCustomerFields` —— 编辑态保存客户资料（**白名单字段**，防止误改 mallKey 这类关联键）。
-const EDITABLE_CUST_FIELDS = ['name', 'phone', 'phone2', 'address', 'businessArea', 'businessHours', 'category', 'contactName'];
+// ⭐ 2026-10-03 老板定：后台详情页的编辑能力扩展到**区域 / 商圈 / 品类 / 业务员** ——
+//   背景（老板报障）：「加新店」现场录的店，后台详情页看不到品类/区域/商圈；老板要求这几项都能在后台改。
+//   · district / bizCircle —— 区域 / 商圈（客户档案上就是这两个字段）
+//   · cat1 / cat2 / cat3   —— 品类三级（后台用与手机端同一套词表做三级下拉，见 admin.html 的 CAT_WORDS）
+//   · salesman             —— 业务员（后台下拉选系统业务员；⚠️ 商城再导入时**会被商城值盖掉**，见 mallFieldsFrom）
+//   ⚠️ businessArea 留着（历史字段，全库无值；卡片已不再展示那一行，避免误改成没人看的东西）
+const EDITABLE_CUST_FIELDS = ['name', 'phone', 'phone2', 'address', 'businessArea', 'businessHours', 'category', 'contactName',
+                              'district', 'bizCircle', 'cat1', 'cat2', 'cat3', 'salesman'];
 
 async function getCustomerDetail(event) {
   const { customerId } = event;
@@ -814,6 +853,95 @@ async function getCustomerDetail(event) {
   };
 }
 
+// ⭐ 2026-10-03 老板定：后台客户详情页的「🔍 防重检测」—— **复核用，只读，不改任何数据**。
+//   为什么这么实现：
+//     · `tasks.selfCheck` 虽免鉴权只读，但它的附近列表里**电话打了码** —— 复核恰恰要看清电话，所以不转发它；
+//     · 判定（同号 / 同名 / 疑似）**一律转发 `tasks.selfCheck`** —— 它内部跑的就是「加新店」录入时拦截用的
+//       同一个 `dupCheck`，所以「事前拦截」与「事后复核」还是同一把尺子 → 口径**永不漂移**
+//       （这里绝不复制 phoneKey / 相似度算法）。
+//       ⚠️ 只能走 `selfCheck`：它是 tasks 里**刻意放在鉴权之前**的免鉴权入口；
+//          而 `newShopCheck` 在鉴权之后，云函数间调用没有 OPENID → 必然 NO_AUTH（2026-10-03 踩过）；
+//     · 唯一自己干的事：把半径内的店**完整列出来**（含**完整电话** —— 后台是管理员，本来就有权看），
+//       并把 tasks 给出的判定按 `id` 标注到对应那家身上（hit: block / sameName / suspect）。
+//   ⚠️ 默认半径 200 米（与手机端 DUP_RADIUS 同口径）；上限 1000 米。
+async function dupCheckCust(event) {
+  const customerId = String(event.customerId || '').trim();
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
+  const self = cDoc && cDoc.data;
+  if (!self) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const lat = Number(self.lat), lng = Number(self.lng);
+  if (!lat || !lng) return { ok: false, code: 'NO_COORD', msg: '这家店还没有坐标，做不了防重检测' };
+  const R = Math.min(Math.max(Number(event.radius) || 200, 10), 1000);
+  const name = String(self.nameRaw || self.name || '').trim();
+  const phone = String(self.phone || '').trim();
+
+  // ① 判定：转发 tasks.newShopCheck（excludeId = 自己，免得把自己报成"疑似重复"）
+  let block = null, sameName = null, suspect = null, dupErr = '', dupTruncated = false;
+  try {
+    // ⚠️⚠️ 必须走 `selfCheck`（**刻意放在鉴权之前**的那条免鉴权路）——
+    //   云函数间调用**没有 OPENID**，而 `newShopCheck` 在鉴权之后 → 必然 `NO_AUTH 未登录` 失败
+    //   （2026-10-03 老板实测报障："判定服务异常 + 一堆英文"，就是这个）。
+    //   ⭐ 同批给 selfCheck 补了 `excludeId` 透传，所以这里能正确把"自己"排除掉。
+    const r = await cloud.callFunction({
+      name: 'tasks',
+      data: { action: 'selfCheck', lat, lng, name, phone, radius: R, excludeId: customerId }
+    });
+    const res = (r && r.result) || {};
+    const dup = res.dup || {};
+    block = dup.block || null; sameName = dup.sameName || null; suspect = dup.suspect || null;
+    dupTruncated = !!dup.truncated;
+    if (res.ok === false) dupErr = res.msg || '判定服务返回异常';
+  } catch (err) {
+    dupErr = '判定服务无响应：' + ((err && err.message) || '调用失败');
+  }
+  const hitOf = (id) => (block && block.id === id) ? 'block'
+    : (sameName && sameName.id === id) ? 'sameName'
+    : (suspect && suspect.id === id) ? 'suspect' : '';
+
+  // ② 附近完整列表（⚠️ 同 dupCheck 的口径：PAGE=100 / MAX=300 分批 —— limit(50) 是历史上的真凶）
+  const dLat = R / 111000;
+  const dLng = R / (111000 * Math.cos(lat * Math.PI / 180) || 1);
+  const rows = [];
+  try {
+    const PAGE = 100, MAX = 300;
+    for (let sk = 0; sk < MAX; sk += PAGE) {
+      const part = await db.collection('customers')
+        .where({ lat: _.gt(lat - dLat).and(_.lt(lat + dLat)), lng: _.gt(lng - dLng).and(_.lt(lng + dLng)) })
+        .field({ name: true, nameRaw: true, phone: true, phone2: true, address: true, lat: true, lng: true,
+                 mallKey: true, mallCode: true, customerType: true, source: true, deleted: true })
+        .skip(sk).limit(PAGE).get();
+      const arr = (part && part.data) || [];
+      for (const x of arr) rows.push(x);
+      if (arr.length < PAGE) break;   // 取完了
+    }
+  } catch (err) {
+    return { ok: false, code: 'QUERY_FAIL', msg: '附近查询失败：' + ((err && err.message) || err) };
+  }
+  const HIT_RANK = (h) => h === 'block' ? 0 : h === 'sameName' ? 1 : h === 'suspect' ? 2 : 3;
+  const list = rows
+    .filter(x => x._id !== customerId)
+    .map(x => {
+      const d = Math.round(haversine(lat, lng, x.lat, x.lng));
+      return {
+        id: x._id, name: x.nameRaw || x.name || '', phone: x.phone || '', phone2: x.phone2 || '',
+        address: x.address || '', dist: d, mallCode: x.mallCode || '',
+        customerType: x.customerType || '', source: x.source || '', deleted: !!x.deleted,
+        hit: hitOf(x._id)
+      };
+    })
+    .filter(x => x.dist <= R)
+    // ⚠️ 按档位排：同号 → 同名 → 疑似 → 其余，档内按距离（复核时最要紧的一眼在最上面）
+    .sort((a, b) => (HIT_RANK(a.hit) - HIT_RANK(b.hit)) || (a.dist - b.dist));
+  return {
+    ok: true, radius: R,
+    self: { id: customerId, name, phone, lat, lng },
+    list, count: list.length,
+    truncated: rows.length >= 300,     // 到上限了 → 可能还有没扫到的
+    block, sameName, suspect, dupErr, dupTruncated
+  };
+}
+
 // 后台管理员改坐标 —— **直接生效**（这是后台管理员本人操作，不走业务员报错那条审核路）
 async function updateCustomerCoords(event) {
   const { customerId } = event;
@@ -841,6 +969,10 @@ async function updateCustomerFields(event) {
     if (fields[k] !== undefined) data[k] = String(fields[k] == null ? '' : fields[k]).trim().slice(0, 200);
   });
   if (!Object.keys(data).length) return { ok: false, code: 'BAD_ARG', msg: '没有可保存的字段' };
+  // ⭐ 2026-10-03：改了店名 → **同时把 nameRaw 一起改**，两处口径必须一致 ——
+  //   `nameRaw` 是"原值留底"，但**展示和防重检测读的都是 `nameRaw || name`**；
+  //   只改 name 不改 nameRaw 的话，后台显示的还是旧名、防重检测也拿旧名去比（老板刚好同时报这两个问题）。
+  if (data.name !== undefined) data.nameRaw = data.name;
   data.updatedAt = Date.now();
   await db.collection('customers').doc(customerId).update({ data });
   return { ok: true, saved: Object.keys(data) };
@@ -1098,8 +1230,16 @@ async function visitTimeoutTick() {
           await db.collection('visits').doc(v._id).remove(); // 自动取消：零痕迹（沿用取消口径）
           logs.push({ at: now, by: '系统', role: 'system', type: 'visitAutoCancel', detail: { name: custName, limitMin } });
         }
-        await db.collection('tasks').doc(v.taskId).update({ data: { logs } });
-        await notify().catch(() => {});
+        // ⭐ 2026-10-04【对抗性检查修】自由拜访：自动提交/自动取消也要重算卡片
+        //   —— 否则「已拜访 N 家」会虚高（取消没摘）或偏低（提交没加）。
+        //   ⚠️ 上面那条 `_resyncFreeTrip` 在 visits 云函数里，这里是 adminapi，得单独算。
+        if (v.freeTripId) await resyncFreeTrip(v.freeTripId).catch(() => {});
+        // ⚠️ 2026-10-04【修】自由拜访的 taskId 是空字符串 → `.doc('')` 会抛错，必须判空
+        //   （原来每遇到一条自由拜访就抛一次，被下面 catch 吞掉，任务日志整段丢失）
+        if (v.taskId) {
+          await db.collection('tasks').doc(v.taskId).update({ data: { logs } });
+          await notify().catch(() => {});
+        }
         // 最新位置状态位同步（2026-09-08 老板定：拜访状态变化必须立即反映到后台；不伪造坐标）
         await db.collection('salesman_locations').doc('latest_' + v.salesmanId).update({ data: { visitOngoing: false } }).catch(() => {});
       } else if (v.remindAt && Number(v.remindAt) <= now && !v.remindSentAt) {
@@ -2083,6 +2223,24 @@ async function custSync(event) {
 //   谁读：后台 `admin/store.js` 读本地缓存时顺手比一下 —— 若比缓存的 pulledAt 新，
 //        说明"手机端刚加了店 / 后台刚改了数据"，就在后台自动重拉（走 custSync 增量），老板无需手动点刷新。
 //   ⚠️ 读失败一律当"没变动"返回，绝不因此报错打断前端。
+// ⭐ 2026-10-04 自由拜访：以**真实拜访记录**为准重算某张卡的 customerIds
+//   （与 `visits` 云函数里的 _resyncFreeTrip 同口径 —— 那边管业务员主动提交/取消，
+//     这边管**定时器自动提交/自动取消**，两条路都必须重算，否则「已拜访 N 家」会不准）
+async function resyncFreeTrip(tripId) {
+  if (!tripId) return;
+  const ids = [];
+  for (let sk = 0; sk < 1000; sk += 100) {
+    const part = await db.collection('visits')
+      .where({ freeTripId: tripId, status: _.neq('ongoing') })
+      .field({ customerId: true }).skip(sk).limit(100).get();
+    const arr = (part && part.data) || [];
+    for (const r of arr) if (r.customerId) ids.push(r.customerId);
+    if (arr.length < 100) break;
+  }
+  const uniq = Array.from(new Set(ids));
+  await db.collection('free_trips').doc(tripId).update({ data: { customerIds: uniq, updatedAt: Date.now() } });
+}
+
 async function custDirty() {
   try {
     const r = await db.collection('settings').where({ key: 'custDirtyAt' }).limit(1).get();
@@ -2091,6 +2249,103 @@ async function custDirty() {
   } catch (e) {
     return { ok: true, at: 0 };
   }
+}
+
+// ⭐ 2026-10-03 自由拜访（后台）：列出「自由拜访卡」
+//   入参：{ salesmanId }（不传 = 全部业务员）
+//   出参：{ ok, count, list:[{...}] } —— 字段与手机端 free_trip 口径一致
+async function listFreeTrips(event) {
+  const sid = String(event.salesmanId || "");
+  const where = sid ? { salesmanId: sid } : {};
+  const r = await db.collection("free_trips").where(where)
+    .orderBy("createdAt", "desc").limit(200).get()
+    .catch(silentCatch("adminapi·listFreeTrips", { data: [] }));
+  const list = (r.data || []).map(t => ({
+    id: t._id,
+    salesmanId: t.salesmanId || "",
+    salesmanName: t.salesmanName || "",
+    district: t.district || "",
+    bizCircle: t.bizCircle || "",
+    radius: Number(t.radius) || 0,
+    status: t.status || "active",
+    visitedCount: Array.isArray(t.customerIds) ? t.customerIds.length : 0,
+    customerIds: Array.isArray(t.customerIds) ? t.customerIds : [],
+    lat: Number(t.centerLat) || 0,
+    lng: Number(t.centerLng) || 0,
+    createdAt: Number(t.createdAt) || 0,
+    updatedAt: Number(t.updatedAt) || 0
+  }));
+  return { ok: true, count: list.length, list: list };
+}
+
+// ⭐ 2026-10-03 自由拜访（后台）：删除一张自由拜访卡
+//   ⚠️ **只删归类，拜访记录本身不删** —— 把该卡下所有 visits 的 freeTripId **置空**
+//      （退化成「无任务拜访」），不留悬空引用。与「客户回收站=软删」同一思路。
+async function deleteFreeTrip(event) {
+  const id = String(event.tripId || event.id || "");
+  if (!id) return { ok: false, code: "BAD_ARG", msg: "缺少 tripId" };
+  const r = await db.collection("free_trips").doc(id).get().catch(() => ({ data: [] }));
+  const t = (r.data && r.data[0]) || (r.data && !Array.isArray(r.data) ? r.data : null);
+  if (!t) return { ok: false, code: "NOT_FOUND", msg: "自由拜访卡不存在" };
+  // ① 先把拜访记录上的归属摘掉（保留记录本身）
+  let cleared = 0;
+  try {
+    // ⚠️ 2026-10-04【对抗性检查修】原来逐条 doc().update()：
+    //   一张卡跑了几十家时 = 几十次串行请求，**很容易把云函数拖到超时**（免费环境 30 秒上限）。
+    //   改成 **where().update() 批量更新**（云函数里支持），一次搞定。
+    const before = await db.collection("visits").where({ freeTripId: id }).count().catch(() => ({ total: 0 }));
+    cleared = before.total || 0;
+    await db.collection("visits").where({ freeTripId: id }).update({ data: { freeTripId: "" } });
+  } catch (e) { /* 摘不掉也不挡删卡 */ }
+  // ② 再删卡
+  // ⭐ 2026-10-05【检查修】后台删卡也要进「滚动消息」—— 原来漏了，导致
+  //   「业务员删卡有记录、老板后台删卡没记录」，而且老板删卡更该留痕。
+  //   ⚠️ 记在**删之前**（删完卡就没了，拿不到 district/bizCircle）。
+  try {
+    await db.collection('free_trip_logs').add({
+      data: {
+        tripId: id,
+        action: 'delete',
+        salesmanId: t.salesmanId || '',
+        salesmanName: String(t.salesmanName || '') + '（后台删除）',
+        district: t.district || '',
+        bizCircle: t.bizCircle || '',
+        visitedCount: Array.isArray(t.customerIds) ? t.customerIds.length : 0,
+        byAdmin: true,
+        at: Date.now()
+      }
+    });
+  } catch (e) { /* 日志写不进去不挡删卡 */ }
+  await db.collection("free_trips").doc(id).remove();
+  return { ok: true, id: id, visitsCleared: cleared, msg: "已删除（拜访记录保留为无任务拜访）" };
+}
+
+// ⭐ 2026-10-03 自由拜访（后台）：看某张卡「去过的店」（去重）
+async function freeTripDetailAdmin(event) {
+  const id = String(event.tripId || event.id || "");
+  if (!id) return { ok: false, code: "BAD_ARG", msg: "缺少 tripId" };
+  const r = await db.collection("free_trips").doc(id).get().catch(() => ({ data: [] }));
+  const t = (r.data && r.data[0]) || (r.data && !Array.isArray(r.data) ? r.data : null);
+  if (!t) return { ok: false, code: "NOT_FOUND", msg: "自由拜访卡不存在" };
+  const ids = Array.isArray(t.customerIds) ? t.customerIds.filter(Boolean) : [];
+  let custs = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const part = await db.collection("customers")
+      .where({ _id: _.in(ids.slice(i, i + 100)) })
+      .field({ name: true, nameRaw: true, address: true, district: true, bizCircle: true,
+               phone: true, lat: true, lng: true, deleted: true })
+      .get().catch(silentCatch("adminapi·freeTripDetailAdmin", { data: [] }));
+    for (const c of (part.data || [])) custs.push(c);
+  }
+  custs = custs.filter(c => c.deleted !== true);   // 进回收站的自动跳过
+  return {
+    ok: true,
+    trip: { id: t._id, salesmanName: t.salesmanName || "", district: t.district || "",
+            bizCircle: t.bizCircle || "", status: t.status || "active", radius: Number(t.radius) || 0,
+            visitedCount: ids.length, createdAt: Number(t.createdAt) || 0 },
+    customers: custs.map(c => ({ id: c._id, name: c.name || "", address: c.address || "",
+      district: c.district || "", bizCircle: c.bizCircle || "", phone: c.phone || "" }))
+  };
 }
 
 // ⭐ 2026-09-27 M2b 新增：**按页聚合**（客户管理页 / 批次总表切本地缓存后，
@@ -2505,6 +2760,11 @@ function mallFieldsFrom(m) {
     if (MALL_NO_TOUCH.indexOf(pair[1]) >= 0) return;   // ⚠️ 坐标类字段一律不碰（见上）
     out[pair[1]] = v;
   });
+  // ⭐ 2026-10-03 老板定：业务员**「随时可改，导入时被盖」** ——
+  //   商城表带来的是「业务负责人」，除了照抄进 mallSalesman（原值，商城信息卡显示"签约业务员"），
+  //   **同时写进 salesman**（= 后台详情页那个可下拉的「业务员」格）→ 商城表再导入一次，就把手选的盖掉。
+  //   ⚠️ 商城值为空 → 上面 forEach 已经 return，两个字段都不动（不会把现场/手填的值抹掉）。
+  if (out.mallSalesman !== undefined) out.salesman = out.mallSalesman;
   return out;
 }
 
@@ -2524,6 +2784,7 @@ async function runMallMatch(event) {
                      mallKey: true, mallCode: true,
                      lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true,
                      mallSource: true, mallLevel: true, mallSalesman: true,
+                     salesman: true,   // ⭐ 2026-10-03：mallFieldsFrom 现在也回写 salesman（业务员「导入时被盖」）—— 不 fetch 它，diff 就会每轮误判"变了"而重写
                      mallTags: true, mallCategory: true,
                      source: true };
   let visitCusts;
@@ -2685,7 +2946,7 @@ async function applyMallMatch(event) {
     // ⚠️ 带上 source + MALL_FIELD_PAIRS 的全部落点 —— 逐字段 diff 要用（少一个就会误判"变了"）
     const custRows = await fetchAll('customers', { _id: _.in(ids) }, {
       mallKey: true, mallCode: true, lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true,
-      mallSource: true, mallLevel: true, mallSalesman: true, mallTags: true, mallCategory: true,
+      mallSource: true, mallLevel: true, mallSalesman: true, salesman: true, mallTags: true, mallCategory: true,   // ⭐ salesman：与 mallFieldsFrom 的回写对齐（否则 diff 误判）
       name: true, region: true, address: true, phone: true, phone2: true, source: true
     });
     const cMap = {};
@@ -2779,7 +3040,7 @@ async function refreshFromMall(event) {
     _id: true, mallKey: true, mallCode: true, name: true, region: true,
     address: true, phone: true, phone2: true,
     lastOrderAt: true, lastBrowseAt: true, mallJoinedAt: true,
-    mallLevel: true, mallSalesman: true,
+    mallLevel: true, mallSalesman: true, salesman: true,   // ⭐ salesman：「从商城更新」也照"业务员导入时被盖"的口径（见 mallFieldsFrom）
     mallSource: true, mallTags: true, mallCategory: true
   });
   const malls = await fetchAll('mall_customers', {}, {});
@@ -2802,6 +3063,15 @@ async function refreshFromMall(event) {
       diff.push({ field: cf, from: ov, to: nv });
       upd[cf] = m[mf];
     });
+    // ⭐ 2026-10-03 老板定（业务员「随时可改，导入时被盖」）：
+    //   「从商城更新」走的也是这张映射表，但 `salesman` **不是它的落点**（落点是 mallSalesman），
+    //   这里单独补一次 —— 与 mallFieldsFrom（比对 / 认领那条链路）**同一口径**：
+    //   商城有业务负责人就写进 salesman。
+    const nvSm = String(m.salesman == null ? '' : m.salesman).trim();
+    if (nvSm && nvSm !== String(c.salesman == null ? '' : c.salesman).trim()) {
+      diff.push({ field: 'salesman', from: String(c.salesman || ''), to: nvSm });
+      upd.salesman = m.salesman;
+    }
     if (diff.length) {
       items.push({ customerId: c._id, name: c.name, mallName: m.name || '', changes: diff });
       writes.push({ id: c._id, upd });
@@ -3087,6 +3357,114 @@ async function transcribeVisit(event) {
   }
 }
 
+// ⭐ 2026-10-03 老板要：「加新店」现场录的音**后台也能转文字**。
+//   与 transcribeVisit（拜访录音）同一套路：转发到 transcribe 云函数并带管理员账号密码 ——
+//   云函数间调用没有 OPENID，transcribe 会用账号密码校验并**自动补 real:true** 真执行（不走"老板演示的虚拟成功"）。
+//   ⚠️ 走的是 transcribe 的 **fileIDs 分支**（那条路本来就不依赖 visitId，正是为这种场景留的），并把 customerId 带下去 ——
+//      这样写出来的 transcripts 记录带着 customerId + audioFileID，下面按它取结果。
+async function transcribeCustAudio(event) {
+  const customerId = String(event.customerId || '').trim();
+  const fileID = String(event.fileID || '').trim();
+  if (!customerId || !fileID) return { ok: false, code: 'BAD_ARG', msg: '缺少客户或录音' };
+  try {
+    const r = await cloud.callFunction({
+      name: 'transcribe',
+      data: {
+        action: 'start',
+        fileIDs: [{ fileID, duration: Number(event.duration) || 0 }],
+        customerId,
+        username: event.username,
+        password: event.password
+      }
+    });
+    const res = (r && r.result) || { ok: false, code: 'CALL_FAIL', msg: '转写服务无响应' };
+    const seg = (res && Array.isArray(res.segs) && res.segs[0]) || {};
+    return Object.assign({}, res, { transcriptId: seg.transcriptId || '' });
+  } catch (err) {
+    return { ok: false, code: 'CALL_FAIL', msg: (err && err.message) || '转写调用失败' };
+  }
+}
+
+// ⭐ 2026-10-03：取「加新店」录音的转写结果 —— **一出结果就回写客户档案**（`customers.audios[i].text`），
+//   这样后台详情页与手机端客户详情页都能直接显示（两边读的都是客户档案，不用各自再查一次转写表）。
+//   ⚠️ 为什么不用 transcribe.poll 拿明细：云函数间调用**没有 OPENID** → transcribe 的 `poll` 会直接走 `pollAll()`，
+//      根本不看传进去的 transcriptIds。所以这里分两步：先 poll **当推进器**（让它去腾讯云把状态落库），再自己查 transcripts。
+//   ⚠️ 幂等：文字没变就不写库（免得每次轮询都把 updatedAt 顶上去）。
+async function pollCustAudioText(event) {
+  const customerId = String(event.customerId || '').trim();
+  const fileID = String(event.fileID || '').trim();
+  if (!customerId || !fileID) return { ok: false, code: 'BAD_ARG', msg: '缺少客户或录音' };
+  // ① 推进：transcribe.poll 无参 → 云端 pollAll()，把处理中的挨个结算（含刚提交这段）
+  try { await cloud.callFunction({ name: 'transcribe', data: { action: 'poll' } }); } catch (err) { /* 推进失败不影响下面查库，下次轮询再试 */ }
+  // ② 查这段录音对应的转写记录（同一 fileID 理论上只一条；多的话取最新）—— ⚠️ 不用 orderBy，免得要复合索引
+  const tr = await db.collection('transcripts')
+    .where({ customerId, audioFileID: fileID }).limit(10).get().catch(() => ({ data: [] }));
+  const t = (tr.data || []).slice()
+    .sort((a, b) => (Number(b.requestedAt) || 0) - (Number(a.requestedAt) || 0))[0] || null;
+  if (!t) return { ok: true, status: 'none', text: '' };
+  // ③ 出结果 → 回写客户档案上那条录音的 text
+  if (t.status === 'done' && t.text) {
+    const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
+    const c = cDoc && cDoc.data;
+    const auds = (c && Array.isArray(c.audios)) ? c.audios.slice() : [];
+    const i = auds.findIndex(a => a && a.fileID === fileID);
+    if (i >= 0 && auds[i].text !== t.text) {
+      auds[i] = Object.assign({}, auds[i], { text: t.text });
+      await db.collection('customers').doc(customerId).update({ data: { audios: auds, updatedAt: Date.now() } });   // updatedAt：本地缓存增量同步用
+    }
+  }
+  return { ok: true, status: t.status || '', text: t.text || '', errorMsg: t.errorMsg || '' };
+}
+
+// ⭐ 2026-10-03 老板定：「加新店」的录音**可以删** —— 老板原话「如果已经转成文字，则删除录音保留文字」。
+//   所以删的时候分两种：
+//     · **没有文字** → 整条从 `customers.audios` 里**移除**
+//     · **有文字**   → **保留文字**：那条改成 `{ text, duration }`（去掉 fileID），播放器自然就渲染不出来了
+//   ⚠️ 云存储上的音频文件**真删**（`cloud.deleteFile`）—— 不真删的话"删除"就没意义了。
+//   ⚠️ 用 **index** 定位（不是 fileID）：删完 fileID 就没了，后续（改文字）还得按位置找，用 index 一致。
+async function deleteCustAudio(event) {
+  const customerId = String(event.customerId || '').trim();
+  const idx = Number(event.index);
+  if (!customerId || !(idx >= 0)) return { ok: false, code: 'BAD_ARG', msg: '缺少客户或序号' };
+  const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
+  const c = cDoc && cDoc.data;
+  if (!c) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const auds = Array.isArray(c.audios) ? c.audios.slice() : [];
+  const a = auds[idx];
+  if (!a) return { ok: false, code: 'BAD_ARG', msg: '这条录音不存在（可能已被删，刷新看看）' };
+  const fileID = String(a.fileID || '');
+  const keepText = String(a.text || '').trim();
+  // ① 云存储文件真删（失败不阻断 —— 库里先摘掉，文件回头再清理）
+  let fileDeleted = false;
+  if (fileID) {
+    try { await cloud.deleteFile({ fileList: [fileID] }); fileDeleted = true; } catch (e) { /* 见 fileDeleted */ }
+  }
+  // ② 库里：有文字 → 只留文字；没有文字 → 整条移除
+  if (keepText) auds[idx] = { text: keepText, duration: Number(a.duration) || 0, audioDeletedAt: Date.now() };
+  else auds.splice(idx, 1);
+  await db.collection('customers').doc(customerId).update({ data: { audios: auds, updatedAt: Date.now() } });
+  return { ok: true, keptText: !!keepText, fileDeleted: fileDeleted, audios: auds.length };
+}
+
+// ⭐ 2026-10-03 老板定：转写出来的文字**要能改**（有的识别错了）——
+//   老板原话「应该增加一个编辑按钮，因为有的文字转写错误，需要修改」。
+//   ⚠️ 同样按 **index** 定位（不是 fileID）：录音文件可能已被删、只留文字，那时 fileID 已经没了。
+//   ⚠️ text 传空 = 清空那段文字（允许）。
+async function saveCustAudioText(event) {
+  const customerId = String(event.customerId || '').trim();
+  const idx = Number(event.index);
+  if (!customerId || !(idx >= 0)) return { ok: false, code: 'BAD_ARG', msg: '缺少客户或序号' };
+  const text = String(event.text == null ? '' : event.text).slice(0, 20000);
+  const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
+  const c = cDoc && cDoc.data;
+  if (!c) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const auds = Array.isArray(c.audios) ? c.audios.slice() : [];
+  if (!auds[idx]) return { ok: false, code: 'BAD_ARG', msg: '这条录音不存在（刷新看看）' };
+  auds[idx] = Object.assign({}, auds[idx], { text: text, textEditedAt: Date.now() });
+  await db.collection('customers').doc(customerId).update({ data: { audios: auds, updatedAt: Date.now() } });
+  return { ok: true, text: text };
+}
+
 // 2026-09-11 M2c：本月转写用量（后台用量条）
 async function transcribeUsage() {
   const cfgR = await db.collection('settings').where({ key: 'asrConfig' }).get();
@@ -3172,6 +3550,31 @@ async function purgeUnbatchedCustomers(event) {
 }
 
 // fileID 批量换临时 https 链接（后台展示现场照片/播放录音用；分批 ≤50，防 HTTP 超时）
+// ⭐ 2026-10-05 老板定：**分享封面**（图放云存储、不占主包；后台可排序/删除）
+//   存在 settings.shareImages = [{ fileID, name, at }]，顺序即显示顺序。
+//   ⚠️ 手机端读不到 adminapi（后台入口、要账号密码）→ 业务员那份由 tasks 的 shareImages 出。
+async function listShareImages() {
+  const r = await db.collection('settings').where({ key: 'shareImages' }).limit(1).get().catch(() => ({ data: [] }));
+  const v = (r.data && r.data[0] && r.data[0].value) || [];
+  return { ok: true, list: Array.isArray(v) ? v : [] };
+}
+// 保存分享封面列表（整体覆盖：排序 / 删除 / 新增都靠它）
+async function saveShareImages(event) {
+  const raw = Array.isArray(event && event.list) ? event.list : null;
+  if (!raw) return { ok: false, code: 'BAD_ARG', msg: '缺少 list' };
+  const list = raw.slice(0, 30).map(x => ({
+    fileID: String((x && x.fileID) || '').slice(0, 300),
+    name: String((x && x.name) || '').slice(0, 40),
+    at: Number((x && x.at) || Date.now())
+  })).filter(x => x.fileID);
+  const old = await db.collection('settings').where({ key: 'shareImages' }).limit(1).get().catch(() => ({ data: [] }));
+  if (old.data && old.data[0]) {
+    await db.collection('settings').doc(old.data[0]._id).update({ data: { value: list } });
+  } else {
+    await db.collection('settings').add({ data: { key: 'shareImages', value: list } });
+  }
+  return { ok: true, count: list.length, list: list };
+}
 async function getTempFileURL(event) {
   const list = Array.isArray(event.fileIDs) ? event.fileIDs.filter(f => typeof f === 'string' && f) : [];
   if (!list.length) return { ok: true, urls: {} };
@@ -3709,7 +4112,7 @@ async function setSetting(event) {
   let value = event.value;
   if (!key) return { ok: false, code: 'BAD_ARG', msg: '缺少设置项 key' };
   // 仅允许写入已知设置项（防任意写入）
-  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays', 'welcomeConfig', 'locTrackEnabled', 'locLatestEnabled', 'locWorkTier', 'locPackUpload', 'locPackSec', 'locMoveThreshold', 'adminAutoRefresh', 'adminHiddenPause', 'tickIntervalMin', 'asrPollMin', 'reviewWatchEnabled', 'recEnabled', 'photoLimit', 'evidenceRequired', 'platformPhotoShow', 'coordFixEnabled', 'salesmanScope', 'usageAlertPct', 'usageQuota', 'mpAlertTemplateId', 'adminNotifyPhones'];
+  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays', 'welcomeConfig', 'locTrackEnabled', 'locLatestEnabled', 'locWorkTier', 'locPackUpload', 'locPackSec', 'locMoveThreshold', 'adminAutoRefresh', 'adminHiddenPause', 'tickIntervalMin', 'asrPollMin', 'reviewWatchEnabled', 'recEnabled', 'photoLimit', 'evidenceRequired', 'platformPhotoShow', 'coordFixEnabled', 'salesmanScope', 'usageAlertPct', 'usageQuota', 'mpAlertTemplateId', 'adminNotifyPhones', 'shareImages'];
   if (!ALLOWED.includes(key)) return { ok: false, code: 'BAD_KEY', msg: '未知设置项' };
   // ===== 2026-09-11 降频与开关类设置（老板定：应对云开发「调用次数」用尽）=====
   // 说明：统一在此预规范化并改写 value，后面的 `let v = value;` 自然拿到规范化结果；
@@ -4130,10 +4533,20 @@ async function fixLegacyPendingCoords(event) {
   for (const b of badSrc) {
     await db.collection('customers').doc(b._id).update({ data: { coordSource: 'platform', updatedAt: Date.now() } });   // 2026-09-27 补
   }
+  // 顺带（2026-10-02）：把**手机端「加新店」历史写下的来源值 'field' 统一为新值 'newshop'**（幂等）——
+  //   老板定：「加新店」现场录入的坐标，来源显示「新店」。tasks.newShopSubmit / updateNewShop 已改为写 'newshop'，
+  //   这里把**改之前建的那几家**一并订正 —— 否则后台详情页/列表认不出 'field'，会显示成「未知」。
+  //   ⚠️ 只动 coordSource 这一个字段，另加 updatedAt（本地缓存增量同步 custSync 靠它；
+  //      不写 updatedAt 的话后台快照里的来源还是旧值，看起来像"改了没生效"）。
+  //   ⚠️ 量很小（2026-10-02 实测库里仅 4 家），幂等、可重复跑。
+  const badSrcField = await fetchAll('customers', { coordSource: 'field' }, { _id: true });
+  for (const b of badSrcField) {
+    await db.collection('customers').doc(b._id).update({ data: { coordSource: 'newshop', updatedAt: Date.now() } });
+  }
   return {
     ok: true,
-    msg: `存量处理完成：待定写回 ${fixed} 家｜仅恢复状态 ${restored} 家｜未处理 ${skipped} 家｜修正来源 plat→platform ${badSrc.length} 家`,
-    found: rows.length, fixed, restored, skipped, platFixed: badSrc.length
+    msg: `存量处理完成：待定写回 ${fixed} 家｜仅恢复状态 ${restored} 家｜未处理 ${skipped} 家｜修正来源 plat→platform ${badSrc.length} 家｜修正来源 field→newshop ${badSrcField.length} 家`,
+    found: rows.length, fixed, restored, skipped, platFixed: badSrc.length, fieldFixed: badSrcField.length
   };
 }
 

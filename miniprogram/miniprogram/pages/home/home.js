@@ -238,12 +238,9 @@ Page({
   onShareAppMessage() {
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false,
-    // ⭐ 2026-10-01 临时自检（B2）：老板首页显示"本包版本 + 云端 login 返回的关键字段"
-    dbg: '' },
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false },
   onShow() {
     const app = getApp();
-    try { this.setData({ dbg: (app.globalData && app.globalData.dbg) || '' }); } catch (e0) { /* 静默 */ }
     // 2026-09-10：自定义 Tab 栏选中态（首页=0；tab 页常驻后切页不再重建底部栏）
     try { const tb = this.getTabBar && this.getTabBar(); if (tb) tb.setTab(0, !!app.globalData.bossMode); } catch (e) { /* 低版本基础库忽略 */ }
     if (!this._revFn) {
@@ -589,7 +586,10 @@ Page({
   goQuick(e) {
     const n = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.n) || '';
     if (n === '记事') { wx.navigateTo({ url: '/pages/notes/notes' }); return; }
-    if (n === '新店') { wx.navigateTo({ url: '/pages/newshop/newshop' }); return; }   // ⭐ 加新店：现场给新店建档
+    // ⭐ 2026-10-02 老板定：点「加新店」**先进"我加过的店"列表**（卡片 + 底部"＋ 加新店"大按钮），
+    //   不再直接进建店表单 —— 这样能先看看以前加过哪些，也能从列表里再建。
+    if (n === '新店') { wx.navigateTo({ url: '/pages/myshops/myshops' }); return; }
+    if (n === '自由拜访') { wx.navigateTo({ url: '/pages/freevisit/freevisit' }); return; }   // ⭐ 2026-10-03：原「团队」占位卡改成自由拜访
     api.toast((n ? '「' + n + '」' : '该功能') + '开发中，敬请期待');
   },
   goTodayTask() {

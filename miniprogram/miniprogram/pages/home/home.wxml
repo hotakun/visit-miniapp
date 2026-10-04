@@ -60,10 +60,6 @@
     <view class="de-ar">›</view>
   </view>
 
-  <!-- ⭐ 2026-10-01 临时自检（B2）：**只在老板模式显示**。用来确认"手机跑的包是哪一版 + 云端 login 返回了什么"。
-       看到这行（哪怕内容是"自检位未捕获"）= **包是新版**；整行都没有 = 手机上的包还是旧的。老板验完可删。 -->
-  <view wx:if="{{bossMode}}" style="text-align:center;font-size:10px;color:#9AA3AE;margin:2px 0 8px">{{dbg || 'B2 · 自检位未捕获（包已是新版）'}}</view>
-
   <view class="hero" wx:if="{{!bossMode}}">
     <view class="h1">{{dateText}}</view>
     <view class="hring" wx:if="{{cardMode === 'today'}}">
@@ -92,16 +88,16 @@
 
   <!-- ⭐ 快捷入口（2026-09-28 老板定）：橙色大卡与「我的任务」之间的一组图标入口。
        · 「新店」= **红橙色加号 + 右上角小加号**（单个红加号容易被误认成医院红十字 → 叠个小加号读作「新增」）
-       · 其余三个用 emoji（💰 业绩 / 👥 团队 / 📝 记事）
+       · 其余用 emoji（💰 业绩 / 🚶 自由拜访 / 📝 记事）
        · 本期仍**只做样子**（点击弹「开发中」提示），功能待接；仅业务员端显示（老板端没有橙色大卡）。 -->
   <view class="quick" wx:if="{{!bossMode}}">
     <view class="qk" bindtap="goQuick" data-n="业绩">
       <view class="qk-ic qk-a">💰</view>
       <view class="qk-t">业绩</view>
     </view>
-    <view class="qk" bindtap="goQuick" data-n="团队">
+    <view class="qk" bindtap="goQuick" data-n="自由拜访">
       <view class="qk-ic qk-b">👥</view>
-      <view class="qk-t">团队</view>
+      <view class="qk-t">自由拜访</view>
     </view>
     <view class="qk" bindtap="goQuick" data-n="记事">
       <view class="qk-ic qk-c">📒</view>

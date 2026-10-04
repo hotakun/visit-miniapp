@@ -1,6 +1,7 @@
 /* 我新加的店（2026-09-29 新增）—— 视觉跟「我的记事」等页保持一致：暖白底 + 白卡 + 橙点缀 */
 
-.page { padding: 12px 12px 40px; background: var(--bg); min-height: 100vh; box-sizing: border-box; }
+/* 底部留白 100px：给固定的「＋ 加新店」让位，别挡住最后一张卡片（与记事页一致） */
+.page { padding: 12px 12px 100px; background: var(--bg); min-height: 100vh; box-sizing: border-box; }
 
 /* 顶部说明 */
 .hd { padding: 4px 4px 12px; }
@@ -24,6 +25,10 @@
 .shopcard .st { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
 .shopcard .st.wait { color: #8A6412; background: #FFF8E8; border: 1px solid #F3E2BE; }
 .shopcard .st.ok { color: #14663A; background: #EAF6EE; border: 1px solid #CBE8D6; }
+/* ⭐ 2026-10-03：「新店采集」胶囊（蓝）—— 业务员自己现场录的店，跟"有没有对上商城"无关。
+   ⚠️ 上面 .wait/.ok 两个类**已不再被 wxml 使用**（原来那套 mallPending 二值判断已撤），
+      留在这里没害处；要清理就连同 wxml 的注释一起删。 */
+.shopcard .st.new { color: #1B5E9B; background: #EAF3FB; border: 1px solid #C9E0F5; }
 
 .shopcard .r2 { margin-top: 6px; font-size: 12px; color: #5B6472; line-height: 1.6; }
 .shopcard .r3 { margin-top: 6px; font-size: 11.5px; color: #8A93A1; }
@@ -33,6 +38,25 @@
 .shopcard .r4 { display: flex; align-items: center; margin-top: 8px; padding-top: 8px;
   border-top: 1px solid #F4F6F9; font-size: 11px; color: #A3ABB8; }
 .shopcard .r4 .go { margin-left: auto; font-size: 11.5px; font-weight: 700; color: var(--primary-deep); }
+
+/* ⭐ 2026-10-02 老板定：卡片右边的「开始拜访」按钮（无任务拜访）——
+   绝对定位到卡片右下角（不把卡片顶高），橙色实心 = 主操作 */
+.shopcard { position: relative; }
+.shopcard .fv { position: absolute; right: 14px; bottom: 12px;
+  padding: 7px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 700;
+  background: var(--primary, #E8871E); color: #fff; box-shadow: 0 2px 8px rgba(232, 135, 30, .28); }
+/* 右下角给按钮留位置，免得第四行文字被压住 */
+.shopcard .r4 { padding-right: 96px; }
+
+/* ⭐ 2026-10-02 老板定：**吸底固定的「＋ 加新店」** —— 位置与样式照搬「我的记事」的「＋ 记一笔」
+   （fixed 悬在底部；白底 + 虚线橙边橙字，**不是橙色实心** —— 两个页面保持一致） */
+.newbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+/* ⭐ 2026-10-02 老板定：**位置照「记一笔」（吸底固定），但按钮样式用回原来那个橙色实心大按钮** */
+.newbar .nb-btn { height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  background: var(--primary, #E8871E); color: #fff;
+  font-size: 16px; font-weight: 800; letter-spacing: 1px;
+  box-shadow: 0 4px 14px rgba(232, 135, 30, .30); }
 
 /* 加载更多 / 到底 */
 .more { margin: 14px 0 4px; text-align: center; padding: 11px 0; border-radius: 12px;

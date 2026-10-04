@@ -1,0 +1,61 @@
+<!-- 自由拜访卡片页（2026-10-03）
+     口径：卡片显示 区域·商圈 / 建卡时间 / 已拜访 N **家**（去重）/ 业务员；能结束也能唤醒（可重复用）
+     ⚠️ WXML 只用 view/text（禁 div/br） -->
+<view class="page">
+
+  <!-- ① 卡片列表 -->
+  <block wx:if="{{!cur}}">
+    <scroll-view class="list" scroll-y>
+      <view class="fc" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="openCard">
+        <view class="r1">
+          <view class="area">{{item.areaText}}</view>
+          <view class="tag {{item.status === 'active' ? 'on' : 'off'}}">{{item.status === 'active' ? '在用' : '已结束'}}</view>
+        </view>
+        <view class="r2">{{item.timeText}} 建</view>
+        <view class="r3">
+          <text class="who">{{item.salesmanName}}</text>
+          <text class="cnt">已拜访 <text class="num">{{item.visitedCount}}</text> 家</text>
+        </view>
+        <!-- 在用 → 可结束；已结束 → 可唤醒（都能重复用） -->
+        <view class="acts">
+          <view class="act" wx:if="{{item.status === 'active'}}" catchtap="onPause" data-id="{{item.id}}">⏹ 结束这张卡</view>
+          <view class="act resume" wx:else catchtap="onResume" data-id="{{item.id}}">▶ 继续用这张卡</view>
+          <view class="act del" catchtap="onDelete" data-id="{{item.id}}">🗑 删除</view>
+        </view>
+      </view>
+
+      <view class="empty" wx:if="{{!list.length}}">
+        <view class="e1">还没有自由拜访卡</view>
+        <view class="e2">点下面「🗺 打开地图」开始跑店</view>
+      </view>
+      <view class="pad"></view>
+    </scroll-view>
+    <view class="bar"><view class="bigbtn" bindtap="goMap">🗺 打开地图</view></view>
+  </block>
+
+  <!-- ② 已拜访的店（点卡片进来） -->
+  <block wx:else>
+    <view class="head2">
+      <view class="h2-t">{{cur.areaText}}</view>
+      <view class="h2-s">共 <text class="num">{{customers.length}}</text> 家 · 按去重列</view>
+    </view>
+    <scroll-view class="list" scroll-y>
+      <view class="cc" wx:for="{{customers}}" wx:key="id" data-id="{{item.id}}" bindtap="openCust">
+        <view class="c-n">{{item.name}}</view>
+        <view class="c-a">{{item.address}}</view>
+        <view class="c-m"><text class="ok">✓ 已拜访</text></view>
+      </view>
+      <view class="empty" wx:if="{{!customers.length}}">
+        <view class="e1">这趟还没拜访过店铺</view>
+        <view class="e2">点下面「🗺 继续跑店」去拜访</view>
+      </view>
+      <view class="pad"></view>
+    </scroll-view>
+    <!-- 与卡片页一样，底部留「回地图」入口（老板 2026-10-03 指出：否则退不回任务） -->
+    <view class="bar">
+      <view class="half" bindtap="backList">‹ 卡片列表</view>
+      <view class="bigbtn flex1" bindtap="goMap">🗺 继续跑店</view>
+    </view>
+  </block>
+
+</view>

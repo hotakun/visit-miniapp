@@ -135,6 +135,16 @@ exports.main = async (event) => {
   if (action === 'myNewShops') return await myNewShops(salesmanId, event);
   if (action === 'newShopDetail') return await newShopDetail(salesmanId, event, isBoss);
   if (action === 'updateNewShop') return await updateNewShop(salesmanId, event);
+  // ⭐ 2026-10-03 自由拜访：按坐标+半径取附近客户点
+  if (action === 'nearbyCustomers') return await nearbyCustomers(salesmanId, event);
+  // ⭐ 2026-10-03 自由拜访卡（独立集合 free_trips，不绑任务）
+  if (action === 'freeTripCreate') return await freeTripCreate(salesmanId, meDoc, event);
+  if (action === 'freeTripList') return await freeTripList(salesmanId, meDoc, event);
+  if (action === 'freeTripPause') return await freeTripSetStatus(salesmanId, meDoc, event, 'paused');
+  if (action === 'freeTripResume') return await freeTripSetStatus(salesmanId, meDoc, event, 'active');
+  if (action === 'freeTripDetail') return await freeTripDetail(salesmanId, meDoc, event);
+  if (action === 'freeTripDelete') return await freeTripDelete(salesmanId, meDoc, event);   // ⭐ 2026-10-04 业务员删自己的卡
+  if (action === 'walkRoute') return await walkRoute(salesmanId, event);                     // ⭐ 2026-10-04 步行路线（我 → 某家店）
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
 };
 
@@ -302,10 +312,11 @@ const NAME_SUSPECT = 0.72;
 
 // ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
 //   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
-const CODE_VER = '2026-10-01-0100';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）；1001=加 alsoSalesman 声明（老板兼业务员）
+const CODE_VER = '2026-10-03-1100';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）；1001=加 alsoSalesman 声明（老板兼业务员）；1100=selfCheck 支持 excludeId（后台防重复核用）
 
 // ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
-//   入参（全可选）：{ lat, lng, name, phone, radius }
+//   入参（全可选）：{ lat, lng, name, phone, radius, excludeId }
+//     · excludeId —— 排除自己（⭐ 2026-10-03：后台「🔍 防重检测」复核用；不传的话"自己"会被算成重复）
 //   出参：{ ok, ver, radius, nearCount, near[], queryOK, queryErr, dup }
 //     · ver     —— 云端代码版本戳（跟本地对不上 = 没重传）
 //     · near    —— 该坐标附近（默认 200 米）的店，按距离升序，带距离和坐标
@@ -338,7 +349,9 @@ async function selfCheck(event) {
     out.queryErr = (err && err.message) || String(err);
   }
   if (e.name || e.phone) {
-    out.dup = await dupCheck(lat, lng, String(e.name || ''), String(e.phone || ''), '');
+    // ⭐ 2026-10-03：支持 excludeId —— 后台「🔍 防重检测」复核时要把**自己**排除，
+    //   否则"自己跟自己同号"会被当成铁证重复。云函数间调用只能走这条免鉴权路（newShopCheck 要 OPENID）。
+    out.dup = await dupCheck(lat, lng, String(e.name || ''), String(e.phone || ''), String(e.excludeId || ''));
   }
   return out;
 }
@@ -473,7 +486,7 @@ async function newShopSubmit(salesmanId, event) {
     // 坐标：**GCJ-02 入库**（地图直接可用）；现场采的 **WGS-84 原值也留底**
     lat: lat, lng: lng,
     wgsLat: Number(e.wgsLat) || 0, wgsLng: Number(e.wgsLng) || 0,
-    coordSource: 'field',                              // 坐标来源：现场采集（后台坐标列显示"采集"）
+    coordSource: 'newshop',                            // 坐标来源：「加新店」现场录入（后台/详情页显示"新店"）
     coordStatus: 'ok',
     // 品类三级 + 服务与设施
     cat1: String(e.cat1 || '').trim(), cat2: String(e.cat2 || '').trim(), cat3: String(e.cat3 || '').trim(),
@@ -534,7 +547,8 @@ async function myNewShops(salesmanId, event) {
   const col = db.collection('customers');
   const [cnt, res] = await Promise.all([
     col.where(w).count().catch(() => ({ total: 0 })),
-    col.where(w).orderBy('createdAt', 'desc').skip(skip).limit(size).get().catch(silentCatch('tasks·myNewShops', { data: [] }))
+    // ⭐ 2026-10-02 老板定：**最新加的店排在最下面**（像记笔记一样往下加）→ 用 asc
+    col.where(w).orderBy('createdAt', 'asc').skip(skip).limit(size).get().catch(silentCatch('tasks·myNewShops', { data: [] }))
   ]);
   const total = cnt.total || 0;
   const list = (res.data || []).map(c => ({
@@ -543,6 +557,8 @@ async function myNewShops(salesmanId, event) {
     area: c.district || '',
     bizCircle: c.bizCircle || '',
     address: c.address || '',
+    // ⭐ 2026-10-02：**带上坐标** —— 卡片上的「开始拜访」要跳拜访页，拜访页需要 lng/lat 做定位校验
+    lng: c.lng || 0, lat: c.lat || 0,
     createdAt: c.createdAt || 0,
     createdByName: c.createdByName || '',
     mallPending: c.mallPending !== false,                    // 默认按"待商城建档"看
@@ -618,13 +634,14 @@ async function updateNewShop(salesmanId, event) {
 
   const data = {
     name: name, nameRaw: name, phone: phone, address: address,
+    phone2: String(e.phone2 || '').trim(),     // ⭐ 2026-10-02：第二个电话（最多两个）—— 编辑模式也要存
     contactName: String(e.contactName || '').trim(),
     hours: String(e.hours || '').trim(),
     district: area, bizCircle: bizCircle,
     region: area ? ('浙江省>金华市>' + area) : '',
     lat: lat, lng: lng,
     wgsLat: Number(e.wgsLat) || 0, wgsLng: Number(e.wgsLng) || 0,
-    coordSource: 'field', coordStatus: 'ok',
+    coordSource: 'newshop', coordStatus: 'ok',
     cat1: String(e.cat1 || '').trim(), cat2: String(e.cat2 || '').trim(), cat3: String(e.cat3 || '').trim(),
     flags: (e.flags && typeof e.flags === 'object') ? e.flags : {},
     fac: Array.isArray(e.fac) ? e.fac.filter(Boolean) : [],
@@ -1386,6 +1403,368 @@ function fallbackPts(start, ordered, ids) {
 }
 
 // 球面距离（米）——与 adminapi/前端口径一致
+// ⭐ 2026-10-03 自由拜访：按「坐标 + 半径」取附近客户点
+//   入参：{ lat, lng, radius }（radius 米，档位 200/500/1000/2000）
+//   出参：{ ok, radius, center, count, total, truncated, points:[{i,n,nr,la,ln,ad,d,b,ph,ds,cst}] }
+//   ⚠️ **返回上限 500 条**（按距离升序取最近的）—— 2 公里内可能有几千家，不封顶会把手机画卡
+//   ⚠️ 查询方式与 dupCheck 同源：先用**矩形**在库里粗筛（走 lat/lng 索引），再用 haversine **精筛**成圆
+//   ⚠️ 排除已删客户（回收站里的不在图上）
+async function nearbyCustomers(salesmanId, event) {
+  const lat = Number(event.lat), lng = Number(event.lng);
+  if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) {
+    return { ok: false, code: 'BAD_PARAM', msg: '缺少定位坐标' };
+  }
+  let radius = Number(event.radius) || 500;
+  if (!isFinite(radius) || radius < 50) radius = 50;
+  // ⚠️⚠️ 2026-10-04 临时：为老板测试放行 **400 公里**（400000）—— 想看远处的客户点。
+  //   测完要跟 `pages/freevisit/map.wxml` 里那行「400km」按钮**一起删**，并把上限改回 5000。
+  if (radius !== 400000 && radius > 5000) radius = 5000;
+
+  const MAX = 500;      // 最终返回上限（老板 2026-10-04 定：**就是最近 500 家**）
+  const PAGE = 100;     // 云开发单次 get 上限就是 100
+  // ⚠️⚠️ 2026-10-04【重要修正】原来的做法：一次性矩形粗筛最多 3000 条（**没有排序 → 命中哪 3000 条是随机的**）
+  //   → 再按距离排序取 500。结果 **"最近的 500 家"是假的**（探针实测：义乌商贸区 2 公里内有 3279 家，
+  //   3000 都捞不完，取出来的其实是"随机 3000 里最近的 500"）。
+  //   现在改成 **由近到远分圈查**：200m → 500m → 1km → 2km → …→ 用户选的半径，
+  //   每圈查完看够不够，**凑够 MAX×1.5 就停**，最后按距离排序取前 MAX。
+  //   这样既**真的按距离由近到远**，又不会一上来就拉几千条（快）。
+  const rings = [200, 500, 1000, 2000, 3000, 5000, 10000, 50000, 400000].filter(r => r <= radius);
+  if (!rings.length || rings[rings.length - 1] < radius) rings.push(radius);
+
+  // ⭐ 2026-10-05 老板要的：**顺手把「现场证据 / 定位」配置一起带回去** ——
+  //   自由拜访没有 taskId，进不了「tasks.detail / mapData」那条写 globalData.sysCfg 的路
+  //   （见 AGENTS.md 那条"已知取舍"）→ 拜访页会退回默认值。这里搭个顺风车。
+  const cfgP = await loadSettings().catch(() => ({}));
+  const seen = {};        // 去重（同一家可能在多次查询里都命中）
+  const pts = [];
+  try {
+    for (const rr of rings) {
+      const dLat = rr / 111000;
+      const dLng = rr / (111000 * Math.cos(lat * Math.PI / 180) || 1);
+      for (let sk = 0; sk < 3000; sk += PAGE) {          // 每圈最多拉 3000 条再精筛
+        const part = await db.collection('customers')
+          .where({
+            lat: _.gt(lat - dLat).and(_.lt(lat + dLat)),
+            lng: _.gt(lng - dLng).and(_.lt(lng + dLng)),
+            deleted: _.neq(true)
+          })
+          .field({ name: true, nameRaw: true, lat: true, lng: true, address: true,
+                   district: true, bizCircle: true, phone: true, coord_status: true })
+          .skip(sk).limit(PAGE).get();
+        const arr = (part && part.data) || [];
+        for (const c of arr) {
+          if (seen[c._id]) continue;
+          seen[c._id] = 1;
+          const d = Math.round(haversine(lat, lng, c.lat, c.lng));
+          if (!isFinite(d) || d > radius) continue;      // 精筛成圆（不大于用户选的半径）
+          pts.push({
+            i: c._id,
+            n: String(c.name || ''),
+            nr: String(c.nameRaw || ''),
+            la: Number(c.lat) || 0,
+            ln: Number(c.lng) || 0,
+            ad: String(c.address || ''),
+            d: String(c.district || ''),
+            b: String(c.bizCircle || ''),
+            ph: String(c.phone || ''),
+            ds: d,                                        // 距我多少米
+            cst: String(c.coord_status || '')
+          });
+        }
+        if (arr.length < PAGE) break;                     // 这圈取完了
+        if (pts.length >= MAX * 3) break;                 // 已经够多了，别再拉
+      }
+      if (pts.length >= MAX * 1.5) break;                 // ⭐ 凑够 1.5 倍就停，不必查到最外圈
+    }
+  } catch (e) {
+    return { ok: false, code: 'QUERY_FAIL', msg: '附近查询失败：' + ((e && e.message) || e) };
+  }
+
+  pts.sort((a, b) => a.ds - b.ds);                        // 由近到远
+  return {
+    ok: true,
+    radius: radius,
+    center: { lat: lat, lng: lng },
+    count: Math.min(pts.length, MAX),
+    total: pts.length,
+    truncated: pts.length > MAX,
+    // ⭐ 现场证据 / 定位配置（前端拿去写 globalData.sysCfg，自由拜访的拜访页才能跟后台档位走）
+    cfg: {
+      photoLimit: cfgP.photoLimit,
+      recEnabled: cfgP.recEnabled,
+      evidenceRequired: cfgP.evidenceRequired,
+      recordingDurationLimit: cfgP.recordingDurationLimit,
+      visitDurationLimit: cfgP.visitDurationLimit,
+      locKeyRefresh: cfgP.locKeyRefresh,
+      locCheck: cfgP.locCheck
+    },
+    points: pts.slice(0, MAX)
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ⭐ 2026-10-03 自由拜访卡（独立集合 `free_trips`）
+//   老板口径（详见 _scratch/自由拜访-方案与口径.md）：
+//   · 业务员自己建、**不绑任务**、**没有目标客户名单**、**不算进度**、**没有截止日**
+//   · 卡片上的「已拜访 N 家」= `customerIds` 数组长度（**去重**：同一家跑几次都算 1 家）
+//   · `customerIds` 一字段三用：①家数 ②点进去看客户卡片 ③地图上灰针（去过）的判断
+//   · 能结束（paused）也能唤醒（active）；⚠️ 新拜访只进「最新建的那张**在用**卡」
+//   · ⚠️ 实习（trial）**能看不能建**（与项目既有「实习不能提交」一致）
+// ═══════════════════════════════════════════════════════════════════
+const FREE_TRIP_MAX = 50;   // 单个业务员最多保留这么多张（防数据无限膨胀）
+
+function _tripOut(t) {
+  return {
+    id: t._id,
+    salesmanId: t.salesmanId || '',
+    salesmanName: t.salesmanName || '',
+    district: t.district || '',
+    bizCircle: t.bizCircle || '',
+    radius: Number(t.radius) || 0,
+    lat: Number(t.centerLat) || 0,
+    lng: Number(t.centerLng) || 0,
+    status: t.status || 'active',
+    visitedCount: Array.isArray(t.customerIds) ? t.customerIds.length : 0,
+    createdAt: Number(t.createdAt) || 0,
+    updatedAt: Number(t.updatedAt) || 0,
+    pausedAt: Number(t.pausedAt) || 0
+  };
+}
+
+// 用坐标反查「区域 / 商圈」：取附近最近几家客户的众数（前端没传时的兜底）
+async function _guessArea(lat, lng) {
+  const out = { district: '', bizCircle: '' };
+  try {
+    const d = 300 / 111000;
+    const r = await db.collection('customers')
+      .where({ lat: _.gt(lat - d).and(_.lt(lat + d)), lng: _.gt(lng - d).and(_.lt(lng + d)),
+               deleted: _.neq(true) })
+      .field({ district: true, bizCircle: true, lat: true, lng: true })
+      .limit(100).get();
+    const rows = (r.data || []).slice().sort((a, b) =>
+      haversine(lat, lng, a.lat, a.lng) - haversine(lat, lng, b.lat, b.lng));
+    const cnt = (key) => {
+      const m = {};
+      rows.forEach(x => { const v = String(x[key] || '').trim(); if (v) m[v] = (m[v] || 0) + 1; });
+      let best = '', n = 0;
+      Object.keys(m).forEach(k => { if (m[k] > n) { n = m[k]; best = k; } });
+      return best;
+    };
+    out.district = cnt('district');
+    out.bizCircle = cnt('bizCircle');
+  } catch (e) { /* 反查失败就不填，不阻塞建卡 */ }
+  return out;
+}
+
+// 建卡
+async function freeTripCreate(salesmanId, meDoc, event) {
+  if (meDoc && meDoc.trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '实习体验不能建自由拜访卡' };
+  const lat = Number(event.lat), lng = Number(event.lng);
+  if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) {
+    return { ok: false, code: 'BAD_PARAM', msg: '缺少定位坐标' };
+  }
+  const cnt = await db.collection('free_trips').where({ salesmanId: salesmanId }).count()
+    .catch(() => ({ total: 0 }));
+  if ((cnt.total || 0) >= FREE_TRIP_MAX) {
+    return { ok: false, code: 'TOO_MANY', msg: '自由拜访卡已有 ' + FREE_TRIP_MAX + ' 张，先在后台清理一些再建' };
+  }
+  let district = String(event.district || '').trim();
+  let bizCircle = String(event.bizCircle || '').trim();
+  if (!district && !bizCircle) {
+    const g = await _guessArea(lat, lng);
+    district = g.district; bizCircle = g.bizCircle;
+  }
+  const now = Date.now();
+  const doc = {
+    salesmanId: salesmanId,
+    salesmanName: (meDoc && meDoc.name) || '',
+    centerLat: lat,
+    centerLng: lng,
+    district: district,
+    bizCircle: bizCircle,
+    radius: Math.min(Math.max(Number(event.radius) || 500, 50), 5000),
+    customerIds: [],
+    status: 'active',
+    createdAt: now,
+    updatedAt: now,
+    pausedAt: 0,
+    createdByName: (meDoc && meDoc.name) || ''
+  };
+  let r;
+  try {
+    r = await db.collection('free_trips').add({ data: doc });
+  } catch (e) {
+    // ⚠️⚠️ 2026-10-04【老板真机实测踩到】集合还不存在时（`init` 没跑过一次）`.add()` 会抛，
+    //   原来没接住 → 前端把**一整段英文异常**弹给了业务员（"点击建卡弹一堆英文报错"）。
+    //   现在：**云端自愈创建一次再重试**（不指望用户先跑 init）。
+    const em = String((e && e.message) || e) + ' ' + String((e && e.errCode) || '');
+    if (em.indexOf('not exists') >= 0 || em.indexOf('-502005') >= 0) {
+      await db.createCollection('free_trips').catch(() => {});
+      await new Promise(res => setTimeout(res, 600));   // 建表后稍等一下再写
+      r = await db.collection('free_trips').add({ data: doc });
+    } else {
+      return { ok: false, code: 'DB_FAIL', msg: '建卡失败，请稍后再试' };
+    }
+  }
+  const id = (r && (r._id || (r.id))) || '';
+  await _logTrip('create', Object.assign({ _id: id }, doc), meDoc, { visitedCount: 0 });   // ⭐ 进后台滚动消息
+  return { ok: true, id: id, trip: _tripOut(Object.assign({ _id: id }, doc)) };
+}
+
+// 列自己的卡（最新在前）
+async function freeTripList(salesmanId, meDoc, event) {
+  const limit = Math.min(Math.max(Number(event.limit) || 50, 1), 100);
+  const r = await db.collection('free_trips')
+    .where({ salesmanId: salesmanId })
+    .orderBy('createdAt', 'desc').limit(limit).get()
+    .catch(silentCatch('tasks·freeTripList', { data: [] }));
+  const list = (r.data || []).map(_tripOut);
+  const activeCnt = list.filter(t => t.status === 'active').length;
+  return { ok: true, count: list.length, activeCount: activeCnt, list: list };
+}
+
+// 结束 / 唤醒（只动 status，不碰客户与拜访）
+async function freeTripSetStatus(salesmanId, meDoc, event, status) {
+  const id = String(event.tripId || event.id || '');
+  if (!id) return { ok: false, code: 'BAD_PARAM', msg: '缺少 tripId' };
+  const r = await db.collection('free_trips').doc(id).get().catch(() => ({ data: [] }));
+  const t = (r.data && r.data[0]) || (r.data && !Array.isArray(r.data) ? r.data : null);
+  if (!t) return { ok: false, code: 'NOT_FOUND', msg: '自由拜访卡不存在' };
+  if (t.salesmanId !== salesmanId) return { ok: false, code: 'NO_AUTH', msg: '只能操作自己的自由拜访卡' };
+  const now = Date.now();
+  const upd = { status: status, updatedAt: now, pausedAt: status === 'paused' ? now : 0 };
+  await db.collection('free_trips').doc(id).update({ data: upd });
+  await _logTrip(status === 'paused' ? 'pause' : 'resume', t, meDoc, { visitedCount: Array.isArray(t.customerIds) ? t.customerIds.length : 0 });   // ⭐ 进后台滚动消息
+  return { ok: true, id: id, status: status };
+}
+
+// 卡片详情：卡的字段 + 「去过的店」列表（去重，按最后拜访时间倒序）
+async function freeTripDetail(salesmanId, meDoc, event) {
+  const id = String(event.tripId || event.id || '');
+  if (!id) return { ok: false, code: 'BAD_PARAM', msg: '缺少 tripId' };
+  const r = await db.collection('free_trips').doc(id).get().catch(() => ({ data: [] }));
+  const t = (r.data && r.data[0]) || (r.data && !Array.isArray(r.data) ? r.data : null);
+  if (!t) return { ok: false, code: 'NOT_FOUND', msg: '自由拜访卡不存在' };
+  if (t.salesmanId !== salesmanId && !meDoc.boss) {
+    return { ok: false, code: 'NO_AUTH', msg: '只能看自己的自由拜访卡' };
+  }
+  const ids = Array.isArray(t.customerIds) ? t.customerIds.filter(Boolean) : [];
+  let custs = [];
+  if (ids.length) {
+    // ⚠️ 分片查（云开发 where in 单次别塞太多）
+    for (let i = 0; i < ids.length; i += 100) {
+      const part = await db.collection('customers')
+        .where({ _id: _.in(ids.slice(i, i + 100)) })
+        .field({ name: true, nameRaw: true, address: true, district: true, bizCircle: true,
+                 phone: true, lat: true, lng: true, coord_status: true, deleted: true })
+        .get().catch(silentCatch('tasks·freeTripDetail', { data: [] }));
+      for (const c of (part.data || [])) custs.push(c);
+    }
+    // ⚠️ 客户可能已被删进回收站 → 自动跳过、不报错
+    custs = custs.filter(c => c.deleted !== true);
+  }
+  return {
+    ok: true,
+    trip: _tripOut(t),
+    customers: custs.map(c => ({
+      id: c._id,
+      name: c.name || '',
+      nameRaw: c.nameRaw || '',
+      address: c.address || '',
+      district: c.district || '',
+      bizCircle: c.bizCircle || '',
+      phone: c.phone || '',
+      lat: Number(c.lat) || 0,
+      lng: Number(c.lng) || 0,
+      coordStatus: c.coord_status || ''
+    }))
+  };
+}
+
+// ⭐ 2026-10-04 自由拜访「大操作」留痕 —— 供后台「📬 消息中心 → 📜 滚动消息」显示
+//   （老板要："这些大的操作后台的滚动消息要有提示"）
+//   记：建卡 / 结束 / 唤醒 / 删除 四类。⚠️ 日志**独立于卡片** —— 卡删了日志还在（老板要能回溯）。
+//   ⚠️ 写日志失败**绝不影响主操作**（全部 catch 吞掉）。
+async function _logTrip(action, t, meDoc, extra) {
+  try {
+    await db.collection('free_trip_logs').add({
+      data: {
+        tripId: (t && t._id) || '',
+        action: action,                                   // create | pause | resume | delete
+        salesmanId: (t && t.salesmanId) || (meDoc && meDoc._id) || '',
+        salesmanName: (t && t.salesmanName) || (meDoc && meDoc.name) || '',
+        district: (t && t.district) || '',
+        bizCircle: (t && t.bizCircle) || '',
+        visitedCount: (extra && extra.visitedCount) || 0,
+        lat: (t && t.centerLat) || 0,
+        lng: (t && t.centerLng) || 0,
+        at: Date.now()
+      }
+    });
+  } catch (e) {
+    // ⚠️ 集合不存在时自愈一次（同 freeTripCreate 的处理）
+    const em = String((e && e.message) || e) + ' ' + String((e && e.errCode) || '');
+    if (em.indexOf('not exists') >= 0 || em.indexOf('-502005') >= 0) {
+      await db.createCollection('free_trip_logs').catch(() => {});
+    }
+  }
+}
+
+// ⭐ 2026-10-04 业务员删自己的自由拜访卡（老板要的「结束旁边加删除」）
+//   ⚠️ 与后台删除**同口径**：只删「归类」—— 把该卡下所有 visits 的 freeTripId 置空
+//      （退化成「无任务拜访」），**拜访记录本身一条不删**。
+async function freeTripDelete(salesmanId, meDoc, event) {
+  const id = String(event.tripId || event.id || '');
+  if (!id) return { ok: false, code: 'BAD_PARAM', msg: '缺少 tripId' };
+  const r = await db.collection('free_trips').doc(id).get().catch(() => ({ data: [] }));
+  const t = (r.data && r.data[0]) || (r.data && !Array.isArray(r.data) ? r.data : null);
+  if (!t) return { ok: false, code: 'NOT_FOUND', msg: '自由拜访卡不存在' };
+  if (t.salesmanId !== salesmanId) return { ok: false, code: 'NO_AUTH', msg: '只能删除自己的自由拜访卡' };
+  // 摘归属（批量，别逐条 —— 卡里可能跑了几十家）
+  await db.collection('visits').where({ freeTripId: id }).update({ data: { freeTripId: '' } }).catch(() => {});
+  await _logTrip('delete', t, meDoc, { visitedCount: Array.isArray(t.customerIds) ? t.customerIds.length : 0 });   // ⭐ 卡删了、日志还在
+  await db.collection('free_trips').doc(id).remove();
+  return { ok: true, id: id, msg: '已删除（拜访记录保留）' };
+}
+
+// ⭐ 2026-10-04 步行路线（我 → 某家店）—— 供「自由拜访」客户小窗的「🧭 路径」按钮
+//   老板要的是**真实道路**路线（不是两点直线）。复用项目现成的三件套：
+//   `getMpKey()` 取 key + `httpGetJson` 请求 + `decodePolyline` 解压轨迹。
+//   ⚠️ **云函数调腾讯接口不受小程序域名白名单限制**（任务地图 / 后台的路线也是这么调的），
+//      所以**不需要去微信后台配 request 域名**。
+//   ⚠️ 用 `walking`（步行）而不是任务地图那个 `driving`（驾车）—— 业务员是走路的。
+//   ⚠️ 腾讯接口失败时**返回直线兜底**（前端照样能画，不至于"点了没反应"）。
+const WALK_URL = 'https://apis.map.qq.com/ws/direction/v1/walking/';
+async function walkRoute(salesmanId, event) {
+  const fLat = Number(event.fromLat), fLng = Number(event.fromLng);
+  const tLat = Number(event.toLat), tLng = Number(event.toLng);
+  if (!isFinite(fLat) || !isFinite(fLng) || !isFinite(tLat) || !isFinite(tLng)) {
+    return { ok: false, code: 'BAD_PARAM', msg: '缺少起终点坐标' };
+  }
+  const from = fLat + ',' + fLng, to = tLat + ',' + tLng;
+  let pts = null, distance = 0, durationMin = null;
+  try {
+    const key = await getMpKey();
+    const q = '?from=' + from + '&to=' + to + '&key=' + encodeURIComponent(key) + '&output=json';
+    const r = await httpGetJson(WALK_URL + q);
+    if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
+      const route = r.result.routes[0];
+      distance = Math.round(route.distance || 0);
+      durationMin = Math.max(1, Math.round((route.duration || 0) / 60));
+      if (Array.isArray(route.polyline) && route.polyline.length >= 4) pts = decodePolyline(route.polyline);
+    }
+  } catch (e) { /* 走兜底 */ }
+  const fallback = !pts || pts.length < 2;
+  if (fallback) pts = [[fLat, fLng], [tLat, tLng]];   // 直线兜底
+  return {
+    ok: true,
+    fallback: fallback,
+    pts: pts.map(p => [Number(p[0]), Number(p[1])]),
+    distanceMeters: distance || Math.round(haversine(fLat, fLng, tLat, tLng)),
+    durationMin: durationMin
+  };
+}
+
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371000, rad = Math.PI / 180;
   const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;

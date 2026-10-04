@@ -1,0 +1,62 @@
+/* 自由拜访地图页（2026-10-03）—— 全屏地图 + 浮层控件 */
+page { height: 100%; }
+.page { position: relative; width: 100%; height: 100vh; overflow: hidden; background: #EDF1F5; }
+
+/* 地图本体：占满，底部给工具栏留位 */
+.mp { width: 100%; height: 100%; }
+
+/* 「聚火地图」badge（左上角；腾讯 logo 在右下角，互不压） */
+.jh-badge { position: absolute; left: 8px; top: 8px; z-index: 20; display: flex; align-items: center; gap: 3px;
+  background: rgba(255,255,255,.92); border: 1px solid #FFD9C2; border-radius: 6px; padding: 1px 6px; }
+.jh-compass { width: 11px; height: 11px; border: 1.5px solid #F5531C; border-radius: 50%; position: relative; }
+.jh-needle { position: absolute; left: 50%; top: 1px; width: 1.5px; height: 6px; background: #F5531C; margin-left: -0.75px; transform-origin: bottom center; transform: rotate(40deg); }
+.jh-word { font-size: 11px; font-weight: 700; color: #F5531C; }
+
+/* ⭐ 右上角三个浮动控件：横向一行、精致小巧（老板 2026-10-03 定：不要竖排、不要大） */
+.maptools { position: absolute; right: 10px; top: 10px; z-index: 20; display: flex; flex-direction: row; align-items: center; gap: 5px; }
+.mt { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 1px solid #E3E8EF;
+  box-shadow: 0 1px 4px rgba(20,25,35,.14); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: #4A5563; line-height: 1; }
+.mt.wide { width: auto; height: 26px; border-radius: 13px; padding: 0 8px; font-size: 10.5px; font-weight: 700; }
+.mt.on { border-color: #F5531C; color: #F5531C; background: #FFF6F2; }
+
+/* 出圈提示条 */
+.outtip { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); z-index: 20;
+  background: #FCEBEC; color: #C93A40; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 8px; }
+
+/* 客户小卡 */
+.card { position: absolute; left: 12px; right: 12px; bottom: 226px; z-index: 30; background: #fff;
+  border-radius: 14px; padding: 13px; box-shadow: 0 10px 30px rgba(20,25,35,.24); }
+/* ⭐ 右上角关闭（2026-10-04 老板要的）*/
+.c-x { position: absolute; right: 8px; top: 8px; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; color: #9AA3B0; border-radius: 50%; background: #F5F7FA; }
+.c-n { font-size: 15px; font-weight: 800; color: #2B3038; padding-right: 30px; }
+.c-a { font-size: 11.5px; color: #7A8494; margin-top: 4px; }
+.c-d { font-size: 11.5px; color: #F5531C; font-weight: 700; margin-top: 4px; }
+.c-b { display: flex; gap: 8px; margin-top: 11px; }
+.cb { flex: 1; min-width: 0; height: 34px; line-height: 34px; text-align: center; border: 1px solid #E3E8EF; border-radius: 9px;
+  font-size: 12px; font-weight: 700; color: #2B3038; background: #fff; white-space: nowrap; }   /* ⚠️ 2026-10-05：改成 **3 个按钮**（步行路径/行车导航/详情&拜访）→ 字号从 11.5 提到 12 */
+.cb.prim { background: linear-gradient(135deg,#FF7A3D,#F5531C); border-color: transparent; color: #fff; }
+
+/* 底部工具栏 */
+.toolbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; background: #fff;
+  border-top: 1px solid #E3E8EF; padding: 9px 12px calc(9px + env(safe-area-inset-bottom)); }
+.t-loc { font-size: 11.5px; color: #7A8494; margin-bottom: 7px; }
+.t-loc-v { color: #2B3038; font-weight: 700; }
+
+/* 档位：⚠️ 选中的那个**明显更宽**（老板定，不等宽）；靠 flex-grow 差异化，不写死宽度 */
+.ranges { display: flex; gap: 6px; margin-bottom: 8px; }
+.rg { flex: 1 1 0; min-width: 0; text-align: center; font-size: 11.5px; line-height: 1.5; padding: 4px 0;
+  border: 1px solid #E3E8EF; border-radius: 9px; color: #7A8494; }
+.rg.on { flex: 4.2 1 0; border-color: #F5531C; color: #F5531C; background: #FFF6F2; font-weight: 700; }
+.ranges.lock .rg { opacity: .45; border-color: #EDEFF3; }
+
+.t-cnt { font-size: 12px; color: #7A8494; margin-bottom: 8px; }
+.t-num { color: #2B3038; font-weight: 700; }
+
+.btns { display: flex; gap: 7px; }
+.tb { flex: 1; height: 36px; line-height: 34px; text-align: center; border: 1px solid #E3E8EF; border-radius: 10px;
+  background: #fff; font-size: 12px; font-weight: 700; color: #2B3038; }
+.tb.prim { background: linear-gradient(135deg,#FF7A3D,#F5531C); border-color: transparent; color: #fff; }
+.tb.dis { color: #C3C9D2; background: #F5F7FA; }
