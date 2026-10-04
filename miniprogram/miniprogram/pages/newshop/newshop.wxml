@@ -105,24 +105,14 @@
          ============================================================ -->
     <view class="pane" id="pane2" hidden="{{step !== 2}}">
 
-      <!-- 🔧 防重调试面板（老板 2026-09-29）——
-           把内部状态直接摆在界面上，不用再靠我推测。
-           ⭐⭐ 2026-09-29 老板定：**先隐藏**（原话「先隐藏，以后可能还会用」）——
-             由 newshop.js 的 `showDupDebug` 开关控制（当前 false）。
-             **代码一行没删**：把它改成 true，面板立刻回来（事件打点也一起恢复）。 -->
-      <view class="dupdbg" wx:if="{{showDupDebug}}">
-        <text class="dd-t">🔧 防重调试</text>
-        <text class="dd-l">doDup 执行 {{dupDbgRuns}} 次 · dupShow={{dupShow}} · dupChecked={{dupChecked}} · dupBusy={{dupBusy}}</text>
-        <text class="dd-l">dupTip={{dupTip || '空'}} · blk={{blk ? '有' : '空'}} · same={{same ? '有' : '空'}} · near={{near ? '有' : '空'}}</text>
-        <text class="dd-l">dupErr={{dupErr || '空'}}</text>
-        <text class="dd-l">事件（新→旧）：</text>
-        <text class="dd-l" wx:for="{{dupDbgEvts}}" wx:key="*this">· {{item}}</text>
-      </view>
-
       <!-- ⭐ 2026-09-29：**引导卡**（中性蓝，**不是错误**）——
            手动点了「防重检测」但还没填好店名/电话时给指引；
-           ⚠️ 自动跑的那次（进第 2 步 / 采用点位后的 silent 检测）**不会出现这张卡** -->
-      <view class="dup tips" wx:if="{{dupShow && dupTip}}">
+           ⚠️ 自动跑的那次（进第 2 步 / 采用点位后的 silent 检测）**不会出现这张卡**。
+           🔴 2026-10-02 老板定：**默认隐藏这张卡**（原话「把新店第二步上面的蓝色提示框去掉」）——
+              由 newshop.js 的 `showDupTip` 控制（当前 `false`）；改回 `true` 即恢复。
+              ⚠️ **不要把这块 wx:if 直接删掉**：紧跟着的"查询失败"卡是 `wx:elif`，
+                 删了它 elif 就失去配对的 if，整条条件链会坏。 -->
+      <view class="dup tips" wx:if="{{showDupIdle && dupShow && dupTip}}">
         <text class="d-t">📝 {{dupTip === 'noCoord' ? '先回第 1 步定个位置' : '先填好店名和电话，再来查重'}}</text>
         <view class="d-c">
           <text class="d-l">· 店名 —— 照门头上的写，别用简称</text>
@@ -191,7 +181,12 @@
       </view>
       <!-- ⭐⭐ 兜底卡【老板 2026-09-29 定的铁律：**点了检测就必须出一张卡**】——
            正常情况下走不到这里；一旦走到，说明有分支没覆盖，这张卡负责把它暴露出来 -->
-      <view class="dup bad" wx:elif="{{dupShow}}">
+      <!-- ⚠️ 2026-10-02 老板定：条件加 `(showDupIdle || !dupTip)` ——
+           "还没填好店名/电话"时（dupTip 有值）**不再显示**这张兜底卡，
+           否则刚进第 2 步就会蹦出"没有拿到结果"（老板报的）。
+           但**手动点了「防重检测」又真的没内容时**（此时 dupTip 已被清空）**照样显示** ——
+           保住「点了检测就必须出一张卡」这条铁律，避免"点了没反应"。 -->
+      <view class="dup bad" wx:elif="{{dupShow && (showDupIdle || !dupTip)}}">
         <text class="d-t">⚠️ 没有拿到结果</text>
         <view class="d-c">
           <text class="d-l">检测已跑完，但没有任何可显示的内容。</text>
@@ -199,7 +194,11 @@
         </view>
       </view>
 
-      <!-- 必填：店名 / 电话 / 地址 -->
+      <!-- 必填：店名 / 联系人 / 电话 / 地址
+           ⭐ 2026-10-02 老板定：**门店信息卡重排** ——
+             ① 联系人、营业时间从原「选填」卡**并入本卡**（那张卡已删除）；
+             ② **联系人、电话也改成必填**（原来是选填）；
+             ③ 顺序固定为：店名 → 联系人 → 电话 →（电话2）→ 营业时间 → 地址 → 防重检测按钮。 -->
       <view class="card">
         <view class="cardh">🏪 门店信息</view>
 
@@ -209,9 +208,36 @@
             placeholder-class="rph" maxlength="40" />
         </view>
         <view class="row">
-          <text class="rl">电话</text>
+          <text class="rl">联系人<text class="must"> *</text></text>
+          <input class="ri" value="{{contact}}" bindinput="onContact" placeholder="老板 / 店长称呼"
+            placeholder-class="rph" maxlength="20" />
+        </view>
+        <view class="row">
+          <text class="rl">电话<text class="must"> *</text></text>
           <input class="ri" type="number" value="{{phone}}" bindinput="onPhone" placeholder="填了能防止重复建"
             placeholder-class="rph" maxlength="11" />
+          <!-- ⭐ 2026-10-02 老板定：**最多两个电话** —— 右侧浅灰 ⊕ 点一下展开第二个输入框。
+               第二个号码存 `customers.phone2`（与商城侧「联系人联系电话」同一字段），
+               所以后台列表/详情、商城比对、搜索都自动认得它，后续流程无需另改。 -->
+          <view class="addp" wx:if="{{!phone2Open}}" bindtap="addPhone2">⊕</view>
+          <view class="delp" wx:else bindtap="delPhone2">✕</view>
+        </view>
+        <view class="row" wx:if="{{phone2Open}}">
+          <text class="rl">电话2</text>
+          <input class="ri" type="number" value="{{phone2}}" bindinput="onPhone2" placeholder="第二个号码（选填）"
+            placeholder-class="rph" maxlength="11" />
+        </view>
+        <!-- 营业时间：两个**整点下拉**（老板 2026-09-29 定；原「选填」卡搬来）
+             ⚠️ 只选整点 —— 用 time 选择器要选"时 + 分"共 4 次，太烦 -->
+        <view class="row">
+          <text class="rl">营业时间</text>
+          <picker mode="selector" range="{{hourList}}" value="{{hourIdx1}}" bindchange="onHour1">
+            <view class="tm-sel">{{hour1}}</view>
+          </picker>
+          <text class="tm-dash">—</text>
+          <picker mode="selector" range="{{hourList}}" value="{{hourIdx2}}" bindchange="onHour2">
+            <view class="tm-sel">{{hour2}}</view>
+          </picker>
         </view>
         <view class="row">
           <text class="rl">地址<text class="must"> *</text></text>
@@ -222,14 +248,9 @@
         <!-- 防重检测：**只由这个按钮触发**（老板 2026-09-29 定：不自动查、不边打字边查） -->
         <view class="dbtn-row">
           <view class="dbtn" bindtap="doDup">{{dupBusy ? '对比中…' : '🔍 防重检测'}}</view>
-          <!-- ⭐ 2026-09-29：末尾那枚「防重 v7」是**前端版本标识** ——
-               用来一眼确认小程序体验版到底更新了没有（改防重相关界面就 +1）。
-               **看不到它 = 还是旧版**，不用再靠行为反推。
-               v4 = 双保险兜底（js finally + wxml 末卡）
-               v5 = onNameBlur 不再隐藏结果区 + 结果区改常驻（进第 2 步就有引导卡）
-               v6 = 加【防重调试面板】+ 事件打点（用来判定 tap/blur 顺序）
-               v7 = 收 dupTruncated（附近店超 300 家时绿卡里补一句"可能有遗漏"） -->
-          <text class="dbtip">按店名 / 电话查附近 200 米，看看有没有已经建过的<text class="dv">防重 v7</text></text>
+          <!-- 2026-10-02 老板定：**去掉界面上那枚「防重 vN」版本标识**（属开发痕迹，正式版不该出现）。
+               历史：v4 双保险兜底 / v5 结果区常驻 / v6 加调试面板+打点 / v7 收 dupTruncated -->
+          <text class="dbtip">按店名 / 电话查附近 200 米，看看有没有已经建过的</text>
         </view>
       </view>
 
@@ -255,38 +276,21 @@
         </view>
       </view>
 
-      <!-- 选填 -->
-      <view class="card">
-        <view class="cardh">选填</view>
-        <view class="row">
-          <text class="rl">联系人</text>
-          <input class="ri" value="{{contact}}" bindinput="onContact" placeholder="老板 / 店长称呼" placeholder-class="rph" maxlength="20" />
-        </view>
-        <!-- 营业时间：两个**整点下拉**（老板 2026-09-29 定：手机上点开就是上下滚动）
-             ⚠️ 只选整点 —— 用 time 选择器要选"时 + 分"共 4 次，太烦 -->
-        <view class="row">
-          <text class="rl">营业时间</text>
-          <picker mode="selector" range="{{hourList}}" value="{{hourIdx1}}" bindchange="onHour1">
-            <view class="tm-sel">{{hour1}}</view>
-          </picker>
-          <text class="tm-dash">—</text>
-          <picker mode="selector" range="{{hourList}}" value="{{hourIdx2}}" bindchange="onHour2">
-            <view class="tm-sel">{{hour2}}</view>
-          </picker>
-        </view>
-      </view>
+      <!-- ⭐ 2026-10-02 老板定：原「选填」卡**整个删掉** ——
+           里面的「联系人」「营业时间」都已并进上面的「🏪 门店信息」卡（联系人还改成了必填）。 -->
 
-      <view class="tip">区域和商圈是按第 1 步的坐标自动识别的 —— 不对可以直接改。</view>
-    </view>
-
-    <!-- ============================================================
-         第 3 步：🍜 品类与设施（无必填）
-         ============================================================ -->
-    <view class="pane" id="pane3" hidden="{{step !== 3}}">
+      <!-- ⭐ 2026-10-02 老板定：**「品类」卡从第 3 步移到第 2 步的下面** ——
+           填店名/电话时就顺手把品类选了，少翻一页。
+           （第 3 步现在只剩「⭐ 招牌菜」与「🛎 服务与设施」两张卡。） -->
       <view class="card">
         <view class="cardh">🍜 品类</view>
         <view class="row">
           <text class="rl">品类</text>
+          <!-- ⭐ 2026-10-02 老板定：**改回微信原生 picker**。
+               自绘滚轮（方案 A）试了两轮（吸附/级联/行高/颜色），太费时间，放弃 →
+               恢复成原来的 multiSelector，`onCat`/`onCatCol` 那套三级联动逻辑原样启用。
+               ⚠️ 已知局限：原生 picker 的**一屏行数、行高、字号、上下淡化全是微信写死的（约 5 行）**，
+                  小程序端**没有任何参数可调** —— 想"一屏看更多"只能换选择方式（另行讨论）。 -->
           <picker mode="multiSelector" range="{{catRange}}" value="{{catIdx}}"
             bindchange="onCat" bindcolumnchange="onCatCol">
             <view class="rpick">{{catText || '选品类（大 / 中 / 小）'}}<text class="arw">›</text></view>
@@ -294,8 +298,9 @@
         </view>
       </view>
 
-      <!-- 招牌菜：自由输入，用「、，；」隔开；输入时实时拆成胶囊显示
-           ⚠️ 复用客户详情页的"招牌菜"字段（写 customers.platManual.dishes，与现场提报同落点） -->
+      <!-- ⭐ 2026-10-02 老板定：**招牌菜卡从第 3 步搬到第 2 步**（接在品类后面）——
+           招牌菜字段/逻辑跟位置无关，一个字没改（仍写 customers.platManual.dishes）。
+           第 3 步现在只剩「🛎 服务与设施」一张卡。 -->
       <view class="card">
         <view class="cardh">⭐ 招牌菜</view>
         <textarea class="note" value="{{dishRaw}}" bindinput="onDish"
@@ -306,6 +311,14 @@
           <text class="dchip" wx:for="{{dishes}}" wx:key="*this">{{item}}</text>
         </view>
       </view>
+    </view>
+
+    <!-- ============================================================
+         第 3 步：⭐ 招牌菜与设施（无必填）
+         ============================================================ -->
+    <view class="pane" id="pane3" hidden="{{step !== 3}}">
+      <!-- ⭐ 2026-10-02 老板定：**招牌菜已搬到第 2 步**（接在品类卡后面）——
+           本步现在只剩「🛎 服务与设施」这一张卡。 -->
 
       <view class="card">
         <view class="cardh">🛎 服务与设施</view>

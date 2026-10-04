@@ -92,11 +92,6 @@
    手动点了「防重检测」但还没填好店名/电话时给指引，别让人以为出了错 */
 .dup.tips { background: #F1F5FF; border: 1px solid #BFD3F5; color: #1F63C4; }
 .dup.tips .d-q { color: #1F63C4; }
-/* 🔧 防重调试面板（老板 2026-09-29）—— 深底等宽小字，只给排查用；确认没问题后整块删掉 */
-.dupdbg { background: #22262E; color: #D6DEEA; border-radius: 10px; padding: 9px 11px; margin-bottom: 11px;
-  font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; line-height: 1.75; }
-.dupdbg .dd-t { display: block; font-size: 11px; font-weight: 800; color: #FFD166; margin-bottom: 4px; }
-.dupdbg .dd-l { display: block; word-break: break-all; }
 .dup .d-t { font-weight: 800; font-size: 12px; }
 .dup .d-c { background: rgba(255, 255, 255, .62); border-radius: 9px; padding: 8px 10px;
   display: flex; flex-direction: column; gap: 2px; }
@@ -114,8 +109,52 @@
 .dbtn { flex: 0 0 auto; padding: 9px 14px; border-radius: 11px; font-size: 12.5px; font-weight: 700;
   background: #F1F5FF; border: 1px solid #BFD3F5; color: #1F63C4; }
 .dbtip { flex: 1; min-width: 0; font-size: 10.5px; color: #A3ABB8; line-height: 1.5; }
-/* ⭐ 前端版本标识（「防重 v3」）—— 一眼看出小程序体验版更新了没有 */
-.dbtip .dv { margin-left: 5px; color: #C3CAD6; font-weight: 700; }
+
+/* ===== ⭐ 自绘三级滚轮（2026-10-02 老板定）========================================
+   参数：一屏 10 行 / 行高 30px / 字号 18px / 高亮条 = 微信默认那种上下两条细线
+   几何：10 行 × 30px = 300px 高；上下各垫 (300-30)/2 = 135px → 选中行正好落在正中
+   ⚠️ 行高 30px 必须与 js 里的 PK_ROW 常量一致，改一个就要改另一个
+   ============================================================================== */
+.pkmask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 999;
+  background: rgba(20, 24, 32, .42); display: flex; align-items: flex-end; }
+.pk { width: 100%; background: #fff; border-radius: 16px 16px 0 0;
+  padding-bottom: env(safe-area-inset-bottom); }
+.pk-hd { display: flex; align-items: center; justify-content: center;
+  padding: 11px 16px; border-bottom: 1px solid #EDF1F7; }
+.pk-t { font-size: 15px; font-weight: 700; color: #22262E; }
+/* ⭐ 2026-10-02 老板定：**确定 / 取消 移到底部**，做大、拉开、清晰
+   （原来挤在顶栏一行；.pk-c/.pk-o 两个旧样式已随之弃用） */
+.pk-ft { display: flex; gap: 10px; padding: 8px 14px 12px; }
+.pk-btn { flex: 1; height: 46px; line-height: 46px; text-align: center; border-radius: 12px;
+  font-size: 16px; font-weight: 700; }
+.pk-btn.ghost { background: #F4F6FA; color: #5B6472; }
+.pk-btn.main { background: #E8871E; color: #fff; }
+/* ⭐ 2026-10-02 老板定：**列宽固定**（原来 flex:1 会被长文字撑来撑去 → 滚动时列宽乱跳）
+   ＋ 大类多是 2 个字 → 第一列窄一点（24%），给中/小类多留空间（各 38%）
+   用 nth-child 是因为三列由 wxml 的 wx:for 生成、不便于单独加 class */
+.pk-body { position: relative; height: 340px; display: flex; padding: 0 6px 6px; }
+.pk-col { height: 340px; text-align: center; min-width: 0; overflow: hidden; }
+.pk-body .pk-col:nth-child(1) { flex: 0 0 24%; width: 24%; }
+.pk-body .pk-col:nth-child(2) { flex: 0 0 38%; width: 38%; }
+.pk-body .pk-col:nth-child(3) { flex: 0 0 38%; width: 38%; }
+.pk-pad { height: 153px; }   /* ⭐ 行高 34px 时：(340-34)/2 = 153 —— 让选中行正好落在正中 */
+/* 一屏能看到约 10 行（30px × 10） */
+.pk-i { height: 34px; line-height: 34px; font-size: 18px; color: #3D4654;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* ⭐ 2026-10-02 老板：**选中项不要变色**（橙色容易让人误以为"已确定/已选过"）——
+   只用"稍深一点的灰 + 500 粗细"做区分 */
+.pk-i.on { color: #22262E; font-weight: 500; }
+/* ⭐ 2026-10-02 老板定版：**橙色 1.5px**（试过 #E3E8EF 太重 → #F7F9FC 看不见 → #EDF1F6 还嫌淡 → 直接上品牌橙） */
+.pk-hl { position: absolute; left: 6px; right: 6px; top: 153px; height: 34px;
+  border-top: 1.5px solid #E8871E; border-bottom: 1.5px solid #E8871E; pointer-events: none; }
+
+/* ⭐ 第二个电话：电话行右侧那枚浅灰 ⊕（点开第二个输入框）/ ✕（收起并清空）—— 2026-10-02 老板定 */
+.addp { flex: 0 0 auto; width: 26px; height: 26px; margin-left: 6px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 700; color: #C3CAD6; background: #F4F6FA; }
+.delp { flex: 0 0 auto; width: 26px; height: 26px; margin-left: 6px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: #B9C0CB; background: #F4F6FA; }
 
 /* ============ ③ 卡 / 行 / 细分割线（第 2/3/4 步的卡片用） ============ */
 .card { background: #fff; border-radius: 16px; padding: 13px 15px; margin-bottom: 11px;

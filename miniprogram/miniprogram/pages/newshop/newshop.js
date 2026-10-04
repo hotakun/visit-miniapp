@@ -32,6 +32,9 @@
 const api = require('../../utils/api');
 const media = require('../../utils/media');
 const WORDS = require('../../utils/newshop_words');
+// ⭐ 自绘三级滚轮的行高（2026-10-02 老板定 34px）—— **必须与 newshop.wxss 里 .pk-i 的 height 一致**：
+//   改一个就要改另一个，否则吸附会错位（行高变了、吸附还按老刻度算 → 永远对不齐）。
+const PK_ROW = 34;
 const { GpsCapture } = require('../../utils/gps/capture');
 
 // 区域候选（与云函数 geoVote 的口径一致 —— 就是 biz_index 里的"行政区"，共 9 个）
@@ -102,11 +105,22 @@ Page({
     canNext: false,                    // 当前这一步能不能往下走（底部「下一步」的亮/灰）
     // ===== 表单 =====
     name: '', phone: '', address: '', contact: '', note: '',
+    // ⭐ 2026-10-02 老板定：**最多两个电话** ——
+    //   phone2 = 第二个号码（存 customers.phone2，与商城侧「联系人联系电话」同一字段）；
+    //   phone2Open = 第二个输入框是否展开（默认收起，点电话行右侧的 ⊕ 才出现）
+    phone2: '', phone2Open: false,
     areaList: AREA_LIST, area: '', areaIdx: 0,
     bizCircle: '', cands: [],
     // 营业时间：两个**整点下拉**（老板 2026-09-29 定；默认 08:00 — 21:00）
     hourList: HOUR_LIST, hour1: '08:00', hour2: '21:00', hourIdx1: 8, hourIdx2: 21,
     catRange: [[], [], []], catIdx: [0, 0, 0], catText: '', cat1: '', cat2: '', cat3: '',
+    // ⭐ 自绘三级滚轮的状态（2026-10-02）：pkShow = 弹层显隐；pkTmp = 弹层内的临时选择（点"确定"才写回）；
+    //   catTop = 三列各自的 scroll-top（吸附用，30px = 一行）
+    pkShow: false, pkTmp: [0, 0, 0], catTop: [0, 0, 0],
+    // ⚠️ 2026-10-02 拆成两个：**pkHi = "选框里现在高亮第几行"**（滚动中实时更新，**只影响显示**）；
+    //   **pkTmp = "真正选中的索引"**（只在吸附/点击后更新，**只有它才牵动后两列重算**）。
+    //   混用一个变量会让"中类换了、小类还没重算"→ 就是老板报的"小类不相符"。
+    pkHi: [0, 0, 0],
     // 招牌菜：自由输入，「、，；」隔开 → 拆成数组（写 customers.platManual.dishes，与现场提报同落点）
     dishRaw: '', dishes: [],
     facGroups: FAC_GROUPS.map(g => ({ key: g.key, title: g.title, items: g.items.map(v => ({ v: v, on: false })) })), facSel: {},
@@ -130,11 +144,20 @@ Page({
     // ⭐ 引导提示：'' 无 / 'needInput' 还没填店名电话 / 'noCoord' 还没取坐标
     //   （初值就给 needInput —— 进第 2 步看到的是引导卡，不是空白）
     dupTip: 'needInput',
-    // 🔧 防重调试（老板 2026-09-29：不再靠猜，把真相摆到界面上）
+    // 🔴 2026-10-02 老板定：**"还没填好店名/电话"时，整块防重结果区都不显示**
+    //   （原话「把新店第二步上面的蓝色提示框去掉」＋ 追问「刚进来要什么结果呢」）
+    //   ⚠️ 光隐藏引导卡是不够的：条件链会掉到最后一个兜底分支 `wx:elif="{{dupShow}}"`
+    //      （那个条件只有 dupShow，恒真）→ 刚进第 2 步就蹦出一张"没拿到结果"的框。
+    //      所以**引导卡与兜底卡共用这个开关**，一起关掉才干净。
+    //   改回 `true` 即恢复原行为（没填好时显示蓝色引导卡）。
+    //   ⚠️ 「查询失败 / 铁证重复 / 同名 / 相似 / 查到结果」这 5 张卡**不受影响**，照常显示。
+    showDupIdle: false,
+    // 🔧 防重调试（2026-09-29 加 / ⭐ 2026-10-02 **已从界面移除**）
+    //   ⚠️ 2026-10-02：`newshop.wxml` 里的调试面板（.dupdbg）**已删除**，wxss 里的死样式也清了 ——
+    //      所以现在把下面的 `showDupDebug` 改成 `true` **不会**让面板回来
+    //      （要恢复得从 git 历史取回那段 wxml）。
+    //      保留 `showDupDebug` + `_dbg()` 只为让打点逻辑完整，且默认 early-return、零开销。
     //   dupDbgRuns = doDup 执行了几次；dupDbgEvts = 最近 4 个事件（用来判定 tap/blur 顺序）
-    // ⭐⭐ 2026-09-29 老板定：**调试面板先隐藏**（原话「先隐藏，以后可能还会用」）——
-    //   **代码一行没删**：把下面这个开关改回 `true`，面板 + 事件打点全部立刻回来。
-    //   隐藏期间 `_dbg()` 与 dupDbgRuns 的自增都会 early-return，连 setData 开销都省掉。
     showDupDebug: false,
     dupDbgRuns: 0, dupDbgEvts: [],
     // ⚠️ 附近店多到 300 条上限（可能还有没扫到的）→ 结果区补一句提醒
@@ -172,8 +195,12 @@ Page({
       if (d.mode === 'capturing') return '还在采点：先点「⏹ 停止」';
       if (d.mode === 'tuning') return '微调还没落定：先点「✓ 采用微调」';
     }
-    if (n >= 3) {                                      // 进第 3 步：店名 + 地址（同电话则拦）
+    if (n >= 3) {   // 进第 3 步：店名 + 联系人 + 电话 + 地址
+      // ⭐ 2026-10-02 老板定：**联系人和电话也改成必填**（原来只有店名 / 地址必填）——
+      //   电话是查重的关键（同号 = 铁证），不填就查不准；联系人是后续跟进要用的。
       if (!String(d.name || '').trim()) return '请填店名';
+      if (!String(d.contact || '').trim()) return '请填联系人（老板 / 店长怎么称呼）';
+      if (!String(d.phone || '').trim()) return '请填电话（防重复建店靠它，填了才查得准）';
       if (!String(d.address || '').trim()) return '请填地址';
       if (d.blk) return '这家店已经在客户库里了，不用再建';
     }
@@ -214,6 +241,7 @@ Page({
       const set = {
         editMode: true, editId: id,
         name: s.name || '', phone: s.phone || '', address: s.address || '',
+        phone2: s.phone2 || '', phone2Open: !!s.phone2,   // ⭐ 2026-10-02：带出第二个电话（有就自动展开输入框）
         contact: s.contactName || '', bizCircle: s.bizCircle || '',
         dishRaw: (s.dishes || []).join('、'), dishes: s.dishes || [],
         wish: s.mallWish || '', note: s.note || '',
@@ -709,6 +737,10 @@ Page({
     });
   },
   onPhone(e) { this.setData({ phone: e.detail.value }); },
+  // ⭐ 2026-10-02 老板定：**第二个电话（最多两个）** —— 电话行右侧浅灰 ⊕ / ✕
+  onPhone2(e) { this.setData({ phone2: e.detail.value }); },
+  addPhone2() { this.setData({ phone2Open: true }); },
+  delPhone2() { this.setData({ phone2Open: false, phone2: '' }); },
   onAddress(e) { this.setData({ address: e.detail.value }); this._refresh(); },
   onContact(e) { this.setData({ contact: e.detail.value }); },
   // 营业时间：两个**整点** picker（老板 2026-09-29 定；默认 08:00 — 21:00）
@@ -736,12 +768,17 @@ Page({
   // 品类三级联动（大类 → 中类 → 小类；词表来自 words.json）
   _buildCat() {
     const cat = WORDS.cat || {};
+    // ⭐ 2026-10-02：词表已按老板定稿的 5 大类重写（原「购物」大类在新表里本来就不存在），
+    //   所以这里不再需要 SKIP_CAT 过滤 —— 直接取全部大类。
     const c1 = Object.keys(cat);
     const c2 = c1.length ? Object.keys(cat[c1[0]] || {}) : [];
     const c3 = (c1.length && c2.length) ? ((cat[c1[0]] || {})[c2[0]] || []) : [];
     this._cat = cat;
     this.setData({ catRange: [c1, c2, c3], catIdx: [0, 0, 0] });
   },
+  // ===== 原生 picker 的三级联动（⭐ 2026-10-02 **恢复**：自绘滚轮「方案 A」放弃，改回 multiSelector）=====
+  //   ⚠️ 下面那一整段 pk* 是方案 A 的遗留**死代码**（wxml 已不再引用它），留着不碍事；
+  //     以后要清理，从 `pkOpen()` 删到 `_pkSnap()` 结束即可，其余代码不受影响。
   onCatCol(e) {
     const col = Number(e.detail.column), val = Number(e.detail.value);
     const cat = this._cat || {};
@@ -757,16 +794,129 @@ Page({
       c3 = ((cat[c1[idx[0]]] || {})[c2[val]] || []);
       idx[2] = 0;
     }
-    this.setData({ catRange: [c1, c2, c3], catIdx: idx });
+    // ⭐ 2026-10-03 老板定（**滚动即写**）：不依赖"确定"按钮，滚到哪就把值写进去。
+    //   背景（老板报障）：4 家「加新店」建的店品类全是空 —— 微信原生 picker 的 `bindchange`
+    //   **只在点右上角"确定"时才触发**，用户滚了滚轮但没点确定 → cat1/cat2/cat3 一直是初值 ''。
+    //   现在滚动（bindcolumnchange）就同步写；点"确定"时 onCat 仍会再写一次（同值覆盖），互不冲突。
+    this.setData({
+      catRange: [c1, c2, c3], catIdx: idx,
+      catText: [c1[idx[0]], c2[idx[1]], c3[idx[2]]].filter(Boolean).join(' · '),
+      cat1: this._plainCat(c1[idx[0]]), cat2: c2[idx[1]] || '', cat3: c3[idx[2]] || ''
+    });
+  },
+  // ⭐ 2026-10-02 老板定（选 A）：**滚轮里显示带图标，写进库的 cat1 不带图标** ——
+  //   词表大类名形如「🍚 美食餐饮」，这里把开头的 emoji/符号剥掉再存。
+  //   好处：后台客户列表、按品类筛选、以后的统计口径都是干净的中文。
+  //   ⚠️ 用「码点数组 + 判首字符」而不是 u-flag 正则，避免个别老基础库不认。
+  _plainCat(s) {
+    const a = Array.from(String(s || ''));
+    let i = 0;
+    while (i < a.length && !/[\u4e00-\u9fa5A-Za-z0-9]/.test(a[i])) i++;
+    return a.slice(i).join('').trim();
   },
   onCat(e) {
     const v = (e.detail.value || []).map(Number);
     const [c1, c2, c3] = this.data.catRange;
-    const text = [c1[v[0]], c2[v[1]], c3[v[2]]].filter(Boolean).join(' · ');
     this.setData({
-      catIdx: v, catText: text,
-      cat1: c1[v[0]] || '', cat2: c2[v[1]] || '', cat3: c3[v[2]] || ''
+      catIdx: v,
+      // catText 只用于界面显示 → **保留图标**
+      catText: [c1[v[0]], c2[v[1]], c3[v[2]]].filter(Boolean).join(' · '),
+      // 三个存库值 → **大类去掉图标**（中类/小类本来就没有）
+      cat1: this._plainCat(c1[v[0]]), cat2: c2[v[1]] || '', cat3: c3[v[2]] || ''
     });
+  },
+
+  // ===== ⭐ 自绘三级滚轮（2026-10-02「方案 A」**已弃用** —— 下面全是死代码）=====
+  //   ⚠️ PK_ROW 必须与 wxss 的 .pk-i height 一致（当前 30px）
+  //   存库字段**没变**：确定时才写 cat1 / cat2 / cat3（+ catText 只用于显示）
+  pkOpen() {
+    const idx = (this.data.catIdx || [0, 0, 0]).slice();
+    this._tops = idx.map(v => v * PK_ROW);             // 实例变量：滚动中的实时位置（不 setData，免得卡）
+    this.setData({ pkShow: true, pkTmp: idx.slice(), pkHi: idx.slice(), catTop: idx.map(v => v * PK_ROW) });
+  },
+  pkCancel() { this.setData({ pkShow: false }); },
+  pkOk() {
+    const v = (this.data.pkTmp || [0, 0, 0]).slice();
+    const [c1, c2, c3] = this.data.catRange;
+    this.setData({
+      pkShow: false, catIdx: v,
+      catText: [c1[v[0]], c2[v[1]], c3[v[2]]].filter(Boolean).join(' · '),
+      cat1: this._plainCat(c1[v[0]]), cat2: c2[v[1]] || '', cat3: c3[v[2]] || ''
+    });
+  },
+  // 滚动中只记位置，绝不 setData（否则每帧重渲染会卡）
+  pkScroll(e) {
+    const c = Number(e.currentTarget.dataset.col);
+    if (!this._tops) this._tops = [0, 0, 0];
+    this._tops[c] = Number(e.detail.scrollTop) || 0;
+    // ⚠️ 这里**只更新 pkHi（高亮）**，绝不碰 pkTmp ——
+    //   pkTmp 一变就会牵动"后两列重算"，滚动中频繁触发会让中类/小类错位。
+    const gi = Math.max(0, Math.round(this._tops[c] / PK_ROW));
+    const hi = this.data.pkHi || [0, 0, 0];
+    if (hi[c] !== gi) {
+      const nh = hi.slice(); nh[c] = gi;
+      this.setData({ pkHi: nh });
+    }
+    // ⭐⭐ 2026-10-02 老板要"强烈吸附、绝不停在半行上"：
+    //   在 scroll 事件里做「**停住检测**」—— **150ms 内没有新的 scrollTop 就认定停了** → 吸附。
+    //   ⚠️ 只靠 touchend 不够：手指离开后惯性还会继续滚，滚动中会把我设的对齐值冲掉 → 停在半行。
+    if (!this._snapT) this._snapT = [null, null, null];
+    clearTimeout(this._snapT[c]);
+    this._snapT[c] = setTimeout(() => this._pkSnap(c), 150);
+  },
+  // 手指离开 → 延时一下（等惯性滚完）再吸附
+  pkEnd(e) {
+    clearTimeout(this._pkT);
+    this._pkT = setTimeout(() => this._pkSnap(Number(e.currentTarget.dataset.col)), 120);
+  },
+  // 点某一项 → 直接选中并滚到正中
+  pkPick(e) {
+    const c = Number(e.currentTarget.dataset.col), i = Number(e.currentTarget.dataset.i);
+    if (!this._tops) this._tops = [0, 0, 0];
+    this._tops[c] = i * PK_ROW;
+    const ct = (this.data.catTop || [0, 0, 0]).slice();
+    ct[c] = i * PK_ROW;
+    this.setData({ catTop: ct });
+    this._pkSnap(c);
+  },
+  noop() { },
+  // 吸附到最近一行 + 联动后两列（**规则与原来的 onCatCol 完全一致**：改大类→重置中/小类；改中类→重置小类）
+  _pkSnap(col) {
+    const ct = (this.data.catTop || [0, 0, 0]).slice();
+    const tmp = (this.data.pkTmp || [0, 0, 0]).slice();
+    const raw = Number((this._tops || [0, 0, 0])[col]) || 0;
+    const gi = Math.max(0, Math.round(raw / PK_ROW));
+    // ⭐ 2026-10-02 老板要"像原生那样咯噔一下"：**每次换行轻震一次**
+    //   （微信原生 picker 的那声"咯噔"就是短震动；小程序端放不了声音，只能震动。
+    //    真机上有没有感觉，取决于系统"触感反馈"设置和机型。）
+    if (gi !== (this.data.pkTmp || [])[col]) {
+      try { wx.vibrateShort({ type: 'light' }); } catch (e) { /* 不支持就忽略 */ }
+    }
+    tmp[col] = gi;
+    const set = { pkTmp: tmp, pkHi: tmp.slice() };   // ⚠️ 吸附后把"高亮"也对齐到这一行
+    // ⚠️⚠️ 微信的坑：`scroll-top` 设成"与当前值相同"时**不生效**（不会真的滚过去）——
+    //   强吸附必须精确落位，所以**先设 target+1、下一帧再设 target**，保证一定滚到位。
+    const target = gi * PK_ROW;
+    ct[col] = target + 1;
+    set.catTop = ct.slice();
+    const ct2 = ct.slice(); ct2[col] = target;
+    setTimeout(() => this.setData({ catTop: ct2 }), 0);
+    if (col < 2) {
+      const cat = this._cat || {};
+      const c1 = this.data.catRange[0];
+      let c2 = this.data.catRange[1], c3 = this.data.catRange[2];
+      if (col === 0) {
+        c2 = Object.keys(cat[c1[gi]] || {});
+        c3 = c2.length ? ((cat[c1[gi]] || {})[c2[0]] || []) : [];
+        tmp[1] = 0; tmp[2] = 0; ct[1] = 0; ct[2] = 0;
+      } else {
+        c3 = ((cat[c1[tmp[0]]] || {})[c2[gi]] || []);
+        tmp[2] = 0; ct[2] = 0;
+      }
+      this._tops[1] = ct[1]; this._tops[2] = ct[2];
+      set.catRange = [c1, c2, c3]; set.catTop = ct.slice(); set.pkTmp = tmp;
+    }
+    this.setData(set);
   },
 
   // 服务与设施：多选胶囊（分组）
@@ -885,6 +1035,7 @@ Page({
         lat: Number(d.lat), lng: Number(d.lng),
         wgsLat: Number(d.wgsLat) || 0, wgsLng: Number(d.wgsLng) || 0,   // 只有北斗卫星才有 WGS-84 原值
         name: d.name.trim(), phone: String(d.phone || '').trim(), address: d.address.trim(),
+        phone2: String(d.phone2 || '').trim(),     // ⭐ 2026-10-02：第二个电话（最多两个）→ customers.phone2
         contactName: d.contact, hours: (d.hour1 && d.hour2) ? (d.hour1 + '-' + d.hour2) : '',
         dishes: (d.dishes || []).slice(),        // ⭐ 招牌菜 → customers.platManual.dishes
         area: d.area, bizCircle: d.bizCircle,
@@ -928,6 +1079,7 @@ Page({
       editMode: false, editId: '',
       doneShow: false, doneId: '', doneName: '',
       name: '', phone: '', address: '', contact: '', note: '',
+      phone2: '', phone2Open: false,          // ⭐ 换一家店 → 第二个电话也清空（输入框默认收起）
       hour1: '08:00', hour2: '21:00', hourIdx1: 8, hourIdx2: 21,
       dishRaw: '', dishes: [],
       // ⚠️ 结果区是**常驻**的 —— 换一家店也只回到"引导态"，绝不把它藏起来
