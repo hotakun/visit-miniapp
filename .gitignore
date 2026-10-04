@@ -7,6 +7,11 @@ admin/config.json
 *.xlsx
 *.csv
 
+# ===== 备份文件（git 本身就是备份，不再重复提交）=====
+*.bak-*
+*.bak
+*.backup-*
+
 # ===== 本地临时 / 私有配置 =====
 TMP/
 miniprogram/project.private.config.json

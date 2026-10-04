@@ -25,7 +25,10 @@ echo       正在编译...
 cd /d "%~dp0packager\shell"
 rem 2026-09-28：图标不在 shell 目录里，实际在 packager\inputs\icon.ico
 rem   （原来这里写裸的 icon.ico → 报 error CS7064 找不到图标文件）
-"%CSC%" -target:winexe -platform:x64 -out:JuHuoVisitAdmin.new.exe -win32icon:"%~dp0packager\inputs\icon.ico" -r:lib\Microsoft.Web.WebView2.Core.dll -r:lib\Microsoft.Web.WebView2.WinForms.dll Program.cs
+rem 2026-10-03：**必须同时把图标嵌成资源**（-resource）——
+rem   Program.cs 里用 GetManifestResourceStream("icon.ico") 显式设置窗口图标；
+rem   少了这个参数，任务栏图标会退回 .NET 默认的「色块方块」（资源管理器里却看着正常）。
+"%CSC%" -target:winexe -platform:x64 -out:JuHuoVisitAdmin.new.exe -win32icon:"%~dp0packager\inputs\icon.ico" -resource:"%~dp0packager\inputs\icon.ico",icon.ico -r:lib\Microsoft.Web.WebView2.Core.dll -r:lib\Microsoft.Web.WebView2.WinForms.dll Program.cs
 if errorlevel 1 (
   echo.
   echo [X] 编译失败！请把上面的报错文字截图发给开发者。
