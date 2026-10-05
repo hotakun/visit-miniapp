@@ -1,3 +1,7 @@
+// ⚠️ 【未启用 / 储备模块】本文件当前**没有任何调用方**（2026-10-05 全项目 grep 核实，零引用）。
+//    它不是"写了没用的废码"，而是**为将来准备**的专业模块 —— **别当死代码删**。
+//    要启用：接到 capture.js 或拜访页上；背景见 AGENTS.md「utils/gps 储备模块」条。
+//    再次确认零引用的方法：grep -rl "siteQuality" --include=*.js miniprogram/ | grep -v utils/gps/
 // utils/gps/nmeaSim.js —— NMEA 0183 语句模拟器（演示用）
 //
 // 重要：它不是"直接造界面数据"，而是生成**合法的 NMEA 语句**（带正确校验和），
