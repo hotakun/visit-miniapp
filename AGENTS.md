@@ -20,7 +20,7 @@
 - 部署：开发者工具逐个右键云函数「上传并部署：云端安装依赖」；小程序改动必须重新上传（体验版/正式版）
 - 语音缓存接口：`curl -X POST http://localhost:18080/tts -H "Content-Type: application/json" -d '{"name":"范宇琨","type":"review"}'`（type=coordfix 为坐标报错文案）
 - 调后台接口（含中文一律 UTF-8 文件 + `curl --data-binary @file`，命令行中文必乱码）
-- ⭐ **一键体检（2026-10-05 新增，改完代码跑一次）**：`node _scratch/check.js`（只读，不改任何文件）
+- ⭐ **一键体检（2026-10-05 新增，改完代码跑一次）**：`node admin/tools/check.js`（只读，不改任何文件）
   · 一次过 5 项：① 全量 JS 语法 ② `admin.html` 内嵌 `script` 提取后 `node --check` ③ **行尾字节级**（只对 `CRLF_FILES` 明文清单 + `.bat` 硬判，其余只提醒 —— 因为本项目 `core.autocrlf=true`，工作区出现 CRLF 是正常现象）④ JSON 语法 ⑤ WXML 标签配对 + 禁 HTML 标签（**已剥离注释**，所以注释里写"`<br>` 会白屏"不会误报）
   · 外加 ⑥ **`adminapi` 的 `ACTIONS` 白名单 vs dispatch 对账**（治「坑 32」）—— 不一致就报错并给修法；有意放行的两条（`getAdminDistMeta` / `getAdminDistPart`，后台热更新拉分片用）登记在脚本的 `ACTIONS_EXTRA` 里
   · `-v` 列出每个文件明细；**退出码 0 = 全过 / 1 = 有问题**（可当提交前把关）
