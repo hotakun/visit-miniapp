@@ -47,8 +47,6 @@
       <view class="rg {{radius === 500 ? 'on' : ''}}" data-r="500" bindtap="onRange">500m</view>
       <view class="rg {{radius === 1000 ? 'on' : ''}}" data-r="1000" bindtap="onRange">1km</view>
       <view class="rg {{radius === 2000 ? 'on' : ''}}" data-r="2000" bindtap="onRange">2km</view>
-      <!-- ⚠️⚠️ 2026-10-04 临时档位：老板测试用（想看远处的客户点），**测完必须删掉这一行** -->
-      <view class="rg {{radius === 400000 ? 'on' : ''}}" data-r="400000" bindtap="onRange">400km</view>
     </view>
 
     <view class="t-cnt">🏪 附近 <text class="t-num">{{nearCount}}</text> 家 · 其中去过 <text class="t-num">{{visitedCount}}</text> 家</view>

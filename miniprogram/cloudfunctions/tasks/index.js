@@ -1416,9 +1416,7 @@ async function nearbyCustomers(salesmanId, event) {
   }
   let radius = Number(event.radius) || 500;
   if (!isFinite(radius) || radius < 50) radius = 50;
-  // ⚠️⚠️ 2026-10-04 临时：为老板测试放行 **400 公里**（400000）—— 想看远处的客户点。
-  //   测完要跟 `pages/freevisit/map.wxml` 里那行「400km」按钮**一起删**，并把上限改回 5000。
-  if (radius !== 400000 && radius > 5000) radius = 5000;
+  if (radius > 5000) radius = 5000;
 
   const MAX = 500;      // 最终返回上限（老板 2026-10-04 定：**就是最近 500 家**）
   const PAGE = 100;     // 云开发单次 get 上限就是 100
@@ -1428,7 +1426,7 @@ async function nearbyCustomers(salesmanId, event) {
   //   现在改成 **由近到远分圈查**：200m → 500m → 1km → 2km → …→ 用户选的半径，
   //   每圈查完看够不够，**凑够 MAX×1.5 就停**，最后按距离排序取前 MAX。
   //   这样既**真的按距离由近到远**，又不会一上来就拉几千条（快）。
-  const rings = [200, 500, 1000, 2000, 3000, 5000, 10000, 50000, 400000].filter(r => r <= radius);
+  const rings = [200, 500, 1000, 2000, 3000, 5000, 10000, 50000].filter(r => r <= radius);
   if (!rings.length || rings[rings.length - 1] < radius) rings.push(radius);
 
   // ⭐ 2026-10-05 老板要的：**顺手把「现场证据 / 定位」配置一起带回去** ——

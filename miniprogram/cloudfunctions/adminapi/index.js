@@ -15,7 +15,7 @@
 //   2) 找某个 action：  grep -n "'getTask'" miniprogram/cloudfunctions/adminapi/index.js
 //      —— 命中处即分发点
 //   3) 刷新「域 + action 行号」对照表：python _scratch/gen_adminapi_index.py
-//      → 输出 _scratch/_adminapi_index.txt（22 个域 + 69 条 dispatch + ACTIONS 全集）
+//      → 输出 _scratch/_adminapi_index.txt（域分组 + dispatch 全集 + ACTIONS 全集）
 //
 // 【22 个域（按分节标题，顺序即文件顺序）】
 //    1) 云调用用量自建统计        2) 用量告警模板            3) 拜访时长上限·动态闹钟
@@ -28,7 +28,7 @@
 //   22) 智能排序
 //   （另有 **2 处不在分节里**：文件头正下方的 `saveVisitTrText`，以及 `exports.main` 自身）
 //
-// 【action 按用途分组（全集见下方 ACTIONS 数组，共 67 个）】
+// 【action 按用途分组（全集见下方 ACTIONS 数组）】
 //   登录：login
 //   任务：listTasks, getTask, createTask, editTask, rescheduleTask, extendTask,
 //         reassignTask, withdrawTask, deleteTask, sendTask, reviewFinishRequest,
@@ -51,7 +51,7 @@
 //
 // 【⚠️ 免鉴权特例（安全相关，动它们之前先读注释）】
 //   ① getAdminDistMeta / getAdminDistPart —— 在 ACTIONS 校验之前 return（文员机拉更新包用）。
-//      注意：这 2 条**不在 ACTIONS 数组里** → 所以 dispatch 有 69 条、ACTIONS 只有 67 个。
+//      注意：这 2 条**不在 ACTIONS 数组里** → 所以 dispatch 比 ACTIONS 多这 2 条。
 //   ② 定时器入口 —— 必须同时满足 `Type === 'Timer'` 与 `TriggerName === TICK_TRIGGER_NAME`
 //      （2026-09-23 收紧；原写法 `event.TriggerName || event.Type === 'Timer'` 可被客户端伪造）
 const cloud = require('wx-server-sdk');

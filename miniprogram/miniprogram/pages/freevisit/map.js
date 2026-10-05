@@ -13,8 +13,7 @@ const BLUE = '/images/pin-blue.png';
 const GRAY = '/images/pin-gray.png';
 const RED = '/images/pin-red.png';      // ⭐ 2026-10-04 选中的那个点（老板要放大变红跳最上层）
 
-// ⚠️ 2026-10-04 临时：`400000`（400 公里）是老板**测试用**的档位 —— 测完要跟 map.wxml 里那行按钮一起删
-const RANGE_TEXT = { 200: '200 米', 500: '500 米', 1000: '1 公里', 2000: '2 公里', 400000: '400 公里（临时测试）' };
+const RANGE_TEXT = { 200: '200 米', 500: '500 米', 1000: '1 公里', 2000: '2 公里' };
 
 Page({
   data: {
@@ -515,20 +514,5 @@ Page({
       taskId: "", freeTripId: this._tripId || ""
     });
     wx.navigateTo({ url: '/pages/customer/customer?customerId=' + s.id });
-  },
-
-  // 去拜访：按项目惯例先把**客户对象**写进 curCustomer 再跳（pages/customer 与 pages/visit 都从它取）
-  //   ⚠️ taskId 留空 = 自由拜访；freeTripId = 归属「最新在用卡」（没有卡就是无任务拜访）
-  onVisit() {
-    const s = this.data.sel;
-    if (!s || !s.id) return;
-    const p = (this._pts || []).find(x => x.i === s.id) ||
-              (this._visitedPts || []).find(x => x.i === s.id) || {};
-    wx.setStorageSync("curCustomer", {
-      _id: s.id, name: s.name, address: s.address || "",
-      lat: Number(p.la || p.lat) || 0, lng: Number(p.ln || p.lng) || 0,
-      taskId: "", freeTripId: this._tripId || ""
-    });
-    wx.navigateTo({ url: "/pages/customer/customer" });
   }
 });
