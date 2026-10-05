@@ -92,9 +92,6 @@ Page({
     this._recSecs = 0;
     this._recTicker = null;
     this._dead = false;
-    // 演示模式（2026-09-13）：从「客户详情页演示」进来 → 不建档、不校验单开，只跑计时
-    this.isDemo = !!c.demo;
-    if (this.isDemo) { this.beginTimer(c); return; }
     // 开始拜访：云端校验（任务内单开：其他家还在拜访中会拦截）
     api.call('visits', { action: 'start', taskId: c.taskId, customerId: c._id, freeTripId: c.freeTripId || '' }).then(res => {
       if (res && res.code === 'ONGOING_OTHERS') {
@@ -122,11 +119,6 @@ Page({
     }
     this.t0 = t0;
     this._startKey = key;
-    if (this.isDemo) {           // 演示模式（2026-09-13）：只要计时，不碰定位/信标/上报
-      this.tick();
-      this.timer = setInterval(() => this.tick(), 1000);
-      return;
-    }
     getApp().globalData.visitOngoing = true; // 最新位置上报标记（2026-09-08 M1）
     loc.beacon(); // 状态信标：进入拜访中（2026-09-08 老板定：后台立即感知）
     // 后台定位（2026-09-08 M2）：仅拜访中开启，拒绝不阻断；首次提示一次
@@ -457,17 +449,6 @@ Page({
     if (this.submitting) return;
     if (!this.data.result) {
       api.toast('请先选择拜访结果');
-      return;
-    }
-    // 演示模式（2026-09-13 老板定）：从「客户详情页演示」进来 → 走到这一步只提示，不写任何数据；
-    // 位置在「拜访结果」校验之后，所以演示时照样要先选结果，跟真机一致。
-    if (this.isDemo) {
-      this.submitting = true;
-      this.clearStart();
-      this.submitting = false;
-      this.setData({ confirmShow: false });
-      api.toast('演示版：到这里就结束了，真机才会真的提交', 'success'); // 2026-09-28 老板定：文案不带 ✓（success 图标已是勾）
-      setTimeout(() => wx.navigateBack(), 1200);
       return;
     }
     // 游客（实习账号）模拟提交（2026-09-08 老板定）：走完整流程但不写任何数据；
