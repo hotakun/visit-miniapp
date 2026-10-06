@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -642,6 +642,10 @@ exports.main = async (event) => {
     //   → 前端拿到 ok:true 却没有 byId/byCode → 静默不填 → 六列全空、且不报错。
     if (action === 'custPageAgg') return await custPageAgg(event);
     if (action === 'backfillAddressFromPlat') return await backfillAddressFromPlat(event);   // 2026-09-27：用平台地址补全 customers.address（一次性/幂等）
+    // ⭐ 2026-10-04：修 platMatched 被商城导入覆盖成 false（后台详情页平台口碑卡不显示）—— dry=true 只统计
+    if (action === 'fixPlatMatched') return await fixPlatMatched(event);
+    // ⭐ 2026-10-06：后台客户详情页「门店照片」保存（管理员传图/换图/删图）
+    if (action === 'setCustPhotos') return await setCustPhotos(event);
     // ⭐ 2026-09-28 晚：**消息中心**（边栏「📬 消息中心」+ 铃铛/角标数字，老板 2026-09-28 定）
     if (action === 'msgCount') return await msgCount(event);     // 只要"未处理数"（轻量，供角标轮询）
     if (action === 'msgCenter') return await msgCenter(event);   // 消息中心页面数据（重点消息 / 滚动消息）
@@ -2009,6 +2013,91 @@ async function listCustomers(event) {
 //   入参：`{ dry: true }` 只统计不写；`{ offset, limit }` **分批**（⚠️ 云函数 20~30 秒就超时，**必须分批** —— 见 backfillGeo 的同一条教训）。
 //   调用方循环：拿返回的 `nextOffset` 继续调，直到 `done: true`。
 //   ⭐ **一键脚本**：`node admin\tools\backfill_address_loop.js`（自动循环 + 进度；加 `--dry` 先干跑）
+// ⭐ 2026-10-04 新增（修老板报障）：**修复被覆盖的 platMatched**
+//   现象：后台客户详情页「📊 平台口碑」整卡不显示（只剩菜品），例 C1534 大铁牛螺蛳粉(古山店)。
+//   库内 `plat.rating` / `plat.avgPriceText` / `plat.dishes` 全都躺着，**唯独 `platMatched` 是 false**。
+//   根因：`import_excel.py` 的**商城路径** `build_customers` 在"没匹配上点评"时写 `platMatched: false`，
+//     而商城导入走 **overwrite** 模式 → `upsertOne` 对非空字段一律照写（**布尔 false 不算空值**）→
+//     把点评路径刚写好的 `true` 冲掉；同一 payload 里的 `plat: {}` 被 `isEmptyVal`（空对象）跳过
+//     → **plat 幸存、标记被冲掉**。⇒ 凡是「先导点评、后导/重导商城」的客户，全变成"有画像但后台不显示"。
+//   入参 { dry, limit }：**dry=true 只统计 + 给样本，不写库**。
+async function fixPlatMatched(event) {
+  const dry = event.dry === true;
+  const cnt = async (where) => {
+    const r = await db.collection('customers').where(where).count()
+      .catch(silentCatch('adminapi·fixPlatMatched', { total: -1 }));
+    return r.total;
+  };
+  const total = await cnt({});
+  const matched = await cnt({ platMatched: true });
+  const hasUuid = await cnt({ platShopUuid: _.exists(true) });
+  // 脏数据 = **确实有平台画像**（`plat.shopUuid` 落地即代表画像写成功了），但 platMatched 不是 true
+  //   ⚠️ 判据**不能用 `platShopUuid` 存在** —— 那个字段商城路径**每家都写**（含没匹配上点评的），
+  //      会把「同编号副档空壳」（plat 为 {}）也误标成"有画像"。实测：81 家里有 4 家是这种空壳。
+  //   ⚠️ `_.neq(true)` 在 MongoDB 语义下**能匹配"字段不存在"的文档**（这里是故意的，老客户不受影响）
+  const dirtyWhere = { 'plat.shopUuid': _.exists(true), platMatched: _.neq(true) };
+  const dirty = await cnt(dirtyWhere);
+  const r = await db.collection('customers').where(dirtyWhere)
+    .field({ name: true, mallCode: true, platShopUuid: true, platMatched: true, plat: true })
+    .limit(Math.min(Math.max(Number(event.limit) || 20, 1), 50)).get()
+    .catch(silentCatch('adminapi·fixPlatMatched', { data: [] }));
+  const samples = (r.data || []).map(c => {
+    const p = c.plat || {};
+    return {
+      name: c.name, mallCode: c.mallCode || '', uuid: c.platShopUuid || '',
+      platMatched: (c.platMatched === undefined ? '(缺字段)' : c.platMatched),
+      platFields: Object.keys(p).length,
+      rating: p.rating || '', avgPrice: p.avgPriceText || '',
+      dishes: String(p.dishes || '').slice(0, 24)
+    };
+  });
+  if (dry) return { ok: true, dry: true, total, matched, hasUuid, dirty, samples };
+  // 批量刷：**每轮更新完，这些文档就不再匹配 dirtyWhere → 天然分页**（不必手写游标）
+  let updated = 0, rounds = 0;
+  while (rounds++ < 50) {
+    const w = await db.collection('customers').where(dirtyWhere)
+      .update({ data: { platMatched: true, updatedAt: Date.now() } })
+      .catch(e => { throw new Error('批量更新失败：' + ((e && e.message) || e)); });
+    const n = (w && w.stats && w.stats.updated) || 0;
+    updated += n;
+    if (!n) break;
+  }
+  return { ok: true, dry: false, total, matched, hasUuid, dirty, updated, rounds };
+}
+
+// ⭐ 2026-10-06 新增：后台客户详情页「门店照片」保存（管理员传图 / 换图 / 删图）
+//   背景（老板 2026-10-06 定）：「后台可以保存客户详情里的照片，也可以在编辑状态添加或更改」。
+//   口径：① 只有在**编辑态点「💾 保存」**时才写库（与其它字段一致、可反悔）
+//         ② **固定 3 格**（与手机端「门店照片」、以及设计定稿的三格一致）
+//         ③ 每张可删（前端 ✕）→ 后端就是"整份覆盖"，删掉的自然不在数组里
+//   入参 { customerId, photos: [{fileID, thumbID}, …] }（最多 3 项，顺序即展示顺序）
+//   与手机端 `tasks.saveCustPhoto` **共用同一个 `customers.photos` 结构**（{fileID, thumbID, by, at}）→
+//   后台传的图，业务员在小程序里点开客户详情同样能看到。
+async function setCustPhotos(event) {
+  const admin = await verifyAdmin(event);
+  if (!admin) return { ok: false, code: 'NO_AUTH', msg: '账号或密码不正确（或无权限）' };
+  const customerId = String((event && event.customerId) || '');
+  if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const raw = Array.isArray(event.photos) ? event.photos : null;
+  if (!raw) return { ok: false, code: 'BAD_ARG', msg: '缺少照片参数' };
+  // 只留最多 3 项、且必须有 fileID；空位直接丢弃（数组长度即"有几张"）
+  const photos = raw.slice(0, 3)
+    .map(p => {
+      const fileID = String((p && p.fileID) || (typeof p === 'string' ? p : '')).trim();
+      if (!fileID) return null;
+      return {
+        fileID: fileID,
+        thumbID: String((p && p.thumbID) || '').trim(),
+        by: String((p && p.by) || ('admin:' + (admin.name || ''))),
+        at: Number((p && p.at)) || Date.now()
+      };
+    })
+    .filter(Boolean);
+  await db.collection('customers').doc(customerId)
+    .update({ data: { photos: photos, updatedAt: Date.now() } });
+  return { ok: true, count: photos.length };
+}
+
 async function backfillAddressFromPlat(event) {
   const dry = event.dry === true;
   const offset = Math.max(0, Number(event.offset) || 0);
@@ -3153,7 +3242,12 @@ function deriveGeo(c) {
   let city = String(p.city || '').trim() || seg[1] || '';
   if (city && !/市$/.test(city)) city += '市';
   const district = String(p.district || '').trim() || seg[2] || '';
-  const bizCircle = String(p.regionName || '').trim() || '❓ 未划分商圈';
+  // ⚠️ 2026-10-06 修（老板报障 C1562/A389/C419/C723「商圈没显示」）——
+  //   原来**只认 `plat.regionName`**，没有像 city / district 那样的分段退化 → 没有 plat 的客户
+  //   直接落兜底「❓ 未划分商圈」。而商城表的「地区」列格式是 `浙江省>金华市>永康市>龙山镇`
+  //   （seg[1]=市 / seg[2]=区县 / **seg[3]=商圈**）→ 补上 seg[3] 退化。
+  //   ⚠️ 与 `importdata` 的 deriveGeo **必须保持一致**（改一处要改两处）。
+  const bizCircle = String(p.regionName || '').trim() || seg[3] || '❓ 未划分商圈';
   const changed = String(c.city || '') !== city
                || String(c.district || '') !== district
                || String(c.bizCircle || '') !== bizCircle;

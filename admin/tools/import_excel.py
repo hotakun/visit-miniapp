@@ -558,8 +558,15 @@ def build_customers(mall, plat_map):
             if pn and pn != clean_name:
                 doc['plat']['name'] = pn
         else:
-            doc['platMatched'] = False
-            doc['plat'] = {}
+            # ⚠️⚠️ 2026-10-04 修（老板报障「后台看不到评分/人均/评论数，却还有菜品」）——
+            #   **这里绝不能写 `platMatched: False` / `plat: {}`**：
+            #   商城导入走 **overwrite** 模式（非 fill），`importdata` 的 upsertOne 对**非空字段一律照写**，
+            #   而布尔 `False` **不算空值** → 会把「点评导入」刚写好的 `True` **冲成 false**；
+            #   同一 payload 里的 `plat: {}` 反而被 `isEmptyVal`（空对象）跳过 → **plat 幸存、标记被冲掉**。
+            #   ⇒ 后果：客户明明有完整平台画像（评分/人均/菜品都在），后台详情页却显示
+            #     "平台没有收录这家的评分"（菜品因无条件拼接而照显示）。
+            #   所以"没匹配上点评"**什么都不写** —— 新建的客户本就没有这两个字段，后台自会按无画像显示。
+            pass
 
         doc['isSubAccount'] = False
         doc['mainAccountId'] = ''

@@ -55,6 +55,31 @@ async function getToken() {
 const excelJobs = {};
 let excelRunning = false;   // 同时只允许一个导入任务（两个进程会互踩输出目录）
 
+// ⭐ 2026-10-06 新增：把一张图片传到云存储，返回 fileID。
+//   用途：后台客户详情页「门店照片」由管理员上传/更换（老板 2026-10-06 定）。
+//   走**云开发 HTTP API**：/tcb/uploadfile 拿上传链接 → 把二进制 multipart 发给 COS → 用返回的 file_id。
+//   ⚠️ 凭据就是 config.json 里那套（appid/appsecret/envId），与 add_index.js / run_adminapi.js 一致。
+//   ⚠️ 用全局 fetch / FormData / Blob（Node 18+ 自带，本项目本来就用 fetch）。
+async function uploadToCloud(cloudPath, buf) {
+  const token = await getToken();
+  const r = await fetch(`https://api.weixin.qq.com/tcb/uploadfile?access_token=${encodeURIComponent(token)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ env: cfg.envId, path: cloudPath })
+  });
+  const j = await r.json();
+  if (!j || j.errcode) throw new Error('取上传链接失败：' + ((j && j.errmsg) || '') + '(' + ((j && j.errcode) || '?') + ')');
+  const fd = new FormData();
+  fd.append('key', cloudPath);
+  fd.append('Signature', j.authorization);          // ⚠️ 整串签名放进 Signature 字段（云开发文档口径）
+  fd.append('x-cos-security-token', j.token);
+  fd.append('x-cos-meta-fileid', j.cos_file_id);
+  fd.append('file', new Blob([buf]), cloudPath.split('/').pop());
+  const up = await fetch(j.url, { method: 'POST', body: fd });
+  if (!up.ok) throw new Error('传给云存储失败：HTTP ' + up.status);
+  return j.file_id;
+}
+
 async function callApi(body) {
   const t0 = Date.now();
   const action = (body && body.action) || '?';
@@ -410,6 +435,38 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, msg: '启动失败：' + e.message }));
+      }
+    });
+    return;
+  }
+  // ⭐ 2026-10-06 新增：后台客户详情页「门店照片」上传（管理员传图 / 换图）
+  //   入参 { customerId, kind, dataUrl }
+  //     · dataUrl = 前端 canvas 导出的 `data:image/jpeg;base64,...`
+  //     · kind = 'photo'（主图，前端已压到最长边 1600 / q0.85）｜ 'thumb'（320×240 缩略图 / q0.7）
+  //   ⚠️ 本接口**只负责"传上去、给回 fileID"**，不写库 ——
+  //      前端在**点「💾 保存」时才逐个调它**（老板 2026-10-06 定：与其它字段一致、可反悔），
+  //      全部传完再由 adminapi.setCustPhotos 一次性写 `customers.photos`。
+  if (req.method === 'POST' && req.url === '/custPhoto') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', async () => {
+      const reply = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+      try {
+        const opt = JSON.parse(body || '{}');
+        const m = /^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i.exec(String(opt.dataUrl || ''));
+        if (!m) throw new Error('图片内容不对（只收 data:image/...;base64）');
+        const buf = Buffer.from(m[2], 'base64');
+        if (!buf.length) throw new Error('图片是空的');
+        if (buf.length > 8 * 1024 * 1024) throw new Error('单张超过 8MB，请换小一点的图');
+        const ext = /^png$/i.test(m[1]) ? 'png' : (/^webp$/i.test(m[1]) ? 'webp' : 'jpg');
+        const kind = (opt.kind === 'thumb') ? 'thumb' : 'photo';
+        // 路径按客户分目录，文件名带时间戳+随机 → 换图不会互相覆盖
+        const cid = String(opt.customerId || 'misc').replace(/[^a-zA-Z0-9_-]/g, '');
+        const cloudPath = 'custPhoto/' + cid + '/' + kind + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+        const fileID = await uploadToCloud(cloudPath, buf);
+        reply(200, { ok: true, fileID: fileID, bytes: buf.length });
+      } catch (e) {
+        reply(502, { ok: false, msg: '上传失败：' + ((e && e.message) || e) });
       }
     });
     return;

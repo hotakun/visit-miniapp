@@ -173,7 +173,12 @@ function deriveGeo(c) {
   let city = String(p.city || '').trim() || seg[1] || '';
   if (city && !/市$/.test(city)) city += '市';
   const district = String(p.district || '').trim() || seg[2] || '';
-  const bizCircle = String(p.regionName || '').trim() || '❓ 未划分商圈';
+  // ⚠️ 2026-10-06 修（老板报障 C1562/A389/C419/C723「商圈没显示」）——
+  //   原来**只认 `plat.regionName`**，没有像 city / district 那样的分段退化 → 没有 plat 的客户
+  //   直接落兜底「❓ 未划分商圈」。而商城表的「地区」列格式是 `浙江省>金华市>永康市>龙山镇`
+  //   （seg[1]=市 / seg[2]=区县 / **seg[3]=商圈**）→ 补上 seg[3] 退化。
+  //   ⚠️ 仍救不了 region 只写到区县（3 段）的客户 —— 那些得靠「同 platShopUuid 里那条有 plat 的」继承。
+  const bizCircle = String(p.regionName || '').trim() || seg[3] || '❓ 未划分商圈';
   return { city, district, bizCircle };
 }
 

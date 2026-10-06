@@ -727,8 +727,25 @@ tr.row-off td:not(.keep){opacity:.4}
 
     <!-- ===== 导入信息（2026-09-13 新增；规划见 _scratch/客户数据导入规范.md）===== -->
     <!-- 四个入口可分批反复导入：商城客户 / 大众点评客户 / 销售订单 / 订单明细 -->
-    <div id="page-import" style="display:none">
-      <div class="title-bar"><span class="t">导入信息</span></div>
+    <div id="page-import" style="display:none">
+      <div class="title-bar"><span class="t">导入信息</span></div>
+
+      <!-- ⭐ 2026-10-06 老板要的：**一键把云端最新数据拉到本地缓存** ——
+           背景：客户点/客户列表/批次总表 读的都是**本地缓存**（admin/cache/map-points.json，
+           平时**每天自动拉一次**）。导入完表格后，缓存还是旧的 → 老板想立刻看到新数据，就点这里。
+           ⚠️ 走的是后台的 `/mapPoints/refresh`（全量重拉，几秒），跟「🌐 战况监控」那个「🔄 更新地图数据」是**同一件事**。 -->
+      <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid var(--primary)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">🔄 刷新本地缓存（从数据库拉取最新数据）</div>
+        <div class="sb-d">
+          后台的地图 / 客户列表 / 批次总表读的都是<b>本地缓存</b>（平时<b>每天自动拉一次</b>）。<br>
+          刚导入完表格、或在别处改过客户之后，点一下这里就会<b>从云端数据库重新拉一份最新数据</b>，各页立刻能看到。<br>
+          ⚠️ 只读云端、不改任何数据；拉完会就地刷新当前页面。
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn primary" id="impRefreshBtn" onclick="refreshCacheFromDb()">🔄 立即拉取最新数据</button>
+          <span class="sb-d" id="impRefreshMsg" style="flex:1;min-width:200px"></span>
+        </div>
+      </div>
 
       <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid var(--primary)">
         <div style="font-size:15px;font-weight:700;margin-bottom:6px">📥 从表格导入（推荐 · 一步到位）</div>
@@ -923,15 +940,37 @@ tr.row-off td:not(.keep){opacity:.4}
           </div>
           <div id="custSearchDrop" style="display:none;margin-top:6px;background:#FFFFFF;border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.15);overflow:hidden"></div>
         </div>
-        <div id="pickCapsule" style="position:absolute;left:0;right:0;top:12px;margin:0 auto;width:fit-content;z-index:99999;background:#FFFFFF;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;color:#333A44;box-shadow:0 1px 4px rgba(0,0,0,.12);white-space:nowrap;display:none;cursor:pointer;pointer-events:auto"></div>
+        <div id="pickCapsule" style="position:absolute;left:0;right:0;top:12px;margin:0 auto;width:fit-content;z-index:99999;background:#FFFFFF;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;color:#333A44;box-shadow:0 1px 4px rgba(0,0,0,.12);white-space:nowrap;display:none;cursor:pointer;pointer-events:auto"></div>
+        <!-- ⭐ 2026-10-06 老板定：地图**右上角**一个**方框按钮** = 「当前客户点满屏显示」（全览）。
+             就是工具栏那个「⊡ 任务客户」的同款动作（fitCustBounds：自动打开客户点层 → 按业务员/图例过滤
+             → fitBounds padding 40），搬到地图右上角做快捷入口，不用再往下排找。
+             ⚠️ 放在 #trackMap 容器内（不是工具栏）—— 搜索框在左上、拾取胶囊在顶部中间，右上角本来是空的。 -->
+        <div id="custFitBtn" title="当前客户点满屏显示" onclick="fitCustBounds()"
+          onmouseenter="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'"
+          onmouseleave="this.style.borderColor='var(--line)';this.style.color='#333A44'"
+          style="position:absolute;right:12px;top:12px;z-index:99998;width:34px;height:34px;border-radius:8px;background:#FFFFFF;border:1px solid var(--line);box-shadow:0 1px 4px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;line-height:1;color:#333A44;transition:color .12s,border-color .12s;user-select:none">⊡</div>
       </div>
       <div class="card" style="padding:12px 16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span style="font-size:12px;color:var(--sub);font-weight:600" id="trackStat"></span>
           <!-- ⭐ 2026-09-27：地图数据本地缓存（架构文档 §十 M1）—— 每天首次自动拉；点了就重拉 -->
           <button class="btn ghost btn-sm" id="mapDataBtn" style="height:26px;font-size:12px;padding:0 10px" onclick="refreshMapData()">🔄 更新地图数据</button>
-          <span style="font-size:12px;color:var(--sub)" id="mapDataStat"></span>
-          <span style="margin-left:auto"></span>
+          <span style="font-size:12px;color:var(--sub)" id="mapDataStat"></span>
+          <!-- ⭐ 2026-10-06 老板定：战况监控加**三层筛选（城市 / 区域 / 商圈）** ——
+               要再进杭州 10 多万家，「不分类显示就乱了」。
+               ⚠️ 口径：**只筛客户点**；业务员实时位置与当天轨迹**始终全显**（老板 2026-10-06 明确）。 -->
+          <span style="display:flex;align-items:center;gap:6px">
+            <select id="trackCity" class="inp" style="height:26px;font-size:12px;padding:0 6px;width:auto;min-width:86px" title="按城市筛客户点" onchange="trackGeoChanged('city')"></select>
+            <select id="trackDistrict" class="inp" style="height:26px;font-size:12px;padding:0 6px;width:auto;min-width:86px" title="按区域筛客户点" onchange="trackGeoChanged('district')"></select>
+            <select id="trackBiz" class="inp" style="height:26px;font-size:12px;padding:0 6px;width:auto;min-width:86px" title="按商圈筛客户点" onchange="trackGeoChanged('biz')"></select>
+            <button class="btn ghost btn-sm" id="trackGeoClearBtn" style="height:26px;font-size:12px;padding:0 8px;display:none" title="清空筛选，显示全部客户点" onclick="trackGeoClear()">✕ 筛选</button>
+          </span>
+          <!-- ⭐ 2026-10-06 老板定：**从这里起换行** ——
+               「轨迹 / 客户点 / 仓库 / 路况 / 拾取 / 全部 / 点大小 / 图例 / 任务客户 / 业务员」这一整排
+               单独占一行，不再和上面的「统计文字 + 🔄 更新地图数据 + 三层筛选下拉」挤在同一行。
+               （父容器本来就是 flex-wrap:wrap → 靠一个 flex-basis:100% 的空元素强制断行，height:0 保证不占高度）
+               原来的 `<span style="margin-left:auto">`（把开关推到右边）随之去掉，否则换行后第二行会被整体右推。 -->
+          <span style="flex-basis:100%;height:0"></span>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">轨迹<input type="checkbox" id="trackLineSw" onchange="toggleTrackLine()"></label>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">客户点<input type="checkbox" id="custLayerSw" checked onchange="toggleCustLayer()"></label>
           <label style="font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer">仓库<input type="checkbox" id="whSw" checked onchange="toggleWhStar()"></label>
@@ -2034,8 +2073,13 @@ tr.row-off td:not(.keep){opacity:.4}
     <!-- 订单小窗（2026-09-25 老板定）：**第 1 态 = 列订单**（最近 20 单）；
          **点某一单 → 在同一个窗里**换成该单商品明细（第 2 态），带「‹ 返回订单列表」。-->
     <div class="ovl" id="ordOvl" style="display:none;z-index:10001">
-      <div class="modal" style="width:620px;max-width:94vw">
-        <div class="mt" id="ordTitle">📦 订单记录</div>
+      <div class="modal" style="width:620px;max-width:94vw;position:relative">
+        <!-- ⚠️ 2026-10-06 修：关闭 ✕ **不能放在 #ordTitle 里** ——
+             打开弹窗时 JS 会 `$('ordTitle').textContent = '📦 订单记录'`，
+             而 textContent 赋值会**清空所有子元素** → ✕ 每次都被抹掉。
+             所以放成 .modal 的**独立子元素**（绝对定位到右上角），JS 就碰不到它了。 -->
+        <span class="mx" style="position:absolute;right:12px;top:12px;z-index:2" onclick="closeOrderDetail()" title="关闭">✕</span>
+        <div class="mt" id="ordTitle" style="padding-right:34px">📦 订单记录</div>
         <div class="sb-d" id="ordMeta" style="margin-bottom:10px"></div>
         <div id="ordListView">
           <div id="ordListBody" style="max-height:56vh;overflow-y:auto"></div>
@@ -2044,10 +2088,9 @@ tr.row-off td:not(.keep){opacity:.4}
           <div id="ordBody" style="max-height:52vh;overflow-y:auto"></div>
           <div class="sb-d" id="ordSum" style="margin-top:10px;text-align:right;font-weight:700"></div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
-          <button class="btn ghost" id="ordBackBtn" style="display:none" onclick="ordBackToList()">‹ 返回订单列表</button>
-          <button class="btn ghost" onclick="closeOrderDetail()">关闭</button>
-        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+          <button class="btn ghost" id="ordBackBtn" style="display:none" onclick="ordBackToList()">‹ 返回订单列表</button>
+        </div>
       </div>
     </div>
 
@@ -4996,17 +5039,93 @@ const CUST_AGG_LIMIT = 3000;                                  // 一次最多画
 //   不勾 → 保持原样：只画「任务中的客户」，再按地图中心取最近 CUST_AGG_LIMIT 家（快）。
 //   ⚠️ **数据不用重拉** —— 本地缓存 admin/cache/map-points.json 本来就是全量。
 //   ⚠️ 6 万个点一次塞给 GL 可能卡（老板要求"试试看"）→ 卡了就取消勾选 / 刷新页面。
-let trackShowAllCust = false;
-function toggleShowAllCust() {
-  const sw = $('showAllSw');
-  trackShowAllCust = !!(sw && sw.checked);
-  custLastLevel = null;      // 清掉"上次画的档" → 强制重画
-  custFilterSig = '';        // 指纹也清掉，避免被"没变就 return"吃掉
-  // ⚠️ 关键：**必须清掉 loadCustData 的 60 秒缓存** —— 那份缓存里存的是**上次过滤后的结果**
-  //    （"只画任务中客户"时就是几百家），不清掉的话切到「全部」要等 60 秒才生效。
-  trackCustCache = null; trackCustCacheAt = 0;
-  drawCustLayer();           // 立刻重画（和地图 idle 之后走同一条路）
-}
+let trackShowAllCust = false;
+// ⭐ 2026-10-06 老板定：战况监控加**三层筛选（城市 / 区域 / 商圈）** ——
+//   背景：老板要再进杭州 10 多万家，「不分类显示就乱了」。
+//   口径（老板 2026-10-06 明确）：**只筛客户点**；业务员实时位置与当天轨迹**始终全显**。
+//   ⚠️ 筛选是**纯内存过滤** —— `trackAllPts` 留着本地缓存的全量点，切下拉毫秒级，
+//      **绝不**重读那份 22MB 的 map-points.json（原来 toggleShowAllCust 就是靠清缓存重读的，切一下要等好几秒）。
+let trackF = { city: '', district: '', bizCircle: '' };
+let trackAllPts = [];                                              // 本地缓存里的**全部**客户点（未过滤）
+let trackTaskMap = {};                                             // 客户 _id → 业务员 id（来自 listTasks）
+let trackGeoOpts = { cities: [], districts: {}, bizCircles: {} };   // 三个下拉的选项（复用 custGeoFromPoints 口径）
+function toggleShowAllCust() {
+  const sw = $('showAllSw');
+  trackShowAllCust = !!(sw && sw.checked);
+  custLastLevel = null;      // 清掉"上次画的档" → 强制重画
+  custFilterSig = '';        // 指纹也清掉，避免被"没变就 return"吃掉
+  // ⭐ 2026-10-06 改：**改为内存重算**（不再清 60 秒缓存去重读 22MB 本地缓存）——
+  //   trackAllPts 里就是全量点，过滤只是内存里跑一遍，切开关即刻生效。
+  applyTrackCustFilter();
+  drawCustLayer();           // 立刻重画（和地图 idle 之后走同一条路）
+}
+
+// ⭐ 2026-10-06：把 trackAllPts（全量）按「三层筛选 + 全部开关 + 任务口径」过滤成 trackCustCache。
+//   ⚠️ 纯内存、毫秒级 —— 切下拉 / 切「全部」都走这里，不碰网络。
+function applyTrackCustFilter() {
+  const _allCust = trackShowAllCust;
+  trackCustCache = (trackAllPts || []).filter(p => {
+    if (!p || !p.la || !p.ln) return false;
+    // 三层筛选（缓存点里的短键：c=城市 / d=区域 / b=商圈）
+    if (trackF.city && (p.c || '') !== trackF.city) return false;
+    if (trackF.district && (p.d || '') !== trackF.district) return false;
+    if (trackF.bizCircle && (p.b || '') !== trackF.bizCircle) return false;
+    // 不勾「全部」→ 只画任务中的客户（老板 2026-09-27 定的口径）
+    return _allCust || trackTaskMap[p.i];
+  }).map(p => ({
+    _id: p.i, name: p.n, lat: p.la, lng: p.ln,
+    city: p.c || '', district: p.d || '', bizCircle: p.b || '',
+    // ⭐ 2026-09-27 M2a：列表层新字段（客户管理页表格要用）
+    address: p.ad || '', coordSource: p.cs || '', coord_status: p.cst || '',
+    mallCode: p.mc || '', mallKey: p.mk || '', updatedAt: p.u || 0,
+    visitState: trackTaskMap[p.i] ? 'in_task' : 'none',
+    taskSalesmanId: trackTaskMap[p.i] || null
+  }));
+  trackCustCacheAt = Date.now();
+  trackCustVer++;                           // 数据版本号 +1：让 drawCustLayer 知道"数据变了，该重画"
+  updateMapDataLabel();
+}
+
+// 三个下拉的选项/联动状态（与「🏪 客户管理」页同一口径：区域随城市、商圈随区域）
+function renderTrackGeoFilters() {
+  const cSel = $('trackCity'), dSel = $('trackDistrict'), bSel = $('trackBiz');
+  if (!cSel || !dSel || !bSel) return;
+  cSel.innerHTML = '<option value="">全部城市</option>'
+    + (trackGeoOpts.cities || []).map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+  cSel.value = trackF.city;
+  const ds = (trackGeoOpts.districts || {})[trackF.city] || [];
+  dSel.innerHTML = '<option value="">全部区域</option>'
+    + ds.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+  dSel.value = trackF.district;
+  dSel.disabled = !trackF.city;
+  const bk = (trackF.city || '') + '|' + (trackF.district || '');
+  const bs = trackF.district ? ((trackGeoOpts.bizCircles || {})[bk] || []) : [];
+  bSel.innerHTML = '<option value="">全部商圈</option>'
+    + bs.map(b => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('');
+  bSel.value = trackF.bizCircle;
+  bSel.disabled = !trackF.district;
+  const clr = $('trackGeoClearBtn');
+  if (clr) clr.style.display = (trackF.city || trackF.district || trackF.bizCircle) ? '' : 'none';
+}
+function trackGeoChanged(level) {
+  const cSel = $('trackCity'), dSel = $('trackDistrict'), bSel = $('trackBiz');
+  trackF.city = cSel ? cSel.value : '';
+  trackF.district = dSel ? dSel.value : '';
+  trackF.bizCircle = bSel ? bSel.value : '';
+  if (level === 'city') { trackF.district = ''; trackF.bizCircle = ''; }   // 换城市 → 下面两级清空
+  if (level === 'district') { trackF.bizCircle = ''; }                     // 换区域 → 商圈清空
+  renderTrackGeoFilters();
+  custLastLevel = null; custFilterSig = '';   // 清指纹，免得被"没变就 return"吃掉
+  applyTrackCustFilter();
+  drawCustLayer().catch(e => console.error('[地图] 筛选后重绘失败：', e));
+}
+function trackGeoClear() {
+  trackF.city = ''; trackF.district = ''; trackF.bizCircle = '';
+  renderTrackGeoFilters();
+  custLastLevel = null; custFilterSig = '';
+  applyTrackCustFilter();
+  drawCustLayer().catch(e => console.error('[地图] 清筛选后重绘失败：', e));
+}
 // ⭐⭐⭐ 2026-09-27 老板定：**停用聚合，所有客户点直接显示**。
 //   原因：聚合问题太多（层级/样式/性能反复出问题），老板拍板"先去掉聚合"。
 //   ⚠️ **不是删除**：聚合的代码（`localAggregate` / `drawCustBubbles` / `aggDotIcon` / `custBubble*`）**全部保留**，
@@ -5239,38 +5358,29 @@ async function loadCustData(force) {
   // ② 任务（量小，实时）→ 客户↔业务员 映射 + “任务中”业务员集合
   let tt = null;
   try { tt = await api('listTasks', {}); } catch (e) { tt = null; }
-  const taskMap = {};
-  const tSet = new Set();
-  ((tt && tt.ok ? tt.tasks : []) || []).forEach(t => {
-    const ids = (t.customerIds && t.customerIds.length) ? t.customerIds
-      : ((t.dayPlan || []).reduce((a, d) => a.concat(d.customerIds || []), []));
-    ids.forEach(id => { taskMap[id] = t.salesmanId; });
-    if (t.salesmanId) tSet.add(t.salesmanId);
-  });
-  trackTaskSalesmen = tSet;
-  // ⭐ 2026-09-27 老板定（6 万点把地图画卡死后改口径）：战况监控**只画「任务中的客户」** ——
-  //   无任务的客户**一个都不画**（业务员实时位置 / 仓库星这些图层不受影响）。
-  //   判据：该客户出现在**进行中任务**的 customerIds / dayPlan 里 —— 上面的 taskMap 已经算好了 ✓
-  //   → 数据量从 6 万降到几十~几百，地图秒开。
-  // ⭐ 2026-09-28 晚 老板要「全部」开关 —— **这里才是真正要放行的地方**：
-  //   勾上 = **不过滤**，把本地缓存里 6 万多家一次全画（老板要求"试试看"）；
-  //   不勾 = 保持上面的口径（只画任务中的，快）。
-  //   ⚠️ 6 万点确实会把地图画卡（历史上就卡过）→ 卡了就取消勾选 / 刷新页面。
-  const _allCust = trackShowAllCust;
-  trackCustCache = pts.filter(p => p && p.la && p.ln && (_allCust || taskMap[p.i])).map(p => ({
-    _id: p.i, name: p.n, lat: p.la, lng: p.ln,
-    city: p.c || '', district: p.d || '', bizCircle: p.b || '',
-    // ⭐ 2026-09-27 M2a：列表层新字段（客户管理页表格要用）
-    address: p.ad || '', coordSource: p.cs || '', coord_status: p.cst || '',
-    mallCode: p.mc || '', mallKey: p.mk || '', updatedAt: p.u || 0,
-    visitState: taskMap[p.i] ? 'in_task' : 'none',
-    taskSalesmanId: taskMap[p.i] || null
-  }));
-  trackCustCacheAt = Date.now();
-  trackCustVer++;                           // ⭐ 数据版本号 +1：让 drawCustLayer 知道“数据变了，该重画”
-  updateMapDataLabel();
-  return trackCustCache;
-}
+  trackTaskMap = {};
+  const tSet = new Set();
+  ((tt && tt.ok ? tt.tasks : []) || []).forEach(t => {
+    const ids = (t.customerIds && t.customerIds.length) ? t.customerIds
+      : ((t.dayPlan || []).reduce((a, d) => a.concat(d.customerIds || []), []));
+    ids.forEach(id => { trackTaskMap[id] = t.salesmanId; });
+    if (t.salesmanId) tSet.add(t.salesmanId);
+  });
+  trackTaskSalesmen = tSet;
+  // ⭐ 2026-09-27 老板定（6 万点把地图画卡死后改口径）：战况监控**只画「任务中的客户」** ——
+  //   无任务的客户**一个都不画**（业务员实时位置 / 仓库星这些图层不受影响）。
+  //   判据：该客户出现在**进行中任务**的 customerIds / dayPlan 里 —— trackTaskMap 已经算好了 ✓
+  //   → 数据量从 6 万降到几十~几百，地图秒开。
+  // ⭐ 2026-09-28 晚 老板要「全部」开关：勾上 = 不过滤，把本地缓存里全部客户点一次全画。
+  // ⭐ 2026-10-06：**过滤与三层筛选统一挪进 applyTrackCustFilter()** ——
+  //   全量点先留在 trackAllPts，之后切下拉 / 切「全部」都只是内存过滤（毫秒级，不再重读本地缓存）。
+  trackAllPts = pts;
+  // 三层下拉的选项：每次重算（遍历一遍，几 ms）—— 以后新导入城市（杭州）下拉会自己长出来
+  if (pts.length) trackGeoOpts = custGeoFromPoints(pts);
+  renderTrackGeoFilters();
+  applyTrackCustFilter();
+  return trackCustCache;
+}
 
 // ⭐ 2026-09-27：手动重拉地图数据（本地缓存刷新）—— 对应战况监控工具栏的「🔄 更新地图数据」
 async function refreshMapData() {
@@ -5291,8 +5401,48 @@ async function refreshMapData() {
   }
 }
 
-// 显示「数据截至 …」（未就绪时提示“正在准备”），让人知道缓存新旧
-function updateMapDataLabel() {
+// ⭐ 2026-10-06 老板要的：**「导入信息」页的一键刷缓存** —— 把云端最新数据拉到本地缓存
+//   与「🌐 战况监控」的 refreshMapData() 是同一件事（都打 /mapPoints/refresh 全量重拉），
+//   区别只是：① 按钮在导入信息页；② 拉完**顺带把当前所在的页就地重绘**（导入完通常正停在这几页）。
+//   ⚠️ 只读云端，不写任何业务数据。
+async function refreshCacheFromDb() {
+  const b = $('impRefreshBtn');
+  const msg = $('impRefreshMsg');
+  if (b) { b.disabled = true; b.textContent = '⏳ 拉取中…（几秒）'; }
+  if (msg) msg.textContent = '正在从云端拉取…';
+  try {
+    const r = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json()).catch(() => null);
+    if (!r || !r.ok) {
+      if (msg) msg.textContent = '⚠️ 更新失败：' + ((r && r.msg) || '未知错误');
+      alert('更新失败：' + ((r && r.msg) || '未知错误'));
+      return;
+    }
+    // ① 丢弃所有内存缓存 → 下次读就是新的
+    trackCustCache = null; trackCustCacheAt = 0;
+    custAggCache = null; custAggCacheKey = '';
+    try { custLocal = null; } catch (e) { /* 变量可能未定义 */ }
+    // ② 就地重绘"正在看的那一页"
+    const vis = el => el && el.style && el.style.display !== 'none';
+    try {
+      if (vis(document.getElementById('page-geo')) && typeof loadGeoPage === 'function') await loadGeoPage();
+      else if (vis(document.getElementById('page-customers')) && typeof loadCustomers === 'function') await loadCustomers(curBatchId, curBatchName);
+      else if (vis(document.getElementById('page-track')) && typeof loadCustData === 'function') { await loadCustData(true); }
+    } catch (e) { console.error('[刷缓存] 重绘当前页失败（不影响缓存已更新）：', e); }
+    // ③ 更新"数据截至"小字
+    try { if (typeof updateMapDataLabel === 'function') updateMapDataLabel(); } catch (e) { /* 忽略 */ }
+    const secs = Math.round((r.ms || 0) / 100) / 10;
+    if (msg) msg.textContent = '✅ 已更新：' + r.count + ' 家客户（耗时 ' + secs + ' 秒）';
+    alert('✅ 已拉取最新数据：' + r.count + ' 家客户（耗时 ' + secs + ' 秒）\n\n地图 / 客户列表 / 批次总表现在都是最新的了。');
+  } catch (e) {
+    if (msg) msg.textContent = '⚠️ 更新失败：' + (e && e.message ? e.message : e);
+    alert('更新失败：' + (e && e.message ? e.message : e));
+  } finally {
+    if (b) { b.disabled = false; b.textContent = '🔄 立即拉取最新数据'; }
+  }
+}
+
+// 显示「数据截至 …」（未就绪时提示“正在准备”），让人知道缓存新旧
+function updateMapDataLabel() {
   const el = $('mapDataStat');
   if (!el) return;
   if (trackStoreMeta.warming) { el.textContent = custWarmText(); return; }   // ⭐ 带进度
@@ -5300,9 +5450,15 @@ function updateMapDataLabel() {
   const d = new Date(trackStoreMeta.syncedAt);
   const p2 = n => String(n).padStart(2, '0');
   // ⭐ 2026-09-27：地图只画「任务中的客户」→ 文案要把这件事说清楚（否则看着"库内 6 万家"却只有几十个点，以为又出问题了）
-  const shown = (trackCustCache || []).length;
-  el.textContent = '数据截至 ' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes())
-    + ' · 库内 ' + trackStoreMeta.count + ' 家 · 本图只画任务中 ' + shown + ' 家';
+  const shown = (trackCustCache || []).length;
+  // ⭐ 2026-10-06：加了筛选后，文案要把"筛了哪一层"说出来 —— 否则只看见"只画任务中 N 家"会以为数据丢了
+  const _scope = trackF.bizCircle ? ('商圈「' + trackF.bizCircle + '」')
+    : trackF.district ? ('区域「' + trackF.district + '」')
+    : trackF.city ? ('城市「' + trackF.city + '」') : '';
+  el.textContent = '数据截至 ' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes())
+    + ' · 库内 ' + trackStoreMeta.count + ' 家 · '
+    + (_scope ? ('筛选 ' + _scope + ' 内 ' + shown + ' 家' + (trackShowAllCust ? '' : '（再限任务中）'))
+              : ('本图只画任务中 ' + shown + ' 家'));
 }
 
 async function drawCustLayer() {
@@ -5326,8 +5482,10 @@ async function drawCustLayer() {
   //   ⭐ 关键：**不再按视野过滤** —— 一次把点全设进图层，之后拖地图/缩放**什么都不做**（GL 自己平移+裁剪）。
   //   ⚠️ 极端情况（几十万客户）一次塞不下 → 留安全上限 CUST_AGG_LIMIT，到那个量再说。
   //   筛选指纹：业务员下拉 / 图例开关 / 点大小 变了必须重画，否则上面的 return 会把它吃掉。
-  const _filterSig = (trackSelId || '') + '|' + (trackShowAll ? 1 : 0) + '|' + (trackShowAllCust ? 1 : 0) + '|'
-    + [custKindOn.ongoing, custKindOn.pending, custKindOn.visited, custKindOn.gray].join('') + '|' + custSize;
+  const _filterSig = (trackSelId || '') + '|' + (trackShowAll ? 1 : 0) + '|' + (trackShowAllCust ? 1 : 0) + '|'
+    // ⭐ 2026-10-06：三层筛选也进指纹 —— 否则切了城市/区域/商圈会被"没变就 return"吃掉、画面不动
+    + (trackF.city || '') + '|' + (trackF.district || '') + '|' + (trackF.bizCircle || '') + '|'
+    + [custKindOn.ongoing, custKindOn.pending, custKindOn.visited, custKindOn.gray].join('') + '|' + custSize;
   if (custLastLevel === '' && custCustVer === trackCustVer && custFilterSig === _filterSig && custLayer) return;
   custLastLevel = ''; custCustVer = trackCustVer; custFilterSig = _filterSig;
   clearCustBubbles();                       // 收气泡（聚合停用时本来就是空的）
@@ -6041,7 +6199,13 @@ let detailCustCache = [];
 // 数据来源：getCustomerDetail 一次聚合（主档含 plat + 订单/明细汇总 + 拜访 + 备注）
 // 口径：① 经纬度**只认它自己的「✓ 确定」**（右上角保存不写它）；② 后台改坐标 = 直接生效（不走审核）；
 //      ③ 坐标来源四色标签；④ 改完显示一次「距上个坐标 X 米」；⑤ 不显示"正不正常"这类没依据的状态。
-let cdCur = null, cdCurId = null, cdEditing = false, cdGeoPending = null;
+let cdCur = null, cdCurId = null, cdEditing = false, cdGeoPending = null;
+// ⭐ 2026-10-06：客户详情「门店照片」的编辑暂存（老板定：**点「💾 保存」才生效**）
+//   cdPhotoEdit = 固定三格，每格 null 或：
+//     { kind:'keep', fileID, thumbID, at, url }   ← 库里已有的，原样保留
+//     { kind:'new',  dataUrl, thumbUrl, url }     ← 本次新选的，**保存时才上传**
+//   cdPhotoSnap = 进编辑态时的指纹 → 用来判断"照片到底动没动"（没动就不提交）
+let cdPhotoEdit = null, cdPhotoSnap = '';
 // 2026-09-25 老板定：客户详情「购买记录」里点某一单 → 弹出小窗看该单商品明细。
 // 云函数返回的 orderItems（单号 → 商品行数组）暂存在这里，供弹窗按单号取。
 let cdOrderItems = {};
@@ -6128,7 +6292,15 @@ function cdRender() {
   const d = cdCur; if (!d) return;
   const c = d.customer || {};
   const plat = c.plat || {};
-  const hasPlat = !!c.platMatched && Object.keys(plat).length > 0;
+  // ⚠️ 2026-10-04 修（老板报障「后台看不到评分/人均/评论数，却还有菜品」）——
+  //   原判据 `!!c.platMatched && ...` 里的 **`platMatched` 不可靠**：
+  //   `import_excel.py` 的商城路径在"没匹配上点评"时写 `platMatched: false`，
+  //   而商城导入是 overwrite 模式 → 会把「点评导入」刚写好的 true **照写覆盖成 false**
+  //   （同一 payload 里的 `plat: {}` 反被当空值跳过 → plat 幸存）。
+  //   ⇒ 客户明明有完整画像（评分 3.7 / 人均 ¥19/人 / 菜品 10 项），这一行却算出 false →
+  //     整张「📊 平台口碑」卡（连「服务与设施」卡）不显示，只有**无条件拼接的菜品**还在。
+  //   现改为**直接看画像本身有没有内容**（`plat` 非空即认），与 platMatched 完全解耦。
+  const hasPlat = Object.keys(plat).length > 0;
   const goods = d.topGoods || [];
   const orders = d.orders || [];
   const visits = d.visits || [];
@@ -6161,33 +6333,15 @@ function cdRender() {
   //   ① 业务员现场拍（云存储 fileID，已在 showCustDetail 换成临时 URL）
   //   ② 平台图（**本地保存** admin/media/plat/<platShopUuid>/1.jpg → 走 server.js 的 /media/ 路由）
   //   ⚠️ 平台图只抓了主图 1 张时，第 2/3 格自然是空的（空框 = 业务员现场拍的入口）
-  const photoBox = (function () {
-    const urls = (d && d._photoUrls) || {};
-    const shots = [];
-    (Array.isArray(c.photos) ? c.photos : []).forEach(p => {
-      const fid = (p && p.fileID) || (typeof p === 'string' ? p : '');
-      if (fid && urls[fid]) shots.push({ src: urls[fid], kind: 'salesman' });
-    });
-    // ⚠️ 只在"这家确实有平台图"时才渲染（d._platPhoto 由 showCustDetail 查索引得出）→ 避免每个客户一个 404
-    if (c.platShopUuid && d._platPhoto) shots.push({ src: '/media/plat/' + encodeURIComponent(c.platShopUuid) + '/1.jpg', kind: 'plat' });
-    const empty = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C3C9D2;font-size:18px">📷</div>';
-    const cells = [0, 1, 2].map(i => {
-      const s = shots[i];
-      if (!s) return '<div style="position:relative;width:88px;height:66px;border-radius:8px;border:1px dashed #E2E7ED;background:#FAFBFC">' + empty + '</div>';
-      const badge = s.kind === 'plat'
-        ? '<span style="position:absolute;left:3px;bottom:3px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:0 4px;border-radius:5px;line-height:1.5">平台</span>' : '';
-      return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid #E9EDF3;background:#FAFBFC;cursor:zoom-in" ' +
-        'title="点击看大图" onclick="showPhoto(this.dataset.src)" data-src="' + s.src + '">' +
-        empty +
-        '<img src="' + s.src + '" style="position:relative;width:100%;height:100%;object-fit:cover" onerror="this.remove()">' + badge +
-      '</div>';
-    }).join('');
-    const hint = shots.length ? '' : '<div style="font-size:11.5px;color:#B7BEC7;margin-top:5px">还没有门店照片（业务员现场拍，或等平台图抓取）</div>';
-    return '<div style="margin-top:10px">' +
-      '<div style="font-size:12.5px;color:var(--sub);margin-bottom:6px">门店照片</div>' +
-      '<div style="display:flex;gap:8px">' + cells + '</div>' + hint +
-    '</div>';
-  })();
+  const photoBox = (function () {
+    const inner = cdPhotoCellsHtml(cdEditing);
+    // 编辑态：给一句操作提示；只读态：没照片才出空态文案
+    return '<div style="margin-top:10px">' +
+      '<div style="font-size:12.5px;color:var(--sub);margin-bottom:6px">门店照片</div>' +
+      '<div id="cdPhotoBox" style="display:flex;gap:8px">' + inner + '</div>' +
+      '<div id="cdPhotoHintWrap">' + cdPhotoHintHtml() + '</div>' +
+    '</div>';
+  })();
   // ⭐ 2026-10-03 老板定：「加新店」录的音**也要能在后台听** ——
   //   它存在**客户档案**的 `customers.audios`（跟拜访记录 `visits[].audios` 是两条互不相干的线），
   //   渲染在「🏪 商家信息」卡里、**门店照片下面**（同属"现场证据"，挨着最自然）。
@@ -6907,9 +7061,20 @@ function cdCatCol(col) {
   }
 }
 function cdOpenEdit() {
-  cdEditing = true;
-  const mdl = $('custModal').querySelector('.cd-modal');
-  if (mdl) mdl.classList.add('editing');
+  cdEditing = true;
+  const mdl = $('custModal').querySelector('.cd-modal');
+  if (mdl) mdl.classList.add('editing');
+  // ⭐ 2026-10-06：初始化「门店照片」编辑暂存（固定三格，空位为 null）+ 记指纹
+  const _ph = (cdCur && cdCur.customer && Array.isArray(cdCur.customer.photos)) ? cdCur.customer.photos : [];
+  const _pu = (cdCur && cdCur._photoUrls) || {};
+  cdPhotoEdit = [0, 1, 2].map(i => {
+    const p = _ph[i];
+    const fid = (p && p.fileID) || (typeof p === 'string' ? p : '');
+    if (!fid) return null;
+    return { kind: 'keep', fileID: fid, thumbID: (p && p.thumbID) || '', at: p && p.at, url: _pu[fid] || '' };
+  });
+  cdPhotoSnap = cdPhotoSig();
+  cdPhotoRender();
   document.querySelectorAll('#custModal [data-cdfield]').forEach(el => {
     if (el.querySelector('input') || el.querySelector('select')) return;
     const f = el.dataset.cdfield;
@@ -6975,9 +7140,20 @@ function cdSaveEdit() {
     const ctl = el.querySelector('input,select');   // ⭐ 业务员是 <select>，其余是 <input>
     putIfChanged(f, ctl ? ctl.value : '');
   });
-  if (!Object.keys(fields).length) { alert('没有改动，无需保存。'); return; }
-  api('updateCustomerFields', { customerId: cdCurId, fields: fields }).then(r => {
-    if (!r || !r.ok) { alert((r && r.msg) || '保存失败'); return; }
+  // ⭐ 2026-10-06：照片改动也算"有改动"（老板定：点「💾 保存」才生效）
+  const _photoChg = cdPhotoChanged();
+  if (!Object.keys(fields).length && !_photoChg) { alert('没有改动，无需保存。'); return; }
+  (async () => {
+    // ① 字段（有改动才调）
+    if (Object.keys(fields).length) {
+      const r = await api('updateCustomerFields', { customerId: cdCurId, fields: fields });
+      if (!r || !r.ok) { alert((r && r.msg) || '字段保存失败'); return; }
+    }
+    // ② 门店照片（有改动才做）—— 新选的图**在这一刻**才上传云存储，随后整份覆盖写库
+    if (_photoChg) {
+      const rp = await cdPhotoSave();
+      if (!rp || !rp.ok) { alert((rp && rp.msg) || '照片保存失败'); return; }
+    }
     [detailCustCache, custListCache].forEach(cache => {
       const c = cache && cache.find(x => x._id === cdCurId);
       if (c) Object.keys(fields).forEach(k => { c[k] = fields[k]; });
@@ -6991,9 +7167,163 @@ function cdSaveEdit() {
     if (typeof renderBatchTbody === 'function' && $('page-batchDetail') && $('page-batchDetail').style.display !== 'none') {
       try { renderBatchTbody(); } catch (e) { }
     }
-    showCustDetail(cdCurId);
-  });
-}
+    showCustDetail(cdCurId);
+  })();
+}
+// ===== ⭐ 2026-10-06：客户详情「门店照片」（后台传图 / 换图 / 删图）=====
+// 老板口径：① 点「💾 保存」才生效 ② 固定 3 格 ③ 每张右上角 ✕ 可删
+// ⚠️ 数据一律从全局 `cdCur` 取 —— cdPhotoRender() 局部重渲染时拿不到 cdRender() 的局部 c/d。
+
+// 三格内容 HTML（只读态 / 编辑态共用一份，避免两处各写一遍、日后走样）
+function cdPhotoCellsHtml(editing) {
+  const cur = cdCur || {};
+  const c = cur.customer || {};
+  const urls = cur._photoUrls || {};
+  const EMPTY = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C3C9D2;font-size:18px">📷</div>';
+  // —— 编辑态：三格 = cdPhotoEdit（只编辑 customers.photos 的三个位；平台图是"打底"，不参与编辑）——
+  if (editing) {
+    const arr = Array.isArray(cdPhotoEdit) ? cdPhotoEdit : [];
+    return [0, 1, 2].map(i => {
+      const it = arr[i];
+      if (!it) {
+        return '<div title="点击上传照片" onclick="cdPhotoPick(' + i + ')" ' +
+          'style="position:relative;width:88px;height:66px;border-radius:8px;border:1px dashed #E2E7ED;background:#FAFBFC;cursor:pointer">' + EMPTY +
+          '<div style="position:absolute;left:0;right:0;bottom:4px;text-align:center;font-size:9.5px;color:#B7BEC7">点击上传</div></div>';
+      }
+      const del = '<span onclick="event.stopPropagation();cdPhotoDel(' + i + ')" title="删掉这张" ' +
+        'style="position:absolute;right:-5px;top:-5px;width:17px;height:17px;border-radius:50%;background:rgba(0,0,0,.62);color:#fff;font-size:11px;line-height:17px;text-align:center;cursor:pointer;z-index:2">✕</span>';
+      return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid #E9EDF3;background:#FAFBFC">' +
+        EMPTY + '<img src="' + (it.url || '') + '" style="position:relative;width:100%;height:100%;object-fit:cover" onerror="this.remove()">' + del + '</div>';
+    }).join('');
+  }
+  // —— 只读态：业务员现场照（云存储）+ 平台图打底 ——
+  const shots = [];
+  (Array.isArray(c.photos) ? c.photos : []).forEach(p => {
+    const fid = (p && p.fileID) || (typeof p === 'string' ? p : '');
+    if (fid && urls[fid]) shots.push({ src: urls[fid], kind: 'salesman' });
+  });
+  if (c.platShopUuid && cur._platPhoto) shots.push({ src: '/media/plat/' + encodeURIComponent(c.platShopUuid) + '/1.jpg', kind: 'plat' });
+  return [0, 1, 2].map(i => {
+    const s = shots[i];
+    if (!s) return '<div style="position:relative;width:88px;height:66px;border-radius:8px;border:1px dashed #E2E7ED;background:#FAFBFC">' + EMPTY + '</div>';
+    const badge = s.kind === 'plat'
+      ? '<span style="position:absolute;left:3px;bottom:3px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:0 4px;border-radius:5px;line-height:1.5">平台</span>' : '';
+    return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid #E9EDF3;background:#FAFBFC;cursor:zoom-in" ' +
+      'title="点击看大图" onclick="showPhoto(this.dataset.src)" data-src="' + s.src + '">' + EMPTY +
+      '<img src="' + s.src + '" style="position:relative;width:100%;height:100%;object-fit:cover" onerror="this.remove()">' + badge + '</div>';
+  }).join('');
+}
+// ⚠️ 提示文案必须和格子**一起**重绘：cdPhotoRender 只在"局部重绘"时被调（进编辑态 / 选图 / 删图），
+//   而 cdRender() 生成那行提示时往往还没进编辑态 → 不一起更新的话，编辑态会残留"还没有门店照片"那句。
+function cdPhotoHintHtml() {
+  if (cdEditing) return '<div style="font-size:11.5px;color:#B7BEC7;margin-top:5px">点空格上传 / 换图；鼠标移到图上点右上角 ✕ 可删。改动要按右上角「💾 保存」才生效</div>';
+  const c = (cdCur && cdCur.customer) || {};
+  const n = (Array.isArray(c.photos) ? c.photos : []).length
+          + ((c.platShopUuid && cdCur._platPhoto) ? 1 : 0);
+  return n ? '' : '<div style="font-size:11.5px;color:#B7BEC7;margin-top:5px">还没有门店照片（业务员现场拍，或等平台图抓取）</div>';
+}
+function cdPhotoRender() {
+  const box = $('cdPhotoBox');
+  if (box) box.innerHTML = cdPhotoCellsHtml(cdEditing);
+  const hw = $('cdPhotoHintWrap');
+  if (hw) hw.innerHTML = cdPhotoHintHtml();
+}
+function cdPhotoDel(i) {
+  if (!Array.isArray(cdPhotoEdit)) return;
+  cdPhotoEdit[i] = null;
+  // 删中间那张 → 后面的往前提，不留空洞（否则保存时数组会断开、张数也对不上）
+  cdPhotoEdit = cdPhotoEdit.filter(Boolean);
+  while (cdPhotoEdit.length < 3) cdPhotoEdit.push(null);
+  cdPhotoRender();
+}
+function cdPhotoPick(i) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);   // ⚠️ 必须**挂进文档再点**才稳（游离节点的 input 有的浏览器不弹选择器）
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    try {
+      if (!f) return;
+      if (f.size > 15 * 1024 * 1024) { alert('图片太大（上限 15MB），请换一张'); return; }
+      const dataUrl = await cdImgScale(f, 1600, 0.85, false);   // 主图：最长边 1600 / q0.85
+      let thumbUrl = '';
+      try { thumbUrl = await cdImgScale(f, 0, 0.7, true); } catch (e) { thumbUrl = ''; }   // 缩略图：320×240 中心裁切
+      cdPhotoEdit[i] = { kind: 'new', dataUrl: dataUrl, thumbUrl: thumbUrl, url: dataUrl };
+      cdPhotoRender();
+    } catch (e) {
+      alert('这张图读不出来，换一张试试');
+    } finally {
+      try { inp.remove(); } catch (e) { }
+    }
+  };
+  inp.click();
+}
+// 图片缩放/裁切 → data:image/jpeg;base64
+//   crop=true → 320×240 中心裁切（与小程序「照片显示铁律」同一口径，缩略图用）
+//   crop=false → 按最长边等比缩到 maxSide
+function cdImgScale(file, maxSide, quality, crop) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('read'));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('img'));
+      img.onload = () => {
+        let sw = img.width, sh = img.height, sx = 0, sy = 0, dw, dh;
+        if (crop) {
+          const target = 320 / 240;
+          if (sw / sh > target) { const cw = Math.round(sh * target); sx = Math.round((sw - cw) / 2); sw = cw; }
+          else { const ch = Math.round(sw / target); sy = Math.round((sh - ch) / 2); sh = ch; }
+          dw = 320; dh = 240;
+        } else {
+          const r = Math.min(1, (maxSide || 1600) / Math.max(sw, sh));
+          dw = Math.max(1, Math.round(sw * r)); dh = Math.max(1, Math.round(sh * r));
+        }
+        const cv = document.createElement('canvas');
+        cv.width = dw; cv.height = dh;
+        cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+        resolve(cv.toDataURL('image/jpeg', quality));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function cdPostCustPhoto(dataUrl, kind) {
+  try {
+    const r = await fetch('/custPhoto', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerId: cdCurId, kind: kind, dataUrl: dataUrl })
+    });
+    return await r.json();
+  } catch (e) { return { ok: false, msg: '上传请求失败' }; }
+}
+function cdPhotoSig() {
+  if (!Array.isArray(cdPhotoEdit)) return '';
+  return cdPhotoEdit.map(x => x ? (x.kind === 'keep' ? 'k:' + x.fileID : 'n:' + String(x.dataUrl || '').length) : '-').join('|');
+}
+function cdPhotoChanged() { return cdEditing && cdPhotoSig() !== cdPhotoSnap; }
+// 真正落库：新图先逐个传云存储（主图 + 缩略图）→ 再整份覆盖写 customers.photos
+async function cdPhotoSave() {
+  const out = [];
+  for (let i = 0; i < 3; i++) {
+    const it = (cdPhotoEdit || [])[i];
+    if (!it) continue;
+    if (it.kind === 'keep') { out.push({ fileID: it.fileID, thumbID: it.thumbID || '', at: it.at }); continue; }
+    const main = await cdPostCustPhoto(it.dataUrl, 'photo');
+    if (!main || !main.ok) return { ok: false, msg: (main && main.msg) || '照片上传失败' };
+    let thumbID = '';
+    if (it.thumbUrl) {
+      const th = await cdPostCustPhoto(it.thumbUrl, 'thumb');
+      if (th && th.ok) thumbID = th.fileID;
+    }
+    out.push({ fileID: main.fileID, thumbID: thumbID, at: Date.now() });
+  }
+  return await api('setCustPhotos', { customerId: cdCurId, photos: out });
+}
+
 function cdCancelEdit() { cdExitEdit(); showCustDetail(cdCurId); }
 
 // —— 经纬度：✓ 确定 → 二次确认 → 直接生效（老板 2026-09-24 定：后台管理员改 = 自动通过）——
@@ -7427,9 +7757,12 @@ function custLocalPage(f, mode) {
     lo: p => String(p.lo || ''), // 最近下单
     lv: p => String(p.lv || ''), // 最近拜访
     vc: p => p.vc || 0,          // 拜访次数
-    vs: p => (p.vs === 'in_task' ? 1 : 0),                                  // 全局态（任务中的排前面）
-    vt: p => (({ visited: 3, ongoing: 2, pending: 1 })[p.vt] || 0),         // 任务内状态（已回访>拜访中>待回访）
-    mk: p => (String(p.mc || '').trim() || String(p.mk || '').trim() ? 1 : 0)   // 商城（已加在前）
+    vs: p => (p.vs === 'in_task' ? 1 : 0),                                  // 全局态（任务中的排前面）
+    vt: p => (({ visited: 3, ongoing: 2, pending: 1 })[p.vt] || 0),         // 任务内状态（已回访>拜访中>待回访）
+    mk: p => (String(p.mc || '').trim() || String(p.mk || '').trim() ? 1 : 0),   // 商城（已加在前）
+    // ⭐ 2026-10-06 老板要的：**区域 / 商圈也能排序**（按名称字典序，中文按 Unicode 排）
+    d: p => String(p.d || ''),      // 区域
+    b: p => String(p.b || '')       // 商圈
   };
   const sk = f.sort && SORT_GET[f.sort.k] ? f.sort.k : 'ca';
   const sgn = (f.sort && f.sort.desc === false) ? 1 : -1;      // 默认降序（大的在前）
@@ -7645,8 +7978,14 @@ function geoSizeChange(v) {
 }
 
 // ⭐ 2026-09-27 老板定：可排序表头（key 对应 custLocalPage 的 SORT_GET；默认降序，再点切升序）
-function geoSortedTh(key, label, width, cls) {
-  const cur = geoF.sort && geoF.sort.k === key;
+function geoSortedTh(key, label, width, cls) {
+  // ⭐ 2026-10-06 老板定：**「商圈」只在"选了具体区域"时才可排序** ——
+  //   （不选区域 = 全库几万家一起按商圈排，没意义、数据量也太大）
+  //   ⚠️ 与上方「商圈」下拉同一个口径（bizSel.disabled = !geoF.district）。
+  if (key === 'b' && !geoF.district) {
+    return `<th class="${cls || ''}" style="width:${width}px;color:#C4CAD1" title="先在左上方选一个「区域」（不能是"全部区域"），才能按「商圈」排序">${label}</th>`;
+  }
+  const cur = geoF.sort && geoF.sort.k === key;
   const arrow = cur ? (geoF.sort.desc === false ? ' ↑' : ' ↓') : '';
   return `<th class="${cls || ''} sortable${cur ? ' sorted' : ''}" data-sort="${key}"`
     + ` style="width:${width}px" onclick="geoToggleSort('${key}')" title="点击排序（再点切升/降）">`
@@ -7663,9 +8002,13 @@ function geoToggleSort(key) {
   loadGeoPage();
 }
 
-async function loadGeoPage() {
-  const tbody = $('geoTbody');
-  if (!tbody) return;
+async function loadGeoPage() {
+  const tbody = $('geoTbody');
+  if (!tbody) return;
+  // ⭐ 2026-10-06 老板定：**「商圈」排序只在选了具体区域时成立** ——
+  //   兜底：如果之前按商圈排过，现在区域又变回"全部区域"了，就把排序退回默认（建档时间）。
+  //   （放在最前面：不管从 nav() 还是筛选框进来，状态都会被清干净）
+  if (geoF.sort && geoF.sort.k === 'b' && !geoF.district) geoF.sort = { k: 'ca', desc: true };
   // ⭐ 2026-09-29 回收站：**进客户列表就一定退出回收站状态**（含把被回收站藏起来的两个按钮还回来）
   //   放在这里是因为它是"唯一入口" —— 不管从 nav() 还是别的地方调 loadGeoPage()，状态都会被重置干净
   if (geoTrashMode) { geoTrashMode = false; geoTrashPicked = {}; geoTrashCache = []; }
@@ -7693,7 +8036,10 @@ async function loadGeoPage() {
     + '<th style="width:38px"></th>'
     + '<th style="width:38px"></th>'
     + '<th class="no" style="width:22px;text-align:center"><input type="checkbox" id="geoChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle" onchange="geoCheckAll(this.checked)"></th>'
-    + '<th class="lft" style="width:150px">店名</th><th style="width:56px">区域</th><th style="width:86px" title="商圈">商圈</th>'
+    + '<th class="lft" style="width:150px">店名</th>'
+    // ⭐ 2026-10-06 老板要的：**区域 / 商圈也能排序**（原来这两列是死表头）
+    + geoSortedTh('d', '区域', 56)
+    + geoSortedTh('b', '商圈', 86)
     + geoSortedTh('vs', '全局态', 62)
     + geoSortedTh('vt', '任务状态', 66)
     + geoSortedTh('oc', '订单总数', 60)
