@@ -172,6 +172,24 @@ def write_parts(prefix, docs):
     return part
 
 # ============ ① 读源表 ============
+def read_table(path, **kw):
+    """按扩展名读表：.csv 走 read_csv（自动试编码），其余走 read_excel。
+
+    ⚠️ 2026-10-07 新增：原来 load_sources() 里一律 pd.read_excel，
+       导致「浙江-杭州（筛选过）.csv」直接抛 ValueError: Excel file format cannot be determined。
+       （订单/明细那几条链路本来就支持 csv，只有读客户表这几处漏了。）
+    """
+    ext = os.path.splitext(path)[1].lower()
+    if ext == '.csv':
+        for enc in ('utf-8-sig', 'utf-8', 'gbk', 'gb18030'):
+            try:
+                return pd.read_csv(path, encoding=enc, **kw)
+            except UnicodeDecodeError:
+                continue
+        return pd.read_csv(path, encoding='utf-8', errors='replace', **kw)
+    return pd.read_excel(path, **kw)
+
+
 def load_sources():
     """按任务读表：
          mall       商城客户表（必填）＋ 点评表（可选，带来就顺便补平台画像）
@@ -188,20 +206,20 @@ def load_sources():
         #    于是后台「大众点评客户导入」等于白跑，还会把已有客户的 plat 覆盖成空对象。
         if not os.path.exists(p_plat):
             raise SystemExit('找不到大众点评表：' + p_plat)
-        plat = pd.read_excel(p_plat)
+        plat = read_table(p_plat)
         R('① 点评侧 %s → %d 行 × %d 列' % (os.path.basename(p_plat), len(plat), len(plat.columns)))
     elif TASK in ('mall', 'all'):
         if not os.path.exists(p_mall):
             raise SystemExit('找不到商城客户表：' + p_mall)
-        mall = pd.read_excel(p_mall)
+        mall = read_table(p_mall)
         R('① 商城侧 %s → %d 行 × %d 列' % (os.path.basename(p_mall), len(mall), len(mall.columns)))
         if os.path.exists(p_plat):
-            plat = pd.read_excel(p_plat)
+            plat = read_table(p_plat)
             R('② 点评侧 %s → %d 行 × %d 列' % (os.path.basename(p_plat), len(plat), len(plat.columns)))
         else:
             R('② 点评侧（本次没给这张表 → 不带平台画像）')
 
-    dup = pd.read_excel(p_dup, header=1) if os.path.exists(p_dup) else None
+    dup = read_table(p_dup, header=1) if os.path.exists(p_dup) else None
     R('③ 同店重复登记 %s' % ('%d 行' % len(dup) if dup is not None else '（无此文件，跳过）'))
     return mall, plat, dup
 

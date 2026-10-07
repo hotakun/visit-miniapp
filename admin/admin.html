@@ -510,7 +510,13 @@ tr.row-off td:not(.keep){opacity:.4}
 /* ===== 任务管理大卡（2026-09-09 老板定：整体纯白 + Edge 式页签；任务卡与批次卡同款白卡悬浮其上）===== */
 .task-shell{background:#fff;border-radius:18px;box-shadow:0 2px 14px rgba(31,36,48,.06);overflow:hidden;flex:1;min-height:0;display:flex;flex-direction:column} /* 2026-09-09 老板定：高度跟随窗口自适应，页面不出滚动条 */
 .task-shell-head{background:#fff;padding:14px 18px 0;display:flex;align-items:flex-end;gap:12px}
-.task-shell-body{background:#fff;border-top:1px solid var(--line);margin-top:-1px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.task-shell-body{background:#fff;border-top:1px solid var(--line);margin-top:-1px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+/* ⚠️ 2026-10-07 修 bug（老板报「任务管理 · 当前任务 不能滚动，下面的任务卡看不到」）：
+   .task-shell-body 是 overflow:hidden，而承载内容的 #activeWrap / #histWrap / #freeWrap
+   既没有 flex:1 也没有 overflow → 内容一多就**溢出被裁掉**，而外层又滚不动（页面也不出滚动条）。
+   修法：把这三个"内容区"各自变成**可滚动容器**（flex 子项要 min-height:0 才会让 overflow 生效）。
+   ⚠️ 故意**不动 #mapWrap** —— 任务地图有自己的撑满布局，加 overflow 会把地图压坏。 */
+#activeWrap,#histWrap,#freeWrap{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden}
 #activeWrap,#histWrap{flex:1 0 auto;min-height:0;overflow-y:auto}
 #mapWrap{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .ts-tabs{display:flex;gap:4px;align-items:flex-end;flex:1}
@@ -1025,12 +1031,18 @@ tr.row-off td:not(.keep){opacity:.4}
         </div>
         <div class="task-shell-body">
           <div id="taskStats" style="padding:14px 18px 0;font-size:12.5px;font-weight:700"></div>
-          <div id="activeWrap" style="padding:4px 18px 18px">
-            <div id="taskCards" class="tk-grid"></div>
-          </div>
-          <div id="histWrap" style="display:none;padding:4px 18px 18px"></div>
+          <!-- ⚠️ 2026-10-07 修 bug（老板报「任务管理 · 当前任务 不能滚动、下面的卡看不到」）：
+               实测根因 = `#activeWrap` 的 **flex-shrink 被算成 0**（clientH=1664，内容多大就涨多大）
+               → 把父级 .task-shell-body 撑爆 → 再被它自己的 overflow:hidden 裁掉，而页面整体又不出滚动条。
+               ⚠️ 先在 <style> 里写 `#activeWrap{flex:1 1 auto;overflow-y:auto}` —— 实测 **grow 生效、shrink 没生效**
+                 （被别处更"重"的规则盖住）→ 故改用**内联 style**（优先级最高，必定赢）+ basis 给 0%。
+               ⚠️ #histWrap / #freeWrap 同病同治；⚠️ **#mapWrap 故意不动**（任务地图有自己的撑满布局）。 -->
+          <div id="activeWrap" style="padding:4px 18px 18px;flex:1 1 0%;min-height:0;overflow-y:auto;overflow-x:hidden">
+            <div id="taskCards" class="tk-grid"></div>
+          </div>
+          <div id="histWrap" style="display:none;padding:4px 18px 18px;flex:1 1 0%;min-height:0;overflow-y:auto;overflow-x:hidden"></div>
           <!-- ⭐ 2026-10-03 自由拜访（老板定：任务管理第四个 Tab；只读 + 删除）-->
-          <div id="freeWrap" style="display:none;padding:4px 18px 18px"></div>
+          <div id="freeWrap" style="display:none;padding:4px 18px 18px;flex:1 1 0%;min-height:0;overflow-y:auto;overflow-x:hidden"></div>
           <!-- 任务地图标签（2026-09-09 老板定：手机老板任务地图移植——天页签+业务员下拉+数字圆标+绿线+仓库星+店名气泡） -->
           <div id="mapWrap" style="display:none;padding:0 18px 8px">
             <div class="tm-bar">
@@ -3211,7 +3223,7 @@ function renderDetail(res) {
 }
 
 // ===== 任务流程档案：日志时间线 + 提交审核情况（2026-09-08 老板定稿） =====
-const APP_VERSION = '0.9.16'; // 版本号（2026-09-24：人员管理业务员列表新增「星级」列——0.5~5 共 10 档，管理员可设）
+const APP_VERSION = '0.9.20'; // 版本号（2026-10-07：任务卡区域可滚动 + 导入支持 .csv 直导 + 导入并发降为 2、失败不再中途放弃 + 客户详情「门店照片」后台可传可删 + 战况监控三层筛选/两行版式/右上角全览按钮 + 商圈「不显示」修复）
 try { $('sideVer').textContent = 'v' + APP_VERSION; $('curVerText').textContent = 'v' + APP_VERSION; } catch (e) { /* 静默 */ }
 const ARCH_IC = { create: '📝', send: '📨', edit: '✏️', extend: '⏰', reassign: '👤', withdraw: '↩️', finishReq: '📤', reviewApprove: '✅', reviewReject: '⛔', autoDone: '🤖', archive: '🗄️', replan: '🗺', visit: '🏪', resched: '📅', visitAutoSubmit: '⏱', visitAutoCancel: '⏱', expired: '⌛' };
 const ARCH_COLOR = { create: '#2F80ED', send: '#2F80ED', edit: '#F5A623', extend: '#B97A0B', reassign: '#7C3AED', withdraw: '#8A93A0', finishReq: '#B97A0B', reviewApprove: '#34A853', reviewReject: '#E5484D', autoDone: '#34A853', archive: '#E5484D', replan: '#2F80ED', visit: '#16A34A', resched: '#2F80ED', visitAutoSubmit: '#34A853', visitAutoCancel: '#8A93A0', expired: '#E5484D' };

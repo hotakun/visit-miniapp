@@ -5,7 +5,7 @@ const { LOGO_FILE_ID } = require('./utils/config');
 App({
   globalData: {
     user: null,
-    APP_VERSION: '0.9.16', // 版本号（2026-09-24：与后台 admin.html 一致；后台新增「星级」列 + 手机端首页姓名右边显示星级）
+    APP_VERSION: '0.9.20', // 版本号（2026-10-07：与后台 admin.html 一致；后台本轮含任务卡可滚动 + 导入支持 csv + 照片可传可删 + 战况监控三层筛选/版式）
     logoUrl: LOGO_FILE_ID || '/images/logo.png', // LOGO 优先云存储 fileID，未配置回退本地
     bossMode: false, // 老板模式（2026-09-09 §7.13：管理员微信专用演示态；storage 持久）
     // ⭐ 2026-09-30 老板兼业务员（朱小利）：声明「这次以业务员身份用」→ 所有云函数请求自动带 asSalesman，

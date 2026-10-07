@@ -739,11 +739,14 @@ async function runExcelImport(job, opt) {
   // ⭐ 2026-09-26 提速（老板定：金华一个市就是 1401 片，原来**顺序**一片一片调云函数要 2~5 小时）：
   //    改成 **4 片并发**（云函数内部本来就是 30 并发写库，4 片 = 120 路；免费环境也扛得住）。
   //    失败不再立刻中止（累计 5 片才放弃）：单片失败多半是偶发超时，**重跑幂等、不会翻倍**。
-  const CONC = 4;
+  // ⚠️⚠️ 2026-10-07 杭州实测（109015 家 → 2896 片）：CONC=4 时**前 8 片全报 -601008（云函数调用失败）、
+  //    0 片成功**；但把同一片**单独调**是好的（1.4s、859ms 入库 38 家）→ 判定为**并发被限流**，不是分片/索引问题。
+  //    故：① 并发 **4 → 2**；② 失败**不再中止整跑**（见下面 while 条件），跑完再由用户点一次补跑失败的片。
+  const CONC = 2;
   const failed = [];
   let cursor = 0;
   const worker = async () => {
-    while (cursor < files.length && failed.length < 5) {
+    while (cursor < files.length) {
       const f = files[cursor++];
       try {
         const obj = JSON.parse(fs.readFileSync(path.join(partDir, f), 'utf8'));
