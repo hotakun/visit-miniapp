@@ -1331,6 +1331,16 @@ async function cleanExpiredTracks() {
 // 上传需鉴权（老板手动触发）；读取免鉴权（代码文件非敏感，文员 server 转发）。
 const DIST_CHUNK = 90000;
 const DIST_DOC = 'admin_dist';
+// ⭐ 2026-10-07 实测修的坑：原来 4 个文件**全挤在 settings.admin_dist 一个文档**里
+//   （adminHtml 788K + ntMapJs 39K + serverJs 39K + storeJs 9K ≈ **875KB**），
+//   逼近云开发**单文档 1MB 上限** → 写入被丢弃/截断 → 实测 server.js 存成了半截
+//   （拉回来 `Unexpected end of input`，被后台的语法校验拦下，幸未写坏文员端）。
+//   改为**每个 kind 一个独立文档**，各自远小于上限。
+const distDocOf = k => 'admin_dist_' + k;
+async function readDistKind(kind) {
+  const r = await db.collection('settings').doc(distDocOf(kind)).get().catch(() => null);
+  return (r && r.data && r.data.value) || null;   // { kind, content, version, updatedAt }
+}
 
 async function readDist() {
   const r = await db.collection('settings').doc(DIST_DOC).get().catch(() => null);
@@ -1339,39 +1349,55 @@ async function readDist() {
 
 async function uploadAdminDist(event) {
   const { kind, part, total, content, version } = event;
-  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  // ⭐ 2026-10-07：新增 serverJs / storeJs —— 让文员端「立即更新」能连**后端文件**一起更
+  //   （不然会出现「新前端 + 旧后端」→ 前端调不到新接口 → 拉取数据全失败，文员端就踩过）
+  if (!['adminHtml', 'ntMapJs', 'serverJs', 'storeJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
   const p = parseInt(part, 10), t = parseInt(total, 10);
   if (!(p >= 0 && t >= 1 && p < t)) return { ok: false, code: 'BAD_ARG', msg: '分片参数不合法' };
   if (typeof content !== 'string' || !content) return { ok: false, code: 'BAD_ARG', msg: '分片内容为空' };
-  const prev = (await readDist()) || { version: '', adminHtml: '', ntMapJs: '' };
-  if (p === 0) prev[kind] = '';
-  prev[kind] += content;
-  if (p === t - 1) {
-    prev.version = String(version || prev.version || '0.9.00');
-    prev.updatedAt = Date.now();
-  }
-  await db.collection('settings').doc(DIST_DOC).set({ data: { key: 'adminDist', value: prev } });
-  return { ok: true, part: p + 1, total: t };
+  const cur = (await readDistKind(kind)) || {};
+  // ⚠️ 第 0 片先把该 kind 清空（重传时从头拼，绝不叠上一次的旧内容）
+  const next = ((p === 0) ? '' : String(cur.content || '')) + content;
+  await db.collection('settings').doc(distDocOf(kind)).set({
+    data: {
+      key: distDocOf(kind),
+      value: {
+        kind: kind,
+        content: next,
+        version: (p === t - 1) ? String(version || cur.version || '0.9.00') : (cur.version || ''),
+        updatedAt: Date.now()
+      }
+    }
+  });
+  return { ok: true, part: p + 1, total: t, bytes: next.length };
 }
 
 async function getAdminDistMeta() {
-  const d = await readDist();
-  if (!d || !d.adminHtml || !d.ntMapJs) return { ok: false, code: 'NO_DIST', msg: '云端暂无分发文件' };
+  // ⚠️ 2026-10-07：四个 kind 各自一个文档（见 distDocOf 注释），逐个数片
+  const html = await readDistKind('adminHtml');
+  const ntmap = await readDistKind('ntMapJs');
+  if (!html || !html.content || !ntmap || !ntmap.content) return { ok: false, code: 'NO_DIST', msg: '云端暂无分发文件' };
+  const back = await readDistKind('serverJs');
+  const store = await readDistKind('storeJs');
+  const parts = o => (o && o.content) ? Math.ceil(String(o.content).length / DIST_CHUNK) : 0;
   return {
     ok: true,
-    version: d.version,
-    adminHtmlParts: Math.ceil(d.adminHtml.length / DIST_CHUNK),
-    ntMapJsParts: Math.ceil(d.ntMapJs.length / DIST_CHUNK)
+    version: html.version || ntmap.version || '',
+    adminHtmlParts: parts(html),
+    ntMapJsParts: parts(ntmap),
+    // ⚠️ 没传过就是 0 → 文员端自动跳过（只更前端，与以前一致）
+    serverJsParts: parts(back),
+    storeJsParts: parts(store)
   };
 }
 
 async function getAdminDistPart(event) {
   const { kind, part } = event;
-  if (!['adminHtml', 'ntMapJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
-  const d = await readDist();
-  if (!d || !d[kind]) return { ok: false, code: 'NO_DIST', msg: '分片不存在' };
+  if (!['adminHtml', 'ntMapJs', 'serverJs', 'storeJs'].includes(kind)) return { ok: false, code: 'BAD_ARG', msg: 'kind 不合法' };
+  const d = await readDistKind(kind);
+  if (!d || !d.content) return { ok: false, code: 'NO_DIST', msg: '分片不存在' };
   const p = parseInt(part, 10);
-  const chunk = d[kind].slice(p * DIST_CHUNK, (p + 1) * DIST_CHUNK);
+  const chunk = String(d.content).slice(p * DIST_CHUNK, (p + 1) * DIST_CHUNK);
   if (!chunk) return { ok: false, code: 'NO_PART', msg: '分片不存在' };
   return { ok: true, kind, part: p, content: chunk };
 }

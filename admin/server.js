@@ -549,12 +549,37 @@ const server = http.createServer(async (req, res) => {
         }
         return out;
       };
+      const fs2 = require('fs'), path2 = require('path');
+      // ⚠️ 2026-10-07 新增：写**后端文件**（server.js / store.js）前的三道保险
+      //   ① 语法校验（vm.Script）—— 新代码有语法错就**直接拒绝写入**，后台保持原样（绝不把后台写坏）
+      //   ② 备份（.bak-<时间戳>）—— 万一新版跑不起来，手工改名回滚
+      //   ③ 原子替换（写 .tmp → rename）—— 避免写到一半断电/中断留下半截文件
+      const writeBackend = (file, content) => {
+        try { new (require('vm').Script)(content, { filename: file }); }
+        catch (e) { throw new Error('新版 ' + file + ' 语法不通过，已拒绝写入（后台保持原样）：' + e.message); }
+        const full = path2.join(__dirname, file);
+        const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);
+        if (fs2.existsSync(full)) { try { fs2.copyFileSync(full, full + '.bak-' + stamp); } catch (e) { /* 备份失败不挡更新 */ } }
+        const tmp = full + '.tmp';
+        fs2.writeFileSync(tmp, content, 'utf8');
+        fs2.renameSync(tmp, full);
+      };
       const html = await grab('adminHtml', meta.adminHtmlParts);
       const ntmap = await grab('ntMapJs', meta.ntMapJsParts);
       require('fs').writeFileSync(require('path').join(__dirname, 'admin.html'), html, 'utf8');
       require('fs').writeFileSync(require('path').join(__dirname, 'nt-map.js'), ntmap, 'utf8');
+      // ⭐ 2026-10-07 老板定「一劳永逸」：**后端文件也一起更新**。
+      //   背景：文员端以前只能更新前端 → 出现「新 admin.html + 一个月前的旧 server.js」→
+      //   新前端调不到 /mapPoints 等新接口 → **拉取数据全失败**。
+      //   ⚠️ 兼容：云端没传过这两个 kind 时（serverJsParts/storeJsParts 为 0）自动跳过。
+      //   ⚠️ 这两个文件**改完必须重启后台**才生效 —— 所以返回里带 needRestart，由前端提示用户。
+      // ⚠️ 后端文件在云端是 **base64** 存的（原因见 admin/upload_dist.js 里的说明），这里解回 utf8 再写
+      const backend = [];
+      const unb64 = s => Buffer.from(String(s || ''), 'base64').toString('utf8');
+      if (meta.serverJsParts > 0) { writeBackend('server.js', unb64(await grab('serverJs', meta.serverJsParts))); backend.push('server.js'); }
+      if (meta.storeJsParts > 0) { writeBackend('store.js', unb64(await grab('storeJs', meta.storeJsParts))); backend.push('store.js'); }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, version: meta.version }));
+      res.end(JSON.stringify({ ok: true, version: meta.version, backend: backend, needRestart: backend.length > 0 }));
     } catch (e) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, msg: e.message }));
