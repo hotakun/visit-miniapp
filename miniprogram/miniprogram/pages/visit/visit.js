@@ -6,7 +6,7 @@ const media = require('../../utils/media');
 // 已签约商城的客户 → 8 个；未签约的客户（新客）→ 在此基础上多「已签约商城」「未签约」共 10 个
 // ⭐ 2026-10-07 老板定改名：「不愿改」→「已有供应商」、「联系不上」→「关门·休息中」
 //   ⚠️ 同步处（漏一处就坏）：云函数 cloudfunctions/visits 的 RESULT_ENUM_MALL + 下面的 PRAISE 话术键 + 后台 admin.html 的 RESULT_PILL
-const MALL = ['加入商城', '需要样品', '已下单', '已有供应商', '有抵触', '关门·休息中', '闭店·搬迁', '其他'];
+const MALL = ['加入商城', '需要样品', '已下单', '已有供应商', '有抵触', '关门·休息中', '闭店·搬迁', '换老板了', '正常回访', '其他'];   // ⭐ 2026-10-11 老板定：加「换老板了」「正常回访」（与云端 RESULT_ENUM_MALL 逐字一致）
 const NEW = [...MALL, '已签约商城', '未签约'];
 
 // 提交成功话语库（按拜访结果分类，随机取一条，短句 ≤14 字）
@@ -21,7 +21,10 @@ const PRAISE = {
   '其他': ['记录在案，下次再战！', '辛苦了，稳稳拿下！', '跑一趟就有一趟的收获！'],
   '有抵触': ['没关系，慢慢来，下次更好 🌤', '别灰心，门总会打开的', '冷脸也是信息，你辛苦了！'],
   '关门·休息中': ['扑空不算白跑，下次逮住他 😉', '缘分未到，改天再来！', '人不在店也在，下次再约！'],
-  '闭店·搬迁': ['情况记下了，你辛苦啦 🤗', '又排掉一个雷，功劳不小！', '信息已更新，别白跑啦！']
+  '闭店·搬迁': ['情况记下了，你辛苦啦 🤗', '又排掉一个雷，功劳不小！', '信息已更新，别白跑啦！'],
+  // ⭐ 2026-10-11 老板定：新增两项结果的话术
+  '换老板了': ['换人了，正好重新认识一下 🤝', '新老板新机会，聊起来！', '老板换了，关系重新建立！'],
+  '正常回访': ['一切正常，稳住就好 👌', '正常就好，继续保持！', '例行回访完成，踏实！']
 };
 
 Page({
@@ -30,7 +33,7 @@ Page({
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
   data: {
-    c: null, resultList: MALL, result: '', text: '', samples: '', timerText: '00:00',
+    c: null, resultList: [], result: '', text: '', samples: '', timerText: '00:00',
     // ⭐ 2026-10-07 老板定：本页**整条导航栏不显示**（visit.json → "navigationStyle":"custom"）→
     //   页面得自己按状态栏高度留白，否则作战条会顶到手机的时间/电量下面。值在 onLoad 里动态取。
     st: 20,
@@ -144,7 +147,9 @@ Page({
     this.evidenceRequired = !!_cfg.evidenceRequired;
     this.setData({
       c,
-      resultList: c.customerType === 'new' ? NEW : MALL,
+      // ⭐ 2026-10-11 老板定：结果可多选（最多 2 个）→ resultList 统一转成 [{n:名字, on:是否选中}]
+      //   （wxml 里写不了 indexOf，选中态必须在 js 里算好）
+      resultList: (c.customerType === 'new' ? NEW : MALL).map(n => ({ n: n, on: false })),
       recLimitMin: Math.max(3, Math.round(lim / 60)),
       segMaxSec: lim,
       maxPics,                        // 照片上限（后台设置页可配 3/6/9/15，默认 9）
@@ -562,7 +567,25 @@ Page({
     if (this.data.locRefreshing) return; // 收敛精确定位进行中：避免并发定位请求
     loc.getOne(8000).then(p => loc.setCache(p.lat, p.lng)).catch(() => { /* 静默 */ });
   },
-  pickResult(e) { this.setData({ result: e.currentTarget.dataset.r }); this.saveDraftSoon(); },
+  // ⭐ 2026-10-11 老板定：结果**可多选，最多 2 个**（存成逗号串 → 兼容老数据的单值）
+  //   · 再点一次已选中的 = 取消它 · 已选满 2 个再点新的 = 顶掉最早那个（并提示）
+  pickResult(e) {
+    const r = e.currentTarget.dataset.r;
+    const cur = String(this.data.result || '').split(',').filter(Boolean);
+    let next;
+    if (cur.indexOf(r) >= 0) next = cur.filter(x => x !== r);
+    else if (cur.length >= 2) { next = [cur[1], r]; wx.showToast({ title: '最多选 2 个，已替换「' + cur[0] + '」', icon: 'none' }); }
+    else next = cur.concat([r]);
+    const result = next.join(',');
+    this.setData({ result: result, resultList: this._markResults(result) });
+    this.saveDraftSoon();
+  },
+  // 把 result（逗号串）的选中态标到 resultList（wxml 里写不了 indexOf → 在 js 里预处理成 {n,on}）
+  _markResults(result) {
+    const on = String(result || '').split(',').filter(Boolean);
+    const list = (this.data.c && this.data.c.customerType === 'new') ? NEW : MALL;
+    return list.map(n => ({ n: n, on: on.indexOf(n) >= 0 }));
+  },
   onText(e) { this.setData({ text: e.detail.value }); this.saveDraftSoon(); },
   onSamples(e) { this.setData({ samples: e.detail.value }); this.saveDraftSoon(); },
 
@@ -596,7 +619,7 @@ Page({
       wx.hideLoading();
       this.setData({
         isEdit: true,
-        result: v.result || '', text: v.text || '', samples: v.samples || '',
+        result: v.result || '', resultList: this._markResults(v.result || ''), text: v.text || '', samples: v.samples || '',
         pics: pics, recs: recs,
         pendingSeconds: Number(v.durationSeconds) || 0
       });

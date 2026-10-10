@@ -157,8 +157,9 @@
     </view>
     <view class="fc-body" wx:if="{{!foldRes}}">
       <view class="tags">
-        <view class="rtag {{result === item ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="*this"
-              bindtap="pickResult" data-r="{{item}}">{{item}}</view>
+        <!-- ⭐ 2026-10-11 老板定：结果**可多选，最多 2 个**（item 是 {n,on}；wxml 不能写 indexOf，选中态在 js 的 _markResults 里算好） -->
+        <view class="rtag {{item.on ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="n"
+              bindtap="pickResult" data-r="{{item.n}}">{{item.n}}</view>
       </view>
     </view>
   </view>

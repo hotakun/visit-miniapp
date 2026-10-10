@@ -26,7 +26,7 @@ const _silentErrs = [];
 
 // ⭐ 2026-10-07 老板定改名：「不愿改」→「已有供应商」、「联系不上」→「关门·休息中」
 //   ⚠️ 三处必须**同时**改（漏一处就坏）：本文件 + 前端 pages/visit/visit.js 的 MALL/PRAISE + 后台 admin/admin.html 的 RESULT_PILL
-const RESULT_ENUM_MALL = ['加入商城', '需要样品', '已下单', '已有供应商', '有抵触', '关门·休息中', '闭店·搬迁', '其他'];
+const RESULT_ENUM_MALL = ['加入商城', '需要样品', '已下单', '已有供应商', '有抵触', '关门·休息中', '闭店·搬迁', '换老板了', '正常回访', '其他'];   // ⭐ 2026-10-11 老板定：加「换老板了」「正常回访」
 const RESULT_ENUM_NEW = [...RESULT_ENUM_MALL, '已签约商城', '未签约'];
 
 // ===== 2026-09-11 批 3：云调用用量自建统计（与 adminapi 写同一份 settings.usageCounter；攒批落库）=====
@@ -238,7 +238,11 @@ async function saveDraft(user, e, isBoss) {
   if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
   // 结果枚举校验（2026-09-08 审查修复：防非法值经草稿→超时自动提交写库）
   const rr = String(result || '');
-  if (rr && !RESULT_ENUM_NEW.includes(rr)) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
+  // ⭐ 2026-10-11：草稿也支持多选（逗号串，最多 2 项）
+  if (rr) {
+    const dp = String(rr).split(',').map(s => s.trim()).filter(Boolean);
+    if (dp.length > 2 || dp.some(p => !RESULT_ENUM_NEW.includes(p))) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
+  }
   if (isBoss) return { ok: true, msg: '草稿已保存' }; // 老板演示：不落库
   const date = todayStr();
   const ong = await db.collection('visits')
@@ -370,7 +374,10 @@ async function submit(user, e, isBoss) {
   const customer = cRes && cRes.data;
   if (!customer) return { ok: false, code: 'CUST_NOT_FOUND', msg: '客户不存在' };
   const allowed = customer.customerType === 'new' ? RESULT_ENUM_NEW : RESULT_ENUM_MALL;
-  if (!allowed.includes(result)) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
+  // ⭐ 2026-10-11 老板定：结果**可多选（最多 2 个）** → 存成逗号串（如「换老板了,正常回访」，同样兼容老的单值）
+  const resParts = String(result || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!resParts.length || resParts.length > 2) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
+  if (resParts.some(p => !allowed.includes(p))) return { ok: false, code: 'BAD_RESULT', msg: '拜访结果不合法' };
 
   // 3. 现场证据校验（2026-09-11 降频：上限与开关统一走 getSwitchCfg —— 一次读全表 + 60 秒缓存）
   //    照片：上限跟后台「照片上限」档位（3/6/9/15，默认 9）
