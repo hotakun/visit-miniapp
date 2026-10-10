@@ -4576,7 +4576,9 @@ async function testMpSend(event) {
     const r = await mpRequest(`/cgi-bin/message/template/send?access_token=${encodeURIComponent(token)}`, {
       touser: openid,
       template_id: cfg.templateId,
-      data: buildMpData({ name: '测试任务', purpose: 'activate', deadline: todayStr(), total: 1, type: 'new' })
+      // ⭐ 2026-10-10：测试消息原来**缺 taskNo** → `character_string1` 为空 → 必报 47003「value is empty」
+      //   （真实任务通知不受影响：createTask 会传 taskNo）。这里补全所有字段，让"测试发送"真能测。
+      data: buildMpData({ name: '测试任务', taskNo: 'TEST-000001', salesmanName: '测试业务员', purpose: 'activate', startDate: todayStr(), deadline: todayStr(), days: 1, total: 1, type: 'new' })
     });
     if (r && r.errcode === 0) return { ok: true, sent: true, msgid: r.msgid, msg: '测试消息已发送，请查看该微信的"服务通知"' };
     return { ok: false, sent: false, code: 'MP_ERR', msg: `errcode=${r && r.errcode} ${(r && r.errmsg) || ''}` };
