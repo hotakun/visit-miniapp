@@ -6213,7 +6213,12 @@ function recalcDeadline() {
 
 let taskCreateBusy = 0; // 2026-09-09 防连点：15 秒窗口锁
 async function createTask(publish) {
-  if (Date.now() - taskCreateBusy < 15000) return; // 防连点（老板报障：反馈慢连点三次创建三个任务同源问题）
+  // 防连点（老板报障：反馈慢连点三次创建三个任务同源问题）
+  // ⭐ 2026-10-10 晚：改成**有提示的拦截** —— 原来静默 return，老板连点时会以为"点了没反应"（报障原文）。
+  if (Date.now() - taskCreateBusy < 15000) {
+    alert('刚才已经提交过一次（15 秒内不重复提交）。\n\n请稍等几秒，先去「任务管理 → 当前任务」看看有没有这条任务；确认没有再重试。');
+    return;
+  }
   taskCreateBusy = Date.now();
   // 强制修正校验（老板 2026-09-06 定）：天数与初始设置不同 → 不允许存草稿/发送
   if (needsFixDays()) {
@@ -6241,19 +6246,32 @@ async function createTask(publish) {
   const btn = $('ntSend');
   btn.disabled = true;
   btn.textContent = '创建中…';
-  const res = await api('createTask', {
-    name,
-    salesmanId: nwSalesman._id,
-    customerIds,
-    startDate: $('ntStartDate').value.trim(),
-    deadline: $('ntDeadline').value.trim(),
-    plannedDays: days,
-    purpose,
-    status: publish ? 'published' : 'draft',
-    dayGroups,
-    dayRoutes,
-    batchId: nwBatchId || undefined
-  });
+  // ⭐⭐ 2026-10-10 晚（老板报障"按下之后没有反应"）：**原来这里没有 try/catch** ——
+  //   `api()` 抛异常时（网络抖动 / 云端超时 -601008 / 刚重传云函数后的冷启动慢）异常直接逃逸 →
+  //   按钮**永远停在"创建中…"**、也没有任何提示 → 看起来就是"点了没反应"（任务也没建成）。
+  if (!nwSalesman) { alert('请选择业务员'); return; }
+  let res = null;
+  try {
+    res = await api('createTask', {
+      name,
+      salesmanId: nwSalesman._id,
+      customerIds,
+      startDate: $('ntStartDate').value.trim(),
+      deadline: $('ntDeadline').value.trim(),
+      plannedDays: days,
+      purpose,
+      status: publish ? 'published' : 'draft',
+      dayGroups,
+      dayRoutes,
+      batchId: nwBatchId || undefined
+    });
+  } catch (e) {
+    console.error('[createTask] 请求异常', e);   // ⚠️ 原始错误只进控制台；老板看到的是人话
+    btn.disabled = false;
+    btn.textContent = '📨 创建并发送给业务员';
+    alert('创建请求没能完成（网络或云端超时；刚更新过云函数后的第一次最容易碰到）。\n\n请稍等几秒，先去「任务管理 → 当前任务」看看有没有这条任务；确认没有再重试 —— 避免重复创建。');
+    return;
+  }
   btn.disabled = false;
   btn.textContent = '📨 创建并发送给业务员';
   if (res.ok) {

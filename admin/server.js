@@ -33,7 +33,18 @@ async function fetchBatchesFromPg() {
     const url = String(cfg.pgApiUrl).replace(/\/+$/, '') + '/batches' +
       (cfg.pgApiToken ? ('?token=' + encodeURIComponent(cfg.pgApiToken)) : '');
     const r = await (await fetch(url)).json();
-    if (r && r.ok) return r;
+    if (r && r.ok) {
+      // ⭐⭐ 2026-10-10 晚（老板实测踩到："加州阳光的批次我怎么看不到了？"）：
+      //   **PG 与云端不同步时会"看到空批次"** —— 刚建/刚删批次后，pgsync 还没把 `customer_batches`
+      //   表同步过来（每 5 分钟一轮；重传云函数那段时间它还在失败）→ PG 返回"**批次卡为空、可成员统计却有数**"
+      //   → 这在数据上**自相矛盾**（不可能有成员却一个批次都没有）→ 被落盘缓存住 5 分钟 → 老板看到空列表。
+      //   ✅ 自检：**批次卡为空但 total>0 → 这份数据不可信 → 回退云端**（云端永远是准的），且**不落盘**。
+      if (!(r.batches || []).length && r.summary && Number(r.summary.total) > 0) {
+        console.log('[batches] PG 批次卡为空但统计有数（同步滞后），回退云端');
+        return null;
+      }
+      return r;
+    }
     console.log('[batches] PG 没给数据，回退云开发：' + ((r && r.msg) || ''));
     return null;
   } catch (e) {
