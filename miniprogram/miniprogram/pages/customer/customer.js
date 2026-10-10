@@ -147,6 +147,8 @@ function buildD(res, photoUrls, recUrls) {
 
   // 拜访历史：状态胶囊 / 日期时间 / 拜访人 / 时长 / 文字 / 样品 / 现场证据
   const ST = { normal: '已回访', pending_review: '待审核', ongoing: '拜访中', cancelled: '已取消' };
+  // ⭐ 2026-10-10：「✎ 编辑」只给自己的记录显示 → 先取"我"的 id
+  const meId = ((getApp() && getApp().globalData && getApp().globalData.user) || {})._id || '';
   const history = (res.visits || []).map((v, i) => {
     const at = String(v.visitedAt || '');
     const md = at ? (mdCn(at) + (v.duration ? '' : '')) : '';
@@ -166,7 +168,10 @@ function buildD(res, photoUrls, recUrls) {
         if (!au.length) return null;
         return { url: recUrls[au[0].fileID], dur: fmtDur(au[0].duration), txt: esc(v.trText) || '', playing: false, pct: 0 };
       })(),
-      shots: (v.thumbs || []).slice(0, 3)
+      shots: (v.thumbs || []).slice(0, 3),
+      // ⭐ 2026-10-10 老板定：拜访记录可编辑 —— 记 visitId + 是不是"我"记的（只有自己的才显示「✎ 编辑」）
+      vid: v._id || '',
+      mine: !!(meId && v.salesmanId === meId)
     };
   });
 
@@ -594,7 +599,14 @@ Page({
   },
 
   // 从记事页返回时刷新「我的记事 · N 条」（只读本机 storage，不联网）
-  onShow() { this._loadNotes(); },
+  onShow() {
+    this._loadNotes();
+    // ⭐ 2026-10-10：从「编辑拜访记录」回来 → 重拉详情（铁律：改完必须真的刷新）
+    if (wx.getStorageSync('custNeedRefresh')) {
+      wx.removeStorageSync('custNeedRefresh');
+      if (this._cid) setTimeout(() => this.onLoad({ id: this._cid }), 50);
+    }
+  },
 
   // ---------- ✏️ 更正信息（⭐ 2026-10-10 老板定：电话行右侧那块 44×44，原「快速记事」被替换）----------
   //   场景：业务员到店发现**店名 / 老板换了** → 点它打开「加新店」第 2 步的同款表单
@@ -602,6 +614,16 @@ Page({
   //   ⚠️ 原「快速记事」入口已放弃（老板 2026-10-10："记事入口暂时放弃，以后再说"）。
   goCorrect() {
     wx.navigateTo({ url: '/pages/custedit/custedit?customerId=' + (this._cid || '') });
+  },
+  // ⭐⭐ 2026-10-10 老板定：点「✎ 编辑」→ 回拜访页（编辑模式）改这条拜访记录
+  //   ⚠️ 拜访页 onLoad 会读 storage 里的 curCustomer → 先把它补好（这家店）
+  editVisit(e) {
+    const vid = e.currentTarget.dataset.vid;
+    if (!vid) return;
+    const d = this.data.d || {};
+    const cc = wx.getStorageSync('curCustomer') || {};
+    wx.setStorageSync('curCustomer', Object.assign({}, cc, { _id: this._cid, name: d.name || cc.name || '' }));
+    wx.navigateTo({ url: '/pages/visit/visit?editVisitId=' + vid });
   },
   // ---------- 📝 快速记事（2026-10-10 老板当天改回：放在「更正信息」**左边**）----------
   //   点它 = 以本客户为对象快速记一笔（标题 / 关联客户自动带好）。

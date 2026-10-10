@@ -110,7 +110,11 @@ Page({
     });
   },
 
-  onLoad() {
+  onLoad(query) {
+    // ⭐⭐ 2026-10-10 老板定（手机端）：「拜访记录」要能**再次编辑** —— 从客户详情页的拜访历史点「✎ 编辑」
+    //   进来时带 `?editVisitId=xxx` → 本页进**编辑模式**：不 start / 不上锁 / 不跑计时，
+    //   改为拉那条记录预填（照片/录音标 `up:true`，复用现有"已传跳过"上传逻辑），保存走 visits.editSubmitted。
+    this._editId = String((query && query.editVisitId) || '');
     // ⭐ 2026-10-08 老板定：「切换到那家」跳过来后给一句提示（跨页提示只能靠 storage 传）
     //   ⚠️ 延后 500ms 再弹：让页面先渲染出来，否则 toast 会被页面初始化盖掉
     const _tip = wx.getStorageSync('visitSwitchTip');
@@ -148,9 +152,11 @@ Page({
       recEnabled: this.recEnabled     // 录音开关（关闭后本页隐藏录音区）
     });
     // ⭐ 2026-10-08：进页面就"上锁" —— 必须提交/取消才能离开（见 _lockLeave）
-    this._lockLeave();
-    // ⭐ 2026-10-07：作战条上的「距店 XX 米」
-    this._liveDist();
+    //   ⚠️ 编辑模式**不上锁**（改资料，随时可走）、也不跑实时距离/计时
+    if (!this._editId) {
+      this._lockLeave();
+      this._liveDist();   // ⭐ 2026-10-07：作战条上的「距店 XX 米」
+    }
     // ⭐ 2026-10-07：拍照框式 —— 进页面先摆好 3 个虚线空框
     this._refreshSlots();
     // 录音器（页面级单例；串行录制，离开页面即停并丢弃，未提交不上传）
@@ -160,7 +166,8 @@ Page({
     this._dead = false;
     // 开始拜访：云端校验（任务内单开：其他家还在拜访中会拦截）
     this._selfCust = c;   // ⭐ 2026-10-08：「切换到那家」会把 curCustomer 换掉 → 先把本家存住（取消完要回到本家）
-    this._startSelf();
+    if (this._editId) this._loadEdit();   // ⭐ 编辑模式：不 start、不上锁、不计时（见 _loadEdit）
+    else this._startSelf();
   },
   // 开始拜访（本家）：云端校验单开 → 被拦就弹拦截窗，否则起计时
   _startSelf() {
@@ -560,12 +567,82 @@ Page({
   onSamples(e) { this.setData({ samples: e.detail.value }); this.saveDraftSoon(); },
 
   // 第 1 步：点提交立即刷新一次定位，最多等 2 秒出结果再弹窗；2 秒未出也弹窗（用缓存值）；晚到的新鲜结果自动更新弹窗
+  // ⭐⭐ 2026-10-10 编辑模式：拉那条拜访记录 → 预填（照片/录音转临时 URL 并标 up:true，保存时不重复上传）
+  async _loadEdit() {
+    wx.showLoading({ title: '加载记录…', mask: true });
+    try {
+      const res = await api.call('visits', { action: 'history', customerId: this.data.c._id });
+      const v = ((res && res.visits) || []).find(x => x._id === this._editId);
+      if (!v) { wx.hideLoading(); api.toast('没找到这条拜访记录'); wx.navigateBack(); return; }
+      if (v.status === 'ongoing') { wx.hideLoading(); api.toast('这条还在拜访中，请回拜访页正常提交'); wx.navigateBack(); return; }
+      // 照片：fileID → 临时 URL（显示用；up:true → 保存时不会重复传）
+      let pics = [];
+      const ph = (v.photos || []).filter(p => p && p.fileID).slice(0, 9);
+      if (ph.length) {
+        const ids = ph.map(p => p.fileID).concat(ph.map(p => p.thumbID).filter(Boolean));
+        let urls = [];
+        try { const r = await wx.cloud.getTempFileURL({ fileList: ids.slice(0, 30) }); urls = (r.fileList || []).map(x => x.tempFileURL); } catch (e) { /* 取图失败不影响 */ }
+        const n = ph.length;
+        pics = ph.map((p, i) => ({ id: 'e' + i, orig: urls[i] || '', thumb: urls[n + i] || urls[i] || '', up: true, fileID: p.fileID, thumbID: p.thumbID }));
+      }
+      // 录音：fileID → 临时 URL（up:true + trStatus done → 不重复传、不重复触发转写）
+      let recs = [];
+      const au = (v.audios || []).filter(a => a && a.fileID).slice(0, 6);
+      if (au.length) {
+        let urls2 = [];
+        try { const r2 = await wx.cloud.getTempFileURL({ fileList: au.map(a => a.fileID) }); urls2 = (r2.fileList || []).map(x => x.tempFileURL); } catch (e) { /* 同上 */ }
+        recs = au.map((a, i) => ({ id: 'er' + i, path: urls2[i] || '', ext: '.mp3', sec: Number(a.duration) || 0, text: a.text || '', transcribe: false, up: true, fileID: a.fileID, trStatus: 'done' }));
+      }
+      wx.hideLoading();
+      this.setData({
+        isEdit: true,
+        result: v.result || '', text: v.text || '', samples: v.samples || '',
+        pics: pics, recs: recs,
+        pendingSeconds: Number(v.durationSeconds) || 0
+      });
+      this.t0 = 0;   // 编辑模式不计时
+      this._refreshSlots();   // 摆好剩余空框（与已有照片呼应）
+    } catch (e) {
+      wx.hideLoading();
+      console.error('[visit] 编辑模式加载失败', e);
+      api.toast('加载失败，请返回重试');
+      wx.navigateBack();
+    }
+  },
+  // ⭐⭐ 2026-10-10 编辑模式：保存修改（只上传新增的照片/录音 → visits.editSubmitted）
+  async _submitEdit() {
+    this.submitting = true;
+    wx.showLoading({ title: '保存中…', mask: true });
+    try {
+      if ((this.data.pics || []).length || (this.data.recs || []).length) await this.uploadEvidence();
+      const photos = this._evPhotos || (this.data.pics || []).map(p => ({ fileID: p.fileID, thumbID: p.thumbID })).filter(x => x.fileID);
+      const audios = this._evAudios || (this.data.recs || []).filter(r => r.fileID).map(r => ({ fileID: r.fileID, duration: r.sec, transcribe: !!r.transcribe }));
+      const res = await api.call('visits', {
+        action: 'editSubmitted', visitId: this._editId,
+        result: this.data.result, text: this.data.text, samples: this.data.samples,
+        photos: photos, audios: audios
+      });
+      wx.hideLoading();
+      this.submitting = false;
+      if (!res || !res.ok) { api.toast((res && res.msg) || '保存失败，请重试'); return; }
+      api.toast('已保存修改 ✓', 'success');
+      wx.setStorageSync('custNeedRefresh', 1);   // ⭐ 让客户详情页返回时重拉（铁律：改完必须真的刷新）
+      setTimeout(() => wx.navigateBack(), 900);
+    } catch (e) {
+      wx.hideLoading();
+      this.submitting = false;
+      console.error('[visit] 编辑保存失败', e);
+      api.toast('保存失败，请检查网络后重试');
+    }
+  },
   async submit() {
     if (this.submitting) return;
     if (!this.data.result) {
       api.toast('请先选择拜访结果');
       return;
     }
+    // ⭐ 2026-10-10：编辑模式走独立轻量提交（无定位校验、无确认窗、不改任务进度）
+    if (this._editId) return this._submitEdit();
     // 游客（实习账号）模拟提交（2026-09-08 老板定）：走完整流程但不写任何数据；
     // 清理云端 ongoing 防后台残留"拜访中"，提示「模拟提交成功」
     if (api.isTrialUser()) {

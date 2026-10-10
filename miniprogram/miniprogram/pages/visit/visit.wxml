@@ -21,15 +21,15 @@
       <!-- ⭐ 2026-10-08 老板定：**去掉返回键**（原来这里有个「‹」= 留了个后门）——
            本页必须「提交拜访」或「取消拜访」才能离开；系统返回/iOS 右滑由
            wx.enableAlertBeforeUnload 拦一道（见 js 的 _lockLeave）。 -->
-      <view class="hud-dot"></view>
-      <text class="hud-k">拜访中</text>
-      <text class="hud-time">{{timerText}}</text>
+      <view class="hud-dot" wx:if="{{!isEdit}}"></view>
+      <text class="hud-k">{{isEdit ? '编辑拜访记录' : '拜访中'}}</text>
+      <text class="hud-time" wx:if="{{!isEdit}}">{{timerText}}</text>
     </view>
     <view class="hud-n">{{c.name}}</view>
     <view class="hud-m" wx:if="{{distLive}}">📍 {{distLive}}</view>
   </view>
   <!-- 超时预警条（2026-09-08 M1）：上限前 5 分钟出现 -->
-  <view class="timeout-warn" wx:if="{{timeoutWarn}}">⏰ 拜访将在 {{timeoutLeftMin}} 分钟后自动{{result ? '提交' : '取消'}}，请尽快处理</view>
+  <view class="timeout-warn" wx:if="{{timeoutWarn && !isEdit}}">⏰ 拜访将在 {{timeoutLeftMin}} 分钟后自动{{result ? '提交' : '取消'}}，请尽快处理</view>
 
   <!-- 2026-09-11 老板定：现场拍照 / 现场录音 改为【可折叠卡片】—— 点标题栏展开收起；独立展开；默认展开 -->
   <!-- 收起时标题栏右侧显示状态摘要：已拍 N/15 张 / 未拍照；N 段 · 合计 mm:ss / 未录音 -->
@@ -168,9 +168,10 @@
        两个按钮**左右并排**：「✓ 提交拜访」占 2/3（主操作 · 蓝底）、「取消本次拜访」占 1/3（次要 · 白底描边）。
        ⚠️ 单开拦截（blocked）时取消按钮置灰，点不动。 -->
   <view class="foot">
-    <view class="fbtn-main" bindtap="submit">✓ 提交拜访</view>
-    <view class="fbtn-cancel" wx:if="{{!blocked}}" bindtap="askCancel">取消本次拜访</view>
-    <view class="fbtn-cancel off" wx:else>取消本次拜访</view>
+    <!-- ⭐ 2026-10-10：编辑模式只留「✓ 保存修改」（占满整条）；正常拜访仍是「提交 + 取消」两个 -->
+    <view class="fbtn-main" style="{{isEdit ? 'flex:1' : ''}}" bindtap="submit">{{isEdit ? '✓ 保存修改' : '✓ 提交拜访'}}</view>
+    <view class="fbtn-cancel" wx:if="{{!blocked && !isEdit}}" bindtap="askCancel">取消本次拜访</view>
+    <view class="fbtn-cancel off" wx:elif="{{!isEdit}}">取消本次拜访</view>
   </view>
 
   <!-- 单开拦截大弹窗：任务内已有别家拜访中（停留至点击「知道了」） -->

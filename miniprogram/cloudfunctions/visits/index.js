@@ -103,6 +103,7 @@ exports.main = async (event) => {
   if (action === 'reportTrack') return await reportTrack(meUser, event, isBoss);
   if (action === 'cancel') return await cancelVisit(meUser, event, isBoss);
   if (action === 'history') return await history(meUser, event.customerId, isBoss);
+  if (action === 'editSubmitted') return await editSubmitted(meUser, event, isBoss);   // ⭐ 2026-10-10：编辑已提交的拜访记录
   if (action === 'mystats') return await mystats(meUser, isBoss);
   if (action === 'saveTrText') return await saveTrText(meUser, event, isBoss);
   return { ok: false, code: 'BAD_ACTION', msg: '未知操作' };
@@ -509,6 +510,49 @@ async function submit(user, e, isBoss) {
   } catch (e) { /* 日志失败不阻断拜访提交 */ }
 
   return { ok: true, visitId: doc._id, msg: '已提交 ✓' };
+}
+
+// ⭐⭐ 2026-10-10 老板定：「拜访记录」要能**再次编辑** —— 客户详情页的拜访历史里点「✎ 编辑」，
+//   回到拜访页（编辑模式）改内容后保存。**只允许改自己的**（别人的、老板看的都改不了）。
+//   · 改：result / text / samples / photos / audios（**整组替换** —— 前端已处理"保留已有 fileID、只上传新增的"）
+//   · **不改**：visitedAt / taskId / customerId / status（改完保持原状态，不重审）→ 留痕 editedAt/editedBy
+//   · status==='ongoing'（还在拜访中）不走这里（那个用 submit）→ 直接拒
+async function editSubmitted(user, event, isBoss) {
+  const visitId = String((event && event.visitId) || '');
+  if (!visitId) return { ok: false, code: 'BAD_ARG', msg: '缺少拜访记录' };
+  if (user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
+  const vr = await db.collection('visits').doc(visitId).get().catch(() => null);
+  const v = vr && vr.data;
+  if (!v) return { ok: false, code: 'NOT_FOUND', msg: '拜访记录不存在' };
+  if (v.salesmanId !== user._id) return { ok: false, code: 'FORBIDDEN', msg: '只能修改自己的拜访记录' };
+  if (v.status === 'ongoing') return { ok: false, code: 'STATE', msg: '这条还在拜访中，请回拜访页正常提交' };
+  const now = Date.now();
+  const upd = {
+    result: String(event.result || '').slice(0, 40),
+    text: String(event.text || '').slice(0, 5000),
+    samples: String(event.samples || '').slice(0, 500),
+    editedAt: now, editedBy: user.name || '', updatedAt: now
+  };
+  if (Array.isArray(event.photos)) upd.photos = event.photos.slice(0, 15);
+  if (Array.isArray(event.audios)) {
+    upd.audios = event.audios.slice(0, 6);
+    upd.audio = upd.audios.length ? { fileID: upd.audios[0].fileID, duration: upd.audios[0].duration } : null;
+  }
+  await db.collection('visits').doc(visitId).update({ data: upd });
+  // 任务流程档案留痕（有 taskId 才记；失败不影响保存）
+  try {
+    if (v.taskId) {
+      const tRes = await db.collection('tasks').doc(v.taskId).get().catch(() => null);
+      if (tRes && tRes.data) {
+        const tlogs = [...(Array.isArray(tRes.data.logs) ? tRes.data.logs : []), {
+          at: now, by: user.name || '业务员', role: 'salesman', type: 'visitEdit',
+          detail: { visitId: visitId, customerId: v.customerId || '', result: upd.result }
+        }];
+        await db.collection('tasks').doc(v.taskId).update({ data: { logs: tlogs } });
+      }
+    }
+  } catch (e) { /* 留痕失败不影响保存 */ }
+  return { ok: true, msg: '已保存修改' };
 }
 
 async function history(user, customerId, isBoss) {

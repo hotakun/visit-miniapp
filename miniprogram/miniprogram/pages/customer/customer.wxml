@@ -361,6 +361,9 @@
             <image class="hshot-img" src="{{s}}" mode="aspectFill"></image>
           </view>
         </view>
+        <!-- ⭐ 2026-10-10 老板定：「拜访记录」要能再次编辑 —— 自己记的这条，**右下角**给一个「✎ 编辑」
+             （点它回拜访页的编辑模式；⚠️ catchtap 防冒泡，别把条目上的手势带出去） -->
+        <view class="hedit" wx:if="{{item.mine}}" data-vid="{{item.vid}}" catchtap="editVisit">✎ 编辑</view>
       </view>
     </view>
   </view>
