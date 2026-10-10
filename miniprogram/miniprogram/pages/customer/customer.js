@@ -154,7 +154,7 @@ function buildD(res, photoUrls, recUrls) {
     const md = at ? (mdCn(at) + (v.duration ? '' : '')) : '';
     return {
       // ⭐ 2026-10-10 老板定：这里显示**拜访结果**（加入商城 / 需要样品 / 已下单 / 不愿改 / 有抵触 /
-      //   联系不上 / 闭店·搬迁 / 其他），**不是**拜访状态。三种兜底：
+      //   闭店 / 搬迁 / 其他），**不是**拜访状态。三种兜底：
       //   · 拜访中（还没提交）→ 没结果，显"拜访中"  · 老记录没结果 → 退回状态  · 都没有 → 已回访
       tag: (v.status === 'ongoing') ? '拜访中' : (v.result || ST[v.status] || '已回访'),
       md: md + (v.duration ? '' : ''),

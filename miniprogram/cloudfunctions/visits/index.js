@@ -26,7 +26,7 @@ const _silentErrs = [];
 
 // ⭐ 2026-10-07 老板定改名：「不愿改」→「已有供应商」、「联系不上」→「关门·休息中」
 //   ⚠️ 三处必须**同时**改（漏一处就坏）：本文件 + 前端 pages/visit/visit.js 的 MALL/PRAISE + 后台 admin/admin.html 的 RESULT_PILL
-const RESULT_ENUM_MALL = ['正常回访', '加入商城', '已下单', '需要样品', '已有供应商', '有抵触', '关门·休息中', '闭店·搬迁', '换老板了', '其他'];   // ⭐ 2026-10-11 老板定：加「换老板了」「正常回访」；当天再定顺序：**正常回访第 1、需要样品第 4**（与 visit.js 的 MALL 逐字一致）
+const RESULT_ENUM_MALL = ['正常回访', '加入商城', '已下单', '需要样品', '已有供应商', '有抵触', '关门·休息中', '闭店', '搬迁', '换老板了', '其他'];   // ⭐ 2026-10-11 老板定：「闭店」「搬迁」**拆成两项**（原「闭店·搬迁」不是一个意思）；顺序 正常回访第 1 / 需要样品第 4（与 visit.js 的 MALL 逐字一致）
 const RESULT_ENUM_NEW = [...RESULT_ENUM_MALL, '已签约商城', '未签约'];
 
 // ===== 2026-09-11 批 3：云调用用量自建统计（与 adminapi 写同一份 settings.usageCounter；攒批落库）=====
@@ -498,7 +498,9 @@ async function submit(user, e, isBoss) {
     } catch (err) { /* 回填失败不影响提交 */ }
   }
 
-  if (result === '闭店·搬迁') {
+  // ⭐ 2026-10-11：「闭店」「搬迁」拆成两项；且结果**可多选**（逗号串）→ 用"包含"判断
+  const rSegs = String(result || '').split(',').map(s => s.trim());
+  if (rSegs.includes('闭店') || rSegs.includes('搬迁')) {
     await db.collection('customers').doc(customerId).update({ data: { reviewFlag: true } });
   }
 
