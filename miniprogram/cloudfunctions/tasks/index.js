@@ -646,10 +646,8 @@ async function correctCustomer(salesmanId, event) {
   const contactName = String(e.contactName || '').trim();
   const phone = String(e.phone || '').trim();
   const address = String(e.address || '').trim();
+  // ⚠️ 2026-10-10 老板定（追加）：**必填项只有店名**（联系人/电话/地址改选填）
   if (!name) return { ok: false, code: 'NO_NAME', msg: '请填店名' };
-  if (!contactName) return { ok: false, code: 'NO_CONTACT', msg: '请填联系人' };
-  if (!phone) return { ok: false, code: 'NO_PHONE', msg: '请填电话' };
-  if (!address) return { ok: false, code: 'NO_ADDR', msg: '请填地址' };
   // ⚠️ 游客（实习）硬拦 —— tasks 里 trial 是**各写操作自己判**的（不是 main 统一拦），别漏
   const uRes = await db.collection('users').doc(salesmanId).get().catch(() => null);
   const user = uRes && uRes.data;
@@ -670,33 +668,44 @@ async function correctCustomer(salesmanId, event) {
   const cat1 = String(e.cat1 || '').trim(), cat2 = String(e.cat2 || '').trim(), cat3 = String(e.cat3 || '').trim();
   const phone2 = String(e.phone2 || '').trim();
   const dishes = Array.isArray(e.dishes) ? e.dishes.map(x => String(x || '').trim()).filter(Boolean).slice(0, 30) : [];
-  // 「改了哪几项」—— 与旧值逐项比对（留痕正文用）
+  // ⭐ 2026-10-10 老板定（追加）：**留空 = 保留原值** —— 选填项（联系人/电话/地址/营业时间/商圈/品类/招牌菜）
+  //   业务员没填就不动已有资料（避免"懒得填"把资料抹掉）；店名是唯一必填（已校验非空）。
+  const pick = (nv, ov) => { const s = String(nv == null ? '' : nv).trim(); return s ? s : String(ov == null ? '' : ov); };
+  const oldDishes = (c.platManual && Array.isArray(c.platManual.dishes)) ? c.platManual.dishes : [];
+  const vContact = pick(contactName, c.contactName);
+  const vPhone = pick(phone, c.phone);
+  const vPhone2 = pick(phone2, c.phone2);
+  const vAddress = pick(address, c.address);
+  const vHours = pick(hours, c.hours);
+  const vBiz = pick(bizCircle, c.bizCircle);
+  const vCat1 = pick(cat1, c.cat1), vCat2 = pick(cat2, c.cat2), vCat3 = pick(cat3, c.cat3);
+  const vDishes = dishes.length ? dishes : oldDishes;
+  // 「改了哪几项」—— 与旧值逐项比对（留痕正文用；用 pick 后的值比，没填的不算改动）
   const changed = [];
   const cmp = (k, oldV, newV) => { if (String(oldV || '').trim() !== String(newV || '').trim()) changed.push(k); };
   cmp('店名', c.name, name);
-  cmp('联系人', c.contactName, contactName);
-  cmp('电话', c.phone, phone);
-  cmp('电话2', c.phone2, phone2);
-  cmp('地址', c.address, address);
-  cmp('营业时间', c.hours, hours);
+  cmp('联系人', c.contactName, vContact);
+  cmp('电话', c.phone, vPhone);
+  cmp('电话2', c.phone2, vPhone2);
+  cmp('地址', c.address, vAddress);
+  cmp('营业时间', c.hours, vHours);
   cmp('区域', (String(c.region || '').split('>').pop() || ''), area);
-  cmp('商圈', c.bizCircle, bizCircle);
-  cmp('品类', [c.cat1, c.cat2, c.cat3].filter(Boolean).join('·'), [cat1, cat2, cat3].filter(Boolean).join('·'));
-  const oldDishes = (c.platManual && Array.isArray(c.platManual.dishes)) ? c.platManual.dishes : [];
-  cmp('招牌菜', oldDishes.join('、'), dishes.join('、'));
+  cmp('商圈', c.bizCircle, vBiz);
+  cmp('品类', [c.cat1, c.cat2, c.cat3].filter(Boolean).join('·'), [vCat1, vCat2, vCat3].filter(Boolean).join('·'));
+  cmp('招牌菜', oldDishes.join('、'), vDishes.join('、'));
   if (!changed.length) return { ok: true, changed: [], msg: '没有改动' };
   const upd = {
     name: name, nameRaw: nameRaw,
-    contactName: contactName,
-    phone: phone, phone2: phone2,
-    address: address, hours: hours,
-    region: region, bizCircle: bizCircle,
-    cat1: cat1, cat2: cat2, cat3: cat3,
+    contactName: vContact,
+    phone: vPhone, phone2: vPhone2,
+    address: vAddress, hours: vHours,
+    region: region, bizCircle: vBiz,
+    cat1: vCat1, cat2: vCat2, cat3: vCat3,
     updatedAt: now        // ⚠️ 必须写：增量同步（custSync → 本地缓存 / PG）靠它
   };
   // 招牌菜 → platManual.dishes（与「加新店」同口径；保留 platManual 里的其它字段）
   const pm = Object.assign({}, (c.platManual && typeof c.platManual === 'object') ? c.platManual : {});
-  if (dishes.length) pm.dishes = dishes; else delete pm.dishes;
+  if (vDishes.length) pm.dishes = vDishes; else delete pm.dishes;
   if (Object.keys(pm).length) upd.platManual = pm;
   await db.collection('customers').doc(cid).update({ data: upd });
   // 留痕（独立集合；失败不影响更正 —— 但会记 console）

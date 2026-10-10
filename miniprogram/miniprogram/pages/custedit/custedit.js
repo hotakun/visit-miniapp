@@ -159,10 +159,8 @@ Page({
     const contact = String(d.contact || '').trim();
     const phone = String(d.phone || '').trim();
     const address = String(d.address || '').trim();
+    // ⚠️ 2026-10-10 老板定：**必填项只有店名**（联系人/电话/地址改选填；留空 = 保留原值，云端兜底）
     if (!name) return wx.showToast({ title: '请填店名', icon: 'none' });
-    if (!contact) return wx.showToast({ title: '请填联系人', icon: 'none' });
-    if (!phone) return wx.showToast({ title: '请填电话', icon: 'none' });
-    if (!address) return wx.showToast({ title: '请填地址', icon: 'none' });
     const ok = await new Promise(res => wx.showModal({
       title: '确认更正',
       content: '保存后这家店的信息会立即更新（会记下是你改的）。',
