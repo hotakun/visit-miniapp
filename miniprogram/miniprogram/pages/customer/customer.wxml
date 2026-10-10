@@ -16,6 +16,9 @@
   <!-- ⭐ 2026-09-27：入商城辉光（已入=淡橙一圈 / 未入=天蓝一圈）+「新店」蓝胶囊（设计文档 §二 0） -->
   <view class="head {{d.hasMall ? 'is-mall' : 'is-new'}}">
     <view class="hrow1">
+      <!-- ⭐ 2026-10-11 老板定：**客户编号**放店名前面（有编号才显示、没编号不占位）——
+           老板原话：「现在手机端都没有显示客户编号，有编号的还是在客户详情页的顶端卡片中显示上吧」 -->
+      <text class="tag" style="background:#EEF3F8;color:#4A6B8A" wx:if="{{d.code}}">{{d.code}}</text>
       <text class="nm">{{d.name}}</text>
       <text class="tag new" wx:if="{{d.newShop}}">新店</text>
       <text class="tag old" wx:if="{{d.listedYears >= 3}}">收录 {{d.listedYears}} 年</text>

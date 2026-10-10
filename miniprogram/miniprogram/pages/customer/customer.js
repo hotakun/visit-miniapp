@@ -181,6 +181,8 @@ function buildD(res, photoUrls, recUrls) {
   return {
     // 地址：老板 2026-09-25 定 —— **不显示省份和地级市**（浙江省金华市永康市… → 永康市…）
     name: esc(c.name), addr: stripProvCity(c.address, c.region),
+    // ⭐ 2026-10-11 老板定：顶端卡片显示**客户编号**（有编号才显示；云端 custDetail 白名单里已带 mallCode）
+    code: esc(c.mallCode || ''),
     // ⭐ 2026-10-07 修：营业时间**平台优先、现场兜底** —— 平台写在 plat.hours，现场（「加新店」）写在顶层 hours。
     hours: flatHours(p.hours || c.hours),
     status: esc(p.bizStatus) || '',
