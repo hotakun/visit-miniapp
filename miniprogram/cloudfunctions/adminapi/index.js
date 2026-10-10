@@ -1321,9 +1321,14 @@ async function autoArchiveExpired(event) {
 // ===== 位置监控接口（2026-09-08 M2：实时位置/当天轨迹/拜访轨迹回放） =====
 async function listLatestLocations() {
   const rows = await fetchAll('salesman_locations', { type: 'latest' }, {});
+  // ⭐⭐ 2026-10-10 老板定：**战况监控不显示实习（trial 游客账号）的位置，也不给它的按钮；
+  //   「全部业务员」时同样不带实习** —— 在服务端一次过滤干净，前端（trackChips / 地图点 / 全览）拿到什么画什么。
+  //   ⚠️ "真业务员"口径与手机端 bossWar / bossBoard **完全一致**：active + 非 trial +（业务员 或 兼业务员）。
+  const uRows = await fetchAll('users', _.and([{ active: true, trial: _.neq(true) }, _.or([{ role: 'salesman' }, { alsoSalesman: true }])]), { _id: true });
+  const realIds = new Set(uRows.map(u => u._id));
   return {
     ok: true,
-    locations: rows.map(r => ({
+    locations: rows.filter(r => r.salesmanId && realIds.has(r.salesmanId)).map(r => ({
       salesmanId: r.salesmanId, name: r.name || '',
       lat: r.lat, lng: r.lng, accuracy: r.accuracy || 0,
       t: r.t || r.updatedAt || 0, visitOngoing: !!r.visitOngoing
