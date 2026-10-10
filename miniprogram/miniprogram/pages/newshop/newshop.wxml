@@ -212,12 +212,12 @@
             placeholder-class="rph" maxlength="40" />
         </view>
         <view class="row">
-          <text class="rl">联系人<text class="must"> *</text></text>
+          <text class="rl">联系人</text>
           <input class="ri" value="{{contact}}" bindinput="onContact" placeholder="老板 / 店长称呼"
             placeholder-class="rph" maxlength="20" />
         </view>
         <view class="row">
-          <text class="rl">电话<text class="must"> *</text></text>
+          <text class="rl">电话</text>
           <input class="ri" type="number" value="{{phone}}" bindinput="onPhone" placeholder="填了能防止重复建"
             placeholder-class="rph" maxlength="11" />
           <!-- ⭐ 2026-10-02 老板定：**最多两个电话** —— 右侧浅灰 ⊕ 点一下展开第二个输入框。
