@@ -15,6 +15,14 @@ Page({
     this._loaded = false;
     this.distMap = {};
   },
+  // ⭐⭐ 2026-10-10 老板定：**任务心跳回调**（`app.js` 每 15 秒问一次，变了才叫到这里）
+  //   任务详情页比首页更需要"说一声"：**后台把任务结束了**、或改了截止日 —— 业务员正看着这一页呢。
+  //   ⚠️ 只轻提示一句 + 刷新，**不弹窗打断**（他可能正在填东西）。
+  onTaskVerChanged() {
+    try { wx.showToast({ title: '任务有更新', icon: 'none', duration: 1500 }); } catch (e) { /* 静默 */ }
+    try { this.load(); } catch (e) { /* 静默：刷新失败不能让页面崩 */ }
+  },
+
   onShow() {
     const app = getApp();
     if (!this._revFn) {

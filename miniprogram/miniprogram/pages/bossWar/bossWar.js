@@ -34,7 +34,7 @@ Page({
       return;
     }
     this.load();
-    this._timer = setInterval(() => this.load(true), 30000); // 30 秒自动刷（2026-09-09 老板定）
+    this._timer = setInterval(() => this.load(true), 60000); // ⭐ 2026-10-10 老板定：30 秒 → 60 秒（省一半调用量；战况本来就是"看着"的，晚 30 秒无感）
   },
   onHide() { this.clearTimer(); },
   onUnload() { this.clearTimer(); },

@@ -120,6 +120,10 @@ function buildD(res, photoUrls, recUrls) {
   const facRaw = [p.features, p.services, p.facilities].filter(Boolean).join(' ');
   const fac = facRaw.split(/\s+/).map(x => x.trim())
     .filter(x => x && !/^收录\d+年$/.test(x));   // 配套设施里混着的「收录N年」滤掉
+  // ⭐ 2026-10-07 补：**现场建档时直接录的设施**（「加新店」第 3 步写在顶层 `fac` 数组，如 ['有外卖','沿街']）——
+  //   原来只并 `platManual.facs`（后台采纳的提报）→ 漏了现场建档那一刻录下的那批
+  //   （老板报"手机上看不到设施/品类"就是这个 + 下面几处同源）。
+  (c.fac || []).forEach(x => { if (x && fac.indexOf(x) < 0) fac.push(x); });
   (pm.facs || []).forEach(x => { if (x && fac.indexOf(x) < 0) fac.push(x); });
   // ⭐ 2026-09-27：业务员现场提报（待管理员审核）—— 菜品/设施并入列表并标「（待审核）」；团购外卖记 flagPending
   const frs = res.fieldReports || [];
@@ -168,7 +172,9 @@ function buildD(res, photoUrls, recUrls) {
 
   return {
     // 地址：老板 2026-09-25 定 —— **不显示省份和地级市**（浙江省金华市永康市… → 永康市…）
-    name: esc(c.name), addr: stripProvCity(c.address, c.region), hours: flatHours(p.hours),
+    name: esc(c.name), addr: stripProvCity(c.address, c.region),
+    // ⭐ 2026-10-07 修：营业时间**平台优先、现场兜底** —— 平台写在 plat.hours，现场（「加新店」）写在顶层 hours。
+    hours: flatHours(p.hours || c.hours),
     status: esc(p.bizStatus) || '',
     // 游客（实习）打码：后四位 ****（2026-09-08 口径「游客不能看完整电话」；maskTrialPhone 对已打码串幂等）
     tel: api.isTrialUser() ? api.maskTrialPhone(esc(c.phone) || esc(p.phone1) || '') : (esc(c.phone) || esc(p.phone1) || ''),
@@ -176,7 +182,10 @@ function buildD(res, photoUrls, recUrls) {
     // ⭐ 2026-09-28 晚 老板定：「⏳ 待商城建档」淡色胶囊（业务员现场用「加新店」录的店，商城侧还没档案）
     mallPending: !!c.mallPending,
     listedYears: listedYears(p.listedTime),
-    cat: uniqueJoin(p.cat1, p.cat2, p.cat3),
+    // ⭐ 2026-10-07 修：品类**平台优先、现场兜底** —— 平台（大众点评）写在 plat.cat1/2/3，
+    //   现场（「加新店」三级下拉）写在**顶层** cat1/2/3。原来只读平台 → 现场建的店**看不到品类**
+    //   （老板报的正是这条："后台能看到大中小类，手机上却看不到"）。与招牌菜同一路数：平台 + 现场合并显示。
+    cat: uniqueJoin(p.cat1 || c.cat1, p.cat2 || c.cat2, p.cat3 || c.cat3),
     rank: esc(p.rank),
     mallRows: [
       ['注册商城时间', esc(c.mallJoinedAt) || '—'],
@@ -224,7 +233,11 @@ function buildD(res, photoUrls, recUrls) {
       ['人均消费', esc(p.avgPriceText) || '—'],
       ['评论总数', esc(p.reviewCount) ? (esc(p.reviewCount) + ' 条') : '—']
     ].concat(Number(p.chainCount) >= 1 ? [['连锁情况', esc(p.chainCount) + ' 家']] : []),   // 单店不显示（老板定）
-    dishes: dishes, flags: [['团购', !!p.groupon], ['外卖', !!p.takeout]],
+    // ⭐ 2026-10-07 修：团购/外卖**平台优先、现场兜底** —— 现场（「加新店」）写在顶层 `flags`
+    //   （形如 {外卖:true, 团购:false}，见 newshop.js 的 _flags()）。原来只读平台 → 现场建的店两个都显示"未开"。
+    dishes: dishes,
+    flags: [['团购', !!(p.groupon || (c.flags && c.flags['团购']))],
+            ['外卖', !!(p.takeout || (c.flags && c.flags['外卖']))]],
     flagPending: flagPending,      // ⭐ 2026-09-27：待审核的团购/外卖（wxml 显示「· 待审核」）
     // 商圈：老板 2026-09-25 定 —— **也不显示省和地级市** →
     //   原来拼了 `c.region`（"浙江省>金华市>永康市"）会重复出现省级信息，现在**只显示商圈名**（平台 regionName）。
@@ -241,8 +254,17 @@ function buildD(res, photoUrls, recUrls) {
 //   （覆盖 2026-09-27 的"按内容判断"版本 —— 那版在"没备注也没历史"时会自动展开「🏪 商城信息」，
 //    老板实际看到的一直是商城信息卡打开，要求改成固定开这两张。）
 //   注：参数 d 保留（调用方仍会传），当前不再使用。
+// ⭐ 2026-10-07 老板定：**没内容的卡不要默认展开** ——
+//   「📝 管理员备注」「🕑 拜访历史」**只有真有内容时才展开**；空的那张保持收起（只留标题栏）。
+//   （沿革：2026-09-27 是"按内容算"，后来被改回"写死开这两张"—— 于是空卡也展开、白占一屏；
+//     现在按老板 2026-10-07 的要求恢复成"有内容才开"，且**不会**顺手自动展开商城信息那类卡。）
 function defaultOpen(d) {
-  return { mall: false, purchase: false, rate: false, serv: false, remark: true, hist: true };
+  const dd = d || {};
+  return {
+    mall: false, purchase: false, rate: false, serv: false,
+    remark: !!(dd.remarks && dd.remarks.length),
+    hist: !!(dd.history && dd.history.length)
+  };
 }
 
 
@@ -257,6 +279,10 @@ Page({
     markers: [],
     polyline: [],
     open: { mall: false, purchase: false, rate: false, serv: false, remark: false, hist: false },   // ⭐ 实际展开由 defaultOpen(d) 算（见 onLoad）
+    // ⭐ 2026-10-07 老板定：「配套·服务·设施」的标签群**默认收起、只露一行**（设施多的店会撑得很长），点标题行展开
+    foldFac: true,
+    // ⭐ 2026-10-07 老板定：步行规划大弹窗（只有 1 公里内才弹；见 onWalk）
+    walkShow: false, walkLine: [], walkCenterLat: '', walkCenterLng: '', walkInfo: '', walkTip: '',
     // 弹层
     addShow: false, addKind: '', addTitle: '', addPh: '', addVal: '',
     flagShow: false, flagName: '', flagTo: true,
@@ -265,8 +291,9 @@ Page({
     //   ⚠️ centerLat/centerLng = **地图当前中心**：修正模式下 map 的 latitude/longitude 绑它俩。
     //      **绝不能绑 d.lat** —— 那样用户一拖地图，页面任何 setData 都会把视野拉回客户点（地图根本拖不动）。
     fixing: false, fixLat: '', fixLng: '', fixDist: '', centerLat: '', centerLng: '',
-    // ⭐ 2026-09-27：📍报错弹层（接 coordfix 真提交）
-    fixShow: false, fixNote: '', fixShots: ['', '', ''],
+    // 📍 报错：⭐ 2026-10-07 起**本页不再有弹层** —— 直接跳独立整屏取点页 pages/coordfix/
+    //   （弹层版（含大半屏那版）被老板真机否掉："卡片太小、操作实在不方便"）
+    //   → 所以 fixShow / fixNote / fixPick 三个字段都不需要了
     sheetShow: false,
     viewerShow: false, viewerUrl: '',
     notesN: 0          // ⭐ 2026-09-28：本机「我的记事」条数（只读 storage，不联网）
@@ -284,6 +311,15 @@ Page({
     const id = (query && (query.id || query.customerId)) || cc._id || '';
     this._cid = id;
     this._taskId = (query && query.taskId) || cc.taskId || '';   // 开始拜访要用（任务设置也从 cc 兜底）
+    // ⭐ 2026-10-07 老板定：「我新加的店」的按钮改成「客户详情」→ 从这里进来时带 freeVisit=1。
+    //   ⚠️ 必须在这里**清掉 taskId**：goVisit() 是 Object.assign **接力 storage 里的 curCustomer**，
+    //      而 storage 里可能还留着上次任务拜访的 taskId → 点「开始拜访」会变成"任务拜访"
+    //      （云函数会去查任务、校验客户在不在任务里 → 报错 / 串数据）。
+    if (query && query.freeVisit === '1') {
+      const ccFv = wx.getStorageSync('curCustomer') || {};
+      wx.setStorageSync('curCustomer', Object.assign({}, ccFv, { _id: id, taskId: '', freeVisit: true }));
+      this._taskId = '';
+    }
     if (!id) { this.setData({ loadErr: '缺少客户参数（上一页没传客户 id）' }); return; }
     this.setData({ loadErr: '' });
     try {
@@ -303,6 +339,18 @@ Page({
           const r = await wx.cloud.getTempFileURL({ fileList: ids.slice(0, 3) });
           photoUrls = (r.fileList || []).map(x => x.tempFileURL).filter(Boolean);
         } catch (e) { /* 取图失败不影响其它内容 */ }
+      }
+      // ⭐ 2026-10-07 老板定：**分享卡片封面用这家店的门头照**。
+      //   ⚠️ 但**不能用上面的临时 URL** —— 它的域名是 tcb.qcloud.la（云开发**开发环境**域名），
+      //      微信**不允许**把它配进 downloadFile 白名单（后台会提示"不可在正式环境下使用"，提交审核会被拒）。
+      //   解法：**提前把门头照下载成【本地文件】**，分享时直接给本地路径 ——
+      //      `wx.cloud.downloadFile` 属于**云能力，不受域名白名单限制**（这也是分享卡片唯一稳的路子）。
+      //   ⚠️ onShareAppMessage 必须**同步返回**，所以只能在这里先下好，不能等分享时才下。
+      if (ids.length) {
+        try {
+          const dl = await wx.cloud.downloadFile({ fileID: ids[0] });
+          if (dl && dl.tempFilePath) this._shareImg = dl.tempFilePath;
+        } catch (e) { /* 下载失败 → 分享时自动回退统一封面 */ }
       }
 
       // ⭐ 2026-09-27：拜访录音同理（audio fileID → 临时 URL；一次最多 20 个，够覆盖近几条历史）
@@ -356,6 +404,63 @@ Page({
     open[k] = !open[k];
     this.setData({ open });
   },
+
+  // ⭐ 2026-10-07 老板定：「配套·服务·设施」标签群单独折叠（收起只露一行，点标题行切换）
+  toggleFac() {
+    this.setData({ foldFac: !this.data.foldFac });
+  },
+
+  // ⭐⭐ 2026-10-07 老板定：小地图下方的「🚶 步行」—— **1 公里内**弹大窗画真实步行路线（绿色加粗，同自由拜访）；
+  //   **超过 1 公里不弹窗**、只提示"走路太远"（避免业务员白走一趟）。
+  //   ⚠️ 路线由云函数 tasks.walkRoute 调腾讯 walking 接口算 —— 云函数不受小程序域名白名单限制，不用去配 request 域名；
+  //      接口挂掉时云端回**直线兜底**，这里照画，并在弹窗底部注明。
+  onWalk() {
+    const d = this.data.d;
+    if (!d || !d.lat || !d.lng) { wx.showToast({ title: '这家没有坐标，画不了路线', icon: 'none' }); return; }
+    wx.getLocation({
+      type: 'gcj02',
+      success: (r) => {
+        const toLat = Number(d.lat), toLng = Number(d.lng);
+        // 直线距离（Haversine，这里内联一份，不依赖本页其它函数）
+        const R = 6371000, rad = Math.PI / 180;
+        const dLat = (toLat - r.latitude) * rad, dLng = (toLng - r.longitude) * rad;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(r.latitude * rad) * Math.cos(toLat * rad) * Math.sin(dLng / 2) ** 2;
+        const m = 2 * R * Math.asin(Math.sqrt(a));
+        if (!isFinite(m)) { wx.showToast({ title: '取不到位置，请稍后再试', icon: 'none' }); return; }
+        if (m > 1000) {
+          wx.showToast({ title: '距离约 ' + (m / 1000).toFixed(1) + ' 公里，走路太远了', icon: 'none', duration: 2600 });
+          return;
+        }
+        this._drawWalk(r.latitude, r.longitude, toLat, toLng);
+      },
+      fail: () => { wx.showToast({ title: '没拿到你的位置，请检查定位权限', icon: 'none' }); }
+    });
+  },
+  // 调云端算步行路线 → 画到弹窗那张地图上
+  _drawWalk(fromLat, fromLng, toLat, toLng) {
+    wx.showLoading({ title: '规划路线…', mask: false });
+    api.call('tasks', { action: 'walkRoute', fromLat, fromLng, toLat, toLng }).then(r => {
+      wx.hideLoading();
+      if (!r || !r.ok || !r.pts || r.pts.length < 2) { wx.showToast({ title: '路线获取失败，请稍后再试', icon: 'none' }); return; }
+      const pts = r.pts.map(q => ({ latitude: q[0], longitude: q[1] }));
+      const km = r.distanceMeters >= 1000 ? (r.distanceMeters / 1000).toFixed(1) + ' 公里' : r.distanceMeters + ' 米';
+      this.setData({
+        walkShow: true,
+        walkCenterLat: (fromLat + toLat) / 2, walkCenterLng: (fromLng + toLng) / 2,
+        walkInfo: '步行 ' + km + (r.durationMin ? (' · 约 ' + r.durationMin + ' 分钟') : ''),
+        walkTip: r.fallback ? '（路线接口暂时不可用，这里画的是近似直线）' : '',
+        walkLine: [{ points: pts, color: '#16A34A', width: 8, arrowLine: true, borderColor: '#FFFFFF', borderWidth: 2 }]
+      }, () => {
+        // ⚠️ setData 是异步的；等节点渲染出来再框住整条路线（否则 includePoints 拿不到地图）
+        wx.createMapContext('wmap', this).includePoints({ points: pts, padding: [60, 60, 60, 60] });
+      });
+    }).catch(e => {
+      wx.hideLoading();
+      console.error('[客户详情] 步行路线失败', e);
+      wx.showToast({ title: '路线获取失败，请稍后再试', icon: 'none' });
+    });
+  },
+  walkClose() { this.setData({ walkShow: false, walkLine: [] }); },
 
   // ---------- 演示提示（真机才有真实动作的地方） ----------
   tip(e) {
@@ -640,78 +745,19 @@ Page({
     this._fixBusy = false;
   },
 
-  // ---------- 📍 坐标报错（2026-09-27：从"只弹提示"改为**真提交** coord_fix_requests）----------
-  //   流程：点报错 → 弹层（原因可选 + 现场照片可选）→ 提交时**现场精确定位** → 传照片 → 调 coordfix 云函数
-  //   ⚠️ 云端（2026-09-28 晚改）：**允许重复提交** —— 再提交会把旧的 pending 标成 superseded，后台只看最新一条。
-  //   ⚠️ 老板模式 = 模拟成功**不落库**（后台收不到、铃铛不响、语音不播）—— 跟「地图修正」同一条规矩。
+  // ---------- 📍 坐标报错（2026-09-27 起真提交 coord_fix_requests）----------
+  //   ⭐ 2026-10-07 老板定：**改成独立整屏取点页 pages/coordfix/** ——
+  //     本页只负责带着客户现有坐标跳过去；取点（📱手机 / 📡北斗 / ✎拖地图微调）+ 原因 + 提交都在那个页面做。
+  //     （沿革：小弹层 → 当天上午的大半屏弹层 → 当天下午老板真机否掉"卡片太小、操作不方便" → 整屏页）
+  //   ⚠️ 云端 coordfix 一个字没改；老板模式仍是"模拟成功不落库"，与「地图修正」同一条规矩。
   openFix() {
-    this.setData({ fixShow: true, fixNote: '', fixShots: ['', '', ''] });
-  },
-  fixClose() { this.setData({ fixShow: false }); },
-  fixNoteIn(e) { this.setData({ fixNote: e.detail.value }); },
-  // 报错弹层的三格：同样先问「拍照 / 从相册选」（与门店照片、记事页完全一致）
-  fixShot(e) {
-    const i = Number(e.currentTarget.dataset.i) || 0;
-    wx.showActionSheet({
-      itemList: ['拍照', '从相册选'],
-      success: (r) => this.fixShotBySource(i, r.tapIndex === 0 ? 'camera' : 'album'),
-      fail: () => { /* 用户取消 */ }
+    const d = this.data.d || {};
+    if (!d.lat || !d.lng) { api.toast('这个客户还没有坐标'); return; }
+    wx.navigateTo({
+      url: '/pages/coordfix/coordfix?customerId=' + (this._cid || '') +
+           '&lat=' + d.lat + '&lng=' + d.lng +
+           '&name=' + encodeURIComponent(d.name || '')
     });
-  },
-  fixShotBySource(i, src) {
-    wx.chooseMedia({
-      count: 1, mediaType: ['image'], sourceType: [src], sizeType: ['compressed'],
-      success: (r) => {
-        const f = (r.tempFiles || [])[0];
-        if (!f || !f.tempFilePath) return;
-        const s = this.data.fixShots.slice();
-        s[i] = f.tempFilePath;
-        this.setData({ fixShots: s });
-      },
-      fail: () => { /* 用户取消 */ }
-    });
-  },
-  async submitFix() {
-    if (this._fixBusy) return;
-    this._fixBusy = true;
-    const cid = this._cid;
-    if (!cid) { wx.showToast({ title: '缺少客户参数', icon: 'none' }); this._fixBusy = false; return; }
-    try {
-      // ① 现场精确定位（失败即拦截 —— 报错的意义就是"人在这儿、坐标不对"）
-      wx.showLoading({ title: '正在精确定位…', mask: true });
-      const loc = await new Promise((resolve, reject) => {
-        wx.getLocation({ type: 'gcj02', isHighAccuracy: true, highAccuracyExpireTime: 5000, success: resolve, fail: reject });
-      });
-      // ② 现场照片（可选，最多 3 张）先传云存储
-      const shots = (this.data.fixShots || []).filter(Boolean).slice(0, 3);
-      const photos = [];
-      for (let k = 0; k < shots.length; k++) {
-        wx.showLoading({ title: '上传照片 ' + (k + 1) + '/' + shots.length + '…', mask: true });
-        const up = await wx.cloud.uploadFile({
-          cloudPath: 'coordfix/' + cid + '/' + Date.now() + '_' + k + '.jpg',
-          filePath: shots[k]
-        });
-        photos.push({ fileID: up.fileID, thumbID: '' });
-      }
-      // ③ 提交（云函数 coordfix：写 coord_fix_requests 待后台审核）
-      wx.showLoading({ title: '提交中…', mask: true });
-      const res = await api.call('coordfix', {
-        customerId: cid,
-        lat: loc.latitude,
-        lng: loc.longitude,
-        note: String(this.data.fixNote || '').trim().slice(0, 100),
-        photos: photos
-      });
-      wx.hideLoading();
-      this._fixBusy = false;
-      if (!res || !res.ok) { api.toast((res && res.msg) || '提交失败，请稍后再试'); return; }
-      this.setData({ fixShow: false });
-      api.toast(res.msg || '已提交，等待管理员审核', 'success');
-    } catch (err) {
-      wx.hideLoading();
-      this._fixBusy = false;
-      api.toast('定位失败：请到店门口重试');
-    }
   },
 
   // ---------- 大图查看 ----------
@@ -736,6 +782,26 @@ Page({
     const d = this.data.d;
     d.history = d.history.map((v, k) => (k === i ? Object.assign({}, v, { open: !v.open }) : v));
     this.setData({ d });
+  },
+
+  // ⭐ 2026-10-07 老板定：**分享这家店给同事**（右上角三个点的「转发给朋友」也会因此点亮）
+  //   ⚠️ path 必须带 id —— 对方点开直达这家店的详情页（onLoad 认 ?id=）
+  //   ⚠️ 封面只能用 images/share.png：该客户的门头照是云存储 fileID，分享卡片吃不了
+  onShareAppMessage() {
+    const d = this.data.d || {};
+    // ⭐ 2026-10-07 老板定：**拿这家店的门头照当分享封面** —— 同事一眼就能认出是哪家店。
+    //   ⚠️ imageUrl 只吃「本地包内路径」或「https 网络 URL」，**云存储 fileID 不行**；
+    //      而 d.photos[0] 在 onLoad 里已经被 wx.cloud.getTempFileURL 换成**临时 URL**了（见本文件 298-306 行），
+    //      所以这里直接拿来用即可，**不需要异步**（onShareAppMessage 必须同步返回）。
+    //   ⚠️ 没照片的店（新店 / 没拍过门头照）→ 自动回退到统一的 /images/share.png。
+    // ⚠️ 封面优先用**已经下载到本地的门头照**（见 onLoad 里的 wx.cloud.downloadFile）——
+    //   本地路径不需要任何域名白名单；没有就回退统一的 /images/share.png。
+    const cover = this._shareImg || '/images/share.png';
+    return {
+      title: '聚火拜访 · ' + (d.name || '客户详情'),
+      path: '/pages/customer/customer?id=' + this._cid,
+      imageUrl: cover
+    };
   },
 
   // ---------- 开始拜访（2026-09-25 改：**真客户、真任务**，不再是 demo 标记）----------

@@ -32,10 +32,20 @@
              营业时间里的换行符已在 buildD 的 flatHours() 里折成空格 -->
         <text class="tx"><text wx:if="{{d.status}}" class="strong">{{d.status}}</text><text wx:if="{{d.status}}"> · </text>{{d.hours}}</text>
       </view>
-      <view class="mline cat" wx:if="{{d.cat || d.rank}}">
+      <view class="mline cat">
         <text class="ic">🏷</text>
-        <text class="tx">{{d.cat}}</text>
+        <text class="tx">{{d.cat || '—'}}</text>
         <text class="rk" wx:if="{{d.rank}}">🏆 {{d.rank}}</text>
+        <!-- ⭐ 2026-10-07 老板定：分享按钮放【品类行的右边】，**用首页右上角那一模一样的写法**
+             （原装图标 images/share-icon.png + 内联 px 写死）。
+             ⚠️ 首页注释里那四个坑对这里同样适用：① 定位别写在 <button> 上（微信 button 内置样式会顶掉）；
+                ② 容器与 button 别用 100% 互相定尺寸（算成 0 → 图标消失）；③ 内联 style 别用 rpx（会被当 px 放大）；
+                ④ 小图标别用 CSS 手拼。 -->
+        <view style="position:relative;width:20px;height:20px;margin-left:auto;flex:none">
+          <button open-type="share" style="width:20px;height:20px;min-width:0;padding:0;margin:0;background:transparent;border:none;border-radius:0;line-height:0;overflow:visible">
+            <image src="/images/share-icon.png" mode="aspectFit" style="width:20px;height:20px;display:block;transform:scaleY(.75);transform-origin:top"></image>
+          </button>
+        </view>
       </view>
     </view>
     <view class="telrow">
@@ -181,7 +191,11 @@
   <view class="card k-serv {{open.serv ? '' : 'collapsed'}}">
     <view class="ch" data-k="serv" bindtap="toggle">
       <text class="ci">🛎</text><text class="t">服务·位置</text>
-      <text class="sub" wx:if="{{d.flags[1][1]}}">外卖 有</text>
+      <!-- ⚠️ 这一行**不能加 wx:if** —— 它就是那个把右边箭头"顶到最右"的弹簧（`.sub` 带 flex:1）：
+           条件不成立时整行消失 → 箭头紧贴标题（老板 2026-10-07 报的"服务·位置卡的箭头没靠右"）。
+           现在**恒常渲染**：有团购/外卖就显示，都没有就渲染成空文字 —— 照样占位、箭头照样在最右。
+           ⭐ 顺手按设计口径修：原来是 `wx:if="{{d.flags[1][1]}}"`（**只看外卖**）→ 现在**哪个有显示哪个**。 -->
+      <text class="sub">{{d.flags[0][1] ? '团购 有' : (d.flags[1][1] ? '外卖 有' : '')}}</text>
       <text class="chev">⌄</text>
     </view>
     <view class="cb">
@@ -194,9 +208,14 @@
         </view>
         <view class="plusbar" bindtap="openAdd" data-kind="fac">＋</view>
       </view>
+      <!-- ⭐ 2026-10-07 老板定：设施**收起时只露一行**，点这一行才展开/收起（有的店设施特别多，撑得整卡很长） -->
       <view class="facsec" wx:if="{{d.fac.length}}">
-        <view class="fack">配套·服务·设施</view>
-        <view class="chips">
+        <view class="fack" bindtap="toggleFac">
+          <text class="fack-t">配套·服务·设施</text>
+          <text class="fack-n">{{d.fac.length}} 项</text>
+          <text class="fack-ar">{{foldFac ? '▸' : '▾'}}</text>
+        </view>
+        <view class="chips {{foldFac ? 'folded' : ''}}">
           <text class="chip" wx:for="{{d.fac}}" wx:key="*this">{{item}}</text>
         </view>
       </view>
@@ -213,7 +232,7 @@
       <!-- 小地图（2026-09-13 老板要求加上）：以客户坐标为中心、不可拖、可缩 10~20 级、初始 16 级
            ⚠️ <map> 是原生组件，卡片折叠用的 CSS display:none 压不住它 → 必须用 wx:if 跟展开状态走
            2026-09-25 老板定：**打开 POI 标注**（enable-poi 原来是 false，地图上光秃秃的 —— 看不到餐饮/超市） -->
-      <view class="cmap-wrap" wx:if="{{open.serv}}">
+      <view class="cmap-wrap" wx:if="{{open.serv && !walkShow}}">
         <map class="cmap" id="cmap"
              latitude="{{centerLat || d.lat}}" longitude="{{centerLng || d.lng}}"
              scale="16" min-scale="10" max-scale="20"
@@ -250,16 +269,20 @@
       <!-- ⭐ 2026-09-28 晚老板定：小地图下方**不再显示经纬度**（原来那行 `.coords` 已删），
            改成**两个精致小巧的按钮**并排：🧭 导航 / 📍 报错。
            · 导航 = wx.openLocation 打开微信内置地图（用户可一键跳高德/百度继续导航）；无坐标时不显示这一行；
-           · 报错 = 复用原来的坐标报错弹层（openFix），入口从电话行挪到这里。 -->
+           · 报错 = 跳到独立整屏取点页 pages/coordfix/（openFix），入口从电话行挪到这里。 -->
       <!-- ⭐ 2026-09-28 晚老板定：小地图下方那一行按钮（都是 28px 高的小按钮，**精致小巧**）：
            · 左边：🧭 导航（wx.openLocation 打开微信内置地图，可一键跳高德/百度）
-                   + 📍 报错（复用原弹层 —— 老板 2026-09-28 定「两个都留」）
+                   + 📍 报错（⭐ 2026-10-07 起跳到独立整屏取点页 pages/coordfix/ ——
+                     老板原话「两个都留」，这里与「修正」并存、各管各的）
            · 最右边：📍 修正 —— 点它进入**地图修正模式**：地图可拖 → 地图中心点即新坐标 →
              上方经纬度实时显示新坐标 + 与原坐标的距离 → 点「确定」自动提交后台审核。
              修正模式下：它变成「确定」，左边多出「取消」，导航/报错暂时隐藏。
            无坐标（d.lat 空）时整行不显示。 -->
       <view class="mapln" wx:if="{{d.lat}}">
         <block wx:if="{{!fixing}}">
+          <!-- ⭐ 2026-10-07 老板定：导航键**前面**加「🚶 步行」—— 1 公里内弹大窗画**真实步行路线**（绿色，同自由拜访）；
+               超过 1 公里只提示"太远"、不弹窗（避免业务员白走一趟） -->
+          <view class="mbtn walk" bindtap="onWalk">🚶 步行</view>
           <view class="mbtn" bindtap="onNav">🧭 导航</view>
           <view class="mbtn warn" bindtap="openFix">📍 报错</view>
           <view class="mbtn warn ml" bindtap="startFix">修正</view>
@@ -339,10 +362,33 @@
     </view>
   </view>
 
-  <!-- ===================== 底部悬浮：开始拜访 =====================
-       2026-09-25 老板定：这家**正在拜访中** → 按钮变**蓝色「拜访中」**（橙色 → 蓝色，文案同步改） -->
-  <view class="fab-wrap">
-    <view class="fab {{d.visiting ? 'fab-on' : ''}}" bindtap="goVisit">{{d.visiting ? '拜访中' : '开始拜访'}}</view>
+  <!-- ===================== 开始拜访（⭐ 2026-10-07 老板定：从"底部悬浮"改成放在这里）=====================
+       —— 原来它是 position:fixed 悬浮在屏幕底部；老板要求**放在「拜访历史」卡的下方**（跟着页面滚）。
+       2026-09-25 的口径不变：这家**正在拜访中** → 按钮变**蓝色「拜访中」**（橙色 → 蓝色，文案同步改）。 -->
+  <view class="vbtn-wrap">
+    <view class="vbtn {{d.visiting ? 'vbtn-on' : ''}}" bindtap="goVisit">{{d.visiting ? '拜访中' : '开始拜访'}}</view>
+  </view>
+
+  <!-- ⭐⭐ 2026-10-07 老板定：**步行规划大弹窗**（只有 1 公里内才弹）——
+       里面画「我 → 这家」的**真实步行路线**（绿色加粗，与自由拜访同款）。
+       ⚠️ <map> 是原生组件、**一个页面只能有一个** —— 所以开这个弹窗时，卡片里那个小地图必须
+          一起藏掉（见上面 .cmap-wrap 的 wx:if="{{open.serv && !walkShow}}"），否则两个地图会打架。 -->
+  <view class="walk-mask" wx:if="{{walkShow}}">
+    <view class="walk-box">
+      <view class="walk-hd">
+        <text class="walk-t">🚶 步行路线</text>
+        <text class="walk-i">{{walkInfo}}</text>
+        <view class="walk-x" bindtap="walkClose">✕</view>
+      </view>
+      <map class="walk-map" id="wmap"
+           latitude="{{walkCenterLat}}" longitude="{{walkCenterLng}}"
+           scale="15" min-scale="10" max-scale="20"
+           enable-scroll="{{true}}" enable-zoom="{{true}}"
+           enable-rotate="{{false}}" enable-overlooking="{{false}}"
+           show-location="{{true}}" enable-poi="{{true}}"
+           polyline="{{walkLine}}"></map>
+      <view class="walk-ft" wx:if="{{walkTip}}">{{walkTip}}</view>
+    </view>
   </view>
 
   <!-- ===================== 录入弹层 ===================== -->
@@ -370,27 +416,11 @@
     </view>
   </view>
 
-  <!-- ===================== 📍 坐标报错弹层（2026-09-27 新增）===================== -->
-  <view class="mask" wx:if="{{fixShow}}" bindtap="fixClose">
-    <view class="box" catchtap="noop">
-      <view class="box-t">📍 报告坐标不准</view>
-      <view class="box-s">走到店门口再提交 —— 管理员审核后会把坐标改准</view>
-      <input class="box-i" placeholder="哪里不准？（可不填，如：这家搬走了 / 定位差很远）"
-             value="{{fixNote}}" bindinput="fixNoteIn" maxlength="100" />
-      <view class="fixshotrow">
-        <view class="fixshot" wx:for="{{fixShots}}" wx:key="index" data-i="{{index}}" bindtap="fixShot">
-          <image class="fixshot-img" wx:if="{{item}}" src="{{item}}" mode="aspectFill"></image>
-          <block wx:else>
-            <text class="cam3">📷</text><text class="t3">拍照</text>
-          </block>
-        </view>
-      </view>
-      <view class="box-btns">
-        <view class="bbtn ghost" bindtap="fixClose">取消</view>
-        <view class="bbtn main" bindtap="submitFix">提交报错</view>
-      </view>
-    </view>
-  </view>
+  <!-- 📍 坐标报错 = **独立整屏取点页 pages/coordfix/**（⭐ 2026-10-07 老板定）
+       沿革：页面内小弹层 → 当天上午改「大半屏弹层」→ **当天下午老板真机反馈「卡片太小了，操作实在不方便」**
+       → 改成整屏页（账：弹层只有 86% 高度，扣掉标题/说明/状态行/三行来源/三排按钮/原因/按钮，
+       留给地图只剩 190px 左右，拖地图微调根本对不准）。
+       所以本页**不再有报错弹层**：点小地图下方那个「📍 报错」直接跳过去（见 customer.js 的 openFix）。 -->
 
   <!-- ===================== 购买记录抽屉 ===================== -->
   <view class="sheet" wx:if="{{sheetShow}}" bindtap="closeSheet">

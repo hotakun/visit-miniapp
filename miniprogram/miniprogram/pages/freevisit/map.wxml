@@ -28,9 +28,17 @@
   <view class="card" wx:if="{{sel}}">
     <!-- ⭐ 2026-10-04 老板要的：右上角加关闭；否则这张卡只能靠去点别处关 -->
     <view class="c-x" bindtap="closeCard">✕</view>
-    <view class="c-n">{{sel.name}}</view>
-    <view class="c-a">{{sel.address}}</view>
-    <view class="c-d">距我 {{sel.dist}} 米 · {{sel.stateText}}</view>
+    <!-- ⭐⭐ 2026-10-07 老板定（第三版 · 定稿）：
+         第 1 行 = **店名 …… 距我 xx 米**（距离靠右）
+         第 2 行 = **地址**（太长自动省略号）
+         ⚠️ 老板明确「**未去过 / 已拜访 这个字段不要了**」—— 地图上的针本来就有颜色（橙=没去过 / 灰=已拜访）
+            能区分，卡片上再写一遍是重复。（对应的 `.c-st` / `.c-st.done` 两个样式已一并删除，别再往回加。）
+         ⚠️ 第 1 行仍要 `.first`：让开右上角的 ✕ 关闭键，否则「距我 xx 米」被压住。 -->
+    <view class="c-line first">
+      <text class="c-n">{{sel.name}}</text>
+      <text class="c-d">距我 {{sel.dist}} 米</text>
+    </view>
+    <text class="c-a">{{sel.address}}</text>
     <view class="c-b">
       <view class="cb" bindtap="onRoute">🧭 步行路径</view>
       <view class="cb" bindtap="onNav">🚗 行车导航</view>

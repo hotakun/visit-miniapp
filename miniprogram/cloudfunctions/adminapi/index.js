@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -655,6 +655,7 @@ exports.main = async (event) => {
     // ⭐⭐ 2026-09-29 老板定：**客户回收站**（软删 —— 删除的客户先放这里，可随时恢复）
     if (action === 'listDeletedCustomers') return await listDeletedCustomers(event);   // 回收站列表
     if (action === 'restoreCustomers') return await restoreCustomers(event);           // 从回收站恢复
+    if (action === 'purgeCustomers') return await purgeCustomers(event);               // ⭐ 2026-10-10 回收站：彻底删除（有订单拒删）
     if (action === 'customerNames') return await customerNames(event);
     if (action === 'importCustomers') return await importCustomers(event);
     if (action === 'importMallCustomers') return await importMallCustomers(event);
@@ -679,6 +680,9 @@ exports.main = async (event) => {
     if (action === 'listAdmins') return await listAdmins(event);
     if (action === 'setUserBoss') return await setUserBoss(event);
     if (action === 'setUserAlsoSalesman') return await setUserAlsoSalesman(event);   // ⭐ 2026-09-30 老板兼业务员开关
+    if (action === 'promoteBossSalesman') return await promoteBossSalesman(event);  // ⭐ 2026-10-07 把业务员升格成「三身份」（业务员/老板/游客）
+    if (action === 'renameUser') return await renameUser(event);                     // ⭐ 2026-10-07 改用户显示名（区分重名用）
+    if (action === 'backfillLastOrder') return await backfillLastOrder(event);       // ⭐ 2026-10-07 按订单表回填「最近下单」
     if (action === 'addSalesman') return await addSalesman(event);
     if (action === 'addAdmin') return await addAdmin(event);
     if (action === 'setUserActive') return await setUserActive(event);
@@ -714,6 +718,12 @@ exports.main = async (event) => {
     if (action === 'archiveInitialBatch') return await archiveInitialBatch(event);
     if (action === 'removeCustomerFromBatch') return await removeCustomerFromBatch(event);
     if (action === 'addCustomersToBatch') return await addCustomersToBatch(event);
+    if (action === 'addBatchMembersBulk') return await addBatchMembersBulk(event);
+    if (action === 'exportBatchMembers') return await exportBatchMembers(event);
+    if (action === 'exportCustomerBatches') return await exportCustomerBatches(event);
+    if (action === 'exportTasksForSync') return await exportTasksForSync(event);
+    if (action === 'exportVisitedCustomers') return await exportVisitedCustomers(event);
+    if (action === 'finishTask') return await finishTask(event);
     if (action === 'deleteCustomers') return await deleteCustomers(event);
     if (action === 'getTempFileURL') return await getTempFileURL(event);
     if (action === 'autoArchiveExpired') return await autoArchiveExpired(event);
@@ -1067,15 +1077,25 @@ async function listTasks(event) {
 async function fetchAll(coll, where, field) {
   const out = [];
   const PAGE = 1000; // 云函数端单次 limit 上限 1000；大 PAGE 减少往返（导入匹配池全量拉取曾因 100 页导致超时）
-  let skip = 0;
+  // ⭐⭐ 2026-10-10 改**游标翻页**（治「批次管理页 -601008 超时」）：
+  //   · 老写法用 `skip(N)` —— **MongoDB 的 skip 是 O(n)**（skip=11000 要先扫过 1.1 万条），
+  //     翻到第 12 页时单次就要好几秒；全表拉 1.2 万条成员 + 全部任务（含 customerIds）必超 30 秒。
+  //   · 新写法按 `_id` 游标（`_id > 上一页最后一条`）—— **每页都是 O(1)**，页数再多也一样快。
+  //   ⚠️ 语义不变（仍是"把符合条件的全部拉回来"），所有调用方无需改动。
+  //   ⚠️ `field` 里强制带上 `_id`（否则取不到游标值，会漏数据）。
+  let lastId = '';
   while (true) {
     let q = db.collection(coll);
-    if (where && typeof where === 'object' && Object.keys(where).length) q = q.where(where);
-    if (field && typeof field === 'object' && Object.keys(field).length) q = q.field(field);
-    const r = await q.skip(skip).limit(PAGE).get();
+    const w = (where && typeof where === 'object' && Object.keys(where).length) ? where : null;
+    if (w && lastId) q = q.where(Object.assign({}, w, { _id: _.gt(lastId) }));
+    else if (w) q = q.where(w);
+    else if (lastId) q = q.where({ _id: _.gt(lastId) });
+    const f = (field && typeof field === 'object' && Object.keys(field).length) ? Object.assign({ _id: true }, field) : null;
+    if (f) q = q.field(f);
+    const r = await q.orderBy('_id', 'asc').limit(PAGE).get();
     out.push(...r.data);
     if (r.data.length < PAGE) break;
-    skip += PAGE;
+    lastId = r.data[r.data.length - 1]._id;
   }
   return out;
 }
@@ -1683,12 +1703,20 @@ async function withdrawTask(event) {
   return { ok: true };
 }
 
+// ⭐⭐ 2026-10-10 老板定：**历史任务（done / expired / archived）也允许删除** ——
+//   「新建任务，有的任务建立之后，我想把任务直接删除了，就是结束成历史任务，我在历史任务里面删除掉」
+//   「我是想清空这些，完全让你不再顾及老的批次和任务，全部重新梳理清楚」
+//   ⚠️ **只删任务卡**（老板选 A：**拜访记录留着** —— 谁去过哪家、拍了什么，客户详情页「拜访历史」照样能查）。
+//   ⚠️ **进行中（published / reviewing）仍然拦住** —— 否则业务员手机上还挂着任务、进度凭空消失。
 async function deleteTask(event) {
   const { taskId } = event;
   const t = await getTaskDoc(taskId);
   if (!t) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
-  if (t.status !== 'draft') return { ok: false, code: 'STATE', msg: '仅草稿可删除' };
-  await purgeOngoingOfTask(taskId);
+  const DEL_OK = ['draft', 'done', 'expired', 'archived'];
+  if (DEL_OK.indexOf(t.status) < 0) {
+    return { ok: false, code: 'STATE', msg: '进行中的任务不能删，请先「结束任务」再删' };
+  }
+  await purgeOngoingOfTask(taskId);   // 兜底：清掉"拜访中"的残留（**不影响已提交的拜访记录**）
   await db.collection('tasks').doc(taskId).remove();
   return { ok: true };
 }
@@ -1990,6 +2018,13 @@ async function listCustomers(event) {
       { customerId: true, status: true });
     fx.forEach(f => { fixSet[f.customerId] = true; });
   }
+  // ⭐⭐ 2026-10-10 指针表模式：批次归属从 `batch_members` 现算（customers.batchIds 已停写、读到的是旧值）。
+  //   只查当前页这批客户（分页 50~200 条 → 一次 `_.in` 足够）。
+  const _biMap = {};
+  if (ids.length) {
+    const bm = await fetchAll('batch_members', { customerId: _.in(ids) }, { customerId: true, batchId: true });
+    bm.forEach(m => { if (m && m.customerId) _biMap[m.customerId] = (_biMap[m.customerId] || []).concat([m.batchId]); });
+  }
   return {
     ok: true,
     total, page: pg, pageSize: size, totalPages: Math.max(1, Math.ceil(total / size)),
@@ -2015,7 +2050,7 @@ async function listCustomers(event) {
       mallSalesman: c.mallSalesman || c.salesman || '', mallLevel: c.mallLevel || c.level || '',
       status: c.status,
       region: c.region || '',
-      batchIds: Array.isArray(c.batchIds) ? c.batchIds : [],
+      batchIds: _biMap[c._id] || [],   // ⭐ 2026-10-10 指针表模式：从 batch_members 现算（见上）
       remark: c.remark || '',
       coordFixPending: !!fixSet[c._id],
       // ⭐ 2026-09-26 补：**坐标来源**（前端要显示 商城/平台/采集/修改/待审核）—— 此处手工逐字段组装，不补前端就拿不到
@@ -2257,7 +2292,10 @@ async function custMapPoints(event) {
     //   店名原值 / 建档时间 / 客户类型 / 电话 / 备注 / 批次归属 也要能本地渲染（订单/拜访聚合走 custPageAgg 按页拉）
     .field({ name: true, nameRaw: true, lat: true, lng: true, city: true, district: true, bizCircle: true,
              address: true, coordSource: true, coord_status: true, mallCode: true, mallKey: true, updatedAt: true,
-             createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true })
+             createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true,
+             // ⭐ 2026-10-07 补 source：后台「🔎 比对认领」要把**现场录入的店**（source:'field'）也纳入比对池，
+             //   而那个池子读的是本地缓存 → 缓存必须带这个字段，否则前端根本认不出哪些是现场录的。
+             source: true })
     .get().catch(silentCatch('adminapi·custMapPoints', { data: [] }));
   const rows = r.data || [];
   const _agg = await buildAggMaps(rows);   // 6 列预聚合（与 custPageAgg 同口径）
@@ -2279,8 +2317,13 @@ async function custMapPoints(event) {
     ct: String(c.customerType || ''),       // 客户类型（回访 mall / 新客 new）
     ph: String(c.phone || ''),              // 电话（批次总表列）
     rm: String(c.remark || ''),             // 备注（列表「备注」列高亮用）
-    bi: Array.isArray(c.batchIds) ? c.batchIds.join(',') : '',  // 批次归属（"未分批"过滤用）
+    // ⚠️⚠️ 2026-10-10 指针表模式：**这里不再下发批次归属**（`customers.batchIds` 已停写，
+    //   唯一真相 = `batch_members` 表）。全量分片若逐片查成员表太贵（`_.in` 上千个 id 极慢）
+    //   → 分两条路解决：① **PG 路径**：pgapi 的 /points 里 JOIN batch_members 现算（主力，日常走这条）；
+    //     ② **云开发回退路径**：store.js 拉完点后调 `exportBatchMembers` 自己合并（见 store.js refresh）。
+    bi: '',
     mj: String(c.mallJoinedAt || ''),       // 注册商城时间（新客列表的「已入商城」日期）
+    so: String(c.source || ''),             // ⭐ 2026-10-07 客户来源（'field' = 手机端「加新店」现场录入 → 待商城建档）
   })).map((p, idx) => mergeAgg(p, rows[idx]._id, rows[idx].mallCode, _agg));   // 6 列预聚合
   return { ok: true, points: points, next: rows.length >= limit ? String(rows[rows.length - 1]._id) : null, got: rows.length };
 }
@@ -2308,10 +2351,27 @@ async function custSync(event) {
     .orderBy('_id', 'asc').limit(limit)
     .field({ name: true, nameRaw: true, lat: true, lng: true, city: true, district: true, bizCircle: true,
              address: true, coordSource: true, coord_status: true, mallCode: true, mallKey: true, updatedAt: true,
-             createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true })
+             createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true,
+             source: true })   // ⭐ 2026-10-07：source（'field' = 现场录入）—— 与 custMapPoints 同步
     .get().catch(silentCatch('adminapi·custSync', { data: [] }));
   const rows = r.data || [];
   const _aggS = await buildAggMaps(rows);   // ⭐ 2026-09-27：增量同步同样带上 6 列预聚合（口径与 custMapPoints 一致）
+  // ⭐⭐ 2026-10-10 指针表模式：批次归属**从 batch_members 现算**（customers.batchIds 已停写）——
+  //   增量条数少（通常几十条），按 _id 分小批查成员表即可（每批 100 个，避开 `_.in` 上千极慢的坑）。
+  const biMap = {};
+  if (rows.length) {
+    const _ids = rows.map(x => x._id);
+    const _chunks = [];
+    for (let i = 0; i < _ids.length; i += 100) _chunks.push(_ids.slice(i, i + 100));
+    await runPool(_chunks, 10, async (part) => {
+      const mr = await db.collection('batch_members').where({ customerId: _.in(part) })
+        .field({ customerId: true, batchId: true }).limit(1000).get().catch(() => ({ data: [] }));
+      (mr.data || []).forEach(m => {
+        if (!m || !m.customerId) return;
+        biMap[m.customerId] = biMap[m.customerId] ? (biMap[m.customerId] + ',' + m.batchId) : String(m.batchId);
+      });
+    });
+  }
   let maxU = since;
   const points = rows.map(c => {
     const u = Number(c.updatedAt) || 0;
@@ -2326,8 +2386,9 @@ async function custSync(event) {
       mc: String(c.mallCode || ''), mk: String(c.mallKey || ''),
       u: u,
       nr: String(c.nameRaw || ''), ca: Number(c.createdAt) || 0, ct: String(c.customerType || ''),
-      ph: String(c.phone || ''), rm: String(c.remark || ''), bi: Array.isArray(c.batchIds) ? c.batchIds.join(',') : '',
-      mj: String(c.mallJoinedAt || '')
+      ph: String(c.phone || ''), rm: String(c.remark || ''), bi: biMap[c._id] || '',   // ⭐ 2026-10-10 指针表模式：批次归属从 batch_members 现算（见上）
+      mj: String(c.mallJoinedAt || ''),
+      so: String(c.source || '')          // ⭐ 2026-10-07：客户来源（'field' = 现场录入）—— 与 custMapPoints 同口径
     };
   }).map((p, idx) => mergeAgg(p, rows[idx]._id, rows[idx].mallCode, _aggS));
   return { ok: true, points: points, next: rows.length >= limit ? String(rows[rows.length - 1]._id) : null, maxUpdatedAt: maxU, got: rows.length };
@@ -2707,7 +2768,8 @@ async function importCustomers(event) {
         lat: Number(c.lat) || null,
         coord_status: (Number(c.lng) && Number(c.lat)) ? 'ok' : 'pending',
         status: 'active',
-        batchIds: [bid],
+        // ⭐⭐ 2026-10-10 指针表模式：**不再写 customers.batchIds** —— 下一行紧跟着就写了 batch_members，
+        //   那才是唯一记账；这里再写一份就又是双写，删批时白白多出一份要清理的数据。
         createdAt: now,
         updatedAt: now        // 2026-09-27 补：新增客户必须能被增量同步（custSync）看到
       }
@@ -2856,8 +2918,13 @@ const MALL_FIELD_PAIRS = [
   ['source',       'mallSource'],     // 来源（落点沿用现口径 mallSource）
   ['tags',         'mallTags'],       // 客户标签
   ['category',     'mallCategory'],   // 客户分类
-  ['lastOrderAt',  'lastOrderAt'],    // 最后下单
-  ['lastBrowseAt', 'lastBrowseAt']    // 最后浏览商城
+  // ⚠️⚠️ 2026-10-07 老板报障后 **移除了 `['lastOrderAt','lastOrderAt']`**：
+  //   商城表的「最后下单」是**商城系统里的快照**，会**滞后于我们自己的销售订单**（orders）→
+  //   两处显示打架（实例：吕记鲜饺 —— 购买记录 9/19、商城信息 8/26）。
+  //   现在口径统一：**「最近下单」一律以 orders 表为准**（后台列表早在 2026-09-25 就这么算了，
+  //   见 listCustomers 里那段注释）；库里的 lastOrderAt 由 `backfillLastOrder` 一次性回填。
+  //   ⚠️ 别再加回来 —— 加回来就会把真实日期又覆盖成商城快照那个旧值。
+  ['lastBrowseAt', 'lastBrowseAt']    // 最后浏览商城（这项我们没别的数据源，仍以商城为准）
 ];
 // ⚠️⚠️ **绝不覆盖字段（硬拦）** —— 老板 2026-09-29 明确：「**经纬度要以现场为准**」。
 //   理由：商城坐标是"注册时填的地址 / 商城侧地图定位"；**业务员现场采的才是真的到过那个点**。
@@ -3634,8 +3701,12 @@ async function listCustomerRemarks(event) {
 
 // 清空未分批客户（2026-09-08 老板定：彻底清除未分批档案+其拜访/报错记录+云存储照片录音文件）
 async function purgeUnbatchedCustomers(event) {
-  const all = await fetchAll('customers', {}, { _id: true, batchIds: true });
-  const ids = all.filter(c => !(c.batchIds || []).length).map(c => c._id);
+  // ⭐⭐ 2026-10-10 指针表模式：**"未分批"改从 batch_members 判**（`customers.batchIds` 已停写）——
+  //   ⚠️ 不改的话：新入批的客户档案上不再写 batchIds → 会被误判成"未分批" → 本接口会**误删**它们。
+  const all = await fetchAll('customers', {}, { _id: true });
+  const mem = await fetchAll('batch_members', {}, { customerId: true });
+  const inBatch = new Set(mem.map(m => m.customerId));
+  const ids = all.filter(c => !inBatch.has(c._id)).map(c => c._id);
   if (!ids.length) return { ok: true, customers: 0, visits: 0, fixes: 0, files: 0, msg: '没有未分批客户，无需清除' };
   // 1) 收集关联云存储文件（照片/录音）
   const fileIDs = new Set();
@@ -3811,6 +3882,101 @@ async function setUserAlsoSalesman(event) {
   if (!['super_admin', 'admin'].includes(u.role)) return { ok: false, code: 'FORBIDDEN', msg: '仅管理员账号可设为「老板兼业务员」' };
   await db.collection('users').doc(userId).update({ data: { alsoSalesman: !!on } });
   return { ok: true, msg: on ? '已开启「老板兼业务员」：他可用业务员身份接单跑任务' : '已关闭「老板兼业务员」' };
+}
+
+// ⭐ 2026-10-07 老板定：把**某个业务员账号**升格成「兼业务员的管理员」——
+//   让他能在手机端用**三身份**（🏃 业务员 / 👑 老板 / 🖐 游客），跟朱小利完全一样。
+//   背景：手机端的「三身份选择页」只在 **role ∈ {super_admin, admin} 且 alsoSalesman=true** 时出现
+//   （见 login/index.js 的 `if (a.alsoSalesman === true)`）——**纯业务员（role='salesman'）压根进不去那条分支**，
+//   所以必须把 role 一起升格，光开 alsoSalesman 没用。
+//   ⚠️ **原地改三个字段，不碰 `_id` / `phone` / `openid`** → 他历史建的店、拜访、任务一条不断，微信绑定也不变。
+//   ⚠️ 可见副作用（后台能看出来）：他会**同时出现在「人员管理 → 管理员」列表**里；
+//      若后台本来就有一条**同名**的管理员记录（例如卿燕的 super_admin 那条），就会看到**两个同名**，
+//      派单/看列表时要多留意（要不要改名区分，老板说了算）。
+//   入参：{ userId }   出参：{ ok, msg }
+async function promoteBossSalesman(event) {
+  const { userId } = event || {};
+  if (!userId) return { ok: false, code: 'BAD_ARG', msg: '缺少用户' };
+  const uRes = await db.collection('users').doc(userId).get().catch(() => null);
+  const u = uRes && uRes.data;
+  if (!u) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
+  if (['super_admin', 'admin'].includes(u.role)) {
+    // 已经是管理员 → 幂等：只补那两个标记
+    await db.collection('users').doc(userId).update({ data: { boss: true, alsoSalesman: true } });
+    return { ok: true, msg: '该账号本来就是管理员：已开启「老板兼业务员」（手机端可三身份）' };
+  }
+  if (u.role !== 'salesman') return { ok: false, code: 'FORBIDDEN', msg: '只支持业务员账号升格' };
+  if (u.trial === true) return { ok: false, code: 'FORBIDDEN', msg: '游客（实习）账号不能升格' };
+  await db.collection('users').doc(userId).update({ data: { role: 'admin', boss: true, alsoSalesman: true } });
+  return { ok: true, msg: '已升格：他可像朱小利一样在手机端用「业务员 / 老板 / 游客」三身份' };
+}
+
+// ⭐ 2026-10-07 老板定：**改用户的显示名**（后台没有现成入口）。
+//   用途：升格后会出现**同名**的两条记录（例：后台超管「卿燕」+ 手机端三身份的「卿燕」），
+//   把其中一条改成「卿燕(后台)」之类，列表/派单下拉里就能区分。
+//   ⚠️ 只动 `name` 一个字段 —— 账号、手机、微信绑定、历史数据全不受影响。
+//   ⚠️ 注意 `name` 是**展示名**：业务员的 name 会出现在派单下拉、拜访记录、统计里（改之前先想清楚要哪个名字）。
+//   入参：{ userId, name }   出参：{ ok, msg }
+async function renameUser(event) {
+  const { userId } = event || {};
+  const name = String((event && event.name) || '').trim();
+  if (!userId) return { ok: false, code: 'BAD_ARG', msg: '缺少用户' };
+  if (!name) return { ok: false, code: 'BAD_ARG', msg: '请填写名称' };
+  if (name.length > 20) return { ok: false, code: 'BAD_ARG', msg: '名称太长（≤20 字）' };
+  const uRes = await db.collection('users').doc(userId).get().catch(() => null);
+  if (!uRes || !uRes.data) return { ok: false, code: 'NOT_FOUND', msg: '用户不存在' };
+  const old = uRes.data.name || '';
+  await db.collection('users').doc(userId).update({ data: { name: name } });
+  return { ok: true, msg: '「' + old + '」已改名为「' + name + '」' };
+}
+
+// ⭐ 2026-10-07 老板报障（「吕记鲜饺：购买记录 9/19、商城信息 8/26」）—— 查出真因：
+//   **`customers.lastOrderAt` 一直存的是「商城表带来的快照值」**（商城系统里的最后下单），
+//   而我们自己的销售订单（orders）比它新 → 两处口径打架。
+//   ⚠️ 后台**列表**早在 2026-09-25 就改成"按订单表现算"了（见 listCustomers 里那段注释，
+//      「不能再取商城客户表里的 lastOrderAt」），**但**：① 库里那个字段一直没回填；
+//      ② 手机端 `custDetail` / 后台详情页还在读它 → 那两处一直显示旧日期。
+//   本 action：按 orders 表把 `lastOrderAt` **全量回填成真实最近下单**（有订单为准；没订单的保持原值兜底）。
+//   ⚠️ 配套（同一批）：`MALL_FIELD_PAIRS` 已移除 lastOrderAt，否则下次导商城表又会覆盖回旧值。
+//   入参：{ apply? }（不传 apply = 只预览统计，绝不写库）
+async function backfillLastOrder(event) {
+  const doApply = !!(event && event.apply);
+  // 1) 拉全部订单（只要两个字段；约 1 万单，小表）
+  const rows = await fetchAll('orders', {}, { customerCode: true, orderedAt: true });
+  const last = {};
+  rows.forEach(o => {
+    const k = String(o.customerCode || '').trim();
+    const d = String(o.orderedAt || '').slice(0, 10);
+    if (!k || d.length !== 10) return;
+    if (!last[k] || d > last[k]) last[k] = d;
+  });
+  const codes = Object.keys(last);
+  // 2) 按客户编号找客户，比出"真要改的那批"
+  const writes = [];
+  for (let i = 0; i < codes.length; i += 100) {
+    const cs = await fetchAll('customers', { mallCode: _.in(codes.slice(i, i + 100)) },
+      { mallCode: true, lastOrderAt: true });
+    cs.forEach(c => {
+      const want = last[String(c.mallCode || '').trim()];
+      if (!want) return;
+      if (String(c.lastOrderAt || '') === want) return;   // 已经对了就不写
+      writes.push({ id: c._id, from: String(c.lastOrderAt || ''), to: want });
+    });
+  }
+  if (!doApply) {
+    return {
+      ok: true, preview: true, orders: rows.length, codes: codes.length, needFix: writes.length,
+      samples: writes.slice(0, 15),
+      msg: '有 ' + writes.length + ' 家的「最近下单」与订单表不一致（预览，未写入）'
+    };
+  }
+  let done = 0;
+  for (let i = 0; i < writes.length; i += 20) {
+    await Promise.all(writes.slice(i, i + 20).map(w =>
+      db.collection('customers').doc(w.id).update({ data: { lastOrderAt: w.to, updatedAt: Date.now() } })
+        .then(() => { done++; }).catch(() => { /* 单条失败不影响其它 */ })));
+  }
+  return { ok: true, preview: false, fixed: done, msg: '已把 ' + done + ' 家的「最近下单」修正成订单表里的真实日期' };
 }
 
 // ===== 注册审核（2026-09-09 老板拍板：登录改「注册→后台审核→通过后免登进入」） =====
@@ -4232,7 +4398,7 @@ async function setSetting(event) {
   let value = event.value;
   if (!key) return { ok: false, code: 'BAD_ARG', msg: '缺少设置项 key' };
   // 仅允许写入已知设置项（防任意写入）
-  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays', 'welcomeConfig', 'locTrackEnabled', 'locLatestEnabled', 'locWorkTier', 'locPackUpload', 'locPackSec', 'locMoveThreshold', 'adminAutoRefresh', 'adminHiddenPause', 'tickIntervalMin', 'asrPollMin', 'reviewWatchEnabled', 'recEnabled', 'photoLimit', 'evidenceRequired', 'platformPhotoShow', 'coordFixEnabled', 'salesmanScope', 'usageAlertPct', 'usageQuota', 'mpAlertTemplateId', 'adminNotifyPhones', 'shareImages'];
+  const ALLOWED = ['locationCheck', 'locRefreshInterval', 'locKeyRefreshInterval', 'recordingDurationLimit', 'visitDurationLimit', 'expireArchiveDays', 'globalRefreshInterval', 'compareWindowDays', 'dailyVisitLimit', 'phoneVisibility', 'autoApproveFinish', 'mpConfig', 'taskRegionCode', 'mpKey', 'mpWSKey', 'mpSK', 'workStartHour', 'workEndHour', 'offDutyTier', 'trackKeepDays', 'welcomeConfig', 'locTrackEnabled', 'locLatestEnabled', 'locWorkTier', 'locPackUpload', 'locPackSec', 'locMoveThreshold', 'adminAutoRefresh', 'adminHiddenPause', 'tickIntervalMin', 'asrPollMin', 'reviewWatchEnabled', 'recEnabled', 'photoLimit', 'evidenceRequired', 'platformPhotoShow', 'coordFixEnabled', 'salesmanScope', 'usageAlertPct', 'usageQuota', 'mpAlertTemplateId', 'adminNotifyPhones', 'shareImages'];
   if (!ALLOWED.includes(key)) return { ok: false, code: 'BAD_KEY', msg: '未知设置项' };
   // ===== 2026-09-11 降频与开关类设置（老板定：应对云开发「调用次数」用尽）=====
   // 说明：统一在此预规范化并改写 value，后面的 `let v = value;` 自然拿到规范化结果；
@@ -4708,7 +4874,7 @@ async function resetTestData(event) {
   }
   stats.files_deleted = deletedFiles;
   // 3) 客户状态归零（档案保留）：reviewFlag=false；coord_status 按坐标有无重置 ok/pending；
-  //    批次归属 batchIds **保留**（2026-09-08 老板定：重置不动导入数据的批次）
+  //    批次归属 **保留**（2026-09-08 老板定：重置不动导入数据的批次）—— 2026-10-10 起归属在 batch_members 里，本函数不碰它
   // 2026-09-08 修 -601008：原串行逐家 update（247 家=247 次往返）必超 30s → 改 runPool 15 并发（坑 29）
   const cs = await fetchAll('customers', {}, { _id: true, lat: true, lng: true });
   await runPool(cs, 15, async (c) => {
@@ -4894,19 +5060,18 @@ async function genBatchName() {
   return { prefix, seq: n, name: `${prefix}第${CN_NUM[n - 1] || String(n)}批导入` };
 }
 
-// 客户入批（幂等）：batch_members 建纯名单关系（两层状态模型 2026-09-07：批次不持有状态）+ customers.batchIds 追加
+// 客户入批（幂等）：batch_members 建纯名单关系（两层状态模型 2026-09-07：批次不持有状态）。
+// ⭐⭐ 2026-10-10 指针表模式：**只在 batch_members 一处记账**（不再追加 customers.batchIds —— 那是旧的双写）
 async function addCustomerToBatch(customerId, batchId) {
   await ensureBatchColls();
+  // ⭐⭐ 2026-10-10 指针表模式（老板定）：**只写 batch_members，一处记账** ——
+  //   「谁被哪个批次选中」的唯一真相就是这张关系表；`customers.batchIds` 反向字段**彻底停写**。
+  //   （原实现是双写：建成员 + 往客户档案的数组里加 —— 那正是"删批要满库改客户"的根源。）
   const c = await db.collection('customers').doc(customerId).get().catch(() => null);
   if (!c || !c.data) return false;
   const ex = await db.collection('batch_members').where({ batchId, customerId }).limit(1).get();
   if (!ex.data.length) {
     await db.collection('batch_members').add({ data: { batchId, customerId, createdAt: Date.now() } });
-  }
-  const ids = Array.isArray(c.data.batchIds) ? c.data.batchIds : [];
-  if (!ids.includes(batchId)) {
-    ids.push(batchId);
-    await db.collection('customers').doc(customerId).update({ data: { batchIds: ids, updatedAt: Date.now() } });   // 2026-09-27 补：增量同步用
   }
   return true;
 }
@@ -4915,10 +5080,22 @@ async function addCustomerToBatch(customerId, batchId) {
 async function listCustomerBatches(event) {
   await ensureBatchColls();
   const batches = await fetchAll('customer_batches', {}, {});
-  const members = await fetchAll('batch_members', {}, { batchId: true, customerId: true });
+  // ⭐⭐⭐ 2026-10-10 重写（治「批次管理页打不开」）—— **不再拉 2 万条成员**，改用**聚合**只取"每批家数"。
+  //   之前这里是 `fetchAll('batch_members', {})`：把**全表**拉进内存（实测 ≈2 万条），
+  //   叠加下面的 tasks / visits 全表，批次一大（9448+）**必超 30 秒 → 整页 -601008**。
+  //   聚合只回几十条"批次数"，**数据量降 1000 倍**，且云端算完才回，不再往云函数里灌数据。
+  const cnt = {};
+  try {
+    const ag = await db.collection('batch_members').aggregate()
+      .group({ _id: '$batchId', n: $.sum(1) }).limit(3000).end();
+    ((ag && ag.list) || []).forEach(x => { if (x && x._id) cnt[x._id] = x.n || 0; });
+  } catch (e) { console.error('[batches] 成员聚合失败（下轮再看）', e); }
+  const members = [];   // ⚠️ 保留变量名（下面几处还引用它），但**不再装全表**
   // 全局任务中集合（published/reviewing 任务的客户；**已过期的不算**，2026-09-24 与 listCustomers 同口径）
   const inTaskSet = new Set();
-  const tAll = await fetchAll('tasks', {}, { customerIds: true, status: true, deadline: true });
+  // ⭐ 2026-10-10：**只取"还没结束的"任务** —— 原来 `fetchAll('tasks', {})` 拉**全表**，
+  //   包含所有历史任务的全部 `customerIds`（几 MB），是压在 30 秒墙上的又一块大石头。
+  const tAll = await fetchAll('tasks', { status: _.in(['published', 'reviewing']) }, { customerIds: true, status: true, deadline: true });
   const today0 = todayStr();
   tAll.forEach(t => {
     if (t.status !== 'published' && t.status !== 'reviewing') return;
@@ -4926,16 +5103,12 @@ async function listCustomerBatches(event) {
     (t.customerIds || []).forEach(id => inTaskSet.add(id));
   });
   const stat = {};
-  // visited（历史已拜访过）：有完成拜访记录的客户集合
-  const visitedSet = new Set();
-  const vAll = await fetchAll('visits', {}, { customerId: true, status: true });
-  vAll.forEach(v => { if (v.status === 'normal' || v.status === 'pending_review') visitedSet.add(v.customerId); });
-  members.forEach(m => {
-    if (!stat[m.batchId]) stat[m.batchId] = { in_task: 0, free: 0, visited: 0, total: 0 };
-    if (inTaskSet.has(m.customerId)) stat[m.batchId].in_task++;
-    else stat[m.batchId].free++;
-    if (visitedSet.has(m.customerId)) stat[m.batchId].visited++;
-    stat[m.batchId].total++;
+  // ⭐ 2026-10-10：**不再拉 visits 全表**（"已拜访"要逐客户算，正是超时来源之一）。
+  //   现在只出"每批家数"（聚合值）；「任务中 / 已拜访」暂给 0 —— **页面能打开优先**，
+  //   客户级精确统计留给"批次统计进 PG"那一步（一条 SQL 就能算）。
+  batches.forEach(b => {
+    const n = cnt[b._id] || 0;
+    stat[b._id] = { in_task: 0, free: n, visited: 0, total: n };
   });
   // ⚠️ 2026-09-27 性能修复（-601008 超时）：**不再全量拉 customers**。
   //   原写法 `fetchAll('customers', {}, {_id,batchIds})` 在导入 6 万家后要 61 次串行请求（每次 1000 条），
@@ -4952,23 +5125,46 @@ async function listCustomerBatches(event) {
   //   按 _id 分批查（主键索引，很快）；已删客户**依旧留在 batch_members 里**（恢复后批次归属照旧）。
   const aliveMemberIds = new Set();
   {
+    // ⚠️⚠️⚠️ 2026-10-10 性能二次修复（治「批次管理整页 -601008、看不到任何批次」）：
+    //   原来这里是**串行 for 循环** —— 9448 家的批次 = 95 次、加上另一批共 **120 次串行 `await`**，
+    //   哪怕每次只要 0.2 秒也是 24 秒；叠加前面的 batch_members / tasks / visits 全表拉，**必超 30 秒**。
+    //   （我当时注释写"主键索引很快"是误判：快的是单次，不是 120 次串行。）
+    //   ✅ 改成 **runPool 并发 20** → 120 组只要 6 轮，约 2 秒。
+    //   ⚠️ 语义完全不变（仍是"入批客户里没被删的那些"），后面的 `aliveMemberIds.size` / `[...aliveMemberIds]` 照用。
     const _arr = [...memberIds];
-    for (let i = 0; i < _arr.length; i += 100) {
-      const part = await fetchAll('customers',
-        _.and([{ _id: _.in(_arr.slice(i, i + 100)) }, NOT_DELETED]), { _id: true });
+    const _chunks = [];
+    for (let i = 0; i < _arr.length; i += 100) _chunks.push(_arr.slice(i, i + 100));
+    await runPool(_chunks, 20, async (ids) => {
+      const part = await fetchAll('customers', _.and([{ _id: _.in(ids) }, NOT_DELETED]), { _id: true });
       part.forEach(c => aliveMemberIds.add(c._id));
-    }
+    });
   }
-  const unbatched = Math.max(0, totalCustomers - aliveMemberIds.size);
+  // ⭐⭐ 2026-10-10：入批客户数**改用聚合值算** —— ⚠️ 不能再靠 `aliveMemberIds`！
+  //   `members` 现在是空数组 → `aliveMemberIds` 恒为空 → 照旧算法会把「未分批」
+  //   算成【全库总数】（17.9 万）—— 那是个大坑，必须用 `cnt`（每批家数）求和。
+  // ⭐⭐ 2026-10-10 指针表模式：入批客户数改用 **distinct 客户** 聚合 ——
+  //   原来把每批家数直接求和，会把"同时在多个批次"的客户**重复计数** → 未分批数偏小。
+  let inBatchN = 0;
+  try {
+    const ag2 = await db.collection('batch_members').aggregate()
+      .group({ _id: '$customerId' }).count('n').end();
+    inBatchN = Number((((ag2 && ag2.list) || [])[0] || {}).n) || 0;
+  } catch (e) {
+    Object.keys(cnt).forEach(k => { inBatchN += cnt[k] || 0; });   // 聚合失败退回求和（近似值）
+  }
+  const unbatched = Math.max(0, totalCustomers - inBatchN);
   // 全部批次汇总（2026-09-09 老板定：顶部工具卡统计区；客户级去重——客户可属多个批次，Σ 各批 stats 会重复计数）
   // 口径与批次卡一致：in_task=当前有 published/reviewing 任务的客户；free=非任务中；visited=有正常拜访记录的客户
   // ⭐ 2026-09-29：**汇总只算未删的**（已删客户不该出现在任何"客户数"里）
-  const memberArr = [...aliveMemberIds];
+  // ⭐⭐ 2026-10-10：**顶部汇总也改用聚合值** —— 老板实测反馈"所有统计数字都没了"，
+  //   根因是这里还在读 `aliveMemberIds`（我已把 `members` 置空，该集合恒空 → 汇总全 0；
+  //   而且它还引用了**已被删除的 `visitedSet`**，是个随时会炸的坏引用）。
+  //   「任务中 / 已拜访」暂给 0 —— 那两个要逐客户算（正是超时根源），留给"批次统计进 PG"那一步。
   const summary = {
-    total: memberArr.length,
-    in_task: memberArr.filter(id => inTaskSet.has(id)).length,
-    free: memberArr.filter(id => !inTaskSet.has(id)).length,
-    visited: memberArr.filter(id => visitedSet.has(id)).length
+    total: inBatchN,
+    in_task: 0,
+    free: inBatchN,
+    visited: 0
   };
   batches.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return {
@@ -4993,6 +5189,144 @@ async function addCustomersToBatch(event) {
   return { ok: true, added: ok, msg: `已将 ${ok} 家客户加入批次「${b.data.name || ''}」` };
 }
 
+// ⭐ 2026-10-10 老板定：**批量入批**（治「9448 家要 315 次云函数调用、十几分钟、还撞 30 秒超时」）
+//   · 后台按 2500 个 id 一片分几次调它（受云函数入参 100KB 限制）
+//   · 内部：`batch_members` **批量 add**（一次最多 1000 条）
+//           ⭐⭐ 2026-10-10 指针表模式：**原 ② 段（写 customers.batchIds）已整段删除** —— 一处记账
+//   · 效果：库操作 ~7.5 万次 → ~1.9 万次；云函数调用 315 次 → 4 次；耗时 10~20 分钟 → 1 分钟内
+// ⭐ 2026-10-10 老板定：**后台强制结束任务**（原来只有业务员"提前交"一条路）
+//   老板原话：「后台也应该能操作提前结束任务，并同时在业务员手机端反馈」
+//   ⚠️ **口径（老板选 A）**：正在「拜访中」的那一家 —— **记录保留、业务员仍可提交**（跑一半的成果不丢）
+//      → 所以这里**一个字都不动 `visits`**，只改任务状态。
+//   ⚠️ 与业务员"提前交"的区别：**`finishedBy:'admin'`**（留痕分得清是谁结束的）；`finishReason` 记原因。
+//   ⚠️ 不写独立日志集合（集合名各处不一，容易踩空）—— 留痕直接写在任务文档上，够用。
+async function finishTask(event) {
+  const { taskId, reason } = event;
+  if (!taskId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务' };
+  const t = await db.collection('tasks').doc(taskId).get().catch(() => null);
+  if (!t || !t.data) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  if (t.data.status === 'done' || t.data.status === 'archived') {
+    return { ok: false, code: 'ALREADY', msg: '这个任务已经结束了' };
+  }
+  const now = Date.now();
+  await db.collection('tasks').doc(taskId).update({ data: {
+    status: 'done',
+    finishedAt: now,
+    finishedBy: 'admin',
+    finishReason: String(reason || '').slice(0, 200),
+    updatedAt: now
+  } });
+  return { ok: true, msg: '任务已结束（正在拜访中的那一家的记录保留，业务员仍可提交）' };
+}
+
+// ⭐ 2026-10-10 老板定（批次「指针表」模式）第 2 步：**给同步器用的导出接口** —— 游标分页返回 `batch_members`。
+//   用途：`pgsync.js` 把它拉进 PG 的 `batch_members` 表 → 之后后台的「批内列表 / 未分批数 / 每批家数」
+//         **全部改查 PG**（一条 SQL 秒出、零成本）；**云端只负责"记谁在哪个批次"这一件事**。
+//   ⚠️ **刻意不用 `listCustomerBatches`** —— 那个要拉全表 + 算统计，批次一大（9448 家）必超时。
+//   ⚠️ **用 `_id` 游标**（不是 `skip`）—— `_id` 有默认索引，翻多少页都一样快。
+async function exportBatchMembers(event) {
+  const PAGE = Math.min(Number(event.limit) || 1000, 2000);
+  const after = String(event.after || '');
+  let q = db.collection('batch_members');
+  if (after) q = q.where({ _id: _.gt(after) });
+  const r = await q.orderBy('_id', 'asc').limit(PAGE)
+    .field({ _id: true, batchId: true, customerId: true, createdAt: true })   // ⚠️ 必须显式带 _id —— 游标靠它，漏了会"只同步第一页"
+    .get().catch(() => null);
+  const data = (r && r.data) || [];
+  const list = data.map(x => ({ b: x.batchId, c: x.customerId, t: x.createdAt || 0 }));
+  return {
+    ok: true,
+    list: list,
+    count: list.length,
+    last: data.length ? data[data.length - 1]._id : after,
+    hasMore: data.length >= PAGE
+  };
+}
+
+// ⭐⭐ 2026-10-10 指针表模式第 5 步：给同步器（pgsync.js）的三个只读导出接口 ——
+//   后台「📦 批次管理」的每个数字都改从 PG 算（一条 SQL 秒出、零成本），云端只负责"把数据交出去"。
+//   ⚠️ 与 exportBatchMembers 同一套路：游标 / 分页拉取，**不拉全表**。
+// ① 批次卡导出（批次总量小，同步器每轮全量重拉）
+async function exportCustomerBatches(event) {
+  const PAGE = Math.min(Number(event.limit) || 200, 1000);
+  const after = String(event.after || '');
+  let q = db.collection('customer_batches');
+  if (after) q = q.where({ _id: _.gt(after) });
+  const r = await q.orderBy('_id', 'asc').limit(PAGE)
+    .field({ _id: true, name: true, subtitle: true, createdAt: true, createdBy: true, autoNamePrefix: true })
+    .get().catch(() => null);
+  const data = (r && r.data) || [];
+  const list = data.map(x => ({ id: x._id, name: x.name || '', subtitle: x.subtitle || '',
+    createdAt: x.createdAt || 0, createdBy: x.createdBy || '', autoNamePrefix: x.autoNamePrefix || '' }));
+  return { ok: true, list: list, count: list.length, last: data.length ? data[data.length - 1]._id : after, hasMore: data.length >= PAGE };
+}
+
+// ② 任务导出（**只导出未结束的** published / reviewing）——
+//   "任务中"统计只认它们；且一个 9448 家的任务 customerIds ≈ 300KB，同步器按 _id 游标**逐条拉**（limit 默认 1）
+async function exportTasksForSync(event) {
+  const PAGE = Math.min(Number(event.limit) || 1, 20);
+  const after = String(event.after || '');
+  const conds = [{ status: _.in(['published', 'reviewing']) }];
+  if (after) conds.push({ _id: _.gt(after) });
+  const where = conds.length > 1 ? _.and(conds) : conds[0];
+  const r = await db.collection('tasks').where(where).orderBy('_id', 'asc').limit(PAGE)
+    .field({ _id: true, status: true, deadline: true, customerIds: true })
+    .get().catch(() => null);
+  const data = (r && r.data) || [];
+  const list = data.map(x => ({ id: x._id, status: x.status || '', deadline: x.deadline || '',
+    customerIds: Array.isArray(x.customerIds) ? x.customerIds : [] }));
+  return { ok: true, list: list, count: list.length, last: data.length ? data[data.length - 1]._id : after, hasMore: data.length >= PAGE };
+}
+
+// ③ 已拜访客户**聚合**导出（group by customerId）—— 批次卡只需要"哪些客户拜访过"这一个集合，
+//   比导拜访明细小一个数量级；口径与 listCustomers 的统计一致：status ∈ normal / pending_review。
+//   ⚠️ 聚合的 .match() 用**原生操作符**（`_.neq` 那类在聚合里不认，2026-09-29 踩过）。
+async function exportVisitedCustomers(event) {
+  const PAGE = Math.min(Number(event.limit) || 1000, 2000);
+  const skip = Math.max(0, Number(event.skip) || 0);
+  try {
+    const ag = await db.collection('visits').aggregate()
+      .match({ status: { $in: ['normal', 'pending_review'] } })
+      .group({ _id: '$customerId', n: $.sum(1) })
+      .sort({ _id: 1 })
+      .skip(skip).limit(PAGE)
+      .end();
+    const list = (((ag && ag.list) || [])).map(x => ({ c: x._id, n: x.n || 0 }));
+    return { ok: true, list: list, count: list.length, hasMore: list.length >= PAGE };
+  } catch (e) {
+    console.error('[exportVisitedCustomers] 聚合失败', e);
+    return { ok: false, code: 'AGG_FAIL', msg: '统计失败，请稍后再试' };
+  }
+}
+
+async function addBatchMembersBulk(event) {
+  const { batchId, customerIds } = event;
+  if (!batchId || !Array.isArray(customerIds) || !customerIds.length) return { ok: false, code: 'BAD_ARG', msg: '缺少批次或客户' };
+  await ensureBatchColls();
+  const b = await db.collection('customer_batches').doc(batchId).get().catch(() => null);
+  if (!b || !b.data) return { ok: false, code: 'NOT_FOUND', msg: '批次不存在' };
+  const uniq = [...new Set(customerIds)];
+  // 先捞该批次已有的成员 → 幂等（已入批的不重复加）
+  const exist = new Set();
+  for (let i = 0; i < 30; i++) {
+    const r = await db.collection('batch_members').where({ batchId }).skip(i * 1000).limit(1000).field({ customerId: true }).get();
+    (r.data || []).forEach(x => exist.add(x.customerId));
+    if (!r.data || r.data.length < 1000) break;
+  }
+  const news = uniq.filter(id => !exist.has(id));
+  // ① batch_members：批量写（一次最多 1000 条）
+  let added = 0;
+  for (let i = 0; i < news.length; i += 1000) {
+    const arr = news.slice(i, i + 1000).map(id => ({ batchId: batchId, customerId: id, createdAt: Date.now() }));
+    await db.collection('batch_members').add({ data: arr });
+    added += arr.length;
+  }
+  // ⭐⭐ 2026-10-10 指针表模式：**不再写 customers.batchIds**（原 ② 段整段删除）——
+  //   batch_members 一处记账后，"逐客户更新档案"这一步整个消失：
+  //   入批从"每家 1 次读改写"变成"只写一次成员表"，**又快又省**；删批同理不用再碰客户档案。
+  return { ok: true, added: added, total: uniq.length, msg: '新增入批 ' + added + ' 家（这批共 ' + uniq.length + ' 家）' };
+}
+
 // 从批次移除客户（2026-09-07 老板定）：只移除名单关系，客户档案保留；有拜访记录则禁止
 async function removeCustomerFromBatch(event) {
   const { batchId, customerId } = event;
@@ -5001,12 +5335,9 @@ async function removeCustomerFromBatch(event) {
   if (!b || !b.data) return { ok: false, code: 'NOT_FOUND', msg: '批次不存在' };
   const vis = await db.collection('visits').where({ customerId }).limit(1).get();
   if (vis.data.length) return { ok: false, code: 'HAS_VISIT', msg: '该客户有拜访记录，不能从批次中删除' };
+  // ⭐⭐ 2026-10-10 指针表模式：**只删 batch_members 这一条**（不再回写客户档案的 batchIds —— 那一步已废）
   const mem = await db.collection('batch_members').where({ batchId, customerId }).limit(1).get();
   if (mem.data.length) await db.collection('batch_members').doc(mem.data[0]._id).remove();
-  const c = await db.collection('customers').doc(customerId).get().catch(() => null);
-  if (c && c.data && Array.isArray(c.data.batchIds)) {
-    await db.collection('customers').doc(customerId).update({ data: { batchIds: c.data.batchIds.filter(x => x !== batchId), updatedAt: Date.now() } });   // 2026-09-27 补：增量同步用
-  }
   return { ok: true, msg: '已从批次中移除（客户档案保留）' };
 }
 
@@ -5115,6 +5446,72 @@ async function listDeletedCustomers(event) {
 
 // ⭐ 2026-09-29 新增：**从回收站恢复**（去掉 deleted 标记 —— 客户档案与关联数据一直都在，一条不丢）
 //   入参：{ customerIds: [...] }   出参：{ ok, restored, restoredIds, msg }
+// ⭐⭐ 2026-10-10 老板定：**回收站允许「彻底删除」** ——
+//   老板原话：「当然要彻底删除，只要我选择了彻底删除，有拜访记录也删除。有订单的则不能彻底删除。」
+//   · **有订单 → 拒删**（订单是钱，删了总额对不上）→ 回在 `blocked` 里，前端逐条提示
+//   · **有拜访记录 → 一起删**（连同照片/录音文件，否则永远占着云存储且再也删不掉）
+//   · 牵连清理：`coord_fix_requests` / `customer_remarks` / `transcripts`
+//   ⚠️ **每轮 ≤ 30 家**：每家要删云存储文件 + 跨多表，撑不住"HTTP 路只有 4~5 秒"那条线；
+//      前端循环调，返回值带 `remain` 让它接着跑。
+async function purgeCustomers(event) {
+  const ids = Array.isArray(event.customerIds) ? event.customerIds.filter(Boolean) : [];
+  if (!ids.length) return { ok: false, code: 'BAD_ARG', msg: '没有选择客户' };
+  const IDS = ids.slice(0, 30);
+  const purged = [], blocked = [], fileIDs = [];
+  for (const id of IDS) {
+    const c = await db.collection('customers').doc(id).get().catch(() => null);
+    if (!c || !c.data) continue;
+    const doc = c.data;
+    if (doc.deleted !== true) continue;                 // 只允许从回收站彻底删（安全闸）
+    // ① 有订单 → 拒删（订单按 customerCode 匹配；兜底再按 customerId 查一次）
+    const code = doc.mallCode || doc.code || '';
+    let orderN = 0;
+    try {
+      if (code) orderN = (await db.collection('orders').where({ customerCode: code }).count()).total || 0;
+      if (!orderN) orderN = (await db.collection('orders').where({ customerId: id }).count()).total || 0;
+    } catch (e) { /* 静默 */ }
+    if (orderN > 0) { blocked.push({ id: id, name: doc.name || doc.nameRaw || '(无名)', orders: orderN }); continue; }
+    // ② 收照片/录音（客户档案上的 + 拜访记录里的）
+    (doc.photos || []).forEach(p => { if (p && p.fileID) fileIDs.push(p.fileID); if (p && p.thumbID) fileIDs.push(p.thumbID); });
+    const vs = await db.collection('visits').where({ customerId: id }).limit(200).get().catch(() => ({ data: [] }));
+    (vs.data || []).forEach(v => {
+      (v.photos || []).forEach(p => { if (p && p.fileID) fileIDs.push(p.fileID); if (p && p.thumbID) fileIDs.push(p.thumbID); });
+      (v.audios || []).forEach(a => { if (a && a.fileID) fileIDs.push(a.fileID); });
+    });
+    // ③ 删拜访记录（老板定：有拜访记录也删）
+    await runPool(vs.data || [], 10, (v) => db.collection('visits').doc(v._id).remove().catch(() => null));
+    // ④ 牵连清理
+    for (const coll of ['coord_fix_requests', 'customer_remarks', 'transcripts']) {
+      try {
+        const r = await db.collection(coll).where({ customerId: id }).limit(100).get();
+        await runPool(r.data || [], 10, (x) => db.collection(coll).doc(x._id).remove().catch(() => null));
+      } catch (e) { /* 集合可能不存在，静默 */ }
+    }
+    // ⑤ 删客户档案（真删）
+    await db.collection('customers').doc(id).remove().catch(() => null);
+    purged.push(id);
+  }
+  // ⑥ 删云存储文件（失败不影响主流程）
+  let delN = 0;
+  try {
+    for (let i = 0; i < fileIDs.length; i += 50) {
+      const r = await cloud.deleteFile({ fileList: fileIDs.slice(i, i + 50) });
+      delN += ((r && r.fileList) || []).length;
+    }
+  } catch (e) { /* 静默 */ }
+  return {
+    ok: true,
+    purged: purged.length,
+    purgedIds: purged,
+    blocked: blocked,
+    files: delN,
+    remain: Math.max(0, ids.length - IDS.length),
+    msg: '已彻底删除 ' + purged.length + ' 家'
+      + (blocked.length ? '，' + blocked.length + ' 家有订单被拒' : '')
+      + (ids.length > IDS.length ? '；还有 ' + (ids.length - IDS.length) + ' 家未处理，请再点一次' : '')
+  };
+}
+
 async function restoreCustomers(event) {
   const ids = Array.isArray(event.customerIds) ? event.customerIds.filter(Boolean) : [];
   if (!ids.length) return { ok: false, code: 'BAD_ARG', msg: '没有选择客户' };
@@ -5173,24 +5570,48 @@ async function renameCustomerBatch(event) {
 async function deleteCustomerBatch(event) {
   const { batchId } = event;
   if (!batchId) return { ok: false, code: 'BAD_ARG', msg: '缺少批次' };
+  // ⭐ 2026-10-10 老板定：**分片续跑**（治「9448 家的批次一删就 -601008 超时」）
+  //   · 老办法：一次把全部成员回写 + 逐个 remove → 9448 家要 600+ 轮，必撞 30 秒
+  //   · 新办法：**每次最多处理 LIMIT 家**，干完返回 `remain`；**还有剩余就【不删批次卡】**，
+  //     后台看到 remain>0 就再调一次，直到 remain=0 才真正删掉批次卡（所以中途失败也不会删错）
+  // ⭐⭐⭐ 2026-10-10 三次修正（**这才是对的**）：原来先 `fetchAll('batch_members', {batchId})` 把**整批成员拉进内存**
+  //   —— 9448 家要拉 9448 条，慢且贵；我上一版又把它改成"游标翻页"，**而 batch_members 上没有 `batchId+_id` 复合索引**
+  //   → `where({batchId, _id:{$gt:…}})` 反而变成全表扫描，**越翻越慢**（老板实测仍 -601008）。
+  //   ✅ 正解（**不用游标、不拉全表**）：**每轮只取前 300 条** —— 上一轮处理过的已经删掉了，
+  //      所以这一轮 `where({batchId}).limit(300)` 自然就是"接下来的 300 条"。**整个表只读一遍**，且每轮都很快。
+  // ⚠️⚠️⚠️ 2026-10-10 **实测推翻估计**：这条调用走的不是"云函数 30 秒"，而是
+  //   `server.js` → 微信 **HTTP API** 这条路 —— **它的超时阈值只有 ~4~5 秒**（实测：5.9 秒就报 -601008）。
+  //   实测同一接口：**300 家 3.6 秒 ✅ / 800 家 5.9 秒 ❌**。
+  //   → 所以每轮必须压在 **3 秒以内**：**取 200 家**（≈2.4 秒，稳）。
+  //   （9448 家 = 48 轮；后台循环调，每轮约 2.4 秒 ≈ 2 分钟跑完，进度条能看到。）
+  // ⭐⭐ 2026-10-10 指针表模式：**本函数的"改动客户档案"那一步整个删掉了**（见下），
+  //   一轮只剩"读 300 条成员 + 删 300 条成员"—— 删除远比"读改写一次客户"便宜 →
+  //   每轮重新调回 **300 家**（9448 家 ≈ 32 轮，后台循环调、进度条可见）。
+  const LIMIT = Math.min(Number(event.limit) || 300, 1000);
   const b = await db.collection('customer_batches').doc(batchId).get().catch(() => null);
   if (!b || !b.data) return { ok: false, code: 'NOT_FOUND', msg: '批次不存在' };
-  const members = await fetchAll('batch_members', { batchId }, { _id: true, customerId: true });
-  // 客户 batchIds 移除该批（曾逐条 doc get+update 串行 200 次往返超时 -601008）：
-  // 一次拉全这批复制的 batchIds，内存过滤后并行回写
-  const memberIds = [...new Set(members.map(m => m.customerId))];
-  const custRows = await fetchAll('customers', { _id: _.in(memberIds) }, { _id: true, batchIds: true });
-  await runPool(custRows, 15, async c => {
-    if (Array.isArray(c.batchIds) && c.batchIds.includes(batchId)) {
-      await db.collection('customers').doc(c._id).update({ data: { batchIds: c.batchIds.filter(x => x !== batchId), updatedAt: Date.now() } });   // 2026-09-27 补：增量同步用
-    }
-  });
-  const BATCH = 50;
+  const r0 = await db.collection('batch_members').where({ batchId }).limit(LIMIT).get();
+  const members = (r0 && r0.data) || [];
+  if (!members.length) {
+    await db.collection('customer_batches').doc(batchId).remove().catch(() => null);
+    return { ok: true, released: 0, remain: 0, done: true, msg: '批次已删除（无残留成员）' };
+  }
+  // ⭐⭐ 2026-10-10 指针表模式（老板定，本函数的**根治**）：**不再写 customers.batchIds** ——
+  //   原来每轮要"逐个改客户档案"（`_.pull`，9448 家一轮一轮地跑），**这一步整个删除**：
+  //   删批次 = 删成员条目 + 最后删批次卡，**客户档案一个字都不碰**（这才对得起老板说的"删目录"）。
+  //   ⚠️ 删批"又贵又容易超时"的根源至此消失；后台显示"回到未分批"不再依赖档案上的字段。
+  const BATCH = 100;
   for (let i = 0; i < members.length; i += BATCH) {
     await Promise.all(members.slice(i, i + BATCH).map(m => db.collection('batch_members').doc(m._id).remove()));
   }
+  // 还剩多少：一次 count（很快，不拉数据 —— 避免"每轮重拉整批成员"那套）
+  let left = 0;
+  try { left = (await db.collection('batch_members').where({ batchId }).count()).total || 0; } catch (e) { left = 0; }
+  if (left > 0) {
+    return { ok: true, released: members.length, remain: left, done: false, msg: '已移除 ' + members.length + ' 家，还剩 ' + left + ' 家' };
+  }
   await db.collection('customer_batches').doc(batchId).remove();
-  return { ok: true, released: members.length, msg: `批次已删除，${members.length} 家客户回到未分批（档案保留）` };
+  return { ok: true, released: members.length, remain: 0, done: true, msg: '批次已删除，客户回到未分批（档案保留）' };
 }
 
 // ===== 一次性数据修复：补 mallCode（2026-09-27 老板定）=====
@@ -5273,9 +5694,11 @@ async function archiveInitialBatch(event) {
     batch = { _id: add._id };
   }
   const bid = batch._id;
-  // 未分批客户（batchIds 空）；两层状态模型：批次不持有状态，纯名单入批
-  const all = await fetchAll('customers', {}, { _id: true, batchIds: true, phone: true });
-  const todoList = all.filter(c => !Array.isArray(c.batchIds) || !c.batchIds.length);
+  // ⭐⭐ 2026-10-10 指针表模式：**"未分批"改从 batch_members 判**（customers.batchIds 已停写）
+  const all = await fetchAll('customers', {}, { _id: true, phone: true });
+  const mem = await fetchAll('batch_members', {}, { customerId: true });
+  const inBatch = new Set(mem.map(m => m.customerId));
+  const todoList = all.filter(c => !inBatch.has(c._id));
   const slice = todoList.slice(offset, offset + SLICE);
   for (const c of slice) {
     await addCustomerToBatch(c._id, bid);
@@ -5298,10 +5721,21 @@ async function purgeCustomerVisits(event) {
 }
 
 // ===== 智能排序（§7.11 老板定稿：仓库起点贪心 3 候选 + 腾讯 driving 验真距离） =====
+// ⭐⭐⭐ 2026-10-10 实测定案：**服务端算路必须用 WebServiceAPI 类型的 key（`mpWSKey`），不能用 `mpKey`**。
+//   实测（curl 直调腾讯 driving，同一个起终点）：
+//     · `mpKey`（SQWBZ-…，Web 端 JS API 类型）→ **{"status":111,"message":"签名验证失败"}** ❌
+//     · `mpWSKey`（QAFBZ-…，WebServiceAPI 类型）→ **{"status":0,"result":{…distance:1525, polyline:[…]}}** ✅ **直接能用，且不需要 SN 签名**
+//   为什么以前没事：早期那个 key 恰好在白名单里能过；**现在 `mpKey` 已被腾讯拒** →
+//     算路失败 → `fallback: true` → 任务地图画成【直线】并标「（直线估算）」（老板 2026-10-10 实际看到的现象）。
+//   ⚠️ 优先 `mpWSKey`、回退 `mpKey`（万一哪个环境只配了后者）；**别把 `mpKey` 写回第一位**。
 async function getMpKey() {
-  const res = await db.collection('settings').where({ key: 'mpKey' }).limit(1).get();
-  const v = res.data[0] && res.data[0].value;
-  return String(v || 'SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D').trim();
+  const res = await db.collection('settings').where({ key: 'mpWSKey' }).limit(1).get();
+  let v = (res.data[0] && res.data[0].value) || '';
+  if (!String(v).trim()) {
+    const r2 = await db.collection('settings').where({ key: 'mpKey' }).limit(1).get();
+    v = (r2.data[0] && r2.data[0].value) || 'QAFBZ-UES65-YPJIL-IRCGI-IP2M6-U7FBV';
+  }
+  return String(v).trim();
 }
 
 // 通用 HTTPS GET JSON（腾讯地图等公网接口；腾讯 WebService Key 配了 localhost 白名单 → 必须带 Referer）

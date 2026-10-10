@@ -27,6 +27,10 @@
       <view class="geo">
         <view class="geohead">
           <text>📍 定位</text>
+          <!-- ⭐ 2026-10-07 老板定：**编辑模式**在第 1 行「定位」后面**居中显示完整店名** ——
+               这是导航栏标题放不下长店名的替代方案（老板要"完整"，所以**刻意不做省略号**，长就折行）。
+               ⚠️ 新建模式不显示（那时还没店名）。 -->
+          <text class="ednm" wx:if="{{editMode && name}}">{{name}}</text>
           <text class="st {{adopted ? 'ok' : (mode === 'capturing' ? 'run' : (mode === 'tuning' ? 'tune' : ''))}}">{{adopted ? ('已采用 · ' + (adopted === 'phone' ? '手机定位' : (adopted === 'gps' ? '北斗卫星' : '手动微调'))) : (mode === 'capturing' ? '采点中…' : (mode === 'tuning' ? '微调中' : '还没取坐标'))}}</text>
         </view>
 
@@ -410,6 +414,11 @@
     </view>
 
   </view>
+
+  <!-- ⭐ 2026-10-07 老板定：**编辑模式**（从「我的 → 我新加的店」点「点一下改内容」进来）左下角给一个
+       「🧭 导航」—— 业务员改到一半能直接导航去这家店。
+       ⚠️ **新建模式不显示**（那时店还没定下来，导航没意义）；**没坐标也不显示**（导航没目标）。 -->
+  <view class="editnav" wx:if="{{editMode && lat}}" bindtap="navToShop">🧭 导航</view>
 
   <!-- ============ 底部：上一步 / 步骤 / 下一步（四个步骤共用，永远在底部） ============ -->
   <!-- ⚠️ 第 1 步的「上一步」用 visibility 隐藏而不是 display:none —— 要保留它的宽度，

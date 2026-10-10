@@ -16,6 +16,7 @@ App({
     refFrom: '' // 推荐人（2026-09-24）：从分享链接 ?ref=<分享者 users._id> 带进来，注册时随申请提交
   },
   reviewTimer: null,      // 审核观察员定时器（仅存在审核中任务时运行）
+  taskVerTimer: null,     // ⭐ 2026-10-10：任务心跳定时器（"小操作实时反馈"，只在前台跑）
   reviewSnapshot: null,   // 上次快照 { taskId: status }
   reviewListeners: [],    // 页面注册的监听回调（状态变化时调用）
 
@@ -43,6 +44,12 @@ App({
   // 冷启动走 onLaunch、**热启动走 onShow** —— 两处都要接（否则"小程序已在后台、再点分享卡片进来"收不到 ref）
   onShow(options) {
     this.captureRef(options);
+    this.startTaskHeartbeat();     // ⭐ 2026-10-10：回前台就恢复心跳（15 秒一次，只为"小操作实时"）
+  },
+
+  // ⭐ 2026-10-10 新增（原来 app.js 里**没有 onHide**）：切后台就停心跳 —— 省电省钱的前提
+  onHide() {
+    this.stopTaskHeartbeat();
   },
 
   // ===== 推荐人（2026-09-24 老板定：谁分享的链接拉来的人，就记谁为推荐人）=====
@@ -101,6 +108,33 @@ App({
   unregisterReviewListener(fn) {
     this.reviewListeners = this.reviewListeners.filter(f => f !== fn);
   },
+  // ⭐⭐ 2026-10-10 老板定：**任务心跳**（手机端每 15 秒问一次）
+  //   老板原话：「每个小操作都应该三方实时反馈，**大批量数据的才是管控对象**」→ 这是"小操作"那一档。
+  //   覆盖四件事：**新任务派下来 / 任务被后台结束 / 被延期撤回 / 拜访审核结果**。
+  //   ⚠️ 省钱省电三条：① **只在前台跑**（onHide 停）② **只回一个戳**（几十字节）③ **变了才通知页面去拉数据**。
+  //   ⚠️ 页面想响应变化，**自己实现 `onTaskVerChanged()` 就行**；不实现 = 什么都不发生（零副作用）。
+  startTaskHeartbeat() {
+    if (this.taskVerTimer) return;
+    this.taskHeartbeatTick();
+    this.taskVerTimer = setInterval(() => this.taskHeartbeatTick(), 15000);
+  },
+  async taskHeartbeatTick() {
+    try {
+      const r = await wx.cloud.callFunction({ name: 'tasks', data: { action: 'ver' } });
+      const v = (r && r.result && r.result.ver) || '';
+      if (!v) return;
+      if (!this._taskVer) { this._taskVer = v; return; }   // 第一次只记下来，不当"变化"
+      if (v === this._taskVer) return;                      // 没变 → 什么都不做（绝大多数时候走这里）
+      this._taskVer = v;
+      const pages = getCurrentPages();
+      const cur = pages && pages[pages.length - 1];
+      if (cur && typeof cur.onTaskVerChanged === 'function') cur.onTaskVerChanged();
+    } catch (e) { /* 心跳失败静默 —— 绝不能因为心跳把页面搞出问题 */ }
+  },
+  stopTaskHeartbeat() {
+    if (this.taskVerTimer) { clearInterval(this.taskVerTimer); this.taskVerTimer = null; }
+  },
+
   startReviewWatcher() {
     if (this.reviewTimer) return;
     // 2026-09-11 降频：审核观察员轮询开关（后台设置页可关；关闭后不再轮询，省调用）

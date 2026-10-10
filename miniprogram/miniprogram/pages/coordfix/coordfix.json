@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "locpick": "/components/locpick/locpick"
+  },
+  "navigationBarTitleText": "报告坐标不准"
+}

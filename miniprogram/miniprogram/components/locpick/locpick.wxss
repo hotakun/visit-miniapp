@@ -1,0 +1,73 @@
+/* 定位取点组件（2026-10-07 新建）
+   样式从 pages/newshop/newshop.wxss 的「第 1 步：定位」那段搬来，**只改两处**：
+     ① 根 .geo 从"占满剩余高度"改成 height:100%（本组件由外部容器给高度）
+     ② 最后一排按钮的下留白 34px → 12px（下面不再是页脚，而是页面的原因输入与按钮行）
+   ⚠️ 组件样式默认隔离（isolated），这里的类名不会漏到页面上；但项目全局 CSS 变量
+      （--bg / --line / --primary-deep）来自 app.wxss 的 page 选择器，**继承照常生效**。 */
+
+/* 通栏白底，纵向排：标题行 / 地图（吃掉剩余高度） / 状态行 / 三行来源 / 三排按钮
+   ⚠️ height/width 都用 100%：组件被放在弹层的 .fb-geo（display:flex）里，
+      由 flex 把尺寸传下来；写死百分比能兼容"组件标签有无真实盒子"两种情形。 */
+.geo { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; background: #fff; }
+.geohead { display: flex; align-items: center; gap: 7px; padding: 9px 12px 7px; flex: 0 0 auto;
+  border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 800; color: #14663A; }
+.geohead .st { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #6B7688; background: #F1F3F7;
+  border: 1px solid #E4E8EF; border-radius: 999px; padding: 2px 8px; }
+.geohead .st.run { color: #1D5FA8; background: #EAF2FD; border-color: #CFE0F8; }     /* 采点中 */
+.geohead .st.tune { color: #B3261E; background: #FDECEC; border-color: #F3C9C4; }    /* 微调中 */
+.geohead .st.ok { color: #14663A; background: #EAF6EE; border-color: #CBE8D6; }      /* 已采用 */
+
+/* 地图：flex:1 吃掉"标题栏以下、按钮以上"的全部剩余高度
+   ⚠️ 高度必须是 100%（不能像以前那样裁剪）—— 腾讯 logo/审图号要留在右下角（合规） */
+.cmap-wrap { position: relative; flex: 1 1 auto; min-height: 120px; overflow: hidden; }
+.cmap { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+/* 微调模式的中心红点（普通 view 才能盖在原生 map 上） */
+.cmap-pin { position: absolute; left: 50%; top: 50%; z-index: 3; width: 0; height: 0; pointer-events: none; }
+.cmap-pin .dot { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%;
+  background: #E5484D; border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(229, 72, 77, .28); }
+/* 提示胶囊：**左上角 + 白底 60% 透明** */
+.cmap-tip { position: absolute; left: 8px; top: 8px; z-index: 4;
+  background: rgba(255, 255, 255, .6); color: #5B6472; font-size: 10.5px; font-weight: 700;
+  padding: 3px 9px; border-radius: 6px; box-shadow: 0 1px 4px rgba(31, 36, 48, .1);
+  white-space: nowrap; pointer-events: none; }
+
+/* 状态行（唯一一句在变的文字） */
+.gostate { flex: 0 0 auto; padding: 8px 12px; font-size: 11.5px; font-weight: 700; line-height: 1.6;
+  background: #F1F3F7; color: #6B7688; border-top: 1px solid var(--line); }
+.gostate.run { background: #FFF8E8; color: #8A6412; }
+.gostate.tune { background: #FDECEC; color: #B3261E; }
+.gostate.ok { background: #EAF6EE; color: #14663A; }
+
+/* 三个来源各一行：手机=蓝字 / 卫星=绿字 / 微调=红字；被采用的那行高亮 + 打「已采用」 */
+.rows { flex: 0 0 auto; padding: 5px 12px 2px; background: #fff; border-top: 1px solid var(--line); }
+.rows .row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; }
+.rows .row .k { flex: 0 0 60px; font-size: 10.5px; font-weight: 800; color: #8A93A1; }
+.rows .row .v { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: #22262E;
+  line-height: 1.55; word-break: break-all; }
+.rows .row .v.mut { color: #A3ABB8; font-weight: 600; }
+.rows .row .v.bl { color: #1F63C4; }      /* 📱 手机定位 */
+.rows .row .v.gp { color: #14663A; }      /* 📡 北斗卫星 */
+.rows .row .v.rd { color: #B3261E; }      /* ✎ 手动微调 */
+.rows .row.on { background: #F7FAFF; border-radius: 8px; margin: 1px -6px; padding-left: 6px; padding-right: 6px; }
+.rows .row .adopted-tag { flex: 0 0 auto; font-size: 10px; font-weight: 800; color: #fff;
+  background: #2FB86A; padding: 1px 6px; border-radius: 999px; }
+
+/* 按钮：三排，每排「左=去采集 / 右=去采用」，左右同色
+   ⚠️ 每排用 padding 而不是 margin —— margin 会露出底下的灰底，看着"一栏一栏" */
+.geobtns { flex: 0 0 auto; display: flex; gap: 8px; padding: 6px 12px 0; background: #fff; }
+.geobtns.last { padding-bottom: 12px; }        /* 组件底边留一点白（下面的输入框由页面负责） */
+.gb { flex: 1; text-align: center; border-radius: 11px; padding: 11px 0; font-size: 12.5px; font-weight: 700; }
+.gb.blue { background: linear-gradient(135deg, #3E8BF8, #2F7DF6); color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(47, 125, 246, .75); }
+.gb.green { background: linear-gradient(135deg, #2FB86A, #1E9E5A); color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(30, 158, 90, .8); }
+.gb.green.stop { background: linear-gradient(135deg, #E5484D, #C0392B);
+  box-shadow: 0 8px 16px -8px rgba(229, 72, 77, .8); }
+.gb.red { background: linear-gradient(135deg, #E5484D, #C0392B); color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(229, 72, 77, .8); }
+.gb.ghost { background: #F5F7FA; color: #5B6472; border: 1px solid #E9EDF3; }
+.gb.ghost.blue { color: #1F63C4; border-color: #CFE0F8; }
+.gb.ghost.green { color: #14663A; border-color: #CBE8D6; }
+.gb.ghost.red { color: #B3261E; border-color: #F3C9C4; }
+.gb.off { opacity: .42; }
+.gb.busy { opacity: .6; }

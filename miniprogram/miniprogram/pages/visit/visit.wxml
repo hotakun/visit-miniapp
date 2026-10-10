@@ -1,8 +1,32 @@
 <!-- 拜访记录：结果集按客户类型动态显示 -->
+<!-- ⭐ 2026-10-07 老板定：本页导航栏**整条不显示**（visit.json → "navigationStyle":"custom"）→
+     自己按状态栏高度留白（st 由 js 动态取，20~54px 因机型而异）；顶上没有任何题头。
+     ⭐ 留白改由作战条承担（见下面 .hud 的内联 padding-top），深蓝条一直顶到状态栏；
+        同时整页左右**贯穿到屏幕两边**（.page 不设左右内边距） -->
 <view class="page">
-  <view class="vhead">
-    <view class="vname">{{c.name}}</view>
-    <view class="timer">⏱ {{timerText}}</view>
+  <!-- ⭐ 2026-10-07 老板定：顶部「拜访中」作战条（深蓝整条）——
+       ① 和客户详情页的纯白卡一眼分得开（治"点进来不知道换页了"）
+       ② 店名 + 大号计时 + 现场距离，一行看全
+       ③ ⭐ 本页导航栏整条不显示（navigationStyle:custom）→ **页面上不留返回键**；
+          必须「提交拜访」或「取消拜访」才能离开（系统返回也拦，见 js 的 _lockLeave） -->
+  <!-- ⭐ 2026-10-08 老板定：「切换回上家」跳过来后的提示，**两行**（已切回「XXX」/ 请正规结束拜访）。
+       ⚠️ 不能用 wx.showToast —— 它**不支持换行**（会被压成一行空格）。 -->
+  <view class="swtip" wx:if="{{switchTip}}">
+    <view class="swtip-1">已切回「{{switchTip}}」</view>
+    <view class="swtip-2">请正规结束拜访</view>
+  </view>
+
+  <view class="hud" style="padding-top:{{st + 12}}px">
+    <view class="hud-t">
+      <!-- ⭐ 2026-10-08 老板定：**去掉返回键**（原来这里有个「‹」= 留了个后门）——
+           本页必须「提交拜访」或「取消拜访」才能离开；系统返回/iOS 右滑由
+           wx.enableAlertBeforeUnload 拦一道（见 js 的 _lockLeave）。 -->
+      <view class="hud-dot"></view>
+      <text class="hud-k">拜访中</text>
+      <text class="hud-time">{{timerText}}</text>
+    </view>
+    <view class="hud-n">{{c.name}}</view>
+    <view class="hud-m" wx:if="{{distLive}}">📍 {{distLive}}</view>
   </view>
   <!-- 超时预警条（2026-09-08 M1）：上限前 5 分钟出现 -->
   <view class="timeout-warn" wx:if="{{timeoutWarn}}">⏰ 拜访将在 {{timeoutLeftMin}} 分钟后自动{{result ? '提交' : '取消'}}，请尽快处理</view>
@@ -11,44 +35,48 @@
   <!-- 收起时标题栏右侧显示状态摘要：已拍 N/15 张 / 未拍照；N 段 · 合计 mm:ss / 未录音 -->
   <!-- 区块顺序（2026-09-08 老板定）：现场拍照 → 现场录音 → 样品/物料 → 拜访记录 → 拜访结果 -->
   <!-- 2026-09-11：现场拍照改为【最多 15 张】—— 支持连拍（拍完自动再开相机）与相册多选；网格自动换行 -->
-  <view class="sec fcard blk blk-pic">
+  <!-- ⭐⭐ 2026-10-07 老板定：**不要卡片，直接平铺** —— 整页内容是一块通铺白板（.plate），
+       块与块之间只用一条分割线（屏幕利用率更高，看着也更像"一条作业流程"）。
+       ⚠️ 原来的 .sec / .fcard / .blk / blk-XXX（淡色卡片 + 圆角 + 投影）全部去掉；
+          标题栏改成「编号 + 深蓝竖条 + 深蓝字」。 -->
+  <view class="plate">
+  <view class="step">
     <view class="fc-head" bindtap="toggleFold" data-k="pic">
-      <text class="fc-ic">📷</text>
+      <text class="st-no">1</text>
       <text class="fc-t">现场拍照</text>
       <text class="fc-sum">{{pics.length ? ('已拍 ' + pics.length + '/' + maxPics + ' 张') : '未拍照'}}</text>
       <text class="fc-ar">{{foldPic ? '▸' : '▾'}}</text>
     </view>
-    <view wx:if="{{!foldPic}}">
-      <!-- 拍摄入口：连拍 / 相册多选（拍满后自动隐藏） -->
-      <view class="picbar" wx:if="{{pics.length < maxPics}}">
-        <view class="picbtn {{prepBusy ? 'busy' : ''}}" bindtap="shootPhoto">
-          <text class="pb-ic">📷</text><text class="pb-tx">{{prepBusy ? '处理中…' : '拍照'}}</text>
-        </view>
-        <view class="picbtn ghost {{prepBusy ? 'busy' : ''}}" bindtap="pickPhoto">
-          <text class="pb-ic">🖼</text><text class="pb-tx">从相册选</text>
+    <view class="fc-body" wx:if="{{!foldPic}}">
+      <!-- ⭐⭐ 2026-10-07 老板定：**拍照改成「框式」**，与「门头照 / 加新店」是同一套操作 ——
+           永远摆着 3 个虚线框（空框本身就是"点这儿拍"的提示），拍满一排**自动补出下一排**。
+           点空框 → 系统弹「拍照 / 从相册选」；有图那格：左下角序号、右上角 ✕ 删除、点图看大图。 -->
+      <view class="framegrid">
+        <view class="frame {{item.pic ? 'full' : ''}}" wx:for="{{slots}}" wx:key="k" bindtap="tapSlot">
+          <block wx:if="{{item.pic}}">
+            <image class="picimg" src="{{item.pic.thumb}}" data-src="{{item.pic.orig}}" catchtap="previewPhoto" mode="scaleToFill"/>
+            <view class="picno">{{item.no}}</view>
+            <view class="picdel" data-id="{{item.pic.id}}" catchtap="delPhoto">✕</view>
+          </block>
+          <block wx:else>
+            <text class="f-ic">📷</text>
+            <text class="f-tx">{{prepBusy ? '处理中…' : '拍照'}}</text>
+          </block>
         </view>
       </view>
-      <!-- 已拍照片网格（每格固定像素、一行三格自动换行；左下角序号、右上角 ✕ 删除、点图看大图） -->
-      <view class="picgrid">
-        <view class="pictile" wx:for="{{pics}}" wx:key="id">
-          <image class="picimg" src="{{item.thumb}}" data-src="{{item.orig}}" bindtap="previewPhoto" mode="scaleToFill"/>
-          <view class="picno">{{index + 1}}</view>
-          <view class="picdel" data-id="{{item.id}}" catchtap="delPhoto">✕</view>
-        </view>
-      </view>
-      <view class="pic-tip" wx:if="{{!pics.length}}">点上面按钮拍照或从相册选（最多 {{maxPics}} 张）</view>
+      <view class="pic-tip">最多 {{maxPics}} 张 · 点虚线框拍一张，拍满一排会自动出现下一排</view>
     </view>
   </view>
 
   <!-- 2026-09-11：录音开关——后台设置页可关闭（关闭后整块录音区不显示；云端也会拒收录音） -->
-  <view class="sec fcard blk blk-rec" wx:if="{{recEnabled}}">
+  <view class="step" wx:if="{{recEnabled}}">
     <view class="fc-head" bindtap="toggleFold" data-k="rec">
-      <text class="fc-ic">🎙️</text>
+      <text class="st-no">2</text>
       <text class="fc-t">现场录音</text>
       <text class="fc-sum">{{recs.length ? (recCountText + ' 段 · 合计 ' + recTotalText) : '未录音'}}</text>
       <text class="fc-ar">{{foldRec ? '▸' : '▾'}}</text>
     </view>
-    <view wx:if="{{!foldRec}}">
+    <view class="fc-body" wx:if="{{!foldRec}}">
       <view class="fc-sub">最多 {{maxSegs}} 段，单条最长 {{recLimitMin}} 分钟，合计 30 分钟</view>
 
       <!-- 录音中：计时 + 剩余倒计时（剩 30 秒红字加大闪动）+ 停止 -->
@@ -96,50 +124,54 @@
     </view>
   </view>
 
-  <view class="sec blk blk-samp">
+  <view class="step">
     <view class="fc-head" bindtap="toggleFold" data-k="samp">
-      <text class="fc-ic">📦</text>
+      <text class="st-no">3</text>
       <text class="fc-t">样品 / 物料</text>
       <text class="fc-sum">{{samples ? '已填' : '未填'}}</text>
       <text class="fc-ar">{{foldSamp ? '▸' : '▾'}}</text>
     </view>
-    <view wx:if="{{!foldSamp}}">
+    <view class="fc-body" wx:if="{{!foldSamp}}">
       <textarea class="inp area-sm" placeholder="例：带 24 标准白 1 件样品给客户（可多行填写）" value="{{samples}}" bindinput="onSamples" maxlength="-1" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
     </view>
   </view>
 
-  <view class="sec blk blk-text">
+  <view class="step">
     <view class="fc-head" bindtap="toggleFold" data-k="text">
-      <text class="fc-ic">✍️</text>
+      <text class="st-no">4</text>
       <text class="fc-t">拜访记录</text>
       <text class="fc-sum {{text ? 'ok' : ''}}">{{text ? ('已填 ' + text.length + ' 字') : '未填'}}</text>
       <text class="fc-ar">{{foldText ? '▸' : '▾'}}</text>
     </view>
-    <view wx:if="{{!foldText}}">
+    <view class="fc-body" wx:if="{{!foldText}}">
       <textarea class="inp area" placeholder="客户反馈、跟进事项、下次计划……" value="{{text}}" bindinput="onText" maxlength="-1" cursor-spacing="140" show-confirm-bar="{{false}}"></textarea>
     </view>
   </view>
 
-  <view class="sec blk blk-res">
+  <view class="step">
     <view class="fc-head" bindtap="toggleFold" data-k="res">
-      <text class="fc-ic">🎯</text>
+      <text class="st-no">5</text>
       <text class="fc-t">拜访结果</text>
       <text class="fc-sum {{result ? 'ok' : 'warn'}}">{{result ? result : '未选择'}}</text>
       <text class="fc-ar">{{foldRes ? '▸' : '▾'}}</text>
     </view>
-    <view wx:if="{{!foldRes}}">
+    <view class="fc-body" wx:if="{{!foldRes}}">
       <view class="tags">
         <view class="rtag {{result === item ? 'on' : ''}}" wx:for="{{resultList}}" wx:key="*this"
               bindtap="pickResult" data-r="{{item}}">{{item}}</view>
       </view>
     </view>
   </view>
+  </view><!-- /plate：通铺白板到此为止 -->
 
+  <!-- ⭐⭐ 2026-10-07 老板定：底部改成**固定贴底的一条白栏**（原来是一个悬浮胶囊 + 页内"取消拜访"），
+       两个按钮**左右并排**：「✓ 提交拜访」占 2/3（主操作 · 蓝底）、「取消本次拜访」占 1/3（次要 · 白底描边）。
+       ⚠️ 单开拦截（blocked）时取消按钮置灰，点不动。 -->
   <view class="foot">
-    <view class="btn-primary btn-blue" bindtap="submit">✓ 提交拜访</view>
+    <view class="fbtn-main" bindtap="submit">✓ 提交拜访</view>
+    <view class="fbtn-cancel" wx:if="{{!blocked}}" bindtap="askCancel">取消本次拜访</view>
+    <view class="fbtn-cancel off" wx:else>取消本次拜访</view>
   </view>
-
-  <view class="cancel" wx:if="{{!blocked}}" bindtap="askCancel">取消拜访</view>
 
   <!-- 单开拦截大弹窗：任务内已有别家拜访中（停留至点击「知道了」） -->
   <view class="c-mask" wx:if="{{blocked}}">
@@ -151,6 +183,13 @@
       <view class="block-sub">请先完成或取消该家的拜访，</view>
       <view class="block-sub" style="margin-top:0">再开始新的拜访</view>
       <view class="btn-primary" bindtap="goBackFromBlock">知道了</view>
+      <!-- ⭐ 2026-10-08 老板定：除「知道了」，再加两个按钮 ——
+           「切换回上家」= 直接进正在拜访的那一家的拜访页；「取消上家拜访」= 取消掉那家的拜访中（取消完自动继续本家）
+           ⚠️ 按钮文案**不带店名**：店名太长会撑爆按钮（上方 blockMsg 已经显示了完整店名，够认）。 -->
+      <view class="blockbtn-row">
+        <view class="blockbtn" bindtap="switchToOngoing">切换回上家...</view>
+        <view class="blockbtn warn" bindtap="cancelOngoing">取消上家拜访</view>
+      </view>
     </view>
   </view>
 

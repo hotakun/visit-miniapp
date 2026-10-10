@@ -1,0 +1,80 @@
+<!-- 定位取点组件（2026-10-07 新建）—— 从 pages/newshop/ 第 1 步的定位界面搬来（那份一行未动）。
+     用途：客户详情页「📍 报错」的大弹层里现场取新坐标。
+     ⭐ 三个来源各自独立、互不覆盖（v4 口径，老板真机多轮反馈后定稿）：
+       📱 手机定位（蓝） / 📡 北斗卫星（绿） / ✎ 手动微调（红）
+       最后点「✓ 采用…」决定用哪个 —— 被采用的点正常显示、略大，另外两个半透明。
+     ⭐ 微调的特别之处：**已定下的点（tunLat）在重新微调时"留在原地不动"**，
+        拖动只改"候选"（tunCand*，由地图正中的红图钉表示），点「✓ 采用微调」才落定。
+     ⚠️ WXML 只用 view / text（禁 HTML 标签；<br> 曾致白屏）。要换行写两个 view。 -->
+<view class="geo">
+  <view class="geohead">
+    <text>📍 定位</text>
+    <text class="st {{adopted ? 'ok' : (mode === 'capturing' ? 'run' : (mode === 'tuning' ? 'tune' : ''))}}">{{adopted ? ('已采用 · ' + (adopted === 'phone' ? '手机定位' : (adopted === 'gps' ? '北斗卫星' : '手动微调'))) : (mode === 'capturing' ? '采点中…' : (mode === 'tuning' ? '微调中' : '还没取坐标'))}}</text>
+  </view>
+
+  <!-- 地图：永远在（采点中绿点跟着"候选"实时移动，本身就是进度反馈）
+       兜底中心 = 金华市中心，免得"还没定位"时地图空白 -->
+  <view class="cmap-wrap">
+    <map class="cmap" id="gmap"
+         latitude="{{mapLat || 29.0783}}" longitude="{{mapLng || 119.6474}}"
+         markers="{{markers}}"
+         scale="17" min-scale="10" max-scale="20"
+         enable-scroll="{{mode === 'tuning'}}" enable-zoom="{{true}}"
+         enable-rotate="{{false}}" enable-overlooking="{{false}}"
+         show-location="{{false}}" enable-poi="{{true}}"
+         bindregionchange="onRegionChange"></map>
+    <!-- 微调模式：正中红图钉 = "要取的就是这个点"（必须是普通 view 才能盖在原生 map 上）
+         ⚠️ 它是"候选"的可视化；**已定下的那个红点 marker 仍留在原地** -->
+    <view class="cmap-pin" wx:if="{{mode === 'tuning'}}"><view class="dot"></view></view>
+    <view class="cmap-tip" wx:if="{{mode === 'tuning'}}">拖动地图，把红点对准门店位置</view>
+    <view class="cmap-tip" wx:elif="{{!phoneLat && !gpsLat && !tunLat && mode !== 'capturing'}}">等待定位…</view>
+    <view class="cmap-tip" wx:elif="{{adopted && mode === 'idle'}}">实色 = 已采用（这个位置会提交）</view>
+  </view>
+
+  <!-- 状态行（唯一一句在变的文字） -->
+  <view class="gostate {{adopted ? 'ok' : (mode === 'capturing' ? 'run' : (mode === 'tuning' ? 'tune' : ''))}}">
+    <block wx:if="{{mode === 'capturing'}}">📡 采点中 —— {{gpsSummary || gpsText || '正在搜索设备…'}}（绿点在动，还没收敛）</block>
+    <block wx:elif="{{mode === 'tuning'}}">✎ 微调中 —— 拖动地图把红点对准门口{{tunDist ? '（挪了 ' + tunDist + '）' : ''}}；点「✓ 采用微调」落定{{tunLat ? '（原来那个位置先留在原地）' : ''}}</block>
+    <block wx:elif="{{adopted}}">✅ 已采用{{adopted === 'phone' ? '手机定位' : (adopted === 'gps' ? '北斗卫星' : '手动微调')}} —— 想换就点另一个「✓ 采用」</block>
+    <block wx:elif="{{phoneLat || gpsLat || tunLat}}">⏳ 已经有定位点，请点下面「✓ 采用…」选定用哪个</block>
+    <block wx:else>⏳ 还没取坐标 —— 点「📱 手机定位」拿个大概，或「📡 北斗卫星」拿准的</block>
+  </view>
+
+  <!-- 三个来源各一行：手机=蓝字 / 卫星=绿字 / 微调=红字；被采用的那行高亮 + 打「已采用」 -->
+  <view class="rows">
+    <view class="row {{adopted === 'phone' ? 'on' : ''}}">
+      <text class="k">手机定位</text>
+      <text class="v {{phoneLat ? 'bl' : 'mut'}}">{{phoneLat ? (phoneLat + ', ' + phoneLng + '（' + phoneAcc + '）') : '— 还没定'}}</text>
+      <text class="adopted-tag" wx:if="{{adopted === 'phone'}}">已采用</text>
+    </view>
+    <view class="row {{adopted === 'gps' ? 'on' : ''}}">
+      <text class="k">北斗卫星</text>
+      <text class="v {{(gpsLat || pendLat) ? 'gp' : 'mut'}}">{{mode === 'capturing' ? (gpsSummary || gpsText || '正在搜索…') : (gpsLat ? (gpsLat + ', ' + gpsLng) : '— 还没采')}}</text>
+      <text class="adopted-tag" wx:if="{{adopted === 'gps'}}">已采用</text>
+    </view>
+    <!-- ⭐ 微调这行：**微调中显示"正在拖的候选"**（含挪了多远）；平时显示"已定下的那个点" -->
+    <view class="row {{adopted === 'tune' ? 'on' : ''}}">
+      <text class="k">手动微调</text>
+      <text class="v {{(tunLat || tunCandLat) ? 'rd' : 'mut'}}">{{mode === 'tuning' ? (tunCandLat ? (tunCandLat + ', ' + tunCandLng + (tunDist ? '（挪了 ' + tunDist + '）' : '')) : '拖动地图选位置…') : (tunLat ? (tunLat + ', ' + tunLng) : '— 没用过')}}</text>
+      <text class="adopted-tag" wx:if="{{adopted === 'tune'}}">已采用</text>
+    </view>
+  </view>
+
+  <!-- ⚠️ 三个「采用」的灰/亮**只看"这个来源有没有值"，不看 adopted** ——
+       否则"之前采用过、现在又刷新 / 重新微调"时，按钮会被误判成灰的、让人以为不能点。 -->
+  <!-- 第 1 行：手机定位 → 采用手机 -->
+  <view class="geobtns">
+    <view class="gb blue {{locBusy ? 'busy' : ''}}" bindtap="locateNow">{{locBusy ? '定位中…' : '📱 手机定位'}}</view>
+    <view class="gb ghost blue {{phoneLat ? '' : 'off'}}" bindtap="adoptPhone">✓ 采用手机</view>
+  </view>
+  <!-- 第 2 行：北斗采点 → 采用卫星 -->
+  <view class="geobtns">
+    <view class="gb green {{capOn ? 'stop' : ''}}" bindtap="tapCap">{{capOn ? '⏹ 停止' : '📡 北斗卫星'}}</view>
+    <view class="gb ghost green {{pendLat ? '' : 'off'}}" bindtap="adoptGpsCapture">✓ 采用卫星</view>
+  </view>
+  <!-- 第 3 行：微调位置 → 采用微调（最后一排） -->
+  <view class="geobtns last">
+    <view class="gb red {{((phoneLat || gpsLat || tunLat) && mode !== 'tuning') ? '' : 'off'}}" bindtap="startTune">✎ 微调位置</view>
+    <view class="gb ghost red {{(mode === 'tuning' && tunCandLat) ? '' : 'off'}}" bindtap="adoptTune">✓ 采用微调</view>
+  </view>
+</view>

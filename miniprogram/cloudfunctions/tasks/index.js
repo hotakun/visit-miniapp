@@ -110,6 +110,7 @@ exports.main = async (event) => {
   if (action === 'finish') return await finish(salesmanId, taskId, meDoc, isBoss);
   if (action === 'subStatus') return await subStatus(salesmanId, isBoss);
   if (action === 'reviewStatus') return await reviewStatus(salesmanId, isBoss);
+  if (action === 'ver') return await taskVer(salesmanId);   // ⭐ 2026-10-10 手机端心跳（只回一个戳）
   if (action === 'replanDay') return await replanDay(salesmanId, event, isBoss);
   if (action === 'bossBoard') return await bossBoard(salesmanId, isBoss);
   if (action === 'bossWar') return await bossWar(isBoss);
@@ -786,6 +787,24 @@ async function bossTrack(isBoss, e) {
 }
 
 // 审核观察员：返回该业务员所有审核中任务的精简信息（供手机端 15 秒轮询等待审批结果）
+// ⭐⭐ 2026-10-10 老板定：**任务心跳**（手机端每 15 秒问一次，只回一个戳）
+//   老板原话：「每个小操作都应该三方实时反馈，**大批量数据的才是管控对象**」
+//   覆盖四件事：**新任务派下来 / 任务被后台结束 / 被延期撤回 / 拜访审核结果** —— 手机端"变了才拉详情"。
+//   ⚠️ **省钱的关键**：只回一个戳、**不拉任何业务数据** —— 按 `salesmanId`（有索引）取几十条，
+//      在云函数里算个 max，响应几十字节。20 人 ≈ 2~3 元/天。
+//   ⚠️ 老板模式（isBoss）**不做心跳** —— 他的实时性由后台/战况页负责（第三段再说）。
+async function taskVer(salesmanId) {
+  if (!salesmanId) return { ok: true, ver: '0' };
+  const r = await db.collection('tasks')
+    .where({ salesmanId })
+    .field({ updatedAt: true, status: true })
+    .limit(200)
+    .get().catch(() => null);
+  let mx = 0, st = '';
+  ((r && r.data) || []).forEach(t => { const u = t.updatedAt || 0; if (u >= mx) { mx = u; st = t.status || ''; } });
+  return { ok: true, ver: mx + '-' + st };
+}
+
 async function reviewStatus(salesmanId, isBoss) {
   if (isBoss) return { ok: true, list: [] }; // 老板演示：待审数走 adminapi bossBoard
   const res = await db.collection('tasks').where({ salesmanId, status: 'reviewing' })
@@ -1256,8 +1275,9 @@ async function replanDay(salesmanId, event, isBoss) {
       candidates.push(ord);
     }
     // 第 2 层：腾讯 driving 验真（from=我的位置；失败换下个候选）
-    const key = await getMpKey();
-    const URL = 'https://apis.map.qq.com/ws/direction/v1/driving/';
+    // ⭐ 2026-10-07：改走 `txUrl()` —— 它统一按腾讯要求拼参（按名升序）+ 需要时附 `sig` 签名。
+    //   原来这里手拼 `?from=…&key=…`（**没带签名**）→ 碰上开了签名校验的 key 必然 111 → **一直是直线**。
+    const DRIVE_PATH = '/ws/direction/v1/driving/';
     let best = null;
     for (const ord of candidates) {
       try {
@@ -1265,9 +1285,9 @@ async function replanDay(salesmanId, event, isBoss) {
         const to = `${ord[ord.length - 1].lat},${ord[ord.length - 1].lng}`;
         const wpList = dist(origin, ord[0]) < 1 ? ord.slice(1, -1) : ord.slice(0, -1);
         const wp = wpList.map(c => `${c.lat},${c.lng}`).join(';');
-        let q = `?from=${from}&to=${to}&key=${encodeURIComponent(key)}&output=json`;
-        if (wp) q += `&waypoints=${encodeURIComponent(wp)}`;
-        const r = await httpGetJson(URL + q);
+        const params = { from: from, to: to };
+        if (wp) params.waypoints = wp;
+        const r = await httpGetJson(await txUrl(DRIVE_PATH, params));
         if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
           const route = r.result.routes[0];
           const d = Math.round(route.distance || 0);
@@ -1355,11 +1375,52 @@ async function visitedSet(taskId, ids, statuses) {
   return set;
 }
 
-// 腾讯 WebService Key（后台可配；默认内置）
+// 腾讯 **WebServiceAPI** key（云函数服务端调用专用；后台可配）
+// ⭐⭐ 2026-10-07 重要：**不能复用后台地图那个 key**！`admin.html` 用的 `SQWBZ-…-S7F2D` 是
+//   「Web 端(JS API)」类型 —— 腾讯对这类 key 的**服务端调用一律回 `status:111 签名验证失败`**，
+//   换任何 SK、任何签名写法都没用（2026-10-07 拿真 key 把 8 种签名写法全试过，全 111）。
+//   → 必须**另建一个「WebServiceAPI」类型的 key**，存 `settings.mpWSKey`；
+//     若那个 key 开了「签名校验」，再把签名密钥存 `settings.mpSK`（见下面 txUrl / txSign）。
+//   ⚠️ 没配 `mpWSKey` 时退回旧的 `mpKey`（老行为：接口失败 → 直线兜底，页面照常能用）。
 async function getMpKey() {
-  const res = await db.collection('settings').where({ key: 'mpKey' }).limit(1).get();
-  const v = res.data[0] && res.data[0].value;
-  return String(v || 'SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D').trim();
+  for (const k of ['mpWSKey', 'mpKey']) {
+    const res = await db.collection('settings').where({ key: k }).limit(1).get().catch(() => ({ data: [] }));
+    const v = String((res.data[0] && res.data[0].value) || '').trim();
+    if (v) return v;
+  }
+  return 'SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D';
+}
+
+// 腾讯 WebServiceAPI 的**签名密钥 SK**（该 key 开了「签名校验」才需要；没配则返回空 = 不签名）
+async function getMpSK() {
+  const res = await db.collection('settings').where({ key: 'mpSK' }).limit(1).get().catch(() => ({ data: [] }));
+  return String((res.data[0] && res.data[0].value) || '').trim();
+}
+
+// 腾讯 WebServiceAPI 的 **SN 签名**（官方文档：lbs.qq.com/faq/serverFaq/webServiceKey）
+//   规则：`md5( 请求路径 + '?' + 参数按「参数名」升序拼接 + SK )`
+//   ⚠️ 参数值用**原文**、不要 URL 编码；`output` 这类参数**也要算进**签名串里。
+function txSign(path, qs, sk) {
+  const crypto = require('crypto');
+  return crypto.createHash('md5').update(path + '?' + qs + sk, 'utf8').digest('hex');
+}
+
+// 拼一条腾讯 WebServiceAPI 请求地址：参数**按参数名升序**（腾讯签名要求）+ 需要时附 `sig`
+//   入参：path（如 '/ws/direction/v1/walking/'）、params（对象，值用**原文**，别预先编码）
+//   ⚠️ 以后所有"云函数调腾讯接口"的地方都走这里，别再手拼 —— 手拼必漏签名（2026-10-07 踩过）。
+// ⭐⭐ 2026-10-10 实测更正（老板定：**清掉签名，统一成"直接带 key"**）：
+//   **`mpWSKey` 这个 key 没开签名校验 —— 直接带 key 就能用**
+//   （curl 实测：`{"status":0,"result":{"routes":[{"distance":1525,"polyline":[…]}]}}` ✅）
+//   ⚠️ 反过来，设置里一旦填了 `mpSK`，这里就**会**加 `sig` —— 而服务器并不认这个签名 → **反而被拒（111）**。
+//   ✅ 所以**一律不签名**。`txSign` / `getMpSK` 作为死代码保留（万一以后换成开了签名校验的 key，
+//      把下面那行 `// if (sk) …` 放开即可）。
+async function txUrl(path, params) {
+  const key = await getMpKey();
+  const p = Object.assign({}, params, { key: key, output: 'json' });
+  const qs = Object.keys(p).sort().map(k => k + '=' + p[k]).join('&');
+  // const sk = await getMpSK();                       // ⚠️ 需要签名校验的 key 才放开
+  // if (sk) return 'https://apis.map.qq.com' + path + '?' + qs + '&sig=' + txSign(path, qs, sk);
+  return 'https://apis.map.qq.com' + path + '?' + qs;
 }
 
 // 通用 HTTPS GET JSON（腾讯地图等公网接口；Referer 需匹配 key 白名单）
@@ -1732,7 +1793,7 @@ async function freeTripDelete(salesmanId, meDoc, event) {
 //      所以**不需要去微信后台配 request 域名**。
 //   ⚠️ 用 `walking`（步行）而不是任务地图那个 `driving`（驾车）—— 业务员是走路的。
 //   ⚠️ 腾讯接口失败时**返回直线兜底**（前端照样能画，不至于"点了没反应"）。
-const WALK_URL = 'https://apis.map.qq.com/ws/direction/v1/walking/';
+const WALK_PATH = '/ws/direction/v1/walking/';   // ⚠️ 是**路径**（不是完整 URL）—— 交给 txUrl() 拼
 async function walkRoute(salesmanId, event) {
   const fLat = Number(event.fromLat), fLng = Number(event.fromLng);
   const tLat = Number(event.toLat), tLng = Number(event.toLng);
@@ -1742,9 +1803,9 @@ async function walkRoute(salesmanId, event) {
   const from = fLat + ',' + fLng, to = tLat + ',' + tLng;
   let pts = null, distance = 0, durationMin = null;
   try {
-    const key = await getMpKey();
-    const q = '?from=' + from + '&to=' + to + '&key=' + encodeURIComponent(key) + '&output=json';
-    const r = await httpGetJson(WALK_URL + q);
+    // ⭐ 2026-10-07：改走 `txUrl()`（统一拼参 + 需要时附签名）——
+    //   原来手拼且**未签名** → 开了签名校验的 key 一律 111 → **路线一直是直线**（老板报的）。
+    const r = await httpGetJson(await txUrl(WALK_PATH, { from: from, to: to }));
     if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
       const route = r.result.routes[0];
       distance = Math.round(route.distance || 0);
@@ -1871,10 +1932,32 @@ async function custDetail(salesmanId, event, isBoss) {
         'salesman', 'level', 'orderCount', 'buyFreq', 'avgPrice', 'source', 'mallTags', 'mallCategory', 'mallType',
         'customerType', 'batchIds', 'remark', 'platShopUuid', 'platMatched', 'lastVisitAt', 'createdAt',
         'plat', 'platManual', 'photos', 'remarks',
+        // ⭐ 2026-10-07 补：**现场录入（手机端「加新店」）写的顶层字段** ——
+        //   原来白名单里没有它们，手机端 7 卡就只能读到"平台侧"那份（plat.*），
+        //   于是现场建的店在手机端**看不到品类 / 营业时间 / 服务与设施 / 团购外卖**
+        //   （而后台详情页读的是顶层 → 后台看得到。老板报的"后台有、手机没有"就是这个）。
+        //   ⚠️ 前端拿到后是"平台优先、现场兜底"，见 pages/customer/customer.js 的 buildD。
+        'cat1', 'cat2', 'cat3', 'hours', 'fac', 'flags',
+        // ⭐ 2026-10-07 补：**「加新店」建店时录的现场录音**（customers.audios）——
+        //   前端（pages/customer）2026-10-03 就把「读取 + 换临时 URL + 播放 + 渲染」全写好了
+        //   （buildD 的 d.siteRec、playSiteRec、customer.wxml 的「现场录音」块），
+        //   **唯独这里没放 audios** → 数据被白名单滤掉 → 那块永远不显示（老板 2026-10-07 报的）。
+        //   ⚠️ 别删：删了手机端就再也听不到建档时录的音（后台读的是同一份字段，不受此处影响）。
+        'audios',
         // ⭐ 2026-09-28 晚：现场录入的「待商城建档」标记（手机端据此显示「⏳ 待商城建档」淡色胶囊）
         'mallPending'];
       const o = {};
       KEEP.forEach(k => { if (c[k] !== undefined) o[k] = c[k]; });
+      // ⭐ 2026-10-07 老板报障：**「最近下单」以实际订单为准**（与 adminapi.listCustomers 同口径）——
+      //   库里存的 `lastOrderAt` 是**商城表导入时的快照**，会滞后于我们自己的销售订单
+      //   （实例：吕记鲜饺 —— 购买记录 9/19、商城信息 8/26）→ 手机端不再直接用它。
+      //   ⚠️ 本函数上面已经把这个客户的**全部订单**拉下来了（`orders`），取最大日期即可，零额外查询。
+      const _lastReal = (() => {
+        let m = '';
+        (orders || []).forEach(x => { const d = String(x.orderedAt || '').slice(0, 10); if (d > m) m = d; });
+        return m;
+      })();
+      if (_lastReal) o.lastOrderAt = _lastReal;   // 只有"一单都没有"时才回落到库里那个兜底值
       return o;
     })(),
     // 订单摘要 + 最近 20 单（每单带 lines=商品行数，列表里显示"N 品种"）

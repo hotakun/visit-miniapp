@@ -239,6 +239,13 @@ Page({
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
   data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false },
+  // ⭐⭐ 2026-10-10 老板定：**任务心跳回调**（`app.js` 每 15 秒问一次云端"变了没"，变了才叫到这里）
+  //   场景：后台派了新任务 / 把任务结束了 / 延期撤回 —— 首页几秒内自己刷新，业务员不用手动下拉。
+  //   ⚠️ 只做一次轻刷新、**不弹任何提示** —— 免得打扰正在干活的人。
+  onTaskVerChanged() {
+    try { this.load(); } catch (e) { /* 静默：刷新失败不能让页面崩 */ }
+  },
+
   onShow() {
     const app = getApp();
     // 2026-09-10：自定义 Tab 栏选中态（首页=0；tab 页常驻后切页不再重建底部栏）

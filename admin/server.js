@@ -15,6 +15,81 @@ const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf
 //   不带就返回「登录失效」，预热会**静默失败**（现象：/mapPoints 一直空 + warming:true）。
 //   默认 qingyan/123456；不想写死可在 config.json 加 adminUser / adminPass 覆盖。
 const STORE_AUTH = { username: cfg.adminUser || 'qingyan', password: cfg.adminPass || '123456' };
+
+// ⭐⭐ 2026-10-10 老板定：**批次列表落盘缓存**（治「一天重启几十次就拉几十次」）
+//   · 后台每次启动 / 进批次页都调 listCustomerBatches —— 它要拉"全部批次成员 + 全部任务"，
+//     批次一大（9448 家）就是 1.2 万条，又慢又贵（还超时）。
+//   · 做法和客户点缓存一样：结果落盘 admin/cache/batches.json，**5 分钟内（含重启）直接读文件**，
+//     过期才回云端拉一次。写操作后前端会 POST /batches/refresh 主动作废。
+const BATCHES_FILE = path.join(__dirname, 'cache', 'batches.json');
+let _batchBusy = null;
+
+// ⭐⭐ 2026-10-10 指针表模式：**批次数据优先从自己的服务器 PG 拿**（pgapi 的 /batches —— 免费、秒出、
+//   一条 SQL 出全部数字）；拿不到 / 没配 → 自动回退云开发 listCustomerBatches（服务器挂了后台照样能开）。
+//   两者输出 JSON **同构** → 落盘缓存与前端都不用区分来源。
+async function fetchBatchesFromPg() {
+  try {
+    if (!cfg.pgApiUrl) return null;
+    const url = String(cfg.pgApiUrl).replace(/\/+$/, '') + '/batches' +
+      (cfg.pgApiToken ? ('?token=' + encodeURIComponent(cfg.pgApiToken)) : '');
+    const r = await (await fetch(url)).json();
+    if (r && r.ok) return r;
+    console.log('[batches] PG 没给数据，回退云开发：' + ((r && r.msg) || ''));
+    return null;
+  } catch (e) {
+    console.warn('[batches] PG 只读 API 不可用，回退云开发：' + (e && e.message));
+    return null;
+  }
+}
+
+// ⚠️⚠️ 2026-10-10 修（**本功能的隐藏 bug，其实一直在静默失效**）：云开发回退必须有这两步 ——
+//   ① **带凭据**（STORE_AUTH）：adminapi 要认证，原来不带 → 恒回 NO_AUTH → **落盘缓存从来没写进去过**
+//      （老板"一天重启几十次就拉几十次"其实一直没被治好，前端每次都靠 getBatches 的兜底硬拉云端）；
+//   ② **parse 字符串**：`callApi` 末尾是 `return JSON.stringify(out)` → 返回的是 **JSON 字符串**，
+//      直接用会 `r.ok === undefined` → 同样写不进缓存，且响应体变成"双层字符串"（前端解析成 string）。
+async function callCloudListBatches() {
+  try {
+    const raw = await callApi(Object.assign({ action: 'listCustomerBatches' }, STORE_AUTH));
+    const r = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return r || { ok: false, msg: '拉取失败' };
+  } catch (e) {
+    console.warn('[batches] 云开发回退失败：' + (e && e.message));
+    return { ok: false, msg: '拉取失败' };
+  }
+}
+
+function batchesCached(req, res, forceCloud) {  const TTL = 5 * 60 * 1000;
+  let hit = null;
+  try {
+    const st = fs.statSync(BATCHES_FILE);
+    if (Date.now() - st.mtimeMs < TTL) hit = JSON.parse(fs.readFileSync(BATCHES_FILE, 'utf8'));
+  } catch (e) { /* 没缓存 / 文件坏了 → 回云端拉 */ }
+  if (hit) {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(Object.assign({}, hit, { cached: true })));
+    return;
+  }
+  if (_batchBusy) {                                  // 并发合并：同时多处要，只拉一次
+    _batchBusy.then(r => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(r)); });
+    return;
+  }
+  _batchBusy = (async () => {
+    // ⭐ 2026-10-10：默认 **PG 优先**（零成本）；`forceCloud`（写后刷新那条路）**必须走云开发** ——
+    //   "刚写完的批次要即时可见"，PG 有最多 5 分钟的同步滞后（见路由处说明）。
+    if (!forceCloud) {
+      const fromPg = await fetchBatchesFromPg();
+      if (fromPg) return fromPg;
+    }
+    return await callCloudListBatches();   // ⚠️ 走这个（带凭据 + parse），别直接 callApi
+  })().then(r => {
+    if (r && r.ok) {
+      try { fs.mkdirSync(path.dirname(BATCHES_FILE), { recursive: true }); fs.writeFileSync(BATCHES_FILE, JSON.stringify(r)); } catch (e) { /* 落盘失败不影响返回 */ }
+    }
+    _batchBusy = null;
+    return r || { ok: false, msg: '拉取失败' };
+  }).catch(() => { _batchBusy = null; return { ok: false, msg: '拉取失败' }; });
+  _batchBusy.then(r => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(r)); });
+}
 // 端口优先取命令行 --port=N，其次环境变量 PORT，最后默认 8080（壳程序用 --port 传，绕开环境变量传递坑）
 const argPort = parseInt(((process.argv.find(a => a.indexOf('--port=') === 0) || '').split('=')[1]), 10);
 const PREFERRED_PORT = argPort || parseInt(process.env.PORT) || 8080;
@@ -614,6 +689,40 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(r));
     });
+    return;
+  }
+  // ⭐⭐ 2026-10-10 指针表模式：删批次后 **把该批次从本地缓存的 bi 里整体摘掉**（一次请求、服务端内部处理）——
+  //   前端若拼 9448 条 patch 太重；这里服务端过一遍数组即可（毫秒级）。
+  if (req.method === 'POST' && req.url === '/mapPoints/unbatch') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      let reqBody = {};
+      try { reqBody = JSON.parse(body || '{}'); } catch (e) { /* 空体当空对象 */ }
+      let r;
+      try { r = store.unbatch(String(reqBody.batchId || '')); }
+      catch (e) { r = { ok: false, msg: e.message }; }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(r));
+    });
+    return;
+  }
+  // ⭐⭐ 2026-10-10 老板定：**批次列表也落盘缓存**（治「一天重启几十次就拉几十次」）
+  //   · 后台每次启动 / 进批次页都会调 listCustomerBatches —— 那个接口要拉"全部批次成员 + 全部任务"，
+  //     批次一大（9448 家）就是 1.2 万条，又慢又贵（还超时）。
+  //   · 做法和客户点缓存一样：**结果落盘到 admin/cache/batches.json**，**5 分钟内（含重启）直接读文件**。
+  //   · 写操作后前端会打 POST /batches/refresh 主动作废；平时 5 分钟自然过期。
+  if (req.method === 'GET' && req.url.indexOf('/batches') === 0 && req.url !== '/batches/refresh') {
+    batchesCached(req, res);
+    return;
+  }
+  if (req.method === 'POST' && req.url.indexOf('/batches/refresh') === 0) {
+    // ⭐⭐ 2026-10-10 指针表模式：写操作（建批 / 删批 / 改名）后前端调这里**主动作废**落盘缓存。
+    //   `?src=cloud` = **强制走云开发**（不看 PG）—— 因为"刚写完"的批次必须**即时**可见：
+    //   pgsync 同步到 PG 最多滞后 5 分钟，若这里还读 PG，老板建完批次回列表会**看不到新批次**！
+    //   ✅ 平缓过渡：这条路上打一次云端（准、即时）；5 分钟后缓存过期 → 自然切回 PG（免费）。
+    try { fs.unlinkSync(BATCHES_FILE); } catch (e) { /* 没文件就算了 */ }
+    batchesCached(req, res, req.url.indexOf('src=cloud') >= 0);
     return;
   }
   if (req.method === 'GET' && req.url.indexOf('/mapPoints') === 0) {

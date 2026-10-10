@@ -1,4 +1,5 @@
 {
   "usingComponents": {},
-  "navigationBarTitleText": "拜访记录"
+  "navigationBarTitleText": "拜访记录",
+  "navigationStyle": "custom"
 }

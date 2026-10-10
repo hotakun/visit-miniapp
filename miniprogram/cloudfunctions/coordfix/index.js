@@ -34,19 +34,26 @@ exports.main = async (event) => {
     }
   }
   if (!me.data.length) return { ok: false, code: 'NO_AUTH', msg: '未登录' };
+  // ⭐ 2026-10-07 补：**老板兼业务员**（users.alsoSalesman）声明「以业务员身份进入」→ 本次请求**按业务员认人**
+  //   （口径与 tasks / visits / transcribe 完全一致；此前 coordfix **偏偏漏了这一条** →
+  //    朱小利以业务员身份报坐标错 / 现场提报时仍被判成老板 → **虚拟写、不落库**，后台永远收不到。
+  //    现象就是"我明明选了业务员身份，报错还是提交不上去"。）
+  //   ⚠️ 只信库里的 alsoSalesman 标记：声明只能"降权"（老板→业务员），不可能提权。
+  const asSalesman = !!(event && (event.asSalesman === true || event.asSalesman === 'true'))
+    && me.data[0].alsoSalesman === true;
   // ⭐ 2026-09-27 新增：**现场提报**（招牌菜 / 设施 / 团购外卖点改 —— 修正 008 的提报审核链路）。
   //   action 缺省 = 'coord'（坐标报错，下面原逻辑一行不变）
   const action = String((event && event.action) || 'coord').trim();
   if (action === 'field') {
-    const isBossF = ['super_admin', 'admin'].includes(me.data[0].role)
-      || (me.data[0].phone === '13067737286' && event && event.boss === true);
+    const isBossF = !asSalesman && (['super_admin', 'admin'].includes(me.data[0].role)
+      || (me.data[0].phone === '13067737286' && event && event.boss === true));
     return await submitField(me.data[0], event || {}, isBossF);
   }
   // 老板模式（2026-09-10 老板定：管理员模式与老板模式合并——管理员（super_admin/admin）一律按老板处理，
   // 不再看 boss 白名单字段；手机号=15055492888 为老板本人，字段保留仅作历史兜底）
   // 2026-09-09 开发者范宇琨双身份：dev 白名单（13067737286）且请求带 boss 标志 → 按老板处理（模拟提交）
-  const isBoss = ['super_admin', 'admin'].includes(me.data[0].role)
-    || (me.data[0].phone === '13067737286' && event && event.boss === true);
+  const isBoss = !asSalesman && (['super_admin', 'admin'].includes(me.data[0].role)
+    || (me.data[0].phone === '13067737286' && event && event.boss === true));
   if (!customerId || !lat || !lng) return { ok: false, code: 'BAD_ARG', msg: '缺少坐标' };
   if (lat < 18 || lat > 54 || lng < 73 || lng > 135) return { ok: false, code: 'BAD_COORD', msg: '坐标范围异常' };
   const noteText = String(note || '').trim().slice(0, 100);

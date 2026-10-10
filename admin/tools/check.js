@@ -63,18 +63,25 @@ function walk(dir, out = []) {
 
 // ---------- ③ 行尾（字节级：按 Buffer 数 \r\n 与 \n）----------
 function countEol(buf) {
-  let crlf = 0, bare = 0;
+  let crlf = 0, bare = 0, extraCr = 0;
   for (let i = 0; i < buf.length; i++) {
     if (buf[i] === 10) { if (i > 0 && buf[i - 1] === 13) crlf++; else bare++; }
+    // ⭐ 2026-10-08 补数：连续 CR（\r\r）—— 行尾被**反复**转成 CRLF 的痕迹
+    else if (buf[i] === 13 && i > 0 && buf[i - 1] === 13) extraCr++;
   }
-  return { crlf, bare };
+  return { crlf, bare, extraCr };
 }
 function checkEol(rel, abs) {
   const buf = fs.readFileSync(abs);
-  const { crlf, bare } = countEol(buf);
+  const { crlf, bare, extraCr } = countEol(buf);
   const bom = buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF;
   checked.eol++;
   if (bom) fails.push(`行尾 ${rel}：带 BOM（项目约定无 BOM）`);
+  // ⭐⭐ 2026-10-08 新增：行尾**连续 CR**（`\r\r…`）—— 原来只数 `\r\n` 与 `\n`，
+  //   而 `\r\r\n` 里**含**一个 `\r\n` → "裸 LF=0"会把这种脏文件判成"合格"
+  //   （`admin/admin.html` 曾积到**每行约 15 个 CR**，是老板肉眼发现的，体检却全绿）。
+  //   修法：`b.replace(/\r/g,'').replace(/\n/g,'\r\n')`
+  if (extraCr > 0) fails.push(`行尾 ${rel}：有 ${extraCr} 处连续 CR（\\r\\r…，行尾被反复转成 CRLF）；修法：去掉全部 CR 再统一补 \\r\\n`);
   if (MIXED_FILES.has(rel)) {
     // 混合文件：只要求「主体是 CRLF」——有 CRLF 就行，不苛求裸 LF 数
     if (crlf === 0) fails.push(`行尾 ${rel}：应是 CRLF 为主的混合文件，实测 CRLF=0`);

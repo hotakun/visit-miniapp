@@ -79,21 +79,15 @@ Page({
   // ⭐ 2026-10-02 老板定：卡片右边的「开始拜访」→ 直接进拜访页（**无任务拜访 / 自由拜访**）
   //   背景：这家店是现场录入的、**不属于任何任务** → 走 visits 的"自由拜访"分支（taskId 传空）。
   //   ⚠️ 拜访页是从 storage 的 `curCustomer` 取客户信息的（与其它入口一致），所以这里先写 storage。
-  goVisit(e) {
+  goDetail(e) {
     const id = e.currentTarget.dataset.id;
     if (!id) return;
     const it = (this.data.list || []).filter(x => x.id === id)[0];
     if (!it) return;
     if (!it.lng || !it.lat) { api.toast('这家店还没有坐标：先去编辑页定个位置'); return; }
-    wx.setStorageSync('curCustomer', {
-      _id: it.id,
-      name: it.name || '',
-      address: it.address || '',
-      lng: it.lng, lat: it.lat,
-      taskId: '',                                  // ⭐ 空 = 自由拜访（不属于任何任务）
-      freeVisit: true
-    });
-    this._needRefresh = true;                      // 拜访完回来刷新一下
-    wx.navigateTo({ url: '/pages/visit/visit' });
+    // ⭐ 2026-10-07 老板定：先进**客户详情页**，详情页最下面再「开始拜访」。
+    //   ⚠️ 带上 freeVisit=1 —— 否则详情页里的 goVisit() 会接力 storage 里的旧 curCustomer，
+    //      可能带着上次任务拜访的 taskId 变成"任务拜访"（会去查任务、校验客户在不在任务里 → 报错/串数据）。
+    wx.navigateTo({ url: '/pages/customer/customer?id=' + id + '&freeVisit=1' });
   }
 });

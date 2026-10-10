@@ -464,9 +464,11 @@ Page({
       }
       const pts = r.pts.map(q => ({ latitude: q[0], longitude: q[1] }));
       this.setData({
+        // ⭐ 2026-10-07 老板定：**路线改「绿色 + 加粗」**（原来是品牌橙 5px，压在底图上不够跳）——
+        //   绿用项目既有路线同款的 #16A34A（任务地图那条也是这个绿），宽度 5 → 8，白描边 1 → 2。
         polyline: [{
-          points: pts, color: '#F5531C', width: 5,
-          arrowLine: true, borderColor: '#FFFFFF', borderWidth: 1
+          points: pts, color: '#16A34A', width: 8,
+          arrowLine: true, borderColor: '#FFFFFF', borderWidth: 2
         }]
       });
       // 视野框住整条路线（底部留位给工具栏）

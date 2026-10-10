@@ -21,6 +21,11 @@
 .geo { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: #fff; }
 .geohead { display: flex; align-items: center; gap: 7px; padding: 9px 12px 7px; flex: 0 0 auto;
   border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 800; color: #14663A; }
+/* ⭐ 2026-10-07 老板定：**编辑模式**在第 1 行「定位」后面**居中显示完整店名**（导航栏标题放不下长店名的替代）。
+   ⚠️ 刻意**不加** nowrap/省略号 —— 老板要的是"完整"，店名长就让它折行（只多占一点高度，下面的地图自动让位）。
+   它是 flex:1 → 顺便把右边的状态胶囊顶到最右（.st 的 margin-left:auto 此时已无实际作用，留着无害）。 */
+.geohead .ednm { flex: 1; min-width: 0; text-align: center; font-size: 12px; font-weight: 700;
+  color: #22262E; line-height: 1.4; word-break: break-all; }
 .geohead .st { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #6B7688; background: #F1F3F7;
   border: 1px solid #E4E8EF; border-radius: 999px; padding: 2px 8px; }
 .geohead .st.run { color: #1D5FA8; background: #EAF2FD; border-color: #CFE0F8; }     /* 采点中 */
@@ -273,6 +278,14 @@
   box-shadow: 0 4px 10px -4px rgba(232, 137, 12, .55); }
 .w.on.no { background: #D93A32; border-color: #D93A32; color: #fff;
   box-shadow: 0 4px 10px -4px rgba(217, 58, 50, .55); }
+
+/* ⭐ 2026-10-07 老板定：**编辑模式**左下角的「🧭 导航」——
+   从「我的 → 我新加的店」点「点一下改内容」进来才有（新建模式没有，因为那时店还没定下来）。
+   定位：贴左下角、浮在底部三格条**上面**（bottom 让出 .foot 那一条的高度 + 安全区）。 */
+.editnav { position: fixed; left: 14px; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 20;
+  display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px; border-radius: 999px;
+  background: rgba(255, 255, 255, .96); border: 1px solid #E1E7F0; color: #1F63C4;
+  font-size: 13px; font-weight: 700; box-shadow: 0 4px 14px rgba(31, 36, 48, .14); }
 
 /* ============ 底部：上一步 / 步骤 / 下一步（三格；不随步骤移位） ============ */
 .foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px;

@@ -1,0 +1,33 @@
+<!-- 坐标报错 · 整屏取点页（⭐ 2026-10-07 新建）
+     由来：老板 2026-10-07 看完"页面内大半屏弹层"那一版后定的**更好的办法** ——
+       原话「卡片太小了，操作实在不方便」。账是这么算的：弹层只有 86% 高度，
+       里面还得排标题 / 说明 / 状态行 / 三行来源 / 三排按钮 / 原因 / 按钮，**留给地图只剩 190px 左右**
+       （在「加新店」第 1 步那种整屏里，地图能有 350~400px）→ 拖地图微调根本对不准。
+     改成**独立整屏页**后：取点区跟「加新店」第 1 步一样敞亮，操作按得准。
+     ⚠️ 取点那套界面仍复用 components/locpick/（与加新店第 1 步**同一套**），`pages/newshop/` 照旧一行未动。
+     ⚠️ 云端 coordfix 一个字没改：本来就收 { customerId, lat, lng, note, photos }。
+     ⚠️ WXML 只用 view / text（禁 HTML 标签）。 -->
+<view class="page">
+
+  <!-- 取点（整屏撑满；组件只管取点，用户在组件里点「✓ 采用」后抛 adopt 事件上来）
+       ⚠️ class="lc" 不是装饰：自定义组件标签本身没有尺寸，不给它显式撑开的样式，
+          它会按内容收缩 → **右边空出一段**（2026-10-07 老板真机报的） -->
+  <view class="geo-wrap">
+    <locpick class="lc" initLat="{{initLat}}" initLng="{{initLng}}" bind:adopt="onPickAdopt"></locpick>
+  </view>
+
+  <!-- 底部固定：原因（可不填）+ 两个按钮（⭐ 2026-10-07 老板定：取消返回 / 提交报错 都要）
+       ⚠️ margin-bottom 跟着键盘高度走（kb 由 wx.onKeyboardHeightChange 给）——
+          本页是 height:100vh 的固定布局、页面不可滚动，微信默认的"自动顶起"顶不动，
+          输入框会被键盘整个盖住（老板 2026-10-07 真机反馈）。
+          input 上关掉 adjust-position：微信那套自动顶起与这套叠加会让位置不确定。 -->
+  <view class="foot" style="margin-bottom:{{kb}}px">
+    <input class="note" placeholder="哪里不准？（可不填，如：这家搬走了 / 定位差很远）"
+           value="{{note}}" bindinput="onNote" maxlength="100"
+           adjust-position="{{false}}" cursor-spacing="12" />
+    <view class="btns">
+      <view class="btn ghost" bindtap="cancel">取消返回</view>
+      <view class="btn main {{busy ? 'off' : ''}}" bindtap="submit">{{busy ? '提交中…' : '提交报错'}}</view>
+    </view>
+  </view>
+</view>

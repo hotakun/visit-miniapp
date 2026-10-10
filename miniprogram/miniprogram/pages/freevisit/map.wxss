@@ -25,15 +25,28 @@ page { height: 100%; }
   background: #FCEBEC; color: #C93A40; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 8px; }
 
 /* 客户小卡 */
-.card { position: absolute; left: 12px; right: 12px; bottom: 226px; z-index: 30; background: #fff;
+/* ⭐ 2026-10-07 老板定：**往下移**（原来 `bottom: 226px` 悬得太高、挡地图）→ 贴着底部工具栏上方、留 8px 缝。
+   ⚠️ 必须写成 `calc(... + env(safe-area-inset-bottom))`、不能写死 px：底部工具栏自身高度里就含安全区
+   （内容约 130px ＋ 上下内边距 18px ＋ 安全区），写死的话 iPhone 上会正好压住工具栏。
+   工具栏高度拆账：.t-loc 21 + .ranges 33 + .t-cnt 22 + .btns 36 + padding 18 ≈ 130px。 */
+.card { position: absolute; left: 12px; right: 12px; bottom: calc(138px + env(safe-area-inset-bottom)); z-index: 30; background: #fff;
   border-radius: 14px; padding: 13px; box-shadow: 0 10px 30px rgba(20,25,35,.24); }
 /* ⭐ 右上角关闭（2026-10-04 老板要的）*/
 .c-x { position: absolute; right: 8px; top: 8px; width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; color: #9AA3B0; border-radius: 50%; background: #F5F7FA; }
-.c-n { font-size: 15px; font-weight: 800; color: #2B3038; padding-right: 30px; }
-.c-a { font-size: 11.5px; color: #7A8494; margin-top: 4px; }
-.c-d { font-size: 11.5px; color: #F5531C; font-weight: 700; margin-top: 4px; }
+/* ⭐⭐ 2026-10-07 老板定（第三版 · 定稿）：
+   第 1 行 = 店名 ……「距我 xx 米」  ｜  第 2 行 = 地址
+   店名可伸缩（过长省略号），距离按内容宽、永不折行；地址单独一行、太长也走省略号。
+   ⚠️ 第 1 行右侧要让开**右上角的 ✕ 关闭键**（绝对定位 right:8px / top:8px、26px 宽）→ `.first` 补右内边距。
+   ⚠️ 老板明确「未去过 / 已拜访 这个字段不要了」→ `.c-st` / `.c-st.done` 已删除（地图针本身有颜色区分），别往回加。 */
+.c-line { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+.c-line.first { padding-right: 26px; }
+.c-n { flex: 1; min-width: 0; font-size: 15px; font-weight: 800; color: #2B3038;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-d { flex: 0 0 auto; font-size: 11.5px; color: #F5531C; font-weight: 700; white-space: nowrap; }
+.c-a { display: block; margin-top: 4px; font-size: 11.5px; color: #7A8494;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .c-b { display: flex; gap: 8px; margin-top: 11px; }
 .cb { flex: 1; min-width: 0; height: 34px; line-height: 34px; text-align: center; border: 1px solid #E3E8EF; border-radius: 9px;
   font-size: 12px; font-weight: 700; color: #2B3038; background: #fff; white-space: nowrap; }   /* ⚠️ 2026-10-05：改成 **3 个按钮**（步行路径/行车导航/详情&拜访）→ 字号从 11.5 提到 12 */

@@ -17,7 +17,8 @@ const path = require('path');
 
 const CACHE_DIR = path.join(__dirname, 'cache');
 const FILE = path.join(CACHE_DIR, 'map-points.json');
-const VERSION = 5;              // ⭐ 2026-09-27 M2b：字段 12 → 18 项（店名原值/建档时间/客户类型/电话/备注/批次归属）→ 升版本，旧缓存自动作废重拉
+const VERSION = 6;              // ⭐ 2026-10-07：字段 +1（so = source，识别"现场录入的店"）→ 升版本，旧缓存自动作废重拉
+                                // （上一版 = 5：2026-09-27 M2b 字段 12 → 18 项）
 const PAGE_LIMIT = 1000;        // 每片 1000 条（云函数单次返回上限 100KB，1000 条约 100KB 内）
 const MAX_PAGES = 1000;         // 硬上限（100 万条），防死循环
 
@@ -80,9 +81,38 @@ async function refresh(callApi, cred) {
   const auth = cred || {};
   const t0 = Date.now();
   try {
-    const points = [];
+    // ⭐⭐ 2026-10-09（省钱的落脚点）：**优先从"自己的服务器只读 API"拿**（免费，不再打云开发）——
+    //   拿不到 / 没配 / 出错 → **自动回退**下面的云开发分片拉取（服务器挂了后台照样能用）。
+    //   配置项在 admin/config.json：pgApiUrl（如 http://124.222.29.73:18081）、pgApiToken。
+    let points = [];
+    let fromPg = false;    // ⭐ 2026-10-10：这次是不是从自己的服务器（PG）拿的 —— 决定要不要补批次归属
+    let _pgc = {};
+    try { _pgc = require('./config.json'); } catch (e) { /* 没配就走云开发 */ }
+    if (_pgc.pgApiUrl) {
+      try {
+        const url = String(_pgc.pgApiUrl).replace(/\/+$/, '') + '/points' +
+          (_pgc.pgApiToken ? ('?token=' + encodeURIComponent(_pgc.pgApiToken)) : '');
+        const r = await (await fetch(url)).json();
+        if (r && r.ok && Array.isArray(r.rows) && r.rows.length) {
+          // pgapi 返回的是 PG 的 snake_case 列名 → 转成前端一直用的简写字段（与 custMapPoints 下发的完全一致）
+          const M = [['i','id'],['n','name'],['nr','name_raw'],['la','lat'],['ln','lng'],['c','city'],['d','district'],
+            ['b','biz_circle'],['ad','address'],['cs','coord_source'],['cst','coord_status'],['mc','code'],['mk','mall_key'],
+            ['u','updated_at'],['ca','created_at'],['ct','ctype'],['ph','phone'],['rm','remark'],['bi','batch_ids'],
+            ['mj','mall_joined_at'],['so','source']];
+          points = r.rows.map(row => {
+            const o = {};
+            M.forEach(function (p) { const v = row[p[1]]; o[p[0]] = (v === null || v === undefined) ? '' : v; });
+            return o;
+          });
+          console.log('[store] 从自己的服务器拿到 ' + points.length + ' 家（不走云开发）');
+          fromPg = true;
+        }
+      } catch (e) {
+        console.warn('[store] 服务器只读 API 不可用，回退云开发：' + (e && e.message));
+      }
+    }
     let cursor = '';
-    for (let i = 0; i < MAX_PAGES; i++) {
+    if (!points.length) for (let i = 0; i < MAX_PAGES; i++) {
       const res = JSON.parse(await callApi(Object.assign({ action: 'custMapPoints', cursor: cursor, limit: PAGE_LIMIT }, auth)));
       if (!res || !res.ok) throw new Error((res && res.msg) || '云函数返回异常');
       const got = res.points || [];
@@ -91,6 +121,31 @@ async function refresh(callApi, cred) {
       progress.phase = '拉取中';
       if (!res.next || !got.length) break;
       cursor = res.next;
+    }
+    // ⭐⭐ 2026-10-10 指针表模式：**云开发回退路径的"批次归属"补齐** ——
+    //   custMapPoints 已不再下发 bi（唯一真相 = batch_members）；这里拉完后调 exportBatchMembers
+    //   把「谁在哪些批次」合并进来。**PG 路径不需要** —— 那边 pgapi 的 /points 里已 JOIN batch_members 现算。
+    //   （这一步很轻：成员关系几万条，游标分页拉完几秒；且只在新电脑全量预热时才会跑到。）
+    if (!fromPg && points.length) {
+      try {
+        const biMap = {};
+        let bAfter = '';
+        for (let i = 0; i < 200; i++) {
+          const r = JSON.parse(await callApi(Object.assign({ action: 'exportBatchMembers', after: bAfter, limit: 1000 }, auth)));
+          if (!r || !r.ok) break;
+          (r.list || []).forEach(m => {
+            if (!m || !m.c) return;
+            biMap[m.c] = biMap[m.c] ? (biMap[m.c] + ',' + m.b) : String(m.b);
+          });
+          bAfter = r.last || '';
+          if (!r.hasMore) break;
+        }
+        let filled = 0;
+        points.forEach(p => { if (biMap[p.i]) { p.bi = biMap[p.i]; filled++; } });
+        console.log('[store] 批次归属合并完成：' + Object.keys(biMap).length + ' 家客户有批次（命中 ' + filled + '）');
+      } catch (e) {
+        console.warn('[store] 批次归属合并失败（不影响其它字段）：' + (e && e.message));
+      }
     }
     // 只留列表层需要的字段（压体积；详情走 getCustomerDetail 实时拉）
     // ⭐ 2026-09-27 M2a：扩到 12 项（含地址/坐标来源/坐标状态/编号/商城Key/updatedAt）——
@@ -103,7 +158,10 @@ async function refresh(callApi, cred) {
       // ⭐ 2026-09-27 老板定：「列表这几列今后都要做排序」→ 聚合结果也要进缓存，否则本地排不了序。
       //   ⚠️ 这里必须与云函数 custMapPoints/custSync 下发的字段**逐一对齐** —— 少写一个就会被"瘦身"筛掉，
       //   表现为"云函数明明返回了、界面却拿不到"（本次踩过一次）。
-      oc: p.oc || 0, oa: p.oa || 0, lo: p.lo || '', vc: p.vc || 0, lv: p.lv || '', vs: p.vs || 'free', vt: p.vt || ''
+      oc: p.oc || 0, oa: p.oa || 0, lo: p.lo || '', vc: p.vc || 0, lv: p.lv || '', vs: p.vs || 'free', vt: p.vt || '',
+      // ⭐ 2026-10-07 新增：客户来源（'field' = 手机端「加新店」现场录入的店）——
+      //   后台「🔎 比对认领」靠它把"现场录入 · 待商城建档"的店也纳入比对池（云端 runMallMatch 早就纳入了，前端此前漏了）
+      so: p.so || ''
     }));
     // ⭐ 2026-09-29【方案 C】记下"同步水位"maxU —— 增量同步（custSync 的 since）用它，
     //   比用本地时钟打点更可靠（本地时钟与云端不一定严丝合缝，会漏几秒）。
@@ -144,6 +202,26 @@ function patch(patches, removeIds) {
   // syncedAt 保持不动（它表示“上次全量同步时间”，界面的「数据截至」用它）
   write({ v: VERSION, syncedAt: c.syncedAt, count: points.length, points: points });
   return { ok: true, patched: patched, removed: removed, count: points.length };
+}
+
+// ⭐⭐ 2026-10-10 指针表模式：**把某个批次从本地缓存的 bi 里整体摘掉**（删批完成后由 server.js 调用）——
+//   前端拼 9448 条 patch 太重；一次请求、服务端内部过一遍数组即可（毫秒级）。
+//   ⚠️ 保留 maxU（同步水位）：删批后增量同步仍要按老水位接着拉，别把水位丢了。
+function unbatch(batchId) {
+  const c = read();
+  if (!c || !Array.isArray(c.points)) return { ok: false, msg: '本地缓存还不存在（没预热过）', patched: 0 };
+  const bid = String(batchId || '');
+  if (!bid) return { ok: false, msg: '缺少 batchId', patched: 0 };
+  let patched = 0;
+  c.points.forEach(p => {
+    if (!p.bi) return;
+    const arr = String(p.bi).split(',').filter(x => x);
+    if (arr.indexOf(bid) < 0) return;
+    p.bi = arr.filter(x => x !== bid).join(',');
+    patched++;
+  });
+  write({ v: VERSION, syncedAt: c.syncedAt, maxU: c.maxU || 0, count: c.points.length, points: c.points });
+  return { ok: true, patched: patched, count: c.points.length };
 }
 
 // ⭐⭐ 2026-09-29【方案 C】客户数据"变动检测 + 增量补"
@@ -216,15 +294,31 @@ async function checkDirty(callApi, cred) {
   }
 }
 
-// 启动时自动预热：当天没拉过就静默拉一次（**不阻塞服务启动**）
+// ⭐⭐ 2026-10-08 老板定（省钱的根子）：**全量只拉一次，之后只补增量** ——
+//   ⚠️ 原来：`isFreshToday` 只认"今天"→ **隔天就全量重拉**（7.5 万条 ≈ 7.5 万次数据库读 + 75MB 流量），
+//      而且是**每台电脑各自拉一遍** → 老板实测"1 台十几块/天、2 台几十块"（成本 ∝ 台数）。
+//   ⭐ 现在：**只有"真的没有缓存"（新电脑 / 首次 / 换目录）才全量**；
+//      之后每天改成**增量兜底**（拿缓存里的水位 `maxU` 当 since，只拉 updatedAt 更新的那几十条）→ 日常成本降 99%+。
+//   ⚠️ 前提：所有"写客户"的地方都要写 `updatedAt`（2026-09-27 已补齐 **21 处**写入点）。
+//   ⚠️ **唯一漏网 = 删除**：`custSync` 排除了已删，所以"删除"不会通过增量传下来 → 前端删完必须自己调
+//      `/mapPoints/patch` 的 removeIds 把它摘掉（`geoDeletePicked` 已做）。恢复则靠增量自然带回来。
+//   ⚠️ 想强制全量重拉：删掉 `admin/cache/map-points.json`，或点后台的「🔄 更新地图数据」（仍走 `refresh`）。
 function startAutoRefresh(callApi, cred) {
   const c = read();
-  if (isFreshToday(c)) {
-    console.log(`[store] 缓存是今天的（${c.points.length} 家），跳过预热`);
+  if (!c) {
+    console.log('[store] 无本地缓存（新电脑 / 首次）→ 全量预热…');
+    refresh(callApi, cred).catch(() => null);
     return;
   }
-  console.log('[store] 缓存不存在或已过期 → 后台静默预热…');
-  refresh(callApi, cred).catch(() => null);
+  if (isFreshToday(c)) {
+    console.log(`[store] 今天已同步过（${c.points.length} 家），跳过`);
+    return;
+  }
+  const since = watermark(c);
+  console.log(`[store] 隔天 → 只补增量（水位 ${new Date(since).toLocaleString()}），不再全量重拉`);
+  syncIncremental(callApi, cred, since)
+    .then(r => { if (r && r.ok) console.log('[store] 增量兜底完成：' + JSON.stringify(r)); })
+    .catch(() => null);
 }
 
-module.exports = { read, write, status, refresh, patch, checkDirty, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
+module.exports = { read, write, status, refresh, patch, unbatch, checkDirty, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };

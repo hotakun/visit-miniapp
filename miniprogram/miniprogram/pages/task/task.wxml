@@ -42,9 +42,13 @@
 
   <view class="empty" wx:if="{{!loading && !showCustomers.length}}">当天暂无客户安排</view>
 
-  <view class="foot" wx:if="{{task}}">
+  <!-- ⭐ 2026-10-08 老板定：**去掉「🗺 打开地图 · 拜访第 N 家」按钮**（点客户卡片就能进拜访，这个按钮多余）。
+       ⚠️ 它是 wx:elif 链的一环，只删那一行会让"进行中"掉到下面的分支 → 所以：
+          **进行中（published + 未过期 + 未全完）时整条底栏不显示**（否则会留一条空白 fixed 条），
+          其余状态（可交任务 / 已过期 / 审核中 / 已完成）照旧显示。
+       ⚠️ js 里的 `openMap()` 变成零开销死代码（不再被调用），以后要恢复把它接回来即可。 -->
+  <view class="foot" wx:if="{{task && !(task.status === 'published' && !task.expired && !allDone)}}">
     <view class="btn-primary" wx:if="{{task.status === 'published' && !task.expired && allDone}}" hover-class="btn-hover" bindtap="finishTask">🎉 全部完成 · 交任务</view>
-    <view class="btn-primary" wx:elif="{{task.status === 'published' && !task.expired}}" hover-class="btn-hover" bindtap="openMap">{{nextSeq ? '🗺 打开地图 · 拜访第 ' + nextSeq + ' 家' : '🎉 当天已全部完成'}}</view>
     <view class="btn-expired" wx:elif="{{task.expired}}">⏰ 已过期，请联系管理员延期</view>
     <view class="btn-wait" wx:elif="{{task.status === 'reviewing'}}">⏳ 审核中，等待管理员确认…</view>
     <view class="btn-done" wx:else>任务已完成 🎉</view>

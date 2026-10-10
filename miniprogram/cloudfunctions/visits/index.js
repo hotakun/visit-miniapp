@@ -24,7 +24,9 @@ function silentCatch(tag, fallback) {
 const _silentErrs = [];
 
 
-const RESULT_ENUM_MALL = ['加入商城', '需要样品', '已下单', '不愿改', '有抵触', '联系不上', '闭店·搬迁', '其他'];
+// ⭐ 2026-10-07 老板定改名：「不愿改」→「已有供应商」、「联系不上」→「关门·休息中」
+//   ⚠️ 三处必须**同时**改（漏一处就坏）：本文件 + 前端 pages/visit/visit.js 的 MALL/PRAISE + 后台 admin/admin.html 的 RESULT_PILL
+const RESULT_ENUM_MALL = ['加入商城', '需要样品', '已下单', '已有供应商', '有抵触', '关门·休息中', '闭店·搬迁', '其他'];
 const RESULT_ENUM_NEW = [...RESULT_ENUM_MALL, '已签约商城', '未签约'];
 
 // ===== 2026-09-11 批 3：云调用用量自建统计（与 adminapi 写同一份 settings.usageCounter；攒批落库）=====
@@ -185,12 +187,23 @@ async function start(user, e, isBoss) {
     if (others.data.length) {
       const o = others.data[0];
       const cRes = await db.collection('customers').doc(o.customerId).get().catch(() => null);
+      // ⭐ 2026-10-08 老板定：拦截弹窗要新增「切换到那家」/「取消上家拜访」两个按钮 →
+      //   所以这里把**那家的完整信息**一起回给前端（切过去时要当成 curCustomer 用），
+      //   并把它的 taskId 带回去（前端调 visits.cancel 要传 `{taskId, customerId}`）。
+      const oc = (cRes && cRes.data) || {};
       return {
         ok: false,
         code: 'ONGOING_OTHERS',
-        ongoingName: (cRes && cRes.data && cRes.data.name) || '另一家',
-        msg: `「${(cRes && cRes.data && cRes.data.name) || '另一家'}」还未完成拜访，请先完成或取消`,
-        ongoingCustomerId: o.customerId
+        ongoingName: oc.name || '另一家',
+        msg: `「${oc.name || '另一家'}」还未完成拜访，请先完成或取消`,
+        ongoingCustomerId: o.customerId,
+        ongoingTaskId: o.taskId || '',
+        ongoingCustomer: {
+          _id: o.customerId, taskId: o.taskId || '',
+          name: oc.name || '', nameRaw: oc.nameRaw || '', phone: oc.phone || '',
+          address: oc.address || '', lat: oc.lat || 0, lng: oc.lng || 0,
+          customerType: oc.customerType || 'mall', freeTripId: oc.freeTripId || ''
+        }
       };
     }
   }

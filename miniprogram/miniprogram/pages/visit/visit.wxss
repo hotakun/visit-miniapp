@@ -1,52 +1,86 @@
 /* 2026-09-11 老板定：拜访页页面底色再加深一档（#DDE2EA → #D0D6E0），只覆盖本页 */
 page { background: #D0D6E0; }
-.page { padding: 16px 18px 150px; }
-.vhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.vname { font-size: 19px; font-weight: 800; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.timer { display: inline-flex; flex-shrink: 0; background: #1D4ED8; color: #FFFFFF; font-size: 14px; font-weight: 800; padding: 7px 13px; border-radius: 999px; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+/* ⭐⭐ 2026-10-07 老板定（第三次）：**真正贯穿** —— 页面左右不留内边距，
+   作战条 + 内容白板 + 底部栏一律**通到屏幕两边**。
+   （原来 .page 有左右 18px 内边距 → 白板"浮"在灰底上，看着还是"一块大卡片"；底部栏却是满宽的，一对比就露馅。）
+   顶部留白改由作战条自己承担（见 wxml 里 .hud 内联的 padding-top），深蓝条一直延伸到状态栏，像原生头部。 */
+.page { padding: 0 0 150px; }
+/* ⭐ 2026-10-07 老板定：顶部「拜访中」作战条 —— 深蓝整条 + 白字，与客户详情页的纯白卡一眼分得开 */
+/* ⭐ 贯穿式作战条：满宽、无圆角、无投影（顶部 padding 由 wxml 内联 {{st}} 动态给，延伸到状态栏） */
+.hud { background: linear-gradient(135deg, #1D4ED8, #2B6BF3); padding: 12px 15px 13px; color: #fff; }
+/* ⭐ 2026-10-08 老板定：「切换回上家」后的两行提示小卡（居中、深色、3 秒自动消失；数据来自 js 的 switchTip） */
+.swtip { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 95;
+         background: rgba(20,24,32,.88); border-radius: 14px; padding: 16px 22px; text-align: center; max-width: 76%; }
+.swtip-1 { font-size: 14.5px; font-weight: 800; color: #fff; }
+.swtip-2 { margin-top: 6px; font-size: 13px; font-weight: 600; color: #D9E6FF; }
+/* ⭐ 2026-10-08 老板定：**计时移到行居中**（原来靠右，被微信右上角的胶囊「⋯ ⊙」挡住）——
+   用绝对定位把它钉在这一行的正中；左边留「● 拜访中」，右边空着让给胶囊。 */
+.hud-t { position: relative; display: flex; align-items: center; gap: 7px; min-height: 26px; }
+/* ⚠️ 2026-10-08 老板定：作战条左上角那个「‹」返回键**已删**（本页必须提交/取消才能离开） */
+.hud-dot { width: 8px; height: 8px; border-radius: 50%; background: #8AB6FF; box-shadow: 0 0 0 3px rgba(138,182,255,.28); flex-shrink: 0; }
+.hud-k { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: #CFE0FF; }
+/* ⭐ 2026-10-08：绝对居中（不再 margin-left:auto 靠右） */
+.hud-time { position: absolute; left: 50%; transform: translateX(-50%);
+            font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+.hud-n { font-size: 20px; font-weight: 800; margin-top: 6px; line-height: 1.3; }
+.hud-m { margin-top: 6px; font-size: 12px; font-weight: 700; color: #D9E6FF; }
 /* 超时预警条（2026-09-08 M1） */
-.timeout-warn { margin-top: 12px; background: #FDF1F1; border: 1px solid #F5C2C2; color: #C0392B; border-radius: 12px; padding: 9px 12px; font-size: 13px; font-weight: 700; line-height: 1.5; }
-.sec { margin-top: 16px; }
-/* ===== 区块配色（2026-09-11 老板定：只有【标题栏】带淡色，展开的内容区保持白色；颜色再淡一档）===== */
-/* 思路：卡片整体白底 → 只有标题栏一条极淡雾面色，内容区纯白（左侧色条已去掉，2026-09-11 老板定）*/
-.blk { position: relative; border-radius: 16px; padding: 13px 15px; box-shadow: 0 2px 10px rgba(31,36,48,.05); background: #fff; overflow: hidden; border: 1px solid transparent; }
-/* 2026-09-12 老板定：每张卡加一道与标题栏同色系的细描边（标题栏那几个色几乎是全白，做描边看不见 → 取同系深一档） */
-.blk-pic  { border-color: #E3EDF7; }
-.blk-rec  { border-color: #E8E5F7; }
-.blk-samp { border-color: #F5EAD9; }
-.blk-text { border-color: #E2F1E8; }
-.blk-res  { border-color: #F7E6EA; }
-/* 标题栏：通栏淡色底 + 顶部圆角（负 margin 撑满卡片上沿，实现「只有标题带色」）*/
-.blk .fc-head { margin: -13px -15px 12px; padding: 12px 15px; border-radius: 16px 16px 0 0; border-bottom: 1px solid #F0F2F5; }
-.blk-pic  .fc-head { background: #F7FAFD; } /* 现场拍照 · 雾蓝 */
-.blk-rec  .fc-head { background: #F8F7FD; } /* 现场录音 · 雾紫 */
-.blk-samp .fc-head { background: #FDFAF6; } /* 样品物料 · 雾杏 */
-.blk-text .fc-head { background: #F7FBF8; } /* 拜访记录 · 雾绿 */
-.blk-res  .fc-head { background: #FDF8F9; } /* 拜访结果 · 雾玫 */
-/* ===== 折叠卡片（2026-09-11 老板定：五个区块都可点标题栏展开收起）===== */
-.fcard { border-radius: 16px; padding: 13px 15px; box-shadow: 0 2px 10px rgba(31,36,48,.05); }
+/* 满宽页面下，预警条自己留左右 15px（它是一条"提示条"，不跟着贯穿） */
+.timeout-warn { margin: 12px 15px 0; background: #FDF1F1; border: 1px solid #F5C2C2; color: #C0392B; border-radius: 12px; padding: 9px 12px; font-size: 13px; font-weight: 700; line-height: 1.5; }
+/* ⭐⭐ 2026-10-07 老板定：**区块不再用卡片，改平铺** ——
+   整页内容是一块「通铺白板」（.plate），块与块之间只用一条分割线；
+   原来的 .sec / .fcard / .blk / blk-pic(rec/samp/text/res) 淡色卡片 + 圆角 + 投影全部去掉。 */
+.plate { margin-top: 0; background: #fff; overflow: hidden; }
+.step { background: transparent; }
+.step + .step { border-top: 1px solid #EEF1F5; }
+/* 步骤编号（1 2 3 4 5）：平铺下它就是"这是一条流程"的锚点（替代原来的 emoji 图标）；随标题栏一起放大 */
+.st-no { width: 25px; height: 25px; border-radius: 50%; background: #E8F1FD; color: #1D4ED8;
+         font-size: 13.5px; font-weight: 800; text-align: center; line-height: 25px; flex-shrink: 0; }
 /* 摘要状态色（2026-09-11）：已填 / 已选 = 绿；未选择 = 红（提醒提交前必选） */
 .fc-sum.ok { color: var(--green); }
 .fc-sum.warn { color: var(--danger); }
-.fc-head { display: flex; align-items: center; gap: 9px; padding-bottom: 11px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
-.fc-ic { font-size: 16px; flex-shrink: 0; }
-.fc-t { font-size: 14px; font-weight: 800; flex-shrink: 0; }
-/* 收起时靠这行摘要一眼看到状态（已拍 4/15 张 / 2 段 · 合计 01:23 / 未拍照 / 未录音） */
-.fc-sum { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--sub); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fc-ar { width: 20px; text-align: center; font-size: 12px; color: #B7BEC7; flex-shrink: 0; }
-.fc-sub { margin: 0 0 9px; font-size: 12px; color: var(--sub); font-weight: 600; text-align: center; }
+/* 标题栏（平铺版）：⭐ 2026-10-07 老板定 —— 标题栏与内容**都是白的、分不清**，所以给标题栏
+   加一道**极淡灰底**、内容区保持纯白，一眼就能看出"这条是标题、下面是内容"。
+   ⚠️ 这**不是**退回卡片式：整条通栏、无圆角、无间距、无投影，只是换个底色。
+   ⚠️ 灰要够淡（#F4F6FA）—— 太深就又变成"一块块的卡片"了。
+   ⭐ 同日追加：老板要求**标题栏再放大**（行高 19px、字号 17px、编号 25px、色条 5px）。 */
+.fc-head { display: flex; align-items: center; gap: 10px; padding: 19px 15px;
+           background: #F4F6FA; }
+.fc-t { font-size: 17px; font-weight: 800; color: #173A6B; flex-shrink: 0; }
+/* ⭐⭐ 2026-10-07 老板定（第二次）：填写区改**贯穿式** ——
+   展开后的内容**用满整个屏幕宽度**（左右不留内边距），里面的输入框 / 录音盒也一律
+   **去圆角、去投影、去左右留白**，改成"通到边"的浅底条；只有纯文字说明行自己补左右内边距。 */
+/* ⭐ 2026-10-07 老板定：内容区**上下都多留些空间**（原来上面是 0，紧贴着标题栏） */
+.fc-body { padding: 14px 0 18px; }
+/* 收起时靠这行摘要一眼看到状态（已拍 4/15 张 / 2 段 · 合计 01:23 / 未拍照 / 未录音）
+   ⚠️ 标题栏现在是极淡灰底 → 这行小字用稍深一档的灰，保证在灰底上也清楚 */
+.fc-sum { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: #6B7480; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-ar { width: 22px; text-align: center; font-size: 15px; color: #B7BEC7; flex-shrink: 0; }
+/* ⭐ 贯穿式：内容满宽了，纯文字行自己补左右内边距（否则贴屏幕边） */
+.fc-sub { margin: 0 0 9px; padding: 0 15px; font-size: 12px; color: var(--sub); font-weight: 600; text-align: center; }
 .st { font-size: 13.5px; font-weight: 800; margin-bottom: 9px; }
-.tags { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.tags { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; padding: 0 15px; }
 .rtag { padding: 9px 10px; border-radius: 13px; background: #fff; border: 1.5px solid var(--line); text-align: center; font-size: 14px; font-weight: 700; color: #4A5360; }
 .rtag.on { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 6px 14px rgba(245,83,28,.3); }
-.inp { width: 100%; border: none; background: #fff; border-radius: 13px; height: 48px; line-height: 48px; padding: 0 14px; font-size: 14px; box-shadow: 0 2px 10px rgba(31,36,48,.06); box-sizing: border-box; }
+/* ⭐ 贯穿式输入框：满宽、方角、无投影；⭐ 2026-10-07 老板定：**底色改纯白**（浅灰会跟标题栏灰底撞色）
+   —— 改用"上下各一条细线"划定输入区：既看得出是输入框，又不跟标题栏抢视线 */
+.inp { width: 100%; border: none; border-top: 1px solid #EEF1F5; border-bottom: 1px solid #EEF1F5;
+       background: #fff; border-radius: 0; height: 50px; line-height: 50px; padding: 0 15px; font-size: 14px; box-shadow: none; box-sizing: border-box; }
 /* 多行文字框（2026-09-11 老板定：样品 / 物料 与 拜访记录 都放大）*/
 .area { height: 200px; min-height: 200px; padding: 13px 14px; line-height: 1.7; }
 .area-sm { height: 96px; min-height: 96px; padding: 12px 14px; line-height: 1.7; }
-.foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(208,214,224,0), #D0D6E0 30%); }
-.btn-blue { background: var(--blue); }
-/* 取消拜访：窄按钮（灰字细边框），离文字框远防误触（老板 2026-09-04 定） */
-.cancel { width: 130px; margin: 48px auto 0; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--sub); background: #F7F8FA; border: 1px solid #E4E7EC; border-radius: 999px; padding: 8px 0; }
+/* ⭐⭐ 2026-10-07 老板定：底部**固定贴底的一条白栏**（不再悬浮、不再有渐隐），
+   两个按钮左右并排：「提交」占 2/3（蓝底）、「取消」占 1/3（白底描边）—— 与页面白板连成一体 */
+.foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+        display: flex; gap: 9px; align-items: center;
+        padding: 9px 15px calc(9px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #E3E8EF; }
+.fbtn-main { flex: 2 1 0; min-width: 0; height: 46px; border-radius: 10px;
+             background: linear-gradient(135deg, #2B7FF3, #4E9BFF); color: #fff; font-size: 15px; font-weight: 800;
+             display: flex; align-items: center; justify-content: center; }
+.fbtn-cancel { flex: 1 1 0; min-width: 0; height: 46px; border-radius: 10px; box-sizing: border-box;
+               border: 1px solid #E3E8EF; background: #fff; color: #6B7480; font-size: 13px; font-weight: 700;
+               display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+.fbtn-cancel.off { opacity: .45; }
 .csub { font-size: 13px; color: var(--sub); font-weight: 600; text-align: center; margin-bottom: 8px; }
 /* 单开拦截大弹窗（大字大卡片，不自动消失） */
 .block-box { max-width: 360px; padding: 26px 22px 20px; text-align: center; }
@@ -57,6 +91,12 @@ page { background: #D0D6E0; }
 /* 提示句：居中、逗号后换行（WXML 拆两个 view）、橙色与按钮同色、不加粗 */
 .block-sub { margin-top: 8px; font-size: 13px; color: var(--primary); font-weight: 400; text-align: center; line-height: 1.7; }
 .block-box .btn-primary { margin-top: 18px; }
+/* ⭐ 2026-10-08 老板定：拦截弹窗新增的两个按钮（切换到那家 / 取消上家拜访） */
+.blockbtn-row { display: flex; gap: 9px; margin-top: 9px; }
+.blockbtn { flex: 1; min-width: 0; height: 42px; border-radius: 11px; border: 1px solid #E4E7EC; background: #fff;
+            color: #4A5360; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+            padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.blockbtn.warn { color: var(--primary); background: #FFF7F3; border-color: #FFDCCB; }
 /* 提交确认弹窗 */
 .c-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(31,36,48,.5); display: flex; align-items: center; justify-content: center; z-index: 99; padding: 0 34px; }
 .c-box { width: 100%; max-width: 320px; background: #fff; border-radius: 18px; padding: 22px 18px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
@@ -73,18 +113,16 @@ page { background: #D0D6E0; }
 /* ===== 现场证据（2026-09-07）：照片网格 + 录音状态盒 ===== */
 /* 2026-09-11 老板定：三格一行 —— 卡内可用宽约 618rpx，3×192rpx + 2×16rpx = 608rpx 正好放下 */
 .picgrid { display: flex; flex-wrap: wrap; gap: 16rpx; }
-/* ===== 拍照入口（2026-09-11 老板定：更精致 —— 主按钮实色渐变 + 柔和阴影；次按钮白底细描边）===== */
-.picbar { display: flex; gap: 10px; margin-bottom: 10px; }
-.picbtn { flex: 1; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center; gap: 6px;
-          background: linear-gradient(135deg, #FF8A4C, #F5531C); color: #fff; font-size: 14px; font-weight: 800;
-          letter-spacing: .5px; box-shadow: 0 4px 12px rgba(245,83,28,.26); }
-.picbtn.ghost { background: #fff; color: #4A5360; border: 1px solid #E2E6EB; box-shadow: 0 1px 4px rgba(31,36,48,.05); }
-.pb-ic { font-size: 15px; line-height: 1; }
-.pb-tx { font-size: 14px; }
-.picbtn.busy { opacity: .6; }
-.pic-tip { margin-top: 8px; font-size: 12px; color: var(--sub); font-weight: 600; }
-/* 照片格：192rpx × 144rpx（4:3）固定像素，一行三格 */
-.pictile { position: relative; width: 192rpx; height: 144rpx; flex: none; border-radius: 12px; overflow: hidden; background: #F0F2F5; }
+/* ⭐⭐ 2026-10-07 老板定：拍照改「框式」（与门头照 / 加新店同一套）——
+   永远 3 个虚线框（空框=提示），拍满一排自动补下一排；尺寸沿用 192rpx×144rpx（一行三个） */
+/* ⚠️ 照片格尺寸是铁律（192×144rpx 固定、一行三个），所以只有这一块保留左右 15px —— 不能为了"满宽"拉宽格子 */
+.framegrid { display: flex; flex-wrap: wrap; gap: 16rpx; padding: 0 15px; }
+.frame { position: relative; width: 192rpx; height: 144rpx; flex: none; border-radius: 12px; overflow: hidden;
+         box-sizing: border-box; background: #FAFBFD; border: 1.5px dashed #C3D2E4;
+         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.frame.full { border: 0; background: #F0F2F5; }
+.f-ic { font-size: 22px; line-height: 1; opacity: .8; }
+.f-tx { font-size: 11px; color: #8FA3BC; font-weight: 700; }
 .picimg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
 /* 删除圆标（2026-09-11 老板定：更靠右上角、更小）*/
 .picdel { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; line-height: 19px; text-align: center; background: rgba(0,0,0,.5); color: #fff; border-radius: 50%; font-size: 10px; font-weight: 700; z-index: 2; }
@@ -92,12 +130,10 @@ page { background: #D0D6E0; }
 .picno { position: absolute; left: 4px; bottom: 1px; padding: 0 2px; color: #fff; font-size: 15px; font-weight: 800; line-height: 1.1;
          font-variant-numeric: tabular-nums; z-index: 2;
          text-shadow: 0 0 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.85); }
-.pictile.add.busy { opacity: .6; }
-.picempty { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; border: 1.5px dashed #D8DCE3; border-radius: 13px; box-sizing: border-box; color: #B7BEC7; }
-.picempty.busy { opacity: .6; }
-.addic { font-size: 26px; line-height: 1; }
-.addt { margin-top: 5px; font-size: 11px; color: var(--sub); font-weight: 600; }
-.recbox { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border-radius: 13px; padding: 12px 14px; box-shadow: 0 2px 10px rgba(31,36,48,.06); }
+.pic-tip { margin-top: 8px; padding: 0 15px; font-size: 12px; color: var(--sub); font-weight: 600; }
+/* ⭐ 贯穿式：满宽、方角、无投影；⭐ 2026-10-07 老板定：**底色改纯白** ——
+   原来用浅灰 #F7F9FC，跟上面标题栏的灰底（#F4F6FA）撞在一起，看着像多出一条"暗底条" */
+.recbox { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border-radius: 0; padding: 14px 15px; box-shadow: none; }
 /* 开始录音按钮（2026-09-11 老板定：更精致 —— 白底胶囊 + 红点带晕，「圆点」即录音语义）*/
 .recbtn { display: inline-flex; align-items: center; gap: 8px; background: #fff; color: #1F2430; font-size: 14.5px; font-weight: 800;
           padding: 11px 20px 11px 17px; border-radius: 999px; border: 1px solid #E4E7EC; box-shadow: 0 2px 8px rgba(31,36,48,.06); }
@@ -118,10 +154,12 @@ page { background: #D0D6E0; }
 /* 剩 ≤30 秒：红字 + 加大 + 闪动（老板定） */
 .recleft.warn { color: var(--danger); font-size: 16.5px; animation: recwarn .9s ease-in-out infinite; }
 @keyframes recwarn { 50% { opacity: .22; } }
-.reclist { margin-top: 9px; }
+/* 贯穿式：录音段列表满宽（每段自己带左右 padding） */
+.reclist { margin-top: 0; }
 /* 录音段卡片（2026-09-11 老板定：去掉声音波纹，卡片本身改为【从下往上 深绿 → 中绿】渐变）*/
-.recitem { position: relative; display: flex; align-items: center; gap: 9px; border-radius: 14px;
-           padding: 10px 12px; margin-top: 8px; border: 1px solid #2C8A50; overflow: hidden;
+/* ⭐ 贯穿式：满宽、方角、段与段之间只用一条细白线分隔（原来是一张张 14px 圆角的绿色小卡片） */
+.recitem { position: relative; display: flex; align-items: center; gap: 9px; border-radius: 0;
+           padding: 11px 15px; margin-top: 0; border: 0; border-top: 1px solid rgba(255,255,255,.2); overflow: hidden;
            background: linear-gradient(0deg, #1E7A45 0%, #46B173 100%); }
 /* 序号（2026-09-11 老板定：再放大到 22px，要一眼看清是第几段；后面元素由 flex 自动顺移）*/
 .ri-idx { min-width: 28px; text-align: center; font-size: 22px; font-weight: 900; color: #fff; flex-shrink: 0;
@@ -136,7 +174,7 @@ page { background: #D0D6E0; }
 /* 删除键（2026-09-11 老板定：再小一些，降低误触）*/
 .ri-del { width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.22); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
 /* 2026-09-11 老板定：「开始转录」下移 + 录音卡底部留白加大，让下面松弛一些 */
-.trbar { display: flex; align-items: center; gap: 8px; margin-top: 20px; padding-bottom: 10px; }
+.trbar { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 0 15px 10px; }
 /* 2026-09-11 老板定：「开始转录」朴素化、小一些、靠右（原橙色渐变太抢眼）*/
 .trgo { margin-left: auto; padding: 6px 12px; border-radius: 999px; border: 1px solid #E4E7EC;
         background: #fff; color: #4A5360; font-size: 12px; font-weight: 700; flex-shrink: 0; }

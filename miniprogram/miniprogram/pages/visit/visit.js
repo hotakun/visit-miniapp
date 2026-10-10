@@ -4,7 +4,9 @@ const media = require('../../utils/media');
 
 // 拜访结果标签（2026-09-13 老板定稿，见 _scratch/拜访页-设计定稿.md）
 // 已签约商城的客户 → 8 个；未签约的客户（新客）→ 在此基础上多「已签约商城」「未签约」共 10 个
-const MALL = ['加入商城', '需要样品', '已下单', '不愿改', '有抵触', '联系不上', '闭店·搬迁', '其他'];
+// ⭐ 2026-10-07 老板定改名：「不愿改」→「已有供应商」、「联系不上」→「关门·休息中」
+//   ⚠️ 同步处（漏一处就坏）：云函数 cloudfunctions/visits 的 RESULT_ENUM_MALL + 下面的 PRAISE 话术键 + 后台 admin.html 的 RESULT_PILL
+const MALL = ['加入商城', '需要样品', '已下单', '已有供应商', '有抵触', '关门·休息中', '闭店·搬迁', '其他'];
 const NEW = [...MALL, '已签约商城', '未签约'];
 
 // 提交成功话语库（按拜访结果分类，随机取一条，短句 ≤14 字）
@@ -15,10 +17,10 @@ const PRAISE = {
   '已下单': ['太棒了！真金白银到手 🎉', '成交啦！这一趟值了！', '漂亮！业绩又添一笔 📈'],
   '已签约商城': ['恭喜！又拉进一位新客 🎊', '成功入圈，干得漂亮！', '新客到手，持续跟进哦 🚀'],
   '未签约': ['没事，先混个脸熟 😄', '这次没签下，门已经敲开了！', '留了印象就是收获，下次再来！'],
-  '不愿改': ['正常滴，先混个脸熟 😄', '没需求也留了印象，值！', '先结缘，后成交，慢慢来！'],
+  '已有供应商': ['正常滴，先混个脸熟 😄', '没需求也留了印象，值！', '先结缘，后成交，慢慢来！'],
   '其他': ['记录在案，下次再战！', '辛苦了，稳稳拿下！', '跑一趟就有一趟的收获！'],
   '有抵触': ['没关系，慢慢来，下次更好 🌤', '别灰心，门总会打开的', '冷脸也是信息，你辛苦了！'],
-  '联系不上': ['扑空不算白跑，下次逮住他 😉', '缘分未到，改天再来！', '人不在店也在，下次再约！'],
+  '关门·休息中': ['扑空不算白跑，下次逮住他 😉', '缘分未到，改天再来！', '人不在店也在，下次再约！'],
   '闭店·搬迁': ['情况记下了，你辛苦啦 🤗', '又排掉一个雷，功劳不小！', '信息已更新，别白跑啦！']
 };
 
@@ -29,13 +31,22 @@ Page({
   },
   data: {
     c: null, resultList: MALL, result: '', text: '', samples: '', timerText: '00:00',
+    // ⭐ 2026-10-07 老板定：本页**整条导航栏不显示**（visit.json → "navigationStyle":"custom"）→
+    //   页面得自己按状态栏高度留白，否则作战条会顶到手机的时间/电量下面。值在 onLoad 里动态取。
+    st: 20,
+    distLive: '',   // ⭐ 作战条第三行「距店 XX 米」（一次性取位；拿不到就整行不显示）
     confirmShow: false, cancelShow: false, blocked: false, blockMsg: '',
+    // ⭐ 2026-10-08 老板定：单开拦截弹窗新增「切换到那家」/「取消上家拜访」→ 这里存"那家"的信息
+    ongoingName: '', ongoingId: '', ongoingTaskId: '', ongoingCust: null,
+    switchTip: '',   // ⭐ 2026-10-08：「切换回上家」后那两句提示（两行，页内小卡显示）
     distText: '', durMins: 0, distShow: false, locRefreshing: false, locCooldown: 0, locSpinChar: '◐',
     // 超时（2026-09-08 M1）：上限前 5 分钟预警条
     timeoutWarn: false, timeoutLeftMin: 5,
     // 现场证据（2026-09-07 二期提前做）：照片双轨瓦片 + 录音状态机
     // 2026-09-11 M2b：录音改为【多段】—— ≤5 条 / 单条 ≤10 分钟 / 合计 30 分钟硬封顶；按段勾选转写
     pics: [], prepBusy: false, maxPics: 9, // 现场照片上限（2026-09-11 老板定：改为跟后台「照片上限」档位走，默认 9；onLoad 按配置覆盖）
+    // ⭐ 2026-10-07 框式拍照：slots = 框位数组（{k, pic:null}=空框 / {k, pic, no}=已拍），由 _refreshSlots() 重排
+    slots: [],
     recEnabled: true,      // 录音开关（2026-09-11：跟后台走；关闭后本页隐藏录音区，onLoad 覆盖）
     recs: [],              // 已录段：[{id, path, ext, sec, text, transcribe, up, fileID, trStatus}]
     recState: 'idle',      // idle | rec（同一时刻只录一段）
@@ -56,7 +67,8 @@ Page({
     delRecShow: false,     // 删除单段：二次确认弹层
     delRecIdx: -1,
     // 2026-09-11 老板定：五个区块【全部】可折叠（点标题栏展开收起；独立展开）
-    // 2026-09-13 老板改：进入页面【五个区块全部默认收起】（点标题栏再展开）
+    // ⭐ 2026-10-07 老板定（**最终**）：进页面**五个区块全部收起**（回到 09-13 的口径）。
+    //   中途曾试过"默认展开拍照 + 结果"，老板看过后要求改回全收起 —— 别再来回改。
     foldPic: true,
     foldRec: true,
     foldSamp: true,
@@ -64,7 +76,51 @@ Page({
     foldRes: true,
     evDesc: ''
   },
+  // ⭐⭐ 2026-10-08 老板定：**本页必须「提交拜访」或「取消拜访」才能离开** ——
+  //   ① 页面上**不再留返回键**（原作战条左上角那个「‹」已删）；
+  //   ② 系统返回 / iOS 右滑由 `wx.enableAlertBeforeUnload` **拦一道确认框**。
+  //   ⚠️ 小程序**没有"彻底禁止返回"的能力**，官方只有这道确认框；用户在上面点"离开"仍能走。
+  //   ⚠️ 离开前必须 `_unlockLeave()` 放行，否则"提交完自己也退不出去"（见 clearStart / goBackFromBlock）。
+  _lockLeave() {
+    if (wx.enableAlertBeforeUnload) {
+      wx.enableAlertBeforeUnload({ message: '请取消此弹窗，在页面下方选择“提交拜访”或“取消拜访”。' });
+    }
+  },
+  _unlockLeave() {
+    if (wx.disableAlertBeforeUnload) {
+      try { wx.disableAlertBeforeUnload(); } catch (e) { /* 静默 */ }
+    }
+  },
+
+  // ⭐ 2026-10-07 作战条第三行：现场距店距离（**一次性**取位就够 —— 业务员站在店里看一眼）。
+  //   ⚠️ 取不到 / 没授权 → **这一行不显示**，绝不弹提示（现场最烦弹窗）。
+  _liveDist() {
+    const c = this.data.c;
+    if (!c || !c.lat || !c.lng) return;
+    wx.getLocation({
+      type: 'gcj02',
+      success: (r) => {
+        const d = Math.round(haversine(r.latitude, r.longitude, Number(c.lat), Number(c.lng)));
+        // ⚠️ 超过 1 公里就显示公里：真机实测出现过「距店 93078 米」这种（在外地测试时常见），读着费劲
+        const txt = !isFinite(d) ? ''
+          : (d >= 1000 ? ('距店 ' + (d / 1000).toFixed(d >= 10000 ? 0 : 1) + ' 公里') : ('距店 ' + d + ' 米'));
+        this.setData({ distLive: txt });
+      },
+      fail: () => { /* 静默：这一行干脆不显示 */ }
+    });
+  },
+
   onLoad() {
+    // ⭐ 2026-10-08 老板定：「切换到那家」跳过来后给一句提示（跨页提示只能靠 storage 传）
+    //   ⚠️ 延后 500ms 再弹：让页面先渲染出来，否则 toast 会被页面初始化盖掉
+    const _tip = wx.getStorageSync('visitSwitchTip');
+    if (_tip) {
+      wx.removeStorageSync('visitSwitchTip');
+      // ⭐ 2026-10-08 老板定：这句要**两行**显示（已切回「XXX」 / 请正规结束拜访）——
+      //   ⚠️ `wx.showToast` **不支持换行**（会被压成空格）→ 改用**页内小卡** `.swtip`（见 wxml/wxss），3 秒自动消失
+      this.setData({ switchTip: _tip });
+      this._tipTimer = setTimeout(() => this.setData({ switchTip: '' }), 3000);
+    }
     const c = wx.getStorageSync('curCustomer');
     if (!c) { api.toast('客户信息丢失'); wx.navigateBack(); return; }
     const lim = media.recLimit(Number(c.recordingDurationLimit) || 300); // 单条上限（秒；≤600，iOS 已放开）
@@ -77,6 +133,9 @@ Page({
     const _app = getApp();
     const _cfg = (_app && _app.globalData && _app.globalData.sysCfg) || {};
     const maxPics = [3, 6, 9, 15].includes(Number(_cfg.photoLimit)) ? Number(_cfg.photoLimit) : 9;
+    // ⭐ 2026-10-07：导航栏整条不显示 → 自己按状态栏高度留白（**不写死**：各机型 20~54px 不等）
+    const _wi = ((wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()) || {});
+    const _st = Number(_wi.statusBarHeight) || 20;
     this.recEnabled = _cfg.recEnabled === undefined ? true : !!_cfg.recEnabled;
     this.evidenceRequired = !!_cfg.evidenceRequired;
     this.setData({
@@ -85,26 +144,78 @@ Page({
       recLimitMin: Math.max(3, Math.round(lim / 60)),
       segMaxSec: lim,
       maxPics,                        // 照片上限（后台设置页可配 3/6/9/15，默认 9）
+      st: _st,                        // 状态栏高度（导航栏没了，自己留白用）
       recEnabled: this.recEnabled     // 录音开关（关闭后本页隐藏录音区）
     });
+    // ⭐ 2026-10-08：进页面就"上锁" —— 必须提交/取消才能离开（见 _lockLeave）
+    this._lockLeave();
+    // ⭐ 2026-10-07：作战条上的「距店 XX 米」
+    this._liveDist();
+    // ⭐ 2026-10-07：拍照框式 —— 进页面先摆好 3 个虚线空框
+    this._refreshSlots();
     // 录音器（页面级单例；串行录制，离开页面即停并丢弃，未提交不上传）
     this.recorder = media.createRecorder();
     this._recSecs = 0;
     this._recTicker = null;
     this._dead = false;
     // 开始拜访：云端校验（任务内单开：其他家还在拜访中会拦截）
+    this._selfCust = c;   // ⭐ 2026-10-08：「切换到那家」会把 curCustomer 换掉 → 先把本家存住（取消完要回到本家）
+    this._startSelf();
+  },
+  // 开始拜访（本家）：云端校验单开 → 被拦就弹拦截窗，否则起计时
+  _startSelf() {
+    const c = this._selfCust;
     api.call('visits', { action: 'start', taskId: c.taskId, customerId: c._id, freeTripId: c.freeTripId || '' }).then(res => {
       if (res && res.code === 'ONGOING_OTHERS') {
-        // 大弹窗提示（不再用 toast）：停留至用户点击「知道了」，避免一闪而过
-        // 2026-09-13：弹窗改三段式（店名一行 / 还在拜访中… 一行 / 提示两行居中）→ 这里只取店名
-        this.setData({ blocked: true, blockMsg: '「' + (res.ongoingName || '另一家') + '」' });
+        // ⭐ 2026-10-08 老板定：除「知道了」，另加两个按钮 ——
+        //   「切换到那家」= 把那家当 curCustomer 重进本页；「取消上家拜访」= 直接取消那家的拜访中。
+        this.setData({
+          blocked: true,
+          blockMsg: '「' + (res.ongoingName || '另一家') + '」',
+          ongoingName: res.ongoingName || '另一家',
+          ongoingId: res.ongoingCustomerId || '',
+          ongoingTaskId: res.ongoingTaskId || '',
+          ongoingCust: res.ongoingCustomer || null
+        });
         return;
       }
+      this.setData({ blocked: false });
       this.beginTimer(c);
     }).catch(() => { this.beginTimer(c); });
   },
+  // 「切换到那家」：把那家写成 curCustomer → redirectTo 重进本页（替换掉当前这家的页面栈）
+  switchToOngoing() {
+    const oc = this.data.ongoingCust;
+    if (!oc || !oc._id) { api.toast('拿不到那家的信息，请返回重进'); return; }
+    wx.setStorageSync('curCustomer', oc);
+    // ⭐ 2026-10-08 老板定：切过去之后提示一句「已经切回 XXX，请正规结束拜访」
+    //   ⚠️ 紧接着就 redirectTo 换页 → 这句必须**存进 storage 让新页面去弹**，否则刚弹出来就被换走了
+    // ⭐ 2026-10-08：**只存店名**，两行提示语由目标页面自己拼（见 onLoad 的 switchTip）
+    wx.setStorageSync('visitSwitchTip', this.data.ongoingName || '那一家');
+    this._unlockLeave();
+    wx.redirectTo({ url: '/pages/visit/visit' });
+  },
+  // 「取消上家拜访」：直接取消那家的拜访中 → 成功后**自动继续本家**（业务员不用再点一次）
+  cancelOngoing() {
+    const id = this.data.ongoingId;
+    if (!id) { api.toast('拿不到那家的信息，请返回重进'); return; }
+    wx.showLoading({ title: '取消中…', mask: true });
+    api.call('visits', { action: 'cancel', taskId: this.data.ongoingTaskId || '', customerId: id }).then(r => {
+      wx.hideLoading();
+      if (!r || !r.ok) { api.toast((r && r.msg) || '取消失败，请稍后再试'); return; }
+      this.setData({ blocked: false, ongoingCust: null, ongoingId: '', ongoingTaskId: '' });
+      api.toast('已取消上家，继续本家拜访');
+      this._startSelf();
+    }).catch(e => {
+      wx.hideLoading();
+      console.error('[拜访] 取消上家失败', e);
+      api.toast('取消失败，请稍后再试');
+    });
+  },
   // 单开拦截弹窗「知道了」：返回客户详情页
   goBackFromBlock() {
+    // ⭐ 2026-10-08：单开拦截时本页压根没开始拜访 → 放行再走
+    this._unlockLeave();
     wx.navigateBack();
   },
   // 计时基准时间持久化（2026-09-06 老板定）：进入拜访页记一次，切后台/页面重载回来继续沿用，
@@ -199,6 +310,8 @@ Page({
     }).catch(() => { /* 静默：下次再报 */ });
   },
   clearStart() {
+    // ⭐ 2026-10-08：提交 / 取消 / 超时**离开前必须先放行** —— 否则页面那把"锁"会把自己也挡在门里
+    this._unlockLeave();
     if (this._startKey) {
       wx.removeStorageSync(this._startKey);
       this._startKey = null;
@@ -230,29 +343,29 @@ Page({
     const key = map[k];
     if (key) this.setData({ [key]: !this.data[key] });
   },
-  // ===== 现场证据：照片（2026-09-11 老板定：上限 15 张，支持连拍 + 相册多选） =====
-  // 相册多选：一次最多选到剩余额度
-  async pickPhoto() {
+  // ===== 现场证据：照片（⭐ 2026-10-07 老板定：**改成"框式"**，与「门头照 / 加新店」同一套操作）=====
+  // 口径：永远摆着 3 个虚线框（空框本身就是"点这儿拍"的提示），拍满一排**自动补出下一排**；
+  //       到上限（3/6/9/15，跟后台档位走）就不再补。
+  // ⚠️ 原来是「两个按钮（拍照 / 从相册选）+ 拍到就冒一张」，业务员不知道"该拍几张、拍完没有"。
+  // ⭐ 重排规则：total = min(maxPics, max(3, ⌈(已拍 + 1) / 3⌉ × 3))
+  //    已拍 0 → 3 空框 ｜ 已拍 3 → 3 图 + 3 空框 ｜ 已拍 8（上限 9）→ 8 图 + 1 空框 ｜ 已拍 9 → 9 图、无空框
+  _refreshSlots() {
+    const pics = this.data.pics, max = this.data.maxPics;
+    const total = Math.min(max, Math.max(3, Math.ceil((pics.length + 1) / 3) * 3));
+    const slots = [];
+    for (let i = 0; i < total; i++) {
+      slots.push(pics[i] ? { k: 's' + i, pic: pics[i], no: i + 1 } : { k: 's' + i, pic: null });
+    }
+    this.setData({ slots });
+  },
+  // 点虚线空框 = 拍一张：系统弹「拍照 / 从相册选」—— 与门头照一字不差，业务员不用学第二套
+  async tapSlot() {
     if (this.data.prepBusy) return;
-    const left = this.data.maxPics - this.data.pics.length;
-    if (left <= 0) { api.toast('最多 ' + this.data.maxPics + ' 张现场照片'); return; }
+    if (this.data.pics.length >= this.data.maxPics) { api.toast('最多 ' + this.data.maxPics + ' 张现场照片'); return; }
     let files;
-    try { files = await media.chooseImage(left, ['album']); } catch (e) { return; }
+    try { files = await media.chooseImage(1, ['camera', 'album']); } catch (e) { return; }  // 取消 → 直接返回
     if (!files || !files.length) return;
     await this._addPics(files);
-  },
-  // 连拍：拍一张 → 自动再开相机 → 直到在相机里点返回（取消）或拍满 15 张
-  async shootPhoto() {
-    if (this.data.prepBusy) return;
-    while (this.data.pics.length < this.data.maxPics) {
-      let files;
-      try { files = await media.chooseImage(1, ['camera']); } catch (e) { return; } // 取消拍照 → 结束连拍
-      if (!files || !files.length) return;
-      await this._addPics(files);
-      if (this._dead) return;
-      if (this.data.pics.length >= this.data.maxPics) { api.toast('已拍满 ' + this.data.maxPics + ' 张'); return; }
-      // 继续循环 → 自动再次打开相机（连拍体验）
-    }
   },
   // 逐张处理（压缩成「原图 + 缩略图」双轨）后追加到列表
   async _addPics(files) {
@@ -267,10 +380,12 @@ Page({
       } catch (err) { failed++; }
     }
     this.setData({ pics, prepBusy: false });
+    this._refreshSlots();   // ⭐ 拍完重排框（拍满一排自动补下一排）
     if (failed) api.toast(failed + ' 张处理失败，请重试');
   },
   delPhoto(e) {
     this.setData({ pics: this.data.pics.filter(p => p.id !== e.currentTarget.dataset.id) });
+    this._refreshSlots();   // ⭐ 删完重排框（少一张就收回一排空框）
   },
   previewPhoto(e) {
     wx.previewImage({ urls: this.data.pics.map(p => p.orig), current: e.currentTarget.dataset.src });

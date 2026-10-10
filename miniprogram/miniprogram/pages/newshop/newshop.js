@@ -176,7 +176,9 @@ Page({
     if (id) {
       // ⭐ 编辑模式（老板 2026-09-29 定：点卡片进去能改，改完**直接生效**）
       this.setData({ editMode: true, editId: id });
-      wx.setNavigationBarTitle({ title: '修改这家店' });
+      // ⭐ 2026-10-07 老板定：标题要显示**这家店的名字**（原来写死「修改这家店」，进去不知道在改哪家）。
+      //   ⚠️ 店名得等 _loadForEdit 从云端拉回来才知道 → 这里先给个"加载中…"，拿到名字后由它换成店名。
+      wx.setNavigationBarTitle({ title: '加载中…' });
       this._loadForEdit(id);
     } else {
       // 新建：老板 2026-09-29 定，进页面**自动手机定位一次**（拿到只是"候选"，不自动采用）
@@ -287,6 +289,8 @@ Page({
         id: 'saved' + i, fileID: a.fileID, sec: a.duration || 0,
         secText: media.fmtSec(a.duration || 0), saved: true
       }));
+      // ⭐ 2026-10-07 老板定：编辑模式的标题 = **这家店的名字**（真拿不到才退回「修改这家店」）
+      wx.setNavigationBarTitle({ title: String(s.name || '').trim() || '修改这家店' });
       this.setData(set, () => { this._mks(); this._recSum(); this._refresh(); });
     } catch (e) {
       api.toast((e && e.message) || '加载失败');
@@ -294,6 +298,19 @@ Page({
     }
     wx.hideLoading();
   },
+  // ⭐ 2026-10-07 老板定：编辑模式下左下角的「🧭 导航」→ 打开微信内置地图（可一键跳高德/百度）导航去这家店。
+  //   坐标用**当前已采用**的那个：编辑模式下初值就是档案里存的坐标，业务员现改成新的也好使。
+  navToShop() {
+    const d = this.data;
+    const lat = Number(d.lat), lng = Number(d.lng);
+    if (!lat || !lng) return api.toast('这家店还没有坐标');
+    wx.openLocation({
+      latitude: lat, longitude: lng, scale: 18,
+      name: d.name || '这家店',
+      address: d.address || ''
+    });
+  },
+
   onUnload() {
     this._dead = true;
     this._stopRecTicker();                                   // ⚠️ 录音计时器必须清，否则离开页面还在跑

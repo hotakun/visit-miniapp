@@ -107,11 +107,9 @@
 /* ===================== 标签 ===================== */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 11.5px; padding: 4px 9px; border-radius: 8px; background: #F5F7FB; color: #5B6472; border: 1px solid #EDF1F7; }
-/* 📍 报错弹层的三格照片（2026-09-27；尺寸风格对齐门店照片） */
-.fixshotrow { display: flex; gap: 8px; margin-top: 10px; }
-.fixshot { flex: 1; height: 80px; border-radius: 10px; background: #FAFBFD; border: 1px dashed #D6DEEA;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
-.fixshot-img { width: 100%; height: 100%; }
+/* 📍 坐标报错已改成**独立整屏取点页 pages/coordfix/**（⭐ 2026-10-07 老板定：弹层太小、操作不便）——
+   本页不再有报错弹层，原来那批 .fixmask / .fixbox / .fb-* 与更早的三格照片样式（.fixshot*）全部删除。
+   取点区的尺寸与撑满写法见 pages/coordfix/coordfix.wxss。 */
 
 /* ===== ⭐ 2026-09-27 补：入商城辉光 +「新店」胶囊 + 淡灰空态（设计文档 §二/§三/§七）===== */
 /* 店名卡辉光：已入商城=淡橙一圈 / 未入商城=天蓝一圈（叠加在原阴影之上，别覆盖） */
@@ -161,7 +159,13 @@
   color: #fff; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center;
   box-shadow: 0 3px 8px rgba(245,83,28,.28); }
 .facsec { padding: 9px 0; }
-.fack { font-size: 11px; color: var(--sub); font-weight: 700; margin-bottom: 6px; }
+/* ⭐ 2026-10-07 老板定：设施标题那一行变成**可点的折叠行**（右侧带"N 项" + 箭头）；
+   收起时标签群只露一行（.chip 高 24px），点标题行展开 / 收起 */
+.fack { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--sub); font-weight: 700; margin-bottom: 6px; }
+.fack-t { flex-shrink: 0; }
+.fack-n { flex: 1; min-width: 0; color: #A8B0BD; font-weight: 600; }
+.fack-ar { flex-shrink: 0; font-size: 11px; color: #B9C0CC; }
+.chips.folded { max-height: 24px; overflow: hidden; }
 
 /* ===================== 管理员备注 ===================== */
 .rkrow { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #F4F6F9; }
@@ -309,6 +313,22 @@
 .mbtn.warn { color: var(--primary); background: #FFF7F3; border-color: #FFDCCB; }
 .mbtn.ml { margin-left: auto; }                                                        /* 靠最右 */
 .mbtn.ok { color: #fff; background: var(--primary); border-color: var(--primary); }     /* 「确定」= 主色实心 */
+/* ⭐ 2026-10-07 老板定：「🚶 步行」按钮（导航左边那个）—— 用绿色系，跟路线颜色呼应 */
+.mbtn.walk { color: #16A34A; background: #F1FAF3; border-color: #CBEBD6; }
+/* ⭐⭐ 2026-10-07 老板定：步行规划大弹窗（整屏大窗，里面一张地图 + 一条绿色步行路线） */
+.walk-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(20,24,32,.55); z-index: 120;
+             display: flex; flex-direction: column; padding: 64px 14px 40px; }
+.walk-box { flex: 1; min-height: 0; background: #fff; border-radius: 18px; overflow: hidden;
+            display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.walk-hd { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #EEF1F5; flex-shrink: 0; }
+.walk-t { font-size: 15px; font-weight: 800; color: #1F2430; flex-shrink: 0; }
+.walk-i { flex: 1; min-width: 0; font-size: 12px; color: #6B7480; font-weight: 700;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.walk-x { width: 26px; height: 26px; border-radius: 50%; background: #F5F7FA; color: #9AA3B0; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center; font-size: 15px; }
+.walk-map { flex: 1; min-height: 0; width: 100%; }
+.walk-ft { padding: 10px 14px; font-size: 12px; color: #6B7480; font-weight: 600;
+           border-top: 1px solid #EEF1F5; flex-shrink: 0; }
 /* 经纬度行里的"距原位置 xx"（修正模式）：淡一点、小一点 */
 .r .dist { color: #99A2AE; font-size: 11px; font-weight: 400; }
 
@@ -325,3 +345,19 @@
   display: flex; align-items: center; justify-content: center; }
 .jh-needle { width: 4px; height: 4px; background: #F5531C; transform: rotate(45deg); }
 .jh-word { font-size: 11px; font-weight: 800; letter-spacing: -0.2px; line-height: 1; color: #F5531C; }
+
+/* ⭐ 2026-10-07 老板定：品类行右边的「分享给同事」小按钮（✎ 字符图标，别用彩色 emoji —— color 对 emoji 无效） */
+.shbtn { margin-left: auto; width: 26px; height: 26px; min-height: 0; line-height: 26px; padding: 0;
+  border-radius: 50%; background: #F3F5F9; color: var(--sub); font-size: 14px; font-weight: 400;
+  display: flex; align-items: center; justify-content: center; }
+.shbtn::after { border: none; }   /* ⚠️ 去掉小程序 button 自带的边框 */
+
+/* ⭐ 2026-10-07 老板定：「开始拜访」从【底部悬浮】改成【页面流内】—— 放在「拜访历史」卡下方，跟着页面滚。
+   （原来用 .fab-wrap 是 position:fixed；这里新类名，旧的 .fab* 样式留着不用、不再影响） */
+/* ⭐ 2026-10-07 老板定：按钮**向下移两行**（原来上边距只有 6px，紧挨着「拜访历史」卡）——
+   两行 ≈ 44px，所以 padding-top 由 6px 改到 50px */
+.vbtn-wrap { padding: 50px 14px 26px; }
+.vbtn { height: 48px; border-radius: 24px; background: linear-gradient(135deg, var(--primary), #FF7A45);
+  color: #fff; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 18px rgba(245, 83, 28, .28); }
+.vbtn-on { background: linear-gradient(135deg, #2B7FF3, #4E9BFF); box-shadow: 0 6px 18px rgba(43, 127, 243, .32); }
