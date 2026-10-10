@@ -54,11 +54,14 @@
         <view class="ph">{{d.tel}}</view>
         <view class="lb">联系人：{{d.contact}}</view>
       </view>
-      <!-- ⭐ 2026-10-10 老板定：这里从「快速记事」**改成「更正信息」**（同款 44×44 两行文字）——
-           现场发现**店名 / 老板换了**，点它打开「加新店」第 2 步的同款表单（预填现有信息），
-           业务员选择性修改、保存**直接生效**（落地见 pages/custedit/；云函数 tasks.correctCustomer）。
-           ⚠️ 原「快速记事」入口**已放弃**（老板 2026-10-10："记事入口暂时放弃，以后再说"）；
-              客户页仍保留下面那行「我的记事 · N 条」（列表入口），全局入口在「我的」页/首页。 -->
+      <!-- ⭐ 2026-10-10 老板定：这里**并排两个 44×44**（间距由 .telrow 的 gap:11px 提供）——
+           · 左「快速记事」：以本客户为对象快速记一笔（只存本机，见 pages/notes/editor/）
+           · 右「更正信息」：现场发现店名/老板换了 → 打开「加新店」第 2 步的同款表单
+             （预填现有信息，选择性修改，保存直接生效；见 pages/custedit/ + tasks.correctCustomer）
+           （老板当天先砍掉记事、又改回来：「更正信息按钮左边再放上快速记事的按钮」） -->
+      <view class="notebtn" bindtap="goQuickNote">
+        <text>快速</text><text>记事</text>
+      </view>
       <view class="notebtn" bindtap="goCorrect">
         <text>更正</text><text>信息</text>
       </view>

@@ -603,6 +603,15 @@ Page({
   goCorrect() {
     wx.navigateTo({ url: '/pages/custedit/custedit?customerId=' + (this._cid || '') });
   },
+  // ---------- 📝 快速记事（2026-10-10 老板当天改回：放在「更正信息」**左边**）----------
+  //   点它 = 以本客户为对象快速记一笔（标题 / 关联客户自动带好）。
+  //   ⚠️ 记事**只存本机**（2026-09-28 老板定），落地见 pages/notes/editor/。
+  goQuickNote() {
+    const d = this.data.d || {};
+    wx.navigateTo({
+      url: '/pages/notes/editor/editor?customerId=' + (this._cid || '') + '&customerName=' + encodeURIComponent(d.name || '')
+    });
+  },
   // 更正保存后由 custedit 页回调（铁律：改完之后必须真的刷新）—— 重跑一次详情加载
   onCorrectDone() {
     if (this._cid) this.onLoad({ id: this._cid });
