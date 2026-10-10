@@ -370,6 +370,29 @@ async function msgCenter(event) {
       });
     } catch (e) { /* 日志读不到不影响其它消息 */ }
   }
+  // ⭐ 2026-10-10「更正信息」（老板定：业务员现场改店名/老板等，直接生效）—— 流水进滚动消息
+  //   格式：「范宇琨 更正信息 · c347 早阳肉包（店名、电话）」；同样**只在第 0 页**并入（理由同自由拜访日志）。
+  //   ✅ 前端零改动：msgRollRow 只读 text/at/reviewedBy，不看 kind。
+  if (page === 0) {
+    try {
+      const ccRes = await db.collection('customer_corrections')
+        .orderBy('at', 'desc').limit(20).get()
+        .catch(() => ({ data: [] }));
+      (ccRes.data || []).forEach(k => {
+        const cn = k.customerName || '某客户';
+        const chg = Array.isArray(k.changed) ? k.changed.join('、') : '';
+        list.push({
+          id: 'cc-' + k._id,
+          kind: 'custCorrect',
+          at: k.at || 0,
+          salesmanName: k.salesmanName || '业务员',
+          customerId: k.customerId || '',
+          customerName: cn,
+          text: (k.salesmanName || '业务员') + ' 更正信息 · ' + cn + (chg ? ('（' + chg + '）') : '')
+        });
+      });
+    } catch (e) { /* 更正流水取不到不影响其它消息 */ }
+  }
   list.sort((a, b) => (b.at || 0) - (a.at || 0));
   return { ok: true, tab: 'roll', page, pageSize: size, hasMore: vRows.length >= size, items: list };
 }

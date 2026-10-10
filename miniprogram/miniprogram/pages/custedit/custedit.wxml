@@ -1,0 +1,90 @@
+<!-- 更正信息（2026-10-10 老板定）：现场发现店名/老板换了 → 当场更正客户档案。
+     表单 = 「加新店」第 2 步的同款字段（门店信息 / 区域与商圈 / 品类 / 招牌菜），
+     **预填这家店现在的信息**，业务员选择性修改；保存后**直接生效**（老板拍板）。
+     ⚠️ 样式 @import 自 newshop.wxss —— 改这里时把两边对照着看。 -->
+<view class="page">
+  <scroll-view class="body" scroll-y style="flex:1">
+    <view class="tipbar">下面是这家店<b>现在的信息</b>，哪项不对改哪项，没动的保持原样。</view>
+
+    <view class="card">
+      <view class="cardh">🏪 门店信息</view>
+      <view class="row">
+        <text class="rl">店名<text class="must"> *</text></text>
+        <input class="ri" value="{{name}}" bindinput="onName" placeholder="门头上的店名"
+          placeholder-class="rph" maxlength="40" />
+      </view>
+      <view class="row">
+        <text class="rl">联系人<text class="must"> *</text></text>
+        <input class="ri" value="{{contact}}" bindinput="onContact" placeholder="老板 / 店长称呼"
+          placeholder-class="rph" maxlength="20" />
+      </view>
+      <view class="row">
+        <text class="rl">电话<text class="must"> *</text></text>
+        <input class="ri" type="number" value="{{phone}}" bindinput="onPhone" placeholder="老板 / 店里的电话"
+          placeholder-class="rph" maxlength="11" />
+        <view class="addp" wx:if="{{!phone2Open}}" bindtap="addPhone2">⊕</view>
+        <view class="delp" wx:else bindtap="delPhone2">✕</view>
+      </view>
+      <view class="row" wx:if="{{phone2Open}}">
+        <text class="rl">电话2</text>
+        <input class="ri" type="number" value="{{phone2}}" bindinput="onPhone2" placeholder="第二个号码（选填）"
+          placeholder-class="rph" maxlength="11" />
+      </view>
+      <view class="row">
+        <text class="rl">营业时间</text>
+        <picker mode="selector" range="{{hourList}}" value="{{hourIdx1}}" bindchange="onHour1">
+          <view class="tm-sel">{{hour1}}</view>
+        </picker>
+        <text class="tm-dash">—</text>
+        <picker mode="selector" range="{{hourList}}" value="{{hourIdx2}}" bindchange="onHour2">
+          <view class="tm-sel">{{hour2}}</view>
+        </picker>
+      </view>
+      <view class="row">
+        <text class="rl">地址<text class="must"> *</text></text>
+        <input class="ri" value="{{address}}" bindinput="onAddress" placeholder="尽可能写到门牌 / 路口"
+          placeholder-class="rph" maxlength="60" />
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="cardh">📍 区域与商圈</view>
+      <view class="row">
+        <text class="rl">区域</text>
+        <picker mode="selector" range="{{areaList}}" value="{{areaIdx}}" bindchange="onArea">
+          <view class="rpick">{{area || '选区域'}}<text class="arw">›</text></view>
+        </picker>
+      </view>
+      <view class="row">
+        <text class="rl">商圈</text>
+        <input class="ri" value="{{bizCircle}}" bindinput="onBiz" placeholder="商圈名" placeholder-class="rph" maxlength="20" />
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="cardh">🍜 品类</view>
+      <view class="row">
+        <text class="rl">品类</text>
+        <picker mode="multiSelector" range="{{catRange}}" value="{{catIdx}}"
+          bindchange="onCat" bindcolumnchange="onCatCol">
+          <view class="rpick">{{catText || '选品类（大 / 中 / 小）'}}<text class="arw">›</text></view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="cardh">⭐ 招牌菜</view>
+      <textarea class="note" value="{{dishRaw}}" bindinput="onDish"
+        placeholder="比如：红烧肉、白切鸡、酸菜鱼（用「、」或「，」隔开）"
+        placeholder-class="rph" maxlength="-1" auto-height show-confirm-bar="{{false}}" cursor-spacing="18"></textarea>
+      <view class="dishout">
+        <text class="dh" wx:if="{{!dishes.length}}">还没填</text>
+        <text class="dchip" wx:for="{{dishes}}" wx:key="*this">{{item}}</text>
+      </view>
+    </view>
+    <view style="height:14px"></view>
+  </scroll-view>
+  <view class="foot">
+    <view class="savebtn {{busy ? 'busy' : ''}}" bindtap="save">{{busy ? '保存中…' : '保存更正'}}</view>
+  </view>
+</view>

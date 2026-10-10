@@ -596,15 +596,16 @@ Page({
   // 从记事页返回时刷新「我的记事 · N 条」（只读本机 storage，不联网）
   onShow() { this._loadNotes(); },
 
-  // ---------- 📝 快速记事（⭐ 2026-09-28 晚老板定：电话行右侧那块 44×44）----------
-  //   点它 = **以本客户为对象**快速记一笔（标题 / 关联客户自动带好，位置进页面自动取）。
-  //   ⚠️ 记事**只存本机**（老板 2026-09-28 拍板）：文字 / 照片 / 录音都留在这台手机；
-  //      唯一上云的是「点了转文字的那一段录音」—— 落地见 pages/notes/editor/。
-  goQuickNote() {
-    const d = this.data.d || {};
-    wx.navigateTo({
-      url: '/pages/notes/editor/editor?customerId=' + (this._cid || '') + '&customerName=' + encodeURIComponent(d.name || '')
-    });
+  // ---------- ✏️ 更正信息（⭐ 2026-10-10 老板定：电话行右侧那块 44×44，原「快速记事」被替换）----------
+  //   场景：业务员到店发现**店名 / 老板换了** → 点它打开「加新店」第 2 步的同款表单
+  //   （pages/custedit，预填这家店现在的信息），选择性修改后**直接生效**（老板拍板）。
+  //   ⚠️ 原「快速记事」入口已放弃（老板 2026-10-10："记事入口暂时放弃，以后再说"）。
+  goCorrect() {
+    wx.navigateTo({ url: '/pages/custedit/custedit?customerId=' + (this._cid || '') });
+  },
+  // 更正保存后由 custedit 页回调（铁律：改完之后必须真的刷新）—— 重跑一次详情加载
+  onCorrectDone() {
+    if (this._cid) this.onLoad({ id: this._cid });
   },
   // ---------- 📝 我的记事（这一家本机记了几条；点进列表只看这一家）----------
   goNotes() {

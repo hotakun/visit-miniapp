@@ -9,7 +9,7 @@ const db = cloud.database();
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-const COLLECTIONS = ['users', 'customers', 'tasks', 'visits', 'orders', 'order_items', 'import_batches', 'settings', 'coord_fix_requests', 'salesman_locations', 'mall_claims', 'mall_customers', 'customer_batches', 'batch_members', 'registrations', 'transcripts', 'customer_remarks', 'biz_index', 'free_trips', 'free_trip_logs'];   // ⭐ 2026-10-03 加 free_trips（自由拜访卡，独立集合、不绑任务）；biz_index = 「加新店」的区域/商圈识别数据（2026-09-28）
+const COLLECTIONS = ['users', 'customers', 'tasks', 'visits', 'orders', 'order_items', 'import_batches', 'settings', 'coord_fix_requests', 'salesman_locations', 'mall_claims', 'mall_customers', 'customer_batches', 'batch_members', 'registrations', 'transcripts', 'customer_remarks', 'biz_index', 'free_trips', 'free_trip_logs', 'customer_corrections'];   // ⭐ 2026-10-10 加 customer_corrections（「更正信息」留痕）；⭐ 2026-10-03 加 free_trips（自由拜访卡，独立集合、不绑任务）；biz_index = 「加新店」的区域/商圈识别数据（2026-09-28）
 
 const SUPER_ADMIN = {
   username: 'qingyan',

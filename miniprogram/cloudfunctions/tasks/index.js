@@ -136,6 +136,8 @@ exports.main = async (event) => {
   if (action === 'myNewShops') return await myNewShops(salesmanId, event);
   if (action === 'newShopDetail') return await newShopDetail(salesmanId, event, isBoss);
   if (action === 'updateNewShop') return await updateNewShop(salesmanId, event);
+  if (action === 'custEditInfo') return await custEditInfo(salesmanId, event);        // ⭐ 2026-10-10「更正信息」预填（只读）
+  if (action === 'correctCustomer') return await correctCustomer(salesmanId, event);  // ⭐ 2026-10-10「更正信息」保存（直接生效 + 留痕）
   // ⭐ 2026-10-03 自由拜访：按坐标+半径取附近客户点
   if (action === 'nearbyCustomers') return await nearbyCustomers(salesmanId, event);
   // ⭐ 2026-10-03 自由拜访卡（独立集合 free_trips，不绑任务）
@@ -313,7 +315,7 @@ const NAME_SUSPECT = 0.72;
 
 // ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
 //   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
-const CODE_VER = '2026-10-05-0100';   // 2350=修 .limit(50) 截断；2400=电话比较改用 phoneKey（去区号）；1001=加 alsoSalesman 声明（老板兼业务员）；1100=selfCheck 支持 excludeId（后台防重复核用）；0100=自由拜访（nearbyCustomers 分圈取最近500 + walkRoute 步行路线 + 自由拜访卡 CRUD + _logTrip + 集合自愈）
+const CODE_VER = '2026-10-10-2000';   // 2000=「更正信息」（custEditInfo 预填 + correctCustomer 直接生效+留痕）；0100=自由拜访（nearbyCustomers 分圈取最近500 + walkRoute 步行路线 + 自由拜访卡 CRUD + _logTrip + 集合自愈）；1100=selfCheck 支持 excludeId（后台防重复核用）；1001=加 alsoSalesman 声明（老板兼业务员）；2400=电话比较改用 phoneKey（去区号）；2350=修 .limit(50) 截断
 
 // ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
 //   入参（全可选）：{ lat, lng, name, phone, radius, excludeId }
@@ -600,6 +602,127 @@ async function newShopDetail(salesmanId, event, isBoss) {
       createdAt: c.createdAt || 0, createdByName: c.createdByName || ''
     }
   };
+}
+
+// ⭐⭐ 2026-10-10 老板定：「更正信息」—— 业务员在店里发现**店名 / 老板换了**，当场更正客户档案。
+//   入口 = 客户详情页店名卡里那块 44×44（原「快速记事」被替换）。
+//   表单 = 「加新店」第 2 步的**同款字段**（见 pages/custedit/），**预填这家店现在的信息**。
+//   · **直接生效**（老板拍板，不走审核）；**留痕**写独立集合 `customer_corrections`（后台滚动消息会并入）。
+//   ⚠️ **不动**：坐标（lat/lng/coord_*）、商城字段（mallKey/mallCode/…）、订单、批次归属 —— 一个字不碰。
+//   ⚠️ 业务员是**现场核实**后改的（店换老板/换招牌），所以允许改任何客户（不限"自己任务里的"）。
+// 【预填数据】（只读）
+async function custEditInfo(salesmanId, event) {
+  const cid = String((event && event.customerId) || '').trim();
+  if (!cid) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const r = await db.collection('customers').doc(cid).get().catch(() => null);
+  const c = r && r.data;
+  if (!c || c.deleted === true) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const reg = String(c.region || '');
+  return {
+    ok: true,
+    cust: {
+      name: String(c.name || ''),
+      contactName: String(c.contactName || ''),
+      phone: String(c.phone || ''), phone2: String(c.phone2 || ''),
+      address: String(c.address || ''),
+      hours: String(c.hours || ''),
+      // 区域：region 存的是「浙江省>金华市>永康市」这类，取**最后一段**给前端的下拉
+      area: reg ? (reg.split('>').pop() || '') : '',
+      bizCircle: String(c.bizCircle || ''),
+      cat1: String(c.cat1 || ''), cat2: String(c.cat2 || ''), cat3: String(c.cat3 || ''),
+      // 招牌菜：现场录入的那份（platManual.dishes）优先，老档案回退平台抓的 dishes
+      dishes: (c.platManual && Array.isArray(c.platManual.dishes) && c.platManual.dishes.length)
+        ? c.platManual.dishes
+        : (Array.isArray(c.dishes) ? c.dishes : [])
+    }
+  };
+}
+// 【保存更正】（直接生效 + 留痕）
+async function correctCustomer(salesmanId, event) {
+  const e = event || {};
+  const cid = String(e.customerId || '').trim();
+  if (!cid) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
+  const name = String(e.name || '').trim();
+  const contactName = String(e.contactName || '').trim();
+  const phone = String(e.phone || '').trim();
+  const address = String(e.address || '').trim();
+  if (!name) return { ok: false, code: 'NO_NAME', msg: '请填店名' };
+  if (!contactName) return { ok: false, code: 'NO_CONTACT', msg: '请填联系人' };
+  if (!phone) return { ok: false, code: 'NO_PHONE', msg: '请填电话' };
+  if (!address) return { ok: false, code: 'NO_ADDR', msg: '请填地址' };
+  // ⚠️ 游客（实习）硬拦 —— tasks 里 trial 是**各写操作自己判**的（不是 main 统一拦），别漏
+  const uRes = await db.collection('users').doc(salesmanId).get().catch(() => null);
+  const user = uRes && uRes.data;
+  if (user && user.trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
+  const r = await db.collection('customers').doc(cid).get().catch(() => null);
+  const c = r && r.data;
+  if (!c || c.deleted === true) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
+  const now = Date.now();
+  // nameRaw 重建：后台客户列表显示的是 `nameRaw || name` —— 不重建的话**后台还显示旧店名**。
+  //   规则：保留原有「编号 + 空格」前缀（如 `a101 `），只把店名部分换成新值；没有前缀就整体用新店名。
+  const rawOld = String(c.nameRaw || '').trim();
+  const m = rawOld.match(/^([a-z]{1,3}\d+)\s+/i);
+  const nameRaw = m ? (m[1] + ' ' + name) : name;
+  const area = String(e.area || '').trim();
+  const region = area ? ('浙江省>金华市>' + area) : String(c.region || '');   // area 空 → 保留原值（不误清）
+  const hours = String(e.hours || '').trim();
+  const bizCircle = String(e.bizCircle || '').trim();
+  const cat1 = String(e.cat1 || '').trim(), cat2 = String(e.cat2 || '').trim(), cat3 = String(e.cat3 || '').trim();
+  const phone2 = String(e.phone2 || '').trim();
+  const dishes = Array.isArray(e.dishes) ? e.dishes.map(x => String(x || '').trim()).filter(Boolean).slice(0, 30) : [];
+  // 「改了哪几项」—— 与旧值逐项比对（留痕正文用）
+  const changed = [];
+  const cmp = (k, oldV, newV) => { if (String(oldV || '').trim() !== String(newV || '').trim()) changed.push(k); };
+  cmp('店名', c.name, name);
+  cmp('联系人', c.contactName, contactName);
+  cmp('电话', c.phone, phone);
+  cmp('电话2', c.phone2, phone2);
+  cmp('地址', c.address, address);
+  cmp('营业时间', c.hours, hours);
+  cmp('区域', (String(c.region || '').split('>').pop() || ''), area);
+  cmp('商圈', c.bizCircle, bizCircle);
+  cmp('品类', [c.cat1, c.cat2, c.cat3].filter(Boolean).join('·'), [cat1, cat2, cat3].filter(Boolean).join('·'));
+  const oldDishes = (c.platManual && Array.isArray(c.platManual.dishes)) ? c.platManual.dishes : [];
+  cmp('招牌菜', oldDishes.join('、'), dishes.join('、'));
+  if (!changed.length) return { ok: true, changed: [], msg: '没有改动' };
+  const upd = {
+    name: name, nameRaw: nameRaw,
+    contactName: contactName,
+    phone: phone, phone2: phone2,
+    address: address, hours: hours,
+    region: region, bizCircle: bizCircle,
+    cat1: cat1, cat2: cat2, cat3: cat3,
+    updatedAt: now        // ⚠️ 必须写：增量同步（custSync → 本地缓存 / PG）靠它
+  };
+  // 招牌菜 → platManual.dishes（与「加新店」同口径；保留 platManual 里的其它字段）
+  const pm = Object.assign({}, (c.platManual && typeof c.platManual === 'object') ? c.platManual : {});
+  if (dishes.length) pm.dishes = dishes; else delete pm.dishes;
+  if (Object.keys(pm).length) upd.platManual = pm;
+  await db.collection('customers').doc(cid).update({ data: upd });
+  // 留痕（独立集合；失败不影响更正 —— 但会记 console）
+  try {
+    await addWithCollFix('customer_corrections', {
+      customerId: cid, customerName: name, nameOld: String(c.name || ''),
+      changed: changed, at: now,
+      salesmanId: salesmanId, salesmanName: (user && user.name) || ''
+    });
+  } catch (err) {
+    console.error('[correctCustomer] 留痕失败（不影响更正）', err);
+  }
+  return { ok: true, changed: changed, msg: '已更正（' + changed.join('、') + '）' };
+}
+// 写「可能还不存在」的集合：接住 -502005 自愈创建后重试一次（项目铁律：别指望用户先跑 init）
+async function addWithCollFix(coll, data) {
+  try {
+    return await db.collection(coll).add({ data: data });
+  } catch (e1) {
+    const m = String((e1 && e1.message) || '') + String((e1 && e1.errCode) || '');
+    if (m.indexOf('not exists') >= 0 || m.indexOf('502005') >= 0) {
+      try { await db.createCollection(coll); } catch (e2) { /* 已存在等，忽略 */ }
+      return await db.collection(coll).add({ data: data });
+    }
+    throw e1;
+  }
 }
 
 async function updateNewShop(salesmanId, event) {
