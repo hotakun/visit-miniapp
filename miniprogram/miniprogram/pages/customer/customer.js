@@ -774,9 +774,40 @@ Page({
   openPhoto(e) {
     const url = e.currentTarget.dataset.url;
     if (!url) return;
-    this.setData({ viewerShow: true, viewerUrl: url });
+    // ⭐ 2026-10-10：记下"第几格" —— 门店三格带 data-i（大图里才显示「重拍/删除」）；
+    //   拜访历史的照片不带 data-i → 记 -1（那两个按钮不显示，仍只有「关闭」）
+    const ds = e.currentTarget.dataset || {};
+    const idx = (ds.i === undefined || ds.i === null || ds.i === '') ? -1 : Number(ds.i);
+    this.setData({ viewerShow: true, viewerUrl: url, viewerIdx: idx });
   },
   closePhoto() { this.setData({ viewerShow: false }); },
+  // ⭐ 2026-10-10 老板定：门店照片大图里「📷 重拍」—— 直接开相机，复用现有上传链路（覆盖同一格）
+  retakePhoto() {
+    const i = Number(this.data.viewerIdx);
+    if (!(i >= 0)) return;
+    this.setData({ viewerShow: false });
+    this.takePhotoBySource(i, 'camera');
+  },
+  // ⭐ 2026-10-10 老板定：门店照片大图里「🗑 删除」—— 云端删记录（+ 尽力删云存储文件）→ 重拉详情
+  async delPhoto() {
+    const i = Number(this.data.viewerIdx);
+    if (!(i >= 0)) return;
+    const ok = await new Promise(res => wx.showModal({
+      title: '删除这张照片？', content: '删掉后这家店的门店照片就少一张（记录和云文件都会清掉）。',
+      confirmText: '删除', cancelText: '取消', confirmColor: '#E5484D',
+      success: r => res(!!r.confirm), fail: () => res(false)
+    }));
+    if (!ok) return;
+    wx.showLoading({ title: '删除中…', mask: true });
+    let r = null;
+    try { r = await api.call('tasks', { action: 'saveCustPhoto', customerId: this._cid, index: i, del: true }); }
+    catch (e) { console.error('[customer] 删照片异常', e); }
+    wx.hideLoading();
+    if (!r || !r.ok) { api.toast((r && r.msg) || '删除失败，请稍后再试'); return; }
+    this.setData({ viewerShow: false });
+    wx.showToast({ title: '已删除', icon: 'success' });
+    this.onLoad({ id: this._cid });   // 重拉详情（照片会前移，界面保持一致）
+  },
 
   // ---------- 购买记录：全屏抽屉 ----------
   openSheet() { this.setData({ sheetShow: true }); },

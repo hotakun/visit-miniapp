@@ -801,6 +801,24 @@ async function saveCustPhoto(salesmanId, event) {
   const fileID = String((event && event.fileID) || '');
   const thumbID = String((event && event.thumbID) || '');
   const index = Math.min(Math.max(Number(event && event.index) || 0, 0), 2);
+  // ⭐ 2026-10-10 老板定：**删除某一格**（门店照片大图里的「🗑 删除」）—— 删记录 + 尽力删云存储文件
+  if (event && event.del === true) {
+    if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少参数' };
+    const uR0 = await db.collection('users').doc(salesmanId).get().catch(() => null);
+    if (uR0 && uR0.data && uR0.data.trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
+    const cR0 = await db.collection('customers').doc(customerId).get().catch(() => null);
+    if (!cR0 || !cR0.data) return { ok: false, code: 'CUST_NOT_FOUND', msg: '客户不存在' };
+    const arr = (Array.isArray(cR0.data.photos) ? cR0.data.photos : []).filter(Boolean).slice(0, 3);
+    if (index >= arr.length) return { ok: true, photos: arr, msg: '这张已经不在档案里了' };
+    const gone = arr[index];
+    const rest = arr.filter((x, i2) => i2 !== index);
+    await db.collection('customers').doc(customerId).update({ data: { photos: rest, updatedAt: Date.now() } }).catch(silentCatch('tasks·saveCustPhoto·删除', null));
+    try {
+      const fl = [gone && gone.fileID, gone && gone.thumbID].filter(Boolean);
+      if (fl.length) await cloud.deleteFile({ fileList: fl });
+    } catch (e) { /* 文件删不掉不影响记录 */ }
+    return { ok: true, photos: rest, msg: '已删除 ✓' };
+  }
   if (!customerId || !fileID) return { ok: false, code: 'BAD_ARG', msg: '缺少参数' };
   const cRes = await db.collection('customers').doc(customerId).get().catch(() => null);
   if (!cRes || !cRes.data) return { ok: false, code: 'CUST_NOT_FOUND', msg: '客户不存在' };

@@ -456,6 +456,13 @@
   <!-- ===================== 大图查看 ===================== -->
   <view class="viewer" wx:if="{{viewerShow}}" bindtap="closePhoto">
     <image class="viewer-img" src="{{viewerUrl}}" mode="aspectFit"></image>
+    <!-- ⭐ 2026-10-10 老板定：**门店照片**的大图里加「重拍 / 删除」（老板："最好还有重拍及删除按钮"）。
+         ⚠️ 只有门店三格带 data-i（viewerIdx ≥ 0）才显示；拜访历史里的照片不带 → 仍只有「关闭」。
+         ⚠️ 必须 catchtap（阻止冒泡）—— 否则点按钮会顺带触发整层的 closePhoto。 -->
+    <view class="viewer-btns" wx:if="{{viewerIdx >= 0}}">
+      <view class="viewer-b" catchtap="retakePhoto">📷 重拍</view>
+      <view class="viewer-b danger" catchtap="delPhoto">🗑 删除</view>
+    </view>
     <view class="viewer-x">关闭</view>
   </view>
 

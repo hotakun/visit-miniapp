@@ -246,6 +246,11 @@
 .viewer-img { width: 100%; height: 70%; }
 .viewer-x { color: #fff; font-size: 13px; font-weight: 700; border: 1px solid rgba(255,255,255,.4);
   border-radius: 999px; padding: 6px 18px; }
+/* ⭐ 2026-10-10：门店照片大图里的「重拍 / 删除」（照 .viewer-x 的风格） */
+.viewer-btns { display: flex; gap: 12px; }
+.viewer-b { color: #fff; font-size: 13px; font-weight: 700; border-radius: 999px; padding: 6px 18px;
+  background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35); }
+.viewer-b.danger { background: rgba(229,72,77,.85); border-color: rgba(229,72,77,.9); }
 
 /* ===================== 拜访历史里的现场证据（录音 / 转写 / 照片） ===================== */
 .hrec { display: flex; align-items: center; gap: 9px; margin-top: 9px; padding: 8px 10px; border-radius: 10px;
