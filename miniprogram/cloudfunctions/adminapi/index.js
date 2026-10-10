@@ -5720,7 +5720,8 @@ async function purgeCustomerVisits(event) {
   return { ok: true, deleted: visits.length, customerName: cRes.data.name, msg: `已删除 ${visits.length} 条拜访记录，客户回到待拜访` };
 }
 
-// ===== 智能排序（§7.11 老板定稿：仓库起点贪心 3 候选 + 腾讯 driving 验真距离） =====
+// ===== 智能排序（§7.11 老板定稿：仓库起点贪心 3 候选 + 腾讯 **walking（步行）** 逐段验真距离）======
+// ⭐⭐ 2026-10-10 晚：算路从 driving（驾车）**改成 walking（步行）** —— 老板要求（见 walkSegments 的说明）。
 // ⭐⭐⭐ 2026-10-10 实测定案：**服务端算路必须用 WebServiceAPI 类型的 key（`mpWSKey`），不能用 `mpKey`**。
 //   实测（curl 直调腾讯 driving，同一个起终点）：
 //     · `mpKey`（SQWBZ-…，Web 端 JS API 类型）→ **{"status":111,"message":"签名验证失败"}** ❌
@@ -5755,6 +5756,84 @@ function httpGetJson(url) {
   });
 }
 
+// ⭐⭐ 2026-10-10 晚（老板定）：**规划一律走【步行】算路**。
+//   原来用 `driving`（驾车）—— 老板原话：「这里的规划我看着仿佛是**行车规划**，希望能改成**步行规划**」。
+//   ⚠️⚠️ **腾讯 walking 接口【不支持 waypoints（途经点）】**（driving 才支持）——实测（curl 同起终点）：
+//      带不带 `waypoints` 返回**一模一样**（distance/duration 完全相同）→ 参数被**静默忽略**。
+//      → 所以「起点→店1→店2→…→店N」必须**逐段调用 walking 再累加**（本函数就是干这个的）。
+//   ⚠️⚠️ **`duration` 单位是【分钟】**（walking 与 driving 相同；实测：668m→10 分钟、2258m→34 分钟）——
+//      老代码写 `Math.round(route.duration / 60)` 是**当秒处理** → 恒得 0 → `max(1,·)` → **时长一直显示 1 分钟**（本次顺手修）。
+//   · 并发 5 逐段拉（腾讯 WebServiceAPI 有 QPS 限制，别开太大）；单段失败退一步**重试一次**；
+//   · `segCache`：**同一次规划内的"同一段"结果共享**（智能模式的 3 个候选之间常走重复段）——省调用。
+//   · 任一段失败/超预算 → 返回 null（调用方走直线兜底，绝不让云函数卡死）。
+function decodeTxPolyline(pl) {
+  // 腾讯 polyline：[lat0, lng0, dlat1, dlng1, …]，首点=浮点绝对坐标，后续差分 ×1e-6 度
+  //（与前端 `nt-map.js` 的 decodePolyline 同一口径）
+  const pts = [];
+  if (!Array.isArray(pl) || pl.length < 2) return pts;
+  let lat = pl[0], lng = pl[1];
+  pts.push([lat, lng]);
+  for (let i = 2; i + 1 < pl.length; i += 2) {
+    lat += pl[i] / 1e6;
+    lng += pl[i + 1] / 1e6;
+    pts.push([lat, lng]);
+  }
+  return pts;
+}
+function encodeTxPolyline(pts) {
+  // 多段合并后**重新差分压缩**回腾讯格式（前端才解得出）；逐点差分不存在累积误差
+  if (!pts || !pts.length) return null;
+  const out = [pts[0][0], pts[0][1]];
+  for (let i = 1; i < pts.length; i++) {
+    out.push(Math.round((pts[i][0] - pts[i - 1][0]) * 1e6));
+    out.push(Math.round((pts[i][1] - pts[i - 1][1]) * 1e6));
+  }
+  return out;
+}
+async function walkSegments(key, start, ordered, budgetMs, segCache) {
+  const pts = [{ lat: start.lat, lng: start.lng }].concat(ordered.map(c => ({ lat: c.lat, lng: c.lng })));
+  const segs = [];
+  for (let i = 0; i + 1 < pts.length; i++) segs.push([pts[i], pts[i + 1]]);
+  if (!segs.length) return null;
+  const cache = segCache || {};
+  const t0 = Date.now();
+  const out = new Array(segs.length).fill(null);
+  let failed = false;
+  const URL = 'https://apis.map.qq.com/ws/direction/v1/walking/';
+  await runPool(segs.map((s, i) => i), 5, async (idx) => {
+    if (failed || Date.now() - t0 > budgetMs) { failed = true; return; }
+    const s = segs[idx];
+    const ck = s[0].lat + ',' + s[0].lng + ';' + s[1].lat + ',' + s[1].lng;
+    if (cache[ck]) { out[idx] = cache[ck]; return; }
+    const q = `?from=${s[0].lat},${s[0].lng}&to=${s[1].lat},${s[1].lng}&key=${encodeURIComponent(key)}&output=json`;
+    try {
+      let r = await httpGetJson(URL + q);
+      if (!(r && r.status === 0 && r.result && r.result.routes && r.result.routes.length)) {
+        await new Promise(z => setTimeout(z, 350));       // 可能是瞬时配额，退一步重试一次
+        r = await httpGetJson(URL + q);
+      }
+      if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
+        const rt = r.result.routes[0];
+        const seg = { d: Math.round(rt.distance || 0), m: Math.max(1, Math.round(rt.duration || 1)), pl: rt.polyline || null };
+        cache[ck] = seg; out[idx] = seg;
+      } else { failed = true; }
+    } catch (e) { failed = true; }
+  });
+  if (failed || out.some(x => !x)) return null;
+  let d = 0, m = 0;
+  const allPts = [];
+  for (const s of out) {
+    d += s.d || 0; m += s.m || 0;
+    const p = decodeTxPolyline(s.pl);
+    for (const q of p) {
+      const last = allPts[allPts.length - 1];
+      if (last && Math.abs(last[0] - q[0]) < 1e-9 && Math.abs(last[1] - q[1]) < 1e-9) continue;   // 衔接重复点
+      allPts.push(q);
+    }
+  }
+  return { distanceMeters: d, durationMin: Math.max(1, m), polyline: encodeTxPolyline(allPts) };
+}
+
 async function smartSortDay(event) {
   const { customers, origin, mode } = event;
   if (!Array.isArray(customers) || !customers.length) return { ok: false, code: 'BAD_ARG', msg: '没有客户' };
@@ -5773,29 +5852,21 @@ async function smartSortDay(event) {
     }
     const start = (origin && origin.lat && origin.lng) ? origin : withCoord[0];
     const key = await getMpKey();
-    const URL = 'https://apis.map.qq.com/ws/direction/v1/driving/';
-    const from = `${start.lat},${start.lng}`;
-    const to = `${withCoord[withCoord.length - 1].lat},${withCoord[withCoord.length - 1].lng}`;
-    // 起点=第一家时，途经点不含第一家（起点与途经点重复会报错）
-    const wpList = dist(start, withCoord[0]) < 1 ? withCoord.slice(1, -1) : withCoord.slice(0, -1);
-    const wp = wpList.map(c => `${c.lat},${c.lng}`).join(';');
-    let q = `?from=${from}&to=${to}&key=${encodeURIComponent(key)}&output=json`;
-    if (wp) q += `&waypoints=${encodeURIComponent(wp)}`;
-    try {
-      const r = await httpGetJson(URL + q);
-      if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
-        const route = r.result.routes[0];
-        return {
-          ok: true,
-          order: ordered.map(c => c.id),
-          distanceMeters: Math.round(route.distance || 0),
-          durationMin: Math.max(1, Math.round((route.duration || 60) / 60)),
-          polyline: route.polyline || null,
-          fallback: false,
-          msg: '手动顺序'
-        };
-      }
-    } catch (e) { /* 失败走直线兜底 */ }
+    // ⭐ 2026-10-10 老板定：**步行**逐段算路（walking 不支持途经点，见 walkSegments 注释）
+    //   起点=第一家时，序列里去掉第一家自己（否则会出现"店1→店1"的 0 米段）
+    const segList = dist(start, withCoord[0]) < 1 ? withCoord.slice(1) : withCoord;
+    const wr = segList.length ? await walkSegments(key, start, segList, 4000, {}) : { distanceMeters: 0, durationMin: 1, polyline: null };
+    if (wr) {
+      return {
+        ok: true,
+        order: ordered.map(c => c.id),
+        distanceMeters: wr.distanceMeters,
+        durationMin: wr.durationMin,
+        polyline: wr.polyline,
+        fallback: false,
+        msg: '手动顺序（步行）'
+      };
+    }
     // 直线兜底：按手动顺序连点（起点=仓库或第一家）
     let sum = 0;
     let prev = start;
@@ -5805,9 +5876,9 @@ async function smartSortDay(event) {
       ok: true,
       order: ordered.map(c => c.id),
       distanceMeters: dm,
-      durationMin: Math.max(1, Math.round((dm / 1000 / 25) * 60)),
+      durationMin: Math.max(1, Math.round((dm / 1000 / 4) * 60)),   // ⭐ 步行 ~4 km/h（与腾讯 walking 口径一致；原来是 25=驾车）
       fallback: true,
-      msg: '手动顺序（路线接口失败，直线估算）'
+      msg: '手动顺序（路线接口失败，直线估算·步行）'
     };
   }
   if (!origin || !origin.lat || !origin.lng) return { ok: false, code: 'BAD_ARG', msg: '缺少起点（仓库坐标）' };
@@ -5834,29 +5905,20 @@ async function smartSortDay(event) {
     }
     candidates.push(order);
   }
-  // 第 2 层：腾讯 driving 验真（from=仓库, to=最后一家, waypoints=中间店；坐标 lat,lng 纬度在前）
+  // 第 2 层：腾讯 **walking（步行）** 验真 —— ⚠️ walking 不支持途经点（见 walkSegments 注释），逐段调用再累加。
+  //   ⚠️ 3 个候选逐个算（串行）；总预算 4.5 秒 —— 这条调用走 HTTP API，它的等待上限只有 ~4~5 秒；
+  //      预算用尽 → 用已算出的最优候选（一个都没算完 → 下面的直线兜底），绝不把云函数卡死。
   const key = await getMpKey();
-  const URL = 'https://apis.map.qq.com/ws/direction/v1/driving/';
+  const DEADLINE = Date.now() + 4500;
+  const segCache = {};   // 本次规划内"同一段"共享结果（3 个候选之间常有重复段，省调用）
   let best = null;
   for (const order of candidates) {
-    try {
-      const from = `${origin.lat},${origin.lng}`;
-      const to = `${order[order.length - 1].lat},${order[order.length - 1].lng}`;
-      // 起点=第一家时，途经点不含第一家（起点与途经点重复会报错）
-      const wpList = dist(origin, order[0]) < 1 ? order.slice(1, -1) : order.slice(0, -1);
-      const wp = wpList.map(c => `${c.lat},${c.lng}`).join(';');
-      let q = `?from=${from}&to=${to}&key=${encodeURIComponent(key)}&output=json`;
-      if (wp) q += `&waypoints=${encodeURIComponent(wp)}`;
-      const r = await httpGetJson(URL + q);
-      if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
-        const route = r.result.routes[0];
-        const dm = Math.round(route.distance || 0);
-        const du = Math.max(1, Math.round((route.duration || 60) / 60));
-        if (!best || dm < best.distanceMeters) {
-          best = { order: order.map(c => c.id), distanceMeters: dm, durationMin: du, polyline: route.polyline || null };
-        }
-      }
-    } catch (e) { /* 单候选失败继续下一个 */ }
+    if (Date.now() > DEADLINE) break;
+    const segList = dist(origin, order[0]) < 1 ? order.slice(1) : order;   // 起点=第一家时去掉第一家自己
+    const r = await walkSegments(key, origin, segList, Math.max(600, DEADLINE - Date.now()), segCache);
+    if (r && (!best || r.distanceMeters < best.distanceMeters)) {
+      best = { order: order.map(c => c.id), distanceMeters: r.distanceMeters, durationMin: r.durationMin, polyline: r.polyline };
+    }
   }
   if (!best) {
     // 全部失败：回退直线距离贪心第一候选
@@ -5871,9 +5933,9 @@ async function smartSortDay(event) {
       ok: true,
       order: [...first.map(c => c.id), ...noCoord.map(c => c.id)],
       distanceMeters: dm,
-      durationMin: Math.max(1, Math.round((dm / 1000 / 25) * 60)),
+      durationMin: Math.max(1, Math.round((dm / 1000 / 4) * 60)),   // ⭐ 步行 ~4 km/h（与腾讯 walking 口径一致；原来是 25=驾车）
       fallback: true,
-      msg: '路线接口调用失败，已按直线距离排序'
+      msg: '路线接口调用失败，已按直线距离排序（步行估算）'
     };
   }
   return {

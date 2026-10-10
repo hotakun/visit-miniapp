@@ -1274,39 +1274,24 @@ async function replanDay(salesmanId, event, isBoss) {
       }
       candidates.push(ord);
     }
-    // 第 2 层：腾讯 driving 验真（from=我的位置；失败换下个候选）
-    // ⭐ 2026-10-07：改走 `txUrl()` —— 它统一按腾讯要求拼参（按名升序）+ 需要时附 `sig` 签名。
-    //   原来这里手拼 `?from=…&key=…`（**没带签名**）→ 碰上开了签名校验的 key 必然 111 → **一直是直线**。
-    const DRIVE_PATH = '/ws/direction/v1/driving/';
+    // 第 2 层：腾讯 **walking（步行）** 验真 —— ⚠️ walking 不支持途经点（见 walkSegmentsTx），逐段调用再累加。
+    //   3 个候选逐个算（串行）+ 总预算 4.5 秒（这条调用走 HTTP API，等待上限只有 ~4~5 秒）；
+    //   预算用尽 → 用已算出的最优候选（一个都没算完 → 下面的直线兜底）。
+    const segCache = {};   // 本次重排内"同一段"共享结果（候选之间常有重复段，省调用）
+    const DEADLINE = Date.now() + 4500;
     let best = null;
     for (const ord of candidates) {
-      try {
-        const from = `${origin.lat},${origin.lng}`;
-        const to = `${ord[ord.length - 1].lat},${ord[ord.length - 1].lng}`;
-        const wpList = dist(origin, ord[0]) < 1 ? ord.slice(1, -1) : ord.slice(0, -1);
-        const wp = wpList.map(c => `${c.lat},${c.lng}`).join(';');
-        const params = { from: from, to: to };
-        if (wp) params.waypoints = wp;
-        const r = await httpGetJson(await txUrl(DRIVE_PATH, params));
-        if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
-          const route = r.result.routes[0];
-          const d = Math.round(route.distance || 0);
-          if (!best || d < best.distanceMeters) {
-            best = {
-              order: ord.map(c => c._id),
-              distanceMeters: d,
-              durationMin: Math.max(1, Math.round((route.duration || 60) / 60)),
-              polyline: route.polyline || null
-            };
-          }
-        }
-      } catch (e) { /* 单候选失败继续 */ }
+      if (Date.now() > DEADLINE) break;
+      const r = await walkSegmentsTx(origin, ord, Math.max(600, DEADLINE - Date.now()), segCache);
+      if (r && (!best || r.distanceMeters < best.distanceMeters)) {
+        best = { order: ord.map(c => c._id), distanceMeters: r.distanceMeters, durationMin: r.durationMin, pts: r.pts };
+      }
     }
     if (best) {
       newOrder = best.order;
       dm = best.distanceMeters;
       durationMin = best.durationMin;
-      pts = (Array.isArray(best.polyline) && best.polyline.length >= 4) ? decodePolyline(best.polyline) : null;
+      pts = (Array.isArray(best.pts) && best.pts.length >= 2) ? best.pts : null;   // ⭐ walking 逐段合并后的绝对坐标
       if (!pts || pts.length < 2) pts = fallbackPts(origin, withCoord, best.order); // 无轨迹直线兜底
     } else {
       newOrder = candidates[0].map(c => c._id);
@@ -1452,6 +1437,72 @@ function decodePolyline(pl) {
     pts.push([lat, lng]);
   }
   return pts;
+}
+
+// ⭐⭐ 2026-10-10 晚（老板定）：**手机端「重排」也改走【步行】算路** —— 与后台"智能/手动规划"同一口径
+//   （业务员是走路的；原来用 driving 驾车 —— 距离偏长，时长还把"分钟"当"秒"处理）。
+//   ⚠️⚠️ **腾讯 walking 接口不支持 waypoints（途经点）**（实测：带不带返回一模一样，被静默忽略）
+//      → 「我的位置→店1→店2→…→店N」必须**逐段调用再累加**（本函数）。
+//   ⚠️ **duration 单位是【分钟】**（实测同 driving）—— 老代码 `Math.round(route.duration / 60)` 是当秒处理 → 恒 1 分钟（已修）。
+function encodePolyline(pts) {   // 保留（adminapi 侧多段合并要回写压缩格式）；tasks 侧直接用 pts
+  if (!pts || !pts.length) return null;
+  const out = [pts[0][0], pts[0][1]];
+  for (let i = 1; i < pts.length; i++) {
+    out.push(Math.round((pts[i][0] - pts[i - 1][0]) * 1e6));
+    out.push(Math.round((pts[i][1] - pts[i - 1][1]) * 1e6));
+  }
+  return out;
+}
+// 轻量并发池（tasks 里没有 runPool）：把 items 的索引分给若干 worker 轮流跑
+async function poolEach(items, size, fn) {
+  let i = 0;
+  const n = Math.min(Math.max(Number(size) || 1, 1), items.length);
+  await Promise.all(new Array(n).fill(0).map(async () => {
+    while (i < items.length) { const idx = i++; await fn(items[idx]); }
+  }));
+}
+// 步行逐段算路：我的位置 → 店1 → … → 店N；返回 { distanceMeters, durationMin, pts(绝对坐标) } 或 null（失败/超预算）
+async function walkSegmentsTx(origin, ordered, budgetMs, segCache) {
+  const pts = [{ lat: origin.lat, lng: origin.lng }].concat(ordered.map(c => ({ lat: c.lat, lng: c.lng })));
+  const segs = [];
+  for (let i = 0; i + 1 < pts.length; i++) segs.push([pts[i], pts[i + 1]]);
+  if (!segs.length) return null;
+  const cache = segCache || {};
+  const t0 = Date.now();
+  const out = new Array(segs.length).fill(null);
+  let failed = false;
+  await poolEach(segs.map((s, i) => i), 5, async (idx) => {
+    if (failed || Date.now() - t0 > budgetMs) { failed = true; return; }
+    const s = segs[idx];
+    const ck = s[0].lat + ',' + s[0].lng + ';' + s[1].lat + ',' + s[1].lng;
+    if (cache[ck]) { out[idx] = cache[ck]; return; }
+    try {
+      const u = await txUrl('/ws/direction/v1/walking/', { from: `${s[0].lat},${s[0].lng}`, to: `${s[1].lat},${s[1].lng}` });
+      let r = await httpGetJson(u);
+      if (!(r && r.status === 0 && r.result && r.result.routes && r.result.routes.length)) {
+        await new Promise(z => setTimeout(z, 350));       // 可能是瞬时配额，退一步重试一次
+        r = await httpGetJson(u);
+      }
+      if (r && r.status === 0 && r.result && r.result.routes && r.result.routes.length) {
+        const rt = r.result.routes[0];
+        const seg = { d: Math.round(rt.distance || 0), m: Math.max(1, Math.round(rt.duration || 1)), pl: rt.polyline || null };
+        cache[ck] = seg; out[idx] = seg;
+      } else { failed = true; }
+    } catch (e) { failed = true; }
+  });
+  if (failed || out.some(x => !x)) return null;
+  let d = 0, m = 0;
+  const allPts = [];
+  for (const s of out) {
+    d += s.d || 0; m += s.m || 0;
+    const p = decodePolyline(s.pl);
+    for (const q of p) {
+      const last = allPts[allPts.length - 1];
+      if (last && Math.abs(last[0] - q[0]) < 1e-9 && Math.abs(last[1] - q[1]) < 1e-9) continue;   // 衔接重复点
+      allPts.push(q);
+    }
+  }
+  return { distanceMeters: d, durationMin: Math.max(1, m), pts: allPts.length >= 2 ? allPts : null };
 }
 
 // 直线兜底折线：起点=我的位置 → 按新序逐店（[lat,lng]，纬度在前）
