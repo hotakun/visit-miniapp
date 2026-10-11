@@ -183,7 +183,8 @@ const srv = http.createServer(async (req, res) => {
         const rows = await R(
           'SELECT v.id, v.customer_id AS "customerId", v.salesman_id AS "salesmanId", v.salesman_name AS "salesmanName",' +
           ' v.result, v.status, v.duration, v.remark, v.samples, v.audios, v.photos, v.updated_at AS "at",' +
-          ' c.name, c.name_raw AS "nameRaw", c.mall_code AS "mallCode"' +
+          // ⚠️ 字段名与云端 visitRecordsByDay **同构**（前端就不必区分数据来自哪儿）
+          ' c.name AS "customerName", c.name_raw AS "nameRaw", c.mall_code AS "mallCode"' +
           ' FROM visits v LEFT JOIN customers c ON c.id = v.customer_id' +
           " WHERE v.visited_at = $1 AND v.status IN ('normal','pending_review')" +
           ' ORDER BY v.updated_at ASC', [day]);
@@ -197,6 +198,16 @@ const srv = http.createServer(async (req, res) => {
           //   → 整条 SQL 报错、shop 分支直接"服务器出错了"。老板要的是"哪天新增了几家"，先只回 n。
           " FROM customers WHERE source = 'field' AND deleted IS NOT TRUE AND created_at >= $1" +
           ' GROUP BY 1 ORDER BY 1 DESC', [fromMs]);
+        // ⚠️ 前端「每日新店」点进去要看**明细**（云端 newShopDays 是一次带回来的）→ 这里也带 rows，保持同构
+        const rows2 = await R(
+          "SELECT to_char(to_timestamp(created_at/1000) AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') AS day," +
+          ' id AS "customerId", COALESCE(name, name_raw, \'\') AS "customerName",' +
+          ' phone, address, mall_code AS "mallCode", created_at AS "at"' +
+          " FROM customers WHERE source = 'field' AND deleted IS NOT TRUE AND created_at >= $1" +
+          ' ORDER BY created_at DESC', [fromMs]);
+        const byDay = {};
+        (rows2 || []).forEach(x => { (byDay[x.day] = byDay[x.day] || []).push(x); });
+        (list || []).forEach(d => { d.rows = byDay[d.day] || []; d.pending = 0; });
         return out(res, 200, { ok: true, from: 'pg', list: list });
       }
       const list = await R(

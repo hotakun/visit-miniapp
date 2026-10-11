@@ -2390,11 +2390,24 @@ window.vrGo = function (t) {
   $('vrStat').textContent = '';
 };
 window.loadVisitRec = async function () { if (vrTab === 'visit') await vrLoadDays(); else await vrLoadShop(); };
+// ⭐ 2026-10-11 老板定：拜访记录两页**先读轻量服务器**（免费、秒出），拿不到才回退云开发。
+//   服务器接口 = 本地 GET /visitrec?kind=daily|day|shop（server.js 转发到 pgapi 的 /visitrec；
+//   服务器挂了 / 没配 pgApiUrl → 回 {ok:false} → 本函数返回 null，调用方自己回退云开发）。
+async function vrPg(kind, extra) {
+  try {
+    const j = await (await fetch('/visitrec?kind=' + kind + (extra || ''))).json();
+    if (j && j.ok) return j;
+    console.warn('[visitrec] 服务器没给数据，回退云开发：' + ((j && j.msg) || ''));
+  } catch (e) { console.warn('[visitrec] 服务器不可用，回退云开发：' + (e && e.message)); }
+  return null;
+}
+
 async function vrLoadDays() {
   const box = $('vrDates');
   box.style.display = ''; $('vrDay').style.display = 'none';
   box.innerHTML = '<div class="loading">加载中…</div>';
-  const r = await api('visitRecordDays', { days: 7 }).catch(() => null);
+  // ⭐ 2026-10-11：**先问轻量服务器**（免费、秒出）；拿不到再回退云开发
+  const r = await vrPg('daily', '&days=7') || await api('visitRecordDays', { days: 7 }).catch(() => null);
   if (!r || !r.ok) { box.innerHTML = '<div class="empty">加载失败，请稍后再试</div>'; return; }
   const sum = r.list.reduce((a, x) => a + (x.visits || 0), 0);
   $('vrStat').textContent = '近 7 天 · 共 ' + sum + ' 家拜访';
@@ -2410,7 +2423,7 @@ window.vrOpenDay = async function (day) {
   const box = $('vrDay');
   $('vrDates').style.display = 'none'; box.style.display = '';
   box.innerHTML = '<div class="card" style="padding:16px"><div class="loading">加载中…</div></div>';
-  const r = await api('visitRecordsByDay', { day: day }).catch(() => null);
+  const r = await vrPg('day', '&day=' + encodeURIComponent(day)) || await api('visitRecordsByDay', { day: day }).catch(() => null);
   const back = '<div style="display:inline-flex;align-items:center;gap:6px;color:#68727E;font-weight:700;cursor:pointer;padding:6px 2px 12px" onclick="vrLoadDays()">‹ 返回日期列表</div>';
   if (!r || !r.ok) { box.innerHTML = back + '<div class="card" style="padding:16px"><div class="empty">加载失败，请稍后再试</div></div>'; return; }
   const g = {};
@@ -2437,7 +2450,7 @@ window.vrOpenDay = async function (day) {
 async function vrLoadShop() {
   const box = $('vrShop');
   box.innerHTML = '<div class="loading">加载中…</div>';
-  const r = await api('newShopDays', { days: 7 }).catch(() => null);
+  const r = await vrPg('shop', '&days=7') || await api('newShopDays', { days: 7 }).catch(() => null);
   if (!r || !r.ok) { box.innerHTML = '<div class="empty">加载失败，请稍后再试</div>'; return; }
   const days = r.list.filter(d => d.n > 0);
   if (!days.length) { box.innerHTML = '<div class="empty" style="padding:26px;text-align:center;color:#A8B0BB">近 7 天没有新加的店</div>'; return; }
