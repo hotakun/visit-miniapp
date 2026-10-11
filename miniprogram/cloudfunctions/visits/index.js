@@ -102,6 +102,7 @@ exports.main = async (event) => {
   if (action === 'reportLocation') return await reportLocation(meUser, event, isBoss);
   if (action === 'reportTrack') return await reportTrack(meUser, event, isBoss);
   if (action === 'cancel') return await cancelVisit(meUser, event, isBoss);
+  if (action === 'deleteVisit') return await deleteVisit(meUser, event, isBoss);   // ⭐ 2026-10-11 老板定：删掉某条拜访（只能删自己的）
   if (action === 'history') return await history(meUser, event.customerId, isBoss);
   if (action === 'editSubmitted') return await editSubmitted(meUser, event, isBoss);   // ⭐ 2026-10-10：编辑已提交的拜访记录
   if (action === 'mystats') return await mystats(meUser, isBoss);
@@ -310,6 +311,36 @@ async function reportTrack(user, e, isBoss) {
 }
 
 // 取消拜访（2026-09-04 老板定稿）：直接删除本次拜访记录，不留任何痕迹（像没来过一样）；客户仍为待回访；无需定位，任何地方可取消
+// ⭐ 2026-10-11 老板定（手机端）：拜访历史里能**删掉某条拜访**（右下角「🗑 删除」）——
+//   口径与"取消拜访"一致：**真删、不留痕**（老板既有口径）；**只能删自己的**；
+//   删完任务进度自动回退（进度是实时算的），自由拜访卡的"已拜访家数"在这里重算。
+async function deleteVisit(user, e, isBoss) {
+  const visitId = String((e && e.visitId) || '');
+  if (!visitId) return { ok: false, code: 'BAD_ARG', msg: '缺少拜访记录' };
+  if (user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
+  const vr = await db.collection('visits').doc(visitId).get().catch(() => null);
+  const v = vr && vr.data;
+  if (!v) return { ok: false, code: 'NOT_FOUND', msg: '拜访记录不存在' };
+  if (v.salesmanId !== user._id) return { ok: false, code: 'FORBIDDEN', msg: '只能删除自己的拜访记录' };
+  if (v.status === 'ongoing') return { ok: false, code: 'STATE', msg: '这条还在拜访中，请回拜访页正常取消' };
+  // 1) 删拜访本体
+  await db.collection('visits').doc(visitId).remove();
+  // 2) 连带清掉这条的语音转写文字（不留孤儿）
+  try {
+    const tr = await db.collection('transcripts').where({ visitId: visitId }).limit(200).get();
+    await Promise.all((tr.data || []).map(t => db.collection('transcripts').doc(t._id).remove()));
+  } catch (err) { /* 转写清理失败不影响删除 */ }
+  // 3) 自由拜访卡：按真实拜访记录重算「已拜访 N 家」（项目口径：该数组一字段三用）
+  if (v.freeTripId) {
+    try {
+      const rest = await db.collection('visits').where({ freeTripId: v.freeTripId }).field({ customerId: true }).limit(2000).get();
+      const uniq = [...new Set((rest.data || []).map(x => x.customerId).filter(Boolean))];
+      await db.collection('free_trips').doc(v.freeTripId).update({ data: { customerIds: uniq, updatedAt: Date.now() } }).catch(() => { });
+    } catch (err) { /* 重算失败不影响删除 */ }
+  }
+  return { ok: true, msg: '已删除' };
+}
+
 async function cancelVisit(user, e, isBoss) {
   const { taskId, customerId } = e;
   // ⭐ 2026-10-02：自由拜访（无任务）也能取消 —— 只要求 customerId；任务校验仅在任务内拜访时做

@@ -630,6 +630,27 @@ Page({
     wx.setStorageSync('curCustomer', Object.assign({}, cc, { _id: this._cid, name: d.name || cc.name || '' }));
     wx.navigateTo({ url: '/pages/visit/visit?editVisitId=' + vid });
   },
+  // ⭐ 2026-10-11 老板定：拜访记录右下角「🗑 删除」—— 删掉这条拜访
+  //   ⚠️ 口径与"取消拜访"一致：**真删、不留痕**（不可恢复）；**只能删自己的**（云端也会拦）；
+  //      任务进度是实时算的 → 删完自动回退；自由拜访卡的"已拜访家数"由云端重算。
+  async delVisit(e) {
+    const vid = e.currentTarget.dataset.vid;
+    if (!vid) return;
+    const ok = await new Promise(res => wx.showModal({
+      title: '删除这条拜访记录？', content: '删掉后这次拜访就没了（不可恢复），任务进度也会退回。',
+      confirmText: '删除', cancelText: '取消', confirmColor: '#E5484D',
+      success: r => res(!!r.confirm), fail: () => res(false)
+    }));
+    if (!ok) return;
+    wx.showLoading({ title: '删除中…', mask: true });
+    let r = null;
+    try { r = await api.call('visits', { action: 'deleteVisit', visitId: vid }); }
+    catch (err) { console.error('[customer] 删拜访异常', err); }
+    wx.hideLoading();
+    if (!r || !r.ok) { api.toast((r && r.msg) || '删除失败，请稍后再试'); return; }
+    wx.showToast({ title: '已删除', icon: 'success' });
+    this.onLoad({ id: this._cid });   // 重拉详情（铁律：改完必须真的刷新）
+  },
   // ---------- 📝 快速记事（2026-10-10 老板当天改回：放在「更正信息」**左边**）----------
   //   点它 = 以本客户为对象快速记一笔（标题 / 关联客户自动带好）。
   //   ⚠️ 记事**只存本机**（2026-09-28 老板定），落地见 pages/notes/editor/。
