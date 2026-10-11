@@ -11882,8 +11882,8 @@ async function mallNewNearby() {
   if (!ll) { mallNew.msg = '⚠️ 先填经纬度再搜'; mallNewRender(); return; }
   mallNew.ll = ll;
   try {
-    await ensureCustLocal();                                   // 本地缓存（全库客户点）
-    const pts = (typeof custPoints === 'function') ? custPoints() : [];
+    const loc = await ensureCustLocal();                       // 本地缓存（全库客户点）
+    const pts = (loc && loc.points) || [];                     // ⚠️ 点数组是 loc.points（与 custLocalList 同一写法）
     const R = 500;                                             // 搜 500 米（200 米太少会漏）
     const out = [];
     for (const p of pts) {
