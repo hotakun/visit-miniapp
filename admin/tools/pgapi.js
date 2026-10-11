@@ -184,7 +184,7 @@ const srv = http.createServer(async (req, res) => {
           'SELECT v.id, v.customer_id AS "customerId", v.salesman_id AS "salesmanId", v.salesman_name AS "salesmanName",' +
           ' v.result, v.status, v.duration, v.remark, v.samples, v.audios, v.photos, v.updated_at AS "at",' +
           // ⚠️ 字段名与云端 visitRecordsByDay **同构**（前端就不必区分数据来自哪儿）
-          ' c.name AS "customerName", c.name_raw AS "nameRaw", c.mall_code AS "mallCode"' +
+          ' c.name AS "customerName", c.name_raw AS "nameRaw", c.code AS "mallCode"' +
           ' FROM visits v LEFT JOIN customers c ON c.id = v.customer_id' +
           " WHERE v.visited_at = $1 AND v.status IN ('normal','pending_review')" +
           ' ORDER BY v.updated_at ASC', [day]);
@@ -202,7 +202,7 @@ const srv = http.createServer(async (req, res) => {
         const rows2 = await R(
           "SELECT to_char(to_timestamp(created_at/1000) AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') AS day," +
           ' id AS "customerId", COALESCE(name, name_raw, \'\') AS "customerName",' +
-          ' phone, address, mall_code AS "mallCode", created_at AS "at"' +
+          ' phone, address, code AS "mallCode", created_at AS "at"' +
           " FROM customers WHERE source = 'field' AND deleted IS NOT TRUE AND created_at >= $1" +
           ' ORDER BY created_at DESC', [fromMs]);
         const byDay = {};
