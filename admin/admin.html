@@ -11876,6 +11876,24 @@ function mallNewReadLL() {
   if (a[0] > 60 && a[1] < 60) return { lat: a[1], lng: a[0] };   // 粘的是 经度,纬度
   return { lat: a[0], lng: a[1] };
 }
+// ⭐ 2026-10-11：按地址自动解析经纬度（另一种填坐标的方式）—— 调云端 geocode（腾讯 WebServiceAPI，服务端 key）
+//   ⚠️ render 会重画表单，所以**先把各输入框的值同步回 mallNew.form**，否则用户刚填的会被清掉
+async function mallNewParseAddr() {
+  if (!mallNew) return;
+  const addr = String((($('mnAddr') && $('mnAddr').value) || mallNew.form.address || '')).trim();
+  mallNew.form.name = ($('mnName') && $('mnName').value) || mallNew.form.name;
+  mallNew.form.phone = ($('mnPhone') && $('mnPhone').value) || '';
+  mallNew.form.address = addr;
+  mallNew.form.bizCircle = ($('mnBiz') && $('mnBiz').value) || '';
+  if (!addr) { mallNew.msg = '⚠️ 先填地址'; mallNewRender(); return; }
+  mallNew.msg = '解析中…'; mallNewRender();
+  const r = await api('geocode', { address: addr }).catch(() => null);
+  if (!r || !r.ok) { mallNew.msg = '❌ ' + ((r && r.msg) || '解析失败'); mallNewRender(); return; }
+  mallNew.ll = { lat: r.lat, lng: r.lng };
+  mallNew.msg = '✅ 解析到 ' + r.lat.toFixed(6) + ',' + r.lng.toFixed(6) + (r.title ? '（' + r.title + '）' : '');
+  mallNewRender();
+}
+
 async function mallNewNearby() {
   if (!mallNew) return;
   const ll = mallNewReadLL();

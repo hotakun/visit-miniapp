@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'mallPairList', 'bizSuggest', 'createMallCustomer', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'mallPairList', 'bizSuggest', 'createMallCustomer', 'geocode', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -757,6 +757,7 @@ exports.main = async (event) => {
     if (action === 'mallPairList') return await mallPairList(event);                // ⭐ 2026-10-11：配对确认页的**候选清单**（只读）
     if (action === 'bizSuggest') return await bizSuggest(event);                    // ⭐ 2026-10-11：按坐标给**商圈建议**（200→500 米）
     if (action === 'createMallCustomer') return await createMallCustomer(event);    // ⭐ 2026-10-11：新建「已加入商城」客户（**经纬度必填**）
+    if (action === 'geocode') return await geocode(event);                          // ⭐ 2026-10-11：按地址解析经纬度（腾讯 WebServiceAPI）
     if (action === 'finishTask') return await finishTask(event);
     if (action === 'deleteCustomers') return await deleteCustomers(event);
     if (action === 'getTempFileURL') return await getTempFileURL(event);
@@ -3562,6 +3563,23 @@ async function listMallClaims(event) {
 //   **样本太少（<5 家）再放到 500 米**。
 //   ⚠️ 为什么不要 1 公里：老板原话「一公里就会出现，远的地方占大多数之后，就会挤占附近的权重了」。
 //   ⚠️ 「永康市」这类"市名"**照用、不排除**（前任录入员就这么填的，老板说将错就错）。
+// ⭐ 2026-10-11 老板定（新建客户填坐标的方式之一）：**按地址自动解析出经纬度**。
+//   用腾讯 WebServiceAPI 的**地理编码**接口 —— 服务端专用 key（`mpWSKey`，**不需要 SN 签名**，
+//   见 AGENTS.md「腾讯地图两把 key 别搞混」那条实测）。复用本文件已有的 httpGetJson。
+async function geocode(event) {
+  const addr = String((event && event.address) || '').trim();
+  if (!addr) return { ok: false, code: 'BAD_ARG', msg: '缺少地址' };
+  const key = String((await getMpKey()) || '');
+  if (!key) return { ok: false, code: 'NO_KEY', msg: '后台没配腾讯地图 key' };
+  const url = 'https://apis.map.qq.com/ws/geocoder/v1/?address=' + encodeURIComponent(addr) + '&key=' + key;
+  const r = await httpGetJson(url).catch(() => null);
+  if (!r || Number(r.status) !== 0 || !r.result || !r.result.location) {
+    return { ok: false, code: 'GEO_FAIL', msg: '解析不到这个地址 —— 换个写法，或直接从地图复制坐标' };
+  }
+  const loc = r.result.location;
+  return { ok: true, lat: Number(loc.lat), lng: Number(loc.lng), title: String(r.result.title || '') };
+}
+
 async function bizSuggest(event) {
   const lat = Number((event && event.lat) || 0);
   const lng = Number((event && event.lng) || 0);
