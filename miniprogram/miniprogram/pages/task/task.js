@@ -8,7 +8,7 @@ Page({
   },
   data: {
     task: null, customers: [], showCustomers: [], activeDay: 1, loading: true,
-    dayDone: {}, ongoingDays: {}, nextSeq: 0, allDone: false, confirmShow: false, confirmMsg: ''
+    dayDone: {}, dayVisited: {}, ongoingDays: {}, nextSeq: 0, allDone: false, confirmShow: false, confirmMsg: ''
   },
   onLoad(options) {
     this.taskId = options.taskId;
@@ -196,9 +196,14 @@ Page({
     }));
     // 每天完成态：该天客户全部已拜访
     const dayDone = {};
+    // ⭐ 2026-10-11 老板定：每页下面还要显示**已拜访家数**（页面显示成「X/15 家」；
+    //   **全部完成**时保持原来的「N 家 ✓」样式）—— 与 dayDone 同源算，避免两处口径漂移
+    const dayVisited = {};
     this.data.task.dayPlan.forEach(p => {
       const ids = p.customerIds || [];
-      dayDone[p.day] = ids.length > 0 && ids.every(id => map[id] && map[id].visitedToday);
+      const n = ids.filter(id => map[id] && map[id].visitedToday).length;
+      dayDone[p.day] = ids.length > 0 && n === ids.length;
+      dayVisited[p.day] = n;
     });
     // 拜访中客户所在的天：天页签加蓝色对勾角标（老板 2026-09-06 定）
     const ongoingDays = {};
@@ -209,7 +214,7 @@ Page({
     // 当天第一个未拜访客户的序号（打开地图用）
     const firstTodo = showCustomers.find(c => !c.visitedToday && !c.visitOngoing);
     const allDone = this.allCustomers.length > 0 && this.allCustomers.every(c => c.visitedToday);
-    this.setData({ showCustomers, dayDone, ongoingDays, nextSeq: firstTodo ? firstTodo.seq : 0, allDone });
+    this.setData({ showCustomers, dayDone, dayVisited, ongoingDays, nextSeq: firstTodo ? firstTodo.seq : 0, allDone });
   },
   // 交任务（全部完成或提前交）：页内确认弹层；提前交与开关开启时进入审核中
   finishTask() {

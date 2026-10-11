@@ -16,7 +16,8 @@
       <view class="day {{activeDay === d.day ? 'on' : ''}} {{dayDone[d.day] ? 'done' : ''}} {{ongoingDays[d.day] ? 'ong' : ''}}" wx:for="{{task.dayPlan}}" wx:for-item="d" wx:key="day" bindtap="switchDay" data-day="{{d.day}}">
         <view class="day-check" wx:if="{{ongoingDays[d.day]}}">✓</view>
         <text class="dt">第 {{d.day}} 页</text>
-        <text class="dc">{{d.customerIds.length}} 家{{dayDone[d.day] ? ' ✓' : ''}}</text>
+        <!-- ⭐ 2026-10-11 老板定：未完成 → 「已拜访X/15家」；**全部完成** → 保持原来的「15 家 ✓」 -->
+        <text class="dc">{{dayDone[d.day] ? (d.customerIds.length + ' 家 ✓') : (dayVisited[d.day] + '/' + d.customerIds.length + ' 家')}}</text>
       </view>
     </view>
   </scroll-view>
