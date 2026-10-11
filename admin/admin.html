@@ -11835,10 +11835,128 @@ function renderClaimList() {
   }).join('');
 }
 
+// ⭐ 2026-10-12 老板定（铁律：**非必要不动云端、一切考虑费用**）：**商圈建议全本地算**。
+//   算法与云端 bizSuggest 一致：**先 200 米**（样本 ≥5 家就用），不够再放 500 米；
+//   「永康市」这类"市名"**照用、不排除**（老板定：将错就错，前任录入员就这么填的）。
+//   数据来自**本地缓存**（`admin/cache/map-points.json`，`p.b` = 商圈）→ **零请求**。
+//   ⚠️ 由调用方把 `pts` 传进来（`await ensureCustLocal()` 后取 `loc.points`），避免每次重取。
+function localBizSuggest(pts, lat, lng) {
+  try {
+    if (!pts || !pts.length || !lat || !lng) return null;
+    const cosLat = Math.cos(lat * Math.PI / 180);
+    for (const R of [200, 500]) {
+      const dLat = R / 111320, dLng = R / (111320 * cosLat);
+      const cnt = {};
+      let total = 0;
+      for (const p of pts) {
+        if (!p.la || !p.ln) continue;
+        if (Math.abs(p.la - lat) > dLat || Math.abs(p.ln - lng) > dLng) continue;
+        const b = String(p.b || '').trim();
+        if (!b) continue;
+        cnt[b] = (cnt[b] || 0) + 1; total++;
+      }
+      if (total >= 5 || R === 500) {
+        const list = Object.keys(cnt).map(k => ({ name: k, n: cnt[k] })).sort((a, b) => b.n - a.n);
+        return { radius: R, total: total, suggest: list.length ? list[0].name : '', list: list.slice(0, 5) };
+      }
+    }
+  } catch (e) { console.warn('[localBizSuggest]', e); }
+  return null;
+}
+
+// ⭐ 2026-10-12 老板定（铁律同上）：**按坐标搜周围相似的店，全用本地缓存算**（零请求）。
+//   返回 [{id,name,addr,dist}]，按距离升序（老板 2026-10-11 定：先 200 米，不够再 500 米 → 这里一次搜 500 米再按距离排）。
+function localNearby(pts, lat, lng, radiusM) {
+  const R = radiusM || 500;
+  try {
+    if (!pts || !pts.length || !lat || !lng) return [];
+    const cosLat = Math.cos(lat * Math.PI / 180);
+    const out = [];
+    for (const p of pts) {
+      if (!p.la || !p.ln) continue;
+      const dx = (p.ln - lng) * 111320 * cosLat, dy = (p.la - lat) * 111320;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= R) out.push({ id: p.i, name: p.nr || p.n || '', addr: p.ad || '', dist: Math.round(d), biz: p.b || '' });
+    }
+    out.sort((a, b) => a.dist - b.dist);
+    return out.slice(0, 8);
+  } catch (e) { console.warn('[localNearby]', e); return []; }
+}
+
 // ⭐ 2026-10-11 新口径的合并入口：老板点「就是这家」→ applyMallPair（店名/电话/地址取商城的；经纬度/商圈保留系统内的）
+// ⭐ 2026-10-12 新增：通用「带内容的确认框」（合并预览要用）—— 返回 Promise<boolean>。
+//   ⚠️ 同样**自带关闭/滚动/限高**（不重蹈那个弹窗没滚动条的覆辙）。
+function confirmBox(title, htmlBody, okText) {
+  return new Promise(function (resolve) {
+    const box = document.createElement('div');
+    box.id = 'confirmBoxOvl';
+    box.style.cssText = 'position:fixed;inset:0;background:rgba(20,25,35,.5);z-index:2147483000;display:flex;align-items:center;justify-content:center';
+    box.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px 16px;width:min(880px,94vw);max-height:88vh;display:flex;flex-direction:column">' +
+      '<div style="font-weight:800;font-size:14px;margin-bottom:8px">' + title +
+      '<span style="float:right;cursor:pointer;color:#A8B0BB;font-size:20px;line-height:1" id="cbX">✕</span></div>' +
+      '<div style="overflow-y:auto;flex:1;min-height:0">' + htmlBody + '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">' +
+      '<button class="btn ghost" id="cbNo" style="height:32px;font-size:13px">取消</button>' +
+      '<button class="btn primary" id="cbYes" style="height:32px;font-size:13px">' + (okText || '✅ 确认') + '</button></div></div>';
+    document.body.appendChild(box);
+    const done = function (v) { const e0 = document.getElementById('confirmBoxOvl'); if (e0 && e0.parentNode) e0.parentNode.removeChild(e0); resolve(v); };
+    document.getElementById('cbNo').onclick = function () { done(false); };
+    document.getElementById('cbX').onclick = function () { done(false); };
+    document.getElementById('cbYes').onclick = function () { done(true); };
+  });
+}
+
+// ⭐ 2026-10-12 老板定（照演示稿）：点「就是这家」**不直接合**，先给一张「合并预览」——
+//   字段｜商城的｜系统内的｜合并结果｜依据；**电话按 1、2 真实排出来**（三个就标"第 3 个会丢"）；
+//   商圈两边都空就**按坐标本地算**并给建议。看完点「✅ 确认合并」才落笔。
+//   ⚠️ **全部本地算**（老板铁律：非必要不动云端）—— 候选字段来自 mallPairList，坐标/商圈从**本地缓存**取。
 async function pairConfirm(gi, customerId) {
   const g = claimGroups[gi] || {};
-  if (!window.confirm('确认「' + (g.mallName || '') + '」就是系统内的这家客户？\n\n合并后：店名 / 电话 / 地址 取商城的；经纬度 / 商圈 保留系统内的（现场采的为准）。')) return;
+  const c = (g.cands || []).find(function (x) { return x.customerId === customerId; }) || {};
+  let cLat = 0, cLng = 0, cBiz = '', pts = [];
+  try {
+    const loc = await ensureCustLocal();
+    pts = (loc && loc.points) || [];
+    const p = pts.find(function (x) { return x.i === customerId; });
+    if (p) { cLat = p.la || 0; cLng = p.ln || 0; cBiz = p.b || ''; }
+  } catch (e) { }
+  // 电话：商城 = 1、系统 = 2；相同只留一个；三个不同 → 只留「商城的 + 系统的第一个」
+  const mp = String(g.mallPhone || '').trim(), sp = String(c.customerPhone || '').trim(), sp2 = String(c.customerPhone2 || '').trim();
+  let phoneShow = '', phoneNote = '';
+  if (mp && sp && mp !== sp) {
+    phoneShow = '1️⃣ ' + esc(mp) + '<br>2️⃣ ' + esc(sp) + (sp2 ? '<br><s>' + esc(sp2) + '</s>（第 3 个丢掉）' : '');
+    phoneNote = sp2 ? '不同 → 1、2 排，第 3 个丢' : '不同 → 按 1、2 排';
+  } else if (mp && sp) { phoneShow = esc(mp); phoneNote = '相同 → 只留一个'; }
+  else { phoneShow = esc(mp || sp || '（两边都空）'); phoneNote = '只有一边有'; }
+  // 商圈：两边都空 → 按坐标**本地算**（200 米不够再 500 米）
+  let bizShow = esc(cBiz || ''), bizNote = cBiz ? '系统内的' : '';
+  if (!cBiz && cLat && cLng) {
+    const r = localBizSuggest(pts, cLat, cLng);
+    if (r && r.suggest) { bizShow = esc(r.suggest); bizNote = '按坐标算（' + r.radius + ' 米内 ' + r.total + ' 家有商圈）'; }
+  }
+  if (!bizShow) { bizShow = '<span style="color:#B77400">两边都没有</span>'; bizNote = '可手工填'; }
+  const cell = 'padding:6px 10px;border-top:1px solid #EDF1F7';
+  const row = function (k, m, s, fin, why, hl) {
+    return '<tr' + (hl ? ' style="background:#FBFFFC"' : '') + '>' +
+      '<td style="' + cell + ';color:#A8B0BB">' + k + '</td>' +
+      '<td style="' + cell + '">' + m + '</td>' +
+      '<td style="' + cell + ';color:#98A2AE">' + s + '</td>' +
+      '<td style="' + cell + ';font-weight:700;color:#0E7A3E">' + fin + '</td>' +
+      '<td style="' + cell + ';color:#98A2AE;font-size:11.5px">' + (why || '') + '</td></tr>';
+  };
+  const th = 'text-align:left;padding:6px 10px;background:#F8F9FB;font-size:11.5px;color:#68727E';
+  const html = '<div style="font-size:12.5px;margin-bottom:8px">确认「<b>' + esc(g.mallName || '') + '</b>」就是系统内的这家？下面是**合并后的结果**：</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<tr><th style="' + th + '">字段</th><th style="' + th + '">商城的</th><th style="' + th + '">系统内的</th><th style="' + th + '">合并结果</th><th style="' + th + '">依据</th></tr>' +
+    row('店名', esc(g.mallName || '（空）'), esc(c.customerName || '（空）'), esc(g.mallName || c.customerName || ''), '商城优先') +
+    row('电话', esc(mp || '（空）'), esc(sp || '（空）') + (sp2 ? '<br>/' + esc(sp2) : ''), phoneShow, phoneNote, true) +
+    row('地址', esc(g.mallAddress || '（空）'), esc(c.customerAddress || '（空）'), esc(g.mallAddress || c.customerAddress || ''), '商城优先') +
+    row('地区', esc(g.mallRegion || '（空）'), esc(c.customerRegion || '（空）'), esc(g.mallRegion || c.customerRegion || ''), '商城优先') +
+    row('经纬度', '（商城没有）', cLat ? (cLat.toFixed(6) + ', ' + cLng.toFixed(6)) : '（系统也没）', cLat ? (cLat.toFixed(6) + ', ' + cLng.toFixed(6)) : '—', '<b>用系统内的</b>', true) +
+    row('商圈', '（商城没有）', esc(cBiz || '（空）'), bizShow, bizNote, true) +
+    row('标记', '—', '—', '已加入商城', '') +
+    '</table>';
+  if (!(await confirmBox('🛒 合并预览', html, '✅ 确认合并'))) return;
   const res = await api('applyMallPair', { customerId: customerId, mallKey: g.mallKey });
   if (!res || !res.ok) { alert((res && res.msg) || '合并失败，请稍后再试'); return; }
   await loadClaims();          // 按项目铁律：改完必须**重新拉一次**（别让老板看到旧列表）
@@ -11995,15 +12113,20 @@ async function mallNewNearby() {
   } catch (e) { mallNew.msg = '搜索失败（本地缓存没准备好？）'; }
   mallNewRender();
 }
+// ⚠️ 2026-10-12 改**本地算**（老板铁律：非必要不动云端、一切考虑费用）—— 不再调云端 bizSuggest，
+//   直接用本地缓存（`p.b`）算 200→500 米。
 async function mallNewSuggestBiz() {
   const ll = mallNewReadLL();
   if (!ll) { mallNew.msg = '⚠️ 先填经纬度'; mallNewRender(); return; }
-  mallNew.ll = ll; mallNew.suggest = '计算中…'; mallNewRender();
-  const r = await api('bizSuggest', { lat: ll.lat, lng: ll.lng }).catch(() => null);
-  if (r && r.ok) {
-    mallNew.suggest = '建议：' + (r.suggest || '（附近没有参考）') + '（' + r.radius + ' 米内 ' + r.total + ' 家有商圈）';
-    if (r.suggest) { mallNew.form.bizCircle = r.suggest; }
-  } else { mallNew.suggest = '算不出来，可手填'; }
+  mallNew.ll = ll;
+  try {
+    const loc = await ensureCustLocal();
+    const r = localBizSuggest((loc && loc.points) || [], ll.lat, ll.lng);
+    if (r && r.suggest) {
+      mallNew.suggest = '建议：' + r.suggest + '（' + r.radius + ' 米内 ' + r.total + ' 家有商圈 · 本地算的）';
+      mallNew.form.bizCircle = r.suggest;
+    } else { mallNew.suggest = '这一带没有参考，可手填'; }
+  } catch (e) { mallNew.suggest = '算不出来，可手填'; }
   mallNewRender();
 }
 async function mallNewCreate() {
