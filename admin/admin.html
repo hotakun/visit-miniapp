@@ -2422,7 +2422,8 @@ window.vrOpenDay = async function (day) {
       '<div style="padding:9px 14px;background:#F8F9FB;color:var(--sub);font-weight:800;font-size:12px;border-top:1px solid var(--line)">' + esc(g[k].name) +
       '<span style="color:#F5531C;margin-left:8px">' + g[k].rows.length + ' 家</span></div>' +
       g[k].rows.map(v =>
-        '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line);font-weight:600;font-size:13px">' +
+        // ⚠️ 2026-10-11 老板定：**店名不加粗**（原来行上带 font-weight:600，整行都粗，难看）→ 明确 400 常规字重
+        '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line);font-size:13px;font-weight:400">' +
         '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
         vrCode(v.mallCode) + esc(v.customerName || '(未填店名)') + '</span>' +
         (v.result ? '<span class="pill ' + vrTagCls(v.result) + '">' + esc(v.result) + '</span>' : '') +
@@ -2446,8 +2447,9 @@ async function vrLoadShop() {
       d.day + ' ' + vrWeek(d.day) + '<span style="color:#F5531C;margin-left:8px">新增 ' + d.n + ' 家</span>' +
       (d.pending ? '<span style="font-weight:600;color:#C2410C;font-size:12.5px;margin-left:8px">其中待商城建档 ' + d.pending + '</span>' : '') + '</div>' +
       rr.map(c =>
-        '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid #F7F8FA">' +
-        '<span style="flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        // ⚠️ 2026-10-11 老板定：店名不加粗；顺带把这一页的行距/字号与「每日拜访」对齐（padding 12px 14px + 13px）
+        '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line);font-size:13px;font-weight:400">' +
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
         vrCode(c.mallCode) + esc(c.customerName) +
         '<span style="color:#98A2AE;font-weight:500;margin-left:6px;font-size:12.5px">' + esc(c.address || '') + (c.phone ? ' · ' + esc(c.phone) : '') + '</span></span>' +
         (c.mallPending ? '<span class="pill warn">待商城建档</span>' : '<span class="pill blue">已入商城</span>') +
