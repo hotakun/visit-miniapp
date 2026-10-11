@@ -3650,9 +3650,16 @@ async function createMallCustomer(event) {
 
 async function mallPairList(event) {
   const limit = Math.min(Math.max(Number((event && event.limit) || 300), 1), 500);
-  const cl = await db.collection('mall_claims').where({ status: 'pending' }).limit(limit).get().catch(() => ({ data: [] }));
-  const claims = cl.data || [];
-  if (!claims.length) return { ok: true, total: 0, groups: [] };
+  // ⚠️⚠️ 2026-10-12 老板定（原话）：「我**导入之后**，你出现一个列表，把我**导入客户的信息**与系统内客户的信息进行匹配」
+  //   → 要的是**我这次导入的这批**。所以这里**只看最近一批**（`mall_claims.batchAt` 最大的那批；
+  //     **一次导入 = 一个 batchAt**），**历史旧账不混进来**（老板定：旧账先不管）。
+  const cl = await db.collection('mall_claims').where({ status: 'pending' })
+    .orderBy('batchAt', 'desc').limit(limit).get().catch(() => ({ data: [] }));
+  const allRows = cl.data || [];
+  if (!allRows.length) return { ok: true, total: 0, groups: [] };
+  const latestBatch = Number(allRows[0].batchAt) || 0;
+  const claims = allRows.filter(x => (Number(x.batchAt) || 0) === latestBatch);
+  const skippedHistory = allRows.length - claims.length;   // 被过滤掉的历史旧账条数（只报个数，不显示）
 
   // 商城侧（按 mallKey 批量取；⚠️ 每批 20 个，避免 _.in 太大变慢）
   const keys = Array.from(new Set(claims.map(x => x.mallKey).filter(Boolean)));
@@ -3698,7 +3705,7 @@ async function mallPairList(event) {
     g[k].cands.sort((a, b) => (b.score || 0) - (a.score || 0));
     return g[k];
   }).sort((a, b) => ((b.cands[0] || {}).score || 0) - ((a.cands[0] || {}).score || 0));
-  return { ok: true, total: claims.length, groups: groups.slice(0, 100) };
+  return { ok: true, total: claims.length, skippedHistory: skippedHistory, groups: groups.slice(0, 100) };
 }
 
 async function applyMallPair(event) {
