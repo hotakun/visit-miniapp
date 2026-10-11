@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -752,6 +752,7 @@ exports.main = async (event) => {
     if (action === 'exportCustomerBatches') return await exportCustomerBatches(event);
     if (action === 'exportTasksForSync') return await exportTasksForSync(event);
     if (action === 'exportVisitedCustomers') return await exportVisitedCustomers(event);
+    if (action === 'exportVisitsForSync') return await exportVisitsForSync(event);   // ⭐ 2026-10-11：拜访**明细**导出（给 pgsync）
     if (action === 'finishTask') return await finishTask(event);
     if (action === 'deleteCustomers') return await deleteCustomers(event);
     if (action === 'getTempFileURL') return await getTempFileURL(event);
@@ -5442,6 +5443,33 @@ async function exportTasksForSync(event) {
 // ③ 已拜访客户**聚合**导出（group by customerId）—— 批次卡只需要"哪些客户拜访过"这一个集合，
 //   比导拜访明细小一个数量级；口径与 listCustomers 的统计一致：status ∈ normal / pending_review。
 //   ⚠️ 聚合的 .match() 用**原生操作符**（`_.neq` 那类在聚合里不认，2026-09-29 踩过）。
+// ⭐ 2026-10-11 老板定：「📝 拜访记录」那两页的数据**要放在轻量服务器**（点「🔄 刷新」去服务器拉，不再走云开发）。
+//   这是给服务器同步器 pgsync 的**只读导出** —— 回的是**拜访明细**（不是聚合；聚合见 exportVisitedCustomers）。
+//   · 按 `_id` 游标分页（`after` = 上一页最后一条的 id），一次最多 1000 条
+//   · 字段够服务器算「每日拜访汇总 / 按业务员分组 / 某天明细 / 某天新店」用
+async function exportVisitsForSync(event) {
+  const after = String((event && event.after) || '');
+  const limit = Math.min(Math.max(Number((event && event.limit) || 500), 50), 1000);
+  let q = db.collection('visits');
+  if (after) q = q.where({ _id: _.gt(after) });
+  const r = await q.orderBy('_id', 'asc').limit(limit)
+    .field({
+      customerId: true, salesmanId: true, salesmanName: true, visitedAt: true, taskId: true, freeTripId: true,
+      result: true, status: true, duration: true, remark: true, text: true, samples: true,
+      audios: true, audio: true, photos: true, createdAt: true, updatedAt: true
+    }).get().catch(() => ({ data: [] }));
+  const rows = (r.data || []).map(v => ({
+    id: v._id, customerId: v.customerId || '', salesmanId: v.salesmanId || '', salesmanName: v.salesmanName || '',
+    visitedAt: v.visitedAt || '', taskId: v.taskId || '', freeTripId: v.freeTripId || '',
+    result: v.result || '', status: v.status || '', duration: Number(v.duration) || 0,
+    remark: v.remark || v.text || '', samples: v.samples || '',
+    audios: Array.isArray(v.audios) ? v.audios : ((v.audio && v.audio.fileID) ? [v.audio] : []),
+    photos: Array.isArray(v.photos) ? v.photos : [],
+    createdAt: Number(v.createdAt) || 0, updatedAt: Number(v.updatedAt) || 0
+  }));
+  return { ok: true, rows: rows, count: rows.length, last: rows.length ? rows[rows.length - 1].id : after, hasMore: rows.length >= limit };
+}
+
 async function exportVisitedCustomers(event) {
   const PAGE = Math.min(Number(event.limit) || 1000, 2000);
   const skip = Math.max(0, Number(event.skip) || 0);
