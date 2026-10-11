@@ -2983,10 +2983,14 @@ function matchMall(v, m, nameV, addrV, vPhones, nameM, addrM) {
   if (nameSim >= 0.9 && (addrEq || addrSim >= 0.85)) return { score: 95, reason: '名称一致+地址一致', mall: m };
   if (nameSim >= 0.85) return { score: 80, reason: '名称高度相似', mall: m };
   if (nameSim >= 0.6 && addrSim >= 0.7) return { score: 75, reason: '名称近似+地址近似', mall: m };
-  if (addrEq && nameSim >= 0.35) return { score: 70, reason: '地址一致+名称近似', mall: m };
-  if (addrEq) return { score: 60, reason: '仅地址一致', mall: m };
+  if (addrEq && nameSim >= 0.5) return { score: 70, reason: '地址一致+名称近似', mall: m };
+  if (addrEq) return { score: 55, reason: '仅地址一字不差', mall: m };
   if (nameSim >= 0.75) return { score: 60, reason: '仅名称相似', mall: m };
-  if (nameSim >= 0.5 || addrSim >= 0.6) return { score: 50, reason: '名称/地址轻度相似', mall: m };
+  // ⚠️⚠️ 2026-10-12 修（老板截图质问：「安顺屯滋味」和「a109 缙云烧饼(胡库街店)」怎么就相似了？名称完全对不上」）：
+  //   原来是 `nameSim >= 0.5 || addrSim >= 0.6` —— **两条地址"都是胡库街、只差门牌号"（208号 vs 106号）
+  //   就能拿 50 分进候选** ❌。地址像、名字完全不像 → **不是同一家**，不该列给老板看。
+  //   ✅ 现在：**候选的硬门槛 = 名称必须像（≥0.6）**；**地址只做加分项，永远不能单独把一家拉进候选**。
+  if (nameSim >= 0.6) return { score: 50, reason: '名称轻度相似', mall: m };
   return { score: 0, reason: '', mall: m };
 }
 
