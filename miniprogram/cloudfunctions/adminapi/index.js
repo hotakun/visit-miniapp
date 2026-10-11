@@ -3013,11 +3013,22 @@ async function importMallCustomers(event) {
   const STATIC_FIELDS = ['mallCode', 'name', 'region', 'address', 'phone', 'tags', 'category', 'salesman', 'source', 'level'];
   // ⭐ 2026-10-12：记下"最近一次导入是哪一批"（= 这一批的 importBatch 值）。
   //   runMallMatch 靠它**只拉本批**（不拉全商城库）—— 否则必然 -601008（老板实测"导入中断"）。
+  // ⭐⭐ 2026-10-12【最终定案】把"**这一次导入的完整名单**"记在 settings 里 ——
+  //   `mallPairList`（「🛒 商城配对确认」的列表 + 角标）**只按这份名单取**，没导入过 = 空列表。
+  //   老板原话：「我还没开始导入，你这里就冒出来 100 条了」—— 就是这个毛病：
+  //   列表原来读"待确认表里最近一批"，而那张表里躺着历史旧账 → 没导入也有几百条。
   try {
-    const _s0 = await db.collection('settings').where({ key: 'lastMallImportBatch' }).limit(1).get();
+    const _s0 = await db.collection('settings').where({ key: 'lastMallImportAt' }).limit(1).get();
     if (_s0.data && _s0.data.length) await db.collection('settings').doc(_s0.data[0]._id).update({ data: { value: now } });
-    else await db.collection('settings').add({ data: { key: 'lastMallImportBatch', value: now } });
-  } catch (e) { /* 记不上就退回全量比对，不影响导入本身 */ }
+    else await db.collection('settings').add({ data: { key: 'lastMallImportAt', value: now } });
+    // 名单取**整批**（不是这一片）：前端在最后一片会把 allKeys 带过来
+    const _ak = (event && Array.isArray(event.allKeys) && event.allKeys.length)
+      ? event.allKeys
+      : customers.map(c => String(c.mallKey || '').trim()).filter(Boolean);
+    const _s1 = await db.collection('settings').where({ key: 'lastMallKeys' }).limit(1).get();
+    if (_s1.data && _s1.data.length) await db.collection('settings').doc(_s1.data[0]._id).update({ data: { value: _ak } });
+    else await db.collection('settings').add({ data: { key: 'lastMallKeys', value: _ak } });
+  } catch (e) { /* 记不上不影响导入本身 */ }
   const toAdd = [];
   const toUpdate = [];
   customers.forEach(c => {
@@ -3713,14 +3724,25 @@ async function createMallCustomer(event) {
 
 async function mallPairList(event) {
   const limit = Math.min(Math.max(Number((event && event.limit) || 300), 1), 500);
-  // ⚠️⚠️ 2026-10-12 老板定（原话）：「我**导入之后**，你出现一个列表，把我**导入客户的信息**与系统内客户的信息进行匹配」
-  //   → 要的是**我这次导入的这批**。所以这里**只看最近一批**（`mall_claims.batchAt` 最大的那批；
-  //     **一次导入 = 一个 batchAt**），**历史旧账不混进来**（老板定：旧账先不管）。
-  const cl = await db.collection('mall_claims').where({ status: 'pending' })
-    .orderBy('batchAt', 'desc').limit(limit).get().catch(() => ({ data: [] }));
-  const allRows = cl.data || [];
-  if (!allRows.length) return { ok: true, total: 0, groups: [] };
-  const latestBatch = Number(allRows[0].batchAt) || 0;
+  // ⭐⭐ 2026-10-12【最终定案】：**只看「最近一次导入的那份名单」**（`settings.lastMallKeys`）——
+  //   没导入过 / 名单为空 → **返回空列表**。
+  //   老板原话：「我还没开始导入，你这里就冒出来 100 条了」—— 就是这个毛病：
+  //   原来读的是"待确认表里最近一批"，而那张表里躺着历史旧账 → **没导入也是几百条**。
+  //   ⚠️ 这份名单由「导入」写（`importMallCustomers` 的最后一片带 `allKeys` 上来），
+  //      它是**唯一可信的"本批"来源** —— 时间戳 / importBatch / 排序都靠不住（全试过了）。
+  const _sk = await db.collection('settings').where({ key: 'lastMallKeys' }).limit(1).get().catch(() => ({ data: [] }));
+  const _keys = (((_sk.data || [])[0] || {}).value) || [];
+  if (!Array.isArray(_keys) || !_keys.length) return { ok: true, total: 0, groups: [], noImport: true };
+  // 按这批 key 取（⚠️ 云开发 _.in 有上限 → 每批 80 个）
+  const allRows = [];
+  for (let i = 0; i < _keys.length; i += 80) {
+    const cl = await db.collection('mall_claims')
+      .where({ status: 'pending', mallKey: _.in(_keys.slice(i, i + 80)) })
+      .get().catch(() => ({ data: [] }));
+    (cl.data || []).forEach(x => allRows.push(x));
+  }
+  if (!allRows.length) return { ok: true, total: 0, groups: [], noImport: false };
+  const latestBatch = Math.max.apply(null, allRows.map(x => Number(x.batchAt) || 0).concat([0]));
   const claims = allRows.filter(x => (Number(x.batchAt) || 0) === latestBatch);
   const skippedHistory = allRows.length - claims.length;   // 被过滤掉的历史旧账条数（只报个数，不显示）
 

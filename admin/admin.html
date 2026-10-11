@@ -11736,6 +11736,11 @@ async function confirmMallImport() {
       $('mallConfirm').textContent = `导入中 ${i + 1}/${chunks.length}…`;
       const r = await api('importMallCustomers', {
         customers: chunks[i], chunkIndex: i, chunkTotal: chunks.length,
+        // ⭐ 2026-10-12【定案】：**最后一片把整批名单带上** —— 云端会把这份名单记下来，
+        //   「🛒 商城配对确认」的列表与角标**只按这份名单取**（没导入过就是空的）。
+        allKeys: (i === chunks.length - 1)
+          ? mallRows.map(x => String(x.mallKey || '').trim()).filter(Boolean)
+          : undefined,
         fileName: this.mallFileName || ''
       });
       if (!r.ok) throw new Error(r.msg || '导入失败');
