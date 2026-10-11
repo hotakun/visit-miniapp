@@ -3160,16 +3160,37 @@ async function runMallMatch(event) {
     nAddr: normAddr(v.address),
     phones: [v.phone, v.phone2].map(p => String(p || '').trim()).filter(Boolean)
   }));
+  // ⭐⭐ 2026-10-12 老板定【核心修正】：老板原话「我导入之后，你出现一个列表，把我**导入客户的信息**
+  //   与系统内客户的信息进行匹配」→ **比对的主体是"这次导入的那几家商城客户"（一家都不能漏）**，
+  //   对每一家去**系统里**找最像的。
+  //   ⚠️ 旧逻辑**方向反了**（拿"系统内客户"去整个商城库找）→ 两个病：
+  //      ① 冒出跟本次导入无关的配对 —— 老板看到「上海脆皮薄饼」「酸汤猪脚」一脸懵；
+  //      ② 本次导入的店只要分数不够（<45），**一条都不出现** —— 老板："该搜的没搜"。
+  //   ⚠️ 本批怎么认：前端导入完调本接口时把**本批的 mallKey 列表**带过来（`event.mallKeys`）；
+  //      没带就退回旧行为（全商城库），保证别处调它不会坏。
+  const _myKeys = (event && Array.isArray(event.mallKeys) && event.mallKeys.length) ? event.mallKeys : null;
+  const _myPool = _myKeys ? mallPool.filter(x => _myKeys.indexOf(x.m.mallKey) >= 0) : mallPool;
   let autoMatched = 0;
   let dynamicRefreshed = 0;
   let staticChangedCnt = 0;
   const pendingList = [];
+  const noMatchList = [];      // ⭐ 本批里"系统内没找到像的"那几家 —— **也要进列表**（前端给「➕ 新建」），一家都不漏
   const autoUpdates = [];
-  vPool.forEach(({ v, nName, nAddr, phones }) => {
-    let best = { score: 0, reason: '', mall: null };
-    for (const { m, nName: mn, nAddr: ma } of mallPool) {
+  _myPool.forEach(({ m, nName: mn, nAddr: ma }) => {
+    let best = { score: 0, reason: '', mall: m, v: null };
+    for (const { v, nName, nAddr, phones } of vPool) {
       const r = matchMall(v, m, nName, nAddr, phones, mn, ma);
-      if (r.score > best.score) best = r;
+      if (r.score > best.score) best = Object.assign({}, r, { v: v });
+    }
+    // ⭐ 本批每一家都留痕：够像（≥45）→ 走下面的确认流程；不够像 → 进 noMatchList（列表里给「新建」）
+    if (!best.v || best.score < 45) {
+      noMatchList.push({
+        mallKey: m.mallKey, mallName: m.name,
+        mallPhone: m.phone || '', mallAddress: m.address || '', mallRegion: m.region || '',
+        score: best.score || 0, reason: best.reason || '系统内没找到像的',
+        status: 'pending', batchAt: now, createdAt: now
+      });
+      return;
     }
     // ⚠️⚠️ 2026-10-11 老板定【口径变更】：**导入商城表后不再自动认领** —— 全部改成人工确认。
     //   旧逻辑「≥75 分自动认领」**已作废**（老板："自动配掉的看不见，配错了也不会知道"）。
@@ -3193,18 +3214,20 @@ async function runMallMatch(event) {
       //   置 mallPending:false + customerType:'mall' —— 此刻**注册商城时间 / 关联（签约）业务员 / 客户编号**全都齐了，
       //   以后的销售订单也接得上。
       //   （以前靠「待商城建档」页那个手动按钮抹标记 —— 已按老板要求去掉，见 fieldDone 注释）
-      if (v.source === 'field') {
+      if (best.v.source === 'field') {
         _data.mallPending = false;
         _data.customerType = 'mall';
         _data.mallPendingDoneAt = now;
       }
-      autoUpdates.push({ v, data: _data });
-    } else if (best.score >= 45 && best.mall) {
+      autoUpdates.push({ v: best.v, data: _data });
+    } else if (best.v) {
+      // ⚠️ 2026-10-12：主体换成"本批商城客户"后，这里记录「商城那条 ↔ 系统内那家」的确认项
+      //   —— mallPairList 直接读它，保证"你导入的每一家"都出现在列表里。
       pendingList.push({
-        customerId: v._id, customerName: v.name,
+        customerId: best.v._id, customerName: best.v.name,
         mallKey: best.mall.mallKey, mallName: best.mall.name,
+        mallPhone: best.mall.phone || '', mallAddress: best.mall.address || '', mallRegion: best.mall.region || '',
         score: best.score, reason: best.reason,
-        batchId: batchId || '', // 2026-09-08：待确认归属批次（批次卡上的待确认清单只显示本批）
         status: 'pending', batchAt: now, createdAt: now
       });
     }
@@ -3240,6 +3263,15 @@ async function runMallMatch(event) {
   for (let i = 0; i < pendingList.length; i += BATCH) {
     await Promise.all(pendingList.slice(i, i + BATCH).map(async p => {
       const old = await db.collection('mall_claims').where({ customerId: p.customerId, status: 'pending' }).get();
+      await Promise.all(old.data.map(o => db.collection('mall_claims').doc(o._id).remove()));
+      await db.collection('mall_claims').add({ data: p });
+    }));
+  }
+  // ⭐ 2026-10-12：本批里「系统内没找到像的」那几家 —— **也要落库**（按 mallKey 去重，同一家只留最新一条）。
+  //   它们不带 customerId（还没对应到系统内客户）→ 前端会显示成「系统里没有 → ➕ 新建这条客户」那一组。
+  for (let i = 0; i < noMatchList.length; i += BATCH) {
+    await Promise.all(noMatchList.slice(i, i + BATCH).map(async p => {
+      const old = await db.collection('mall_claims').where({ mallKey: p.mallKey, status: 'pending' }).get();
       await Promise.all(old.data.map(o => db.collection('mall_claims').doc(o._id).remove()));
       await db.collection('mall_claims').add({ data: p });
     }));
