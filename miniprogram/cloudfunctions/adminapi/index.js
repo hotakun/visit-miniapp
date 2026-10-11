@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'mallPairList', 'bizSuggest', 'createMallCustomer', 'geocode', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'mallPairList', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -753,7 +753,8 @@ exports.main = async (event) => {
     if (action === 'exportTasksForSync') return await exportTasksForSync(event);
     if (action === 'exportVisitedCustomers') return await exportVisitedCustomers(event);
     if (action === 'exportVisitsForSync') return await exportVisitsForSync(event);   // ⭐ 2026-10-11：拜访**明细**导出（给 pgsync）
-    if (action === 'applyMallPair') return await applyMallPair(event);              // ⭐ 2026-10-11：商城**人工配对**的合并（「🛒 商城配对确认」页用）
+    if (action === 'applyMallPair') return await applyMallPair(event);
+    if (action === 'fixDupCustomers') return await fixDupCustomers(event);              // ⭐ 2026-10-11：商城**人工配对**的合并（「🛒 商城配对确认」页用）
     if (action === 'mallPairList') return await mallPairList(event);                // ⭐ 2026-10-11：配对确认页的**候选清单**（只读）
     if (action === 'bizSuggest') return await bizSuggest(event);                    // ⭐ 2026-10-11：按坐标给**商圈建议**（200→500 米）
     if (action === 'createMallCustomer') return await createMallCustomer(event);    // ⭐ 2026-10-11：新建「已加入商城」客户（**经纬度必填**）
@@ -3791,6 +3792,41 @@ async function mallPairList(event) {
     return g[k];
   }).sort((a, b) => ((b.cands[0] || {}).score || 0) - ((a.cands[0] || {}).score || 0));
   return { ok: true, total: claims.length, skippedHistory: skippedHistory, groups: groups.slice(0, 100) };
+}
+
+// ⭐⭐ 2026-10-12 老板定：把被误改的客户**按 id 名单还原**（原名 / 原电话 / 原地址 / 取消「已加入商城」）。
+//   背景：一批金华各地的「沙县小吃」被某次操作**改成了同一个名字「沙县小吃 余」、还标成已入商城** ——
+//   老板要求「重新跟两个文件的经纬度匹配，还原本来信息」。
+//   ⚠️ **只认传进来的这几条 id** —— **绝不扫全表**（老板最担心的就是"动用几十万条"；
+//      这个接口只按 id 逐个 update，十几条 = **几分钱**）。
+async function fixDupCustomers(event) {
+  const rows = Array.isArray(event && event.rows) ? event.rows : [];
+  if (!rows.length) return { ok: false, code: 'BAD_ARG', msg: '没有要修复的数据' };
+  const now = Date.now();
+  let done = 0, fail = 0;
+  const failedIds = [];
+  for (const r of rows) {
+    if (!r || !r.id) { fail++; continue; }
+    try {
+      const data = { updatedAt: now };          // 增量同步靠它（少了后台缓存不会更新）
+      if (r.name) { data.name = String(r.name).trim(); data.nameRaw = data.name; }
+      if (r.phone !== undefined) data.phone = String(r.phone || '').trim();
+      if (r.address) data.address = String(r.address).trim();
+      if (r.region) data.region = String(r.region).trim();
+      // ⚠️ 还原「这条本来没进商城」：清掉上次误写的商城标记
+      if (r.unmall) {
+        data.customerType = 'new';
+        data.mallKey = '';
+        data.mallCode = '';
+        data.mallPending = true;
+        data.mallMatchedAt = 0;
+        data.mallJoinedAt = '';
+      }
+      await db.collection('customers').doc(r.id).update({ data: data });
+      done++;
+    } catch (e) { fail++; failedIds.push(r.id); }
+  }
+  return { ok: true, done: done, fail: fail, failedIds: failedIds };
 }
 
 async function applyMallPair(event) {
