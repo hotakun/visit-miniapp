@@ -106,6 +106,8 @@ async function round() {
   try { await syncCustomerBatches(); } catch (e) { console.error('[sync] customer_batches 同步失败（下轮再试）:', e.message); }
   try { await syncTasks(); } catch (e) { console.error('[sync] tasks 同步失败（下轮再试）:', e.message); }
   try { await syncVisitedCustomers(); } catch (e) { console.error('[sync] visited_customers 同步失败（下轮再试）:', e.message); }
+  // ⭐ 2026-10-11 老板定：「📝 拜访记录」两页改走轻量服务器 → 拜访**明细**也进 PG
+  try { await syncVisits(); } catch (e) { console.error('[sync] visits 同步失败（下轮再试）:', e.message); }
 }
 
 // ⭐⭐ 2026-10-10 老板定（批次「指针表」模式）第 2 步：**同步 batch_members 进 PG**。
@@ -208,6 +210,35 @@ async function syncTasks() {
   }
   await upsert('tasks', ['id', 'status', 'deadline', 'customer_ids', 'updated_at'], rows);
   console.log('[sync] tasks 同步 ' + rows.length + ' 个未结束任务');
+}
+
+// ⭐ 2026-10-11 老板定：「📝 拜访记录」两个页签改走轻量服务器（点「🔄 刷新」来这里拉，不花云开发的量）。
+//   把**拜访明细**同步进 PG —— 数据来自 adminapi.exportVisitsForSync（按 _id 游标分页）。
+//   ⚠️ **每轮先 DELETE 再全量拉**（和 batch_members 同一道理）：老板刚要求「能删拜访」，
+//      而**增量同步感知不到删除**（删掉的那条会永远留在 PG 里当幽灵）→ 全量最稳。
+//   ⚠️ 用游标（after = 上一页最后一条 id），**不用 skip**（没索引时越翻越慢，踩过）。
+async function syncVisits() {
+  const c = await conn();
+  await c.query('DELETE FROM visits');
+  let after = '', total = 0;
+  for (let i = 0; i < 60; i++) {                     // 一次最多 6 万条，防跑太久
+    const r = await callCloud('exportVisitsForSync', { after, limit: 1000 });
+    if (!r || !r.ok) throw new Error('exportVisitsForSync 返回异常: ' + JSON.stringify(r).slice(0, 160));
+    const list = r.rows || [];
+    if (list.length) {
+      await upsert('visits',
+        ['id', 'customer_id', 'salesman_id', 'salesman_name', 'visited_at', 'task_id', 'free_trip_id',
+          'result', 'status', 'duration', 'remark', 'samples', 'audios', 'photos', 'created_at', 'updated_at'],
+        list.map(x => [x.id, x.customerId, x.salesmanId, x.salesmanName, x.visitedAt, x.taskId, x.freeTripId,
+        x.result, x.status, x.duration, x.remark, x.samples,
+        JSON.stringify(x.audios || []), JSON.stringify(x.photos || []), x.createdAt, x.updatedAt]));
+      total += list.length;
+      after = r.last || ((list[list.length - 1] || {}).id || '');
+    }
+    if (!r.hasMore || !list.length) break;
+    await sleep(200);
+  }
+  console.log(`[sync] visits 同步 ${total} 条（全量重拉）`);
 }
 
 async function syncVisitedCustomers() {

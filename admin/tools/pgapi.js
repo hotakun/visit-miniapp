@@ -163,6 +163,46 @@ const srv = http.createServer(async (req, res) => {
       const r = await q('SELECT count(*)::int AS n, max(updated_at) AS w FROM customers');
       return out(res, 200, { ok: true, count: r.rows[0].n, watermark: Number(r.rows[0].w) || 0, at: Date.now() });
     }
+    // ⭐ 2026-10-11 老板定：「📝 拜访记录」两页改走轻量服务器（点「🔄 刷新」来这里拉，不花云开发的量）。
+    //   一个路由三个功能（kind 区分）：
+    //     · daily（默认）近 N 天汇总：每天 拜访家数 / 去重客户数 / 去重业务员数
+    //     · day=YYYY-MM-DD 某天明细（前端按业务员分组；顺带带客户名/编号）
+    //     · shop 近 N 天新店（现场录入 source='field'）
+    //   ⚠️ 后台 server.js 的 /visitrec 优先读这里；读不到 / 出错 → 自动回退云开发。
+    if (u.pathname === '/visitrec') {
+      const kind = u.searchParams.get('kind') || 'daily';
+      const days = Math.min(Math.max(Number(u.searchParams.get('days')) || 7, 1), 31);
+      const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+      const fromMs = new Date(today + 'T00:00:00+08:00').getTime() - (days - 1) * 86400000;
+      const from = new Date(fromMs + 8 * 3600 * 1000).toISOString().slice(0, 10);   // 'YYYY-MM-DD'（北京）
+      if (kind === 'day') {
+        const day = String(u.searchParams.get('day') || today).slice(0, 10);
+        const rows = await q(
+          'SELECT v.id, v.customer_id AS "customerId", v.salesman_id AS "salesmanId", v.salesman_name AS "salesmanName",' +
+          ' v.result, v.status, v.duration, v.remark, v.samples, v.audios, v.photos, v.updated_at AS "at",' +
+          ' c.name, c.name_raw AS "nameRaw", c.mall_code AS "mallCode"' +
+          ' FROM visits v LEFT JOIN customers c ON c.id = v.customer_id' +
+          " WHERE v.visited_at = $1 AND v.status IN ('normal','pending_review')" +
+          ' ORDER BY v.updated_at ASC', [day]);
+        return out(res, 200, { ok: true, from: 'pg', day: day, total: rows.length, rows: rows });
+      }
+      if (kind === 'shop') {
+        const list = await q(
+          "SELECT to_char(to_timestamp(created_at/1000) AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') AS day," +
+          ' count(*)::int AS n,' +
+          " count(*) FILTER (WHERE mall_pending IS TRUE)::int AS pending" +
+          " FROM customers WHERE source = 'field' AND deleted IS NOT TRUE AND created_at >= $1" +
+          ' GROUP BY 1 ORDER BY 1 DESC', [fromMs]);
+        return out(res, 200, { ok: true, from: 'pg', list: list });
+      }
+      const list = await q(
+        'SELECT visited_at AS day, count(*)::int AS visits,' +
+        ' count(DISTINCT customer_id)::int AS customers, count(DISTINCT salesman_id)::int AS salesmen' +
+        " FROM visits WHERE visited_at >= $1 AND status IN ('normal','pending_review')" +
+        ' GROUP BY visited_at ORDER BY visited_at DESC', [from]);
+      return out(res, 200, { ok: true, from: 'pg', list: list });
+    }
+
     // ⭐⭐ 2026-10-10 指针表模式：批次页数据 —— 输出与云端 `listCustomerBatches` **同构**，
     //   后台 server.js 的 `/batches` 优先读这里（免费、秒出），读不到自动回退云开发。
     //   ⚠️ 所有统计一律从 batch_members 算（customers.batch_ids 已废弃）。
