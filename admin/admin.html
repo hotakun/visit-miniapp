@@ -768,9 +768,6 @@ tr.row-off td:not(.keep){opacity:.4}
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
           <button class="btn primary" onclick="startExcelImport()">📥 从表格重新导入</button>
-          <!-- ⭐ 2026-10-11 老板定：「🛒 商城配对确认」搬到**导入页**（导入 → 配对确认是一条链，同页最顺）。
-               原来错放在「🗃️ 批次管理」页 —— 老板："我要导入商城信息，你怎么又搞到批次管理去了？" -->
-          <button class="btn primary" id="claimBtn" style="display:none" onclick="openClaims()">🛒 商城配对确认<span class="badge" id="claimBadge" style="display:none"></span></button>
           <span class="sb-d" id="xlsImpMsg" style="flex:1;min-width:200px"></span>
         </div>
         <div id="xlsImpBarWrap" style="display:none;max-width:560px;margin-top:10px">
@@ -1544,6 +1541,10 @@ tr.row-off td:not(.keep){opacity:.4}
              ③ 比对上才把商城字段倒进客户档案、并转成"已入商城"（**坐标永不动**，"经纬度以现场为准"）。 -->
         <span class="mall-last" id="mallLastAt">上次导入：—</span>
         <button class="btn ghost btn-sm" onclick="openMallImport()">🛒 导入所有客户列表</button>
+        <!-- ⭐ 2026-10-12 老板定（**归位**）：这一页本来就是"导入 → 比对 → 合并"整条链的家
+             （老板 2026-10-07 原话"一个页面才符合逻辑"）。今天老板又问："为什么一件事情我要分别到两个
+             不同的页面去操作？" → 「🛒 商城配对确认」搬回这里（我 10-11 把它放到「📥 导入信息」页，是错的）。 -->
+        <button class="btn primary btn-sm" id="claimBtn" style="display:none" onclick="openClaims()">🛒 商城配对确认<span class="badge" id="claimBadge" style="display:none"></span></button>
         <button class="btn primary btn-sm" onclick="openMallMatchForField()">🔎 与商城库比对</button>
       </div>
       <div class="card" style="padding:0">
@@ -2657,13 +2658,12 @@ function nav(p) {
   // ⭐ 2026-09-28 晚 老板定：进入消息中心 → 实时拉数据（**不是"读过了就清零"**）
   if (p === 'msg') loadMsgCenter();
   // ⭐ 2026-09-28 晚：「⏳ 待商城建档」页 → 拉一次列表
-  if (p === 'field') { loadFieldList(); loadLastMallImport(); }   // ⭐ 2026-10-07：这页现在也管"导入"，顺手带出上次导入时间
-  if (p === 'import') { loadLastMallImport(); loadClaims(); }     // ⭐ 2026-10-11：配对确认搬到这页 → 进来就拉一次（角标也跟着更新）
+  if (p === 'field') { loadFieldList(); loadLastMallImport(); loadClaims(); }   // ⭐ 2026-10-12：本页是"导入→比对→合并"一条链 → 进来顺手拉一次待配对（角标也跟着更新）
   // 顶部导航：仅回访工作台的**批次管理**页（内部 id=customers）显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
   $('topActions').style.display = (p === 'customers' && curMode === 'mall') ? 'flex' : 'none';
-  // ⭐ 2026-10-11 老板定：「🛒 商城配对确认」的入口在**导入页**（导入 → 配对确认 一条链，同页最顺）；
-  //   统一在这里控制显隐（原先是塞在批次管理页的工具栏里，位置不对）
-  $('claimBtn').style.display = (p === 'import' && curMode !== 'new') ? '' : 'none';
+  // ⭐ 2026-10-12 老板定（归位）：「🛒 商城配对确认」在**「⏳ 待商城建档」页** ——
+  //   那页本来就是"导入 → 比对 → 合并"整条链的家（老板 2026-10-07 定的）。
+  $('claimBtn').style.display = (p === 'field' && curMode !== 'new') ? '' : 'none';
   if (p === 'customers') {
     // 两工作台各自文案与按钮（2026-09-07 批次化：回访=批次卡片列表；新客=原客户表格）
     const isNew = curMode === 'new';
