@@ -11801,15 +11801,23 @@ function renderClaimList() {
   }
   // ⭐ 2026-10-11 新口径：一行 = 一个**商城客户**，右边列出**系统候选**（分数从高到低），老板点「就是这家」即合并。
   $('claimList').innerHTML = claimGroups.map((g, gi) => {
+    // ⚠️⚠️ 2026-10-12 老板报障（三处，都对着演示稿修）：
+    //   ① 候选里要能看出**有没有坐标**（没坐标 = 业务员导航不到）—— 演示稿里就写着"已有坐标"
+    //   ② **有候选时也要留着「新建」入口**（"都不像 → 才新建"）—— 我上一轮把它挤掉了
+    //   ③ 「新建」入口回来之后，里面的【🔍 搜索周围相似的店】才够得着（老板说"输入经纬度后还能再筛"就指它）
     const cands = (g.cands || []).map((c, ci) => `
       <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid #EDF1F7;border-radius:9px;margin-bottom:6px;background:${ci === 0 ? '#FFF9F6' : '#fff'}">
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:13px">${esc(c.customerName)}${c.mallCode ? ' <span style="color:#A8B0BB;font-size:12px;font-weight:400">' + esc(c.mallCode) + '</span>' : ''}</div>
           <div style="font-size:12px;color:var(--sub)">${esc(c.customerRegion || '')} · ${esc(c.customerAddress || '')} · ${esc(c.customerPhone || '')}${c.customerPhone2 ? ' / ' + esc(c.customerPhone2) : ''}</div>
-          <div style="font-size:11px;color:#98A2AE;margin-top:2px">${esc(c.reason || '')} · ${c.score} 分</div>
+          <div style="font-size:11px;color:#98A2AE;margin-top:2px">${esc(c.reason || '')} · ${c.score} 分 · ${c.lat ? '<span style="color:#12A150">✓ 有坐标</span>' : '<span style="color:#D64545">⚠ 没坐标（业务员到不了）</span>'}</div>
         </div>
         <button class="btn ghost" style="height:26px;font-size:12px;color:var(--green);flex:none" onclick="pairConfirm(${gi},'${c.customerId}')">✓ 就是这家</button>
-      </div>`).join('');
+      </div>`).join('') +
+      // ⭐ 2026-10-12：**有候选也留着"新建"**（都不是 → 才新建）—— 演示稿里就是这条「都不像 → 继续新建」
+      '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px dashed #E3E8EF;border-radius:9px;background:#FAFBFC">' +
+      '<div style="flex:1;min-width:0;font-size:12.5px;color:var(--sub)">都不是？那就按商城这条<b>新建</b>（🔴 经纬度必填，填完还能<b>搜周围相似的店</b>再确认一次）</div>' +
+      '<button class="btn p" style="height:26px;font-size:12px;flex:none" onclick="mallNewOpen(' + gi + ')">➕ 新建这条客户</button></div>';
     return `<div style="border:1px solid #EDF1F7;border-radius:12px;margin-bottom:12px;overflow:hidden">
       <div style="padding:8px 12px;background:#F8F9FB;border-bottom:1px solid #EDF1F7;font-size:12.5px;color:var(--sub)">
         <b style="color:#1F2430">商城导入的</b>：${esc(g.mallName || '(未填店名)')}

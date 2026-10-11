@@ -3668,7 +3668,7 @@ async function mallPairList(event) {
   for (let i = 0; i < cids.length; i += 20) {
     const chunk = cids.slice(i, i + 20);
     const cr = await db.collection('customers').where({ _id: _.in(chunk) }).limit(200)
-      .field({ name: true, nameRaw: true, phone: true, phone2: true, address: true, region: true, mallCode: true })
+      .field({ name: true, nameRaw: true, phone: true, phone2: true, address: true, region: true, mallCode: true, lat: true, lng: true })
       .get().catch(() => ({ data: [] }));
     (cr.data || []).forEach(c => { cMap[c._id] = c; });
   }
@@ -3689,6 +3689,8 @@ async function mallPairList(event) {
       customerId: x.customerId, customerName: c.name || c.nameRaw || x.customerName || '',
       customerPhone: c.phone || '', customerPhone2: c.phone2 || '',
       customerAddress: c.address || '', customerRegion: c.region || '', mallCode: c.mallCode || '',
+      // ⚠️ 2026-10-12 老板要：候选上必须能看出**这家有没有坐标**（没坐标 = 业务员导航不到这家店）
+      lat: Number(c.lat) || 0, lng: Number(c.lng) || 0,
       score: x.score || 0, reason: x.reason || ''
     });
   });
