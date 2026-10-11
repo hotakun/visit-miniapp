@@ -3839,6 +3839,11 @@ async function fixDupCustomers(event) {
         data.mallCode = '';
         data.mallJoinedAt = '';
         data.mallSalesman = '';
+        // ⚠️⚠️ 2026-10-12 老板截图（「业务员信息怎么还在呢？没有清理干净吧」）—— 补漏：
+        //   `mallFieldsFrom` 除了写 `mallSalesman`，**还会把它同时写进 `salesman`**
+        //   （= 后台详情页那个「业务员」格，2026-10-03 老板定的"导入时被盖"）—— 我上一版清单漏掉了它，
+        //   所以客户详情页"业务员"那栏还挂着"快餐盒c聚火配送🔥"。
+        data.salesman = '';
         data.mallLevel = '';
         data.mallSource = '';
         data.mallTags = '';
