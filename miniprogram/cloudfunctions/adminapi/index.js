@@ -3188,9 +3188,15 @@ async function runMallMatch(event) {
   //   这里取**最大的那个** = 最近一次导入 → 只比这一批。**完全不依赖前端传参**
   //   （原来那条"最后一片由前端再调比对"的路，前端压根没走 —— 这也是"导入完列表里啥都没有"的原因）。
   //   ⚠️ 老数据（没有 importBatch 的）→ 退回旧行为（全商城库），保证不炸。
-  const _allB = mallPool.map(x => Number(x.m.importBatch) || 0);
-  const _latestB = _allB.length ? Math.max.apply(null, _allB) : 0;
-  const _myPool = _latestB ? mallPool.filter(x => (Number(x.m.importBatch) || 0) === _latestB) : mallPool;
+  //   ⭐⭐ 最可靠的一招（2026-10-12 晚定）：**直接用"这次导入进来的那些 key"** ——
+  //   导入函数调本接口时，`event.items` 就是**这一批解析出来的商城客户**（mallKey 全在），
+  //   比时间戳/批次标记都准。
+  //   ⚠️ 教训：原来靠 `mall_customers.importBatch` 认本批 —— 那个标记**没落上**（老客户走 toUpdate 分支、
+  //      内容没变时根本不写库）→ 退回"比全库" → 老板截图就看到 300 条无关配对。
+  const _keys = ((event && event.items) || []).map(x => String((x && x.mallKey) || '').trim()).filter(Boolean);
+  const _set = {};
+  _keys.forEach(k => { _set[k] = 1; });
+  const _myPool = _keys.length ? mallPool.filter(x => _set[x.m.mallKey]) : mallPool;
   let autoMatched = 0;
   let dynamicRefreshed = 0;
   let staticChangedCnt = 0;
