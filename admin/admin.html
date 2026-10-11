@@ -11969,11 +11969,22 @@ async function pairConfirm(gi, customerId) {
   const g = claimGroups[gi] || {};
   const c = (g.cands || []).find(function (x) { return x.customerId === customerId; }) || {};
   let cLat = 0, cLng = 0, cBiz = '', pts = [];
+  // ⚠️⚠️ 2026-10-12 修（老板截图：合并预览里「系统内的」店名/电话/地址**全是空的**）：
+  //   原来只从本地缓存补了「经纬度/商圈」，名字/电话/地址靠 `cands` 自带的字段 ——
+  //   而那条候选可能来自**云端旧通道**（字段不全）→ 预览里就一排空。
+  //   ✅ 现在**系统那侧的字段一律从本地缓存现查**（按 customerId 取），不信任 cands 带来的值。
   try {
     const loc = await ensureCustLocal();
     pts = (loc && loc.points) || [];
     const p = pts.find(function (x) { return x.i === customerId; });
-    if (p) { cLat = p.la || 0; cLng = p.ln || 0; cBiz = p.b || ''; }
+    if (p) {
+      cLat = p.la || 0; cLng = p.ln || 0; cBiz = p.b || '';
+      c.customerName = p.nr || p.n || c.customerName || '';
+      c.customerPhone = p.ph || c.customerPhone || '';
+      c.customerAddress = p.ad || c.customerAddress || '';
+      c.customerRegion = p.rg || c.customerRegion || '';
+      c.mallCode = p.mc || c.mallCode || '';
+    }
   } catch (e) { }
   // 电话：商城 = 1、系统 = 2；相同只留一个；三个不同 → 只留「商城的 + 系统的第一个」
   const mp = String(g.mallPhone || '').trim(), sp = String(c.customerPhone || '').trim(), sp2 = String(c.customerPhone2 || '').trim();
