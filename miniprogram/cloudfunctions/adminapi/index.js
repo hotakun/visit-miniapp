@@ -3021,7 +3021,10 @@ async function importMallCustomers(event) {
       address: String(c.address || '').trim(), phone: String(c.phone || '').trim(),
       addedAt: c.addedAt || '', lastOrderAt: c.lastOrderAt || '', lastBrowseAt: c.lastBrowseAt || '',
       tags: c.tags || '', category: c.category || '', salesman: c.salesman || '',
-      source: c.source || '', level: c.level || '', updatedAt: now
+      source: c.source || '', level: c.level || '', updatedAt: now,
+      // ⭐ 2026-10-12：**打上"这是哪一次导入进来的"** —— runMallMatch 靠它认"本次导入的那几家"
+      //   （老板：「你按照我导入的信息去匹配」）。同一批共用一个时间戳，取最大的就是最近一批。
+      importBatch: now
     };
     const old = existMap[key];
     if (!key || !old) { toAdd.push(doc); existMap[key] = doc; }
@@ -3043,17 +3046,16 @@ async function importMallCustomers(event) {
     updated += toUpdate.slice(i, i + BATCH).length;
   }
 
-  // 分片模式：非最后一片只入库；最后一片由前端再调 runMallMatch 比对认领
+  // ⚠️⚠️ 2026-10-12【老板实测报障的真凶】：原来这里"最后一片"**直接 return、压根不比对** ——
+  //   注释写着"由前端再调 runMallMatch"，但**前端从来没调过**（全项目 grep 只有注释、没有调用点）。
+  //   所以老板导入完，配对列表里"该搜的没搜"、只剩一堆旧数据。
+  //   ✅ 现在：**最后一片入库后就地比对**（runMallMatch 自己认"最近导入的那一批"，不需要前端传参）。
+  //   ⚠️ 耗时反而更小了：原来是 几千系统客户 × 几千商城客户，现在是 几千 × 本批几家。
   if (chunkTotal && chunkIndex !== chunkTotal - 1) {
     return { ok: true, chunk: true, added: toAdd.length, updated };
   }
-  if (chunkTotal) {
-    // 最后一片：入库完成，比对另起（避免本函数超时）
-    return { ok: true, chunk: true, last: true, added: toAdd.length, updated };
-  }
-  // 兼容单次调用（小数据量）：直接入库 + 比对
   const matchRes = await runMallMatch(event);
-  return { ok: true, added: toAdd.length, updated, ...matchRes };
+  return { ok: true, added: toAdd.length, updated, ...(chunkTotal ? { chunk: true, last: true } : {}), ...matchRes };
 }
 
 // ⭐⭐ 2026-09-29【老板定：**商城库里的字段，有信息就全倒过来**】
@@ -3150,7 +3152,8 @@ async function runMallMatch(event) {
   const mallAll = await fetchAll('mall_customers', {}, {
     mallKey: true, mallCode: true, name: true, region: true, address: true, phone: true,
     addedAt: true, lastOrderAt: true, lastBrowseAt: true,
-    tags: true, category: true, salesman: true, source: true, level: true
+    tags: true, category: true, salesman: true, source: true, level: true,
+    importBatch: true      // ⭐ 2026-10-12：认"本次导入的那几家"（下面的 _myPool 用它）
   });
   // 预规范化：双重循环内不再对同一字符串反复清洗（曾 15 万次 pair × 4 次正则清洗超时 -601008）
   const mallPool = mallAll.map(m => ({ m, nName: normName(m.name), nAddr: normAddr(m.address) }));
@@ -3168,8 +3171,13 @@ async function runMallMatch(event) {
   //      ② 本次导入的店只要分数不够（<45），**一条都不出现** —— 老板："该搜的没搜"。
   //   ⚠️ 本批怎么认：前端导入完调本接口时把**本批的 mallKey 列表**带过来（`event.mallKeys`）；
   //      没带就退回旧行为（全商城库），保证别处调它不会坏。
-  const _myKeys = (event && Array.isArray(event.mallKeys) && event.mallKeys.length) ? event.mallKeys : null;
-  const _myPool = _myKeys ? mallPool.filter(x => _myKeys.indexOf(x.m.mallKey) >= 0) : mallPool;
+  //   本批怎么认（2026-10-12 定稿）：导入时给每一家的 doc 都打了 `importBatch`（= 那次导入的时间戳），
+  //   这里取**最大的那个** = 最近一次导入 → 只比这一批。**完全不依赖前端传参**
+  //   （原来那条"最后一片由前端再调比对"的路，前端压根没走 —— 这也是"导入完列表里啥都没有"的原因）。
+  //   ⚠️ 老数据（没有 importBatch 的）→ 退回旧行为（全商城库），保证不炸。
+  const _allB = mallPool.map(x => Number(x.m.importBatch) || 0);
+  const _latestB = _allB.length ? Math.max.apply(null, _allB) : 0;
+  const _myPool = _latestB ? mallPool.filter(x => (Number(x.m.importBatch) || 0) === _latestB) : mallPool;
   let autoMatched = 0;
   let dynamicRefreshed = 0;
   let staticChangedCnt = 0;
