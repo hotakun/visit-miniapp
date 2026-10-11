@@ -3193,7 +3193,11 @@ async function runMallMatch(event) {
   //   比时间戳/批次标记都准。
   //   ⚠️ 教训：原来靠 `mall_customers.importBatch` 认本批 —— 那个标记**没落上**（老客户走 toUpdate 分支、
   //      内容没变时根本不写库）→ 退回"比全库" → 老板截图就看到 300 条无关配对。
-  const _keys = ((event && event.items) || []).map(x => String((x && x.mallKey) || '').trim()).filter(Boolean);
+  //   ⚠️⚠️ 字段名是 **`customers`，不是 `items`** —— 见 importMallCustomers 的解构：
+  //       `const { customers, fileName, chunkIndex, chunkTotal } = event;`
+  //   写错字段名 → `_keys` 永远为空 → **静默退回"比全库"** → 又是几百条（本轮第二次栽在"没验证字段名"上）。
+  //   所以这里**两个都接**（customers 优先），以后改名也不会又静默失效。
+  const _keys = ((event && (event.customers || event.items)) || []).map(x => String((x && x.mallKey) || '').trim()).filter(Boolean);
   const _set = {};
   _keys.forEach(k => { _set[k] = 1; });
   const _myPool = _keys.length ? mallPool.filter(x => _set[x.m.mallKey]) : mallPool;
