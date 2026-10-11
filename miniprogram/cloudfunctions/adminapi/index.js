@@ -3720,6 +3720,21 @@ async function createMallCustomer(event) {
     if (dr.data && dr.data.length) await db.collection('settings').doc(dr.data[0]._id).update({ data: { value: now, updatedAt: now } });
     else await db.collection('settings').add({ data: { key: 'custDirtyAt', value: now, updatedAt: now } });
   } catch (e) { console.error('[createMallCustomer] 写变动信号失败', e); }
+  // ⚠️⚠️ 2026-10-12 修（老板：「我新建了"淮南牛肉汤ac"，新建之后也弹窗提示说新建成功，业务员能找到了，
+  //   但是这里还是显示存在。到底有没有新建成功呢？」）：
+  //   **建成功是真的**（业务员那边已经能搜到）—— 但它一直赖在「🛒 商城配对确认」列表里，
+  //   因为**这条对应的"待确认"记录没被收掉**。收法同 applyMallPair：**按 mallKey 收**（不区分当时配的是谁）。
+  try {
+    if (mk) {
+      const cl = await db.collection('mall_claims').where({ mallKey: mk, status: 'pending' }).limit(20).get();
+      for (const x of (cl.data || [])) {
+        await db.collection('mall_claims').doc(x._id).update({
+          data: { status: 'confirmed', resolvedAt: now, resolvedBy: (event._admin && event._admin.name) || '',
+                  byHand: true, byCreate: true }
+        });
+      }
+    }
+  } catch (e) { console.error('[createMallCustomer] 收尾 claims 失败（不影响建店）', e); }
   return { ok: true, customerId: add._id };
 }
 
