@@ -11834,10 +11834,12 @@ function renderClaimList() {
       '<div style="flex:1;min-width:0;font-size:12.5px;color:var(--sub)">都不是？那就按商城这条<b>新建</b>（🔴 经纬度必填，填完还能<b>搜周围相似的店</b>再确认一次）</div>' +
       '<button class="btn p" style="height:26px;font-size:12px;flex:none" onclick="mallNewOpen(' + gi + ')">➕ 新建这条客户</button></div>';
     return `<div style="border:1px solid #EDF1F7;border-radius:12px;margin-bottom:12px;overflow:hidden">
-      <div style="padding:8px 12px;background:#F8F9FB;border-bottom:1px solid #EDF1F7;font-size:12.5px;color:var(--sub)">
-        <b style="color:#1F2430">商城导入的</b>：${esc(g.mallName || '(未填店名)')}
-        <span style="color:#A8B0BB"> · ${esc(g.mallRegion || '')} · ${esc(g.mallAddress || '')} · ${esc(g.mallPhone || '无电话')}</span>
-        <span style="float:right">${(g.cands || []).length} 个候选</span>
+      <!-- ⚠️⚠️ 2026-10-12 老板定：「我商城导入的信息你灰色低调显示是错误的，这里反而要强调显示，用橙色」
+           —— 这一行是**主角**（你导入的那条）。改成**浅橙底 + 橙字粗体**强调。 -->
+      <div style="padding:8px 12px;background:#FFF7F1;border-bottom:1px solid #FBE0CF;font-size:12.5px">
+        <b style="color:#F5531C;font-weight:800">商城导入的</b><b style="color:#1F2430;font-weight:800">：${esc(g.mallName || '(未填店名)')}</b>
+        <span style="color:#98A2AE"> · ${esc(g.mallRegion || '')} · ${esc(g.mallAddress || '')} · ${esc(g.mallPhone || '无电话')}</span>
+        <span style="float:right;color:#F5531C;font-weight:700">${(g.cands || []).length} 个候选</span>
       </div>
       <!-- ⚠️⚠️ 2026-10-12 修（老板截图：右上角写着"7 个候选"，下面却显示"没找到相似客户 + 新建"）：
            上一轮我改这处时**把候选列表 cands 整个删掉了** → 无论有没有候选都只显示"新建"。
