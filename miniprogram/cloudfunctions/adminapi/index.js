@@ -3011,6 +3011,13 @@ async function importMallCustomers(event) {
   // ⭐ 2026-09-29：**与 MALL_FIELD_PAIRS 对齐（14 项）** —— 补 mallCode。
   //   mallCode（客户编号）是**订单匹配的钥匙**（orders.customerCode），以前解析端和这里都漏了它。
   const STATIC_FIELDS = ['mallCode', 'name', 'region', 'address', 'phone', 'tags', 'category', 'salesman', 'source', 'level'];
+  // ⭐ 2026-10-12：记下"最近一次导入是哪一批"（= 这一批的 importBatch 值）。
+  //   runMallMatch 靠它**只拉本批**（不拉全商城库）—— 否则必然 -601008（老板实测"导入中断"）。
+  try {
+    const _s0 = await db.collection('settings').where({ key: 'lastMallImportBatch' }).limit(1).get();
+    if (_s0.data && _s0.data.length) await db.collection('settings').doc(_s0.data[0]._id).update({ data: { value: now } });
+    else await db.collection('settings').add({ data: { key: 'lastMallImportBatch', value: now } });
+  } catch (e) { /* 记不上就退回全量比对，不影响导入本身 */ }
   const toAdd = [];
   const toUpdate = [];
   customers.forEach(c => {
@@ -3149,7 +3156,13 @@ async function runMallMatch(event) {
   visitCusts.forEach(v => { _seenV[v._id] = 1; });
   fieldCusts.forEach(v => { if (!_seenV[v._id]) visitCusts.push(v); });
   // ⭐ 2026-09-29：商城库字段**取全（14 个）** —— mallFieldsFrom 要按 MALL_FIELD_PAIRS 逐个抽
-  const mallAll = await fetchAll('mall_customers', {}, {
+  // ⚠️⚠️ 2026-10-12 修（老板实测报 -601008「导入中断：云函数调用失败」）：
+  //   **只拉"最近导入的那一批"**，不要拉全商城库 —— 全库几千条 + 下面的系统客户池几千条，
+  //   加起来必然超 HTTP API 那条 4~5 秒的线（坑 63）。
+  //   本批怎么认：`settings.lastMallImportBatch`（导入时写的 = 那一次的时间戳）。
+  const _sr = await db.collection('settings').where({ key: 'lastMallImportBatch' }).limit(1).get().catch(() => ({ data: [] }));
+  const _batch = Number(((_sr.data || [])[0] || {}).value) || 0;
+  const mallAll = await fetchAll('mall_customers', _batch ? { importBatch: _batch } : {}, {
     mallKey: true, mallCode: true, name: true, region: true, address: true, phone: true,
     addedAt: true, lastOrderAt: true, lastBrowseAt: true,
     tags: true, category: true, salesman: true, source: true, level: true,
