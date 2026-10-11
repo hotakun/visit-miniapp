@@ -2613,7 +2613,10 @@ function curPurposeId() {
 function nav(p) {
   stopDetailTimer('');
   document.querySelectorAll('.side .ni').forEach(n => n.classList.toggle('on', n.dataset.p === p));
-  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import', 'geo', 'msg', 'field'].forEach(id => { $('page-' + id).style.display = 'none'; });   // ⭐ 2026-09-28 晚：加了 'msg'（消息中心）/'field'（待商城建档）
+  ['tasks', 'taskDetail', 'newTask', 'customers', 'batchDetail', 'people', 'settings', 'track', 'import', 'geo', 'msg', 'field', 'visitrec'].forEach(id => { $('page-' + id).style.display = 'none'; });   // ⭐ 2026-09-28 晚：加了 'msg'（消息中心）/'field'（待商城建档）
+  // ⚠️⚠️ 2026-10-11（老板报障：「点了拜访记录后，其他所有页面都有拜访记录的内容」）：
+  //    **上面这个列表是硬编码的** —— 新加一个页面（#page-xxx）**必须**在这里登记，否则切换页面时它不会被隐藏、所有页面叠在一起。
+  //    这是本文件的一个坑（`nav()` 靠这张表隐藏页面，没有"自动遍历 #page-*"的兜底）。
   // ⭐ 2026-09-26 老板定：**客户管理页（原名「地域管理」）的表格跟着窗口走** —— 放开 .main 的 max-width:1200px，
   //    其他页保持原样（1200px 上限）。窗口多宽，表格就铺多宽。
   const mainEl = document.querySelector('main.main');
