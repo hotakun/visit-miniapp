@@ -5640,7 +5640,10 @@ async function refreshMapData() {
     custAggCache = null; custAggCacheKey = '';
     await loadCustData(true);
     drawCustLayer().catch(() => {});
-    alert('✅ 已更新：' + r.count + ' 家客户（耗时 ' + (Math.round((r.ms || 0) / 100) / 10) + ' 秒）');
+    // ⭐ 2026-10-12 老板：「我在后台战况页面点击更新数据，确实是从服务器拉取的是吗？而不是云端是吗？」
+    //   → 原来只有后台黑窗口的日志能看出来（**壳程序看不到**）→ 现在把"数据来源"直接弹给他看。
+    const _src = (r.from === 'pg') ? '🖥️ 你自己的服务器（没走云开发）' : '☁️ 云端（服务器当时不可用，已自动兜底）';
+    alert('✅ 已更新：' + r.count + ' 家客户\n数据来源：' + _src + '\n耗时 ' + (Math.round((r.ms || 0) / 100) / 10) + ' 秒');
   } catch (e) {
     alert('更新失败：' + (e && e.message ? e.message : e));
   } finally {

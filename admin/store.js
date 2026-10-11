@@ -170,7 +170,9 @@ async function refresh(callApi, cred) {
     write({ v: VERSION, syncedAt: Date.now(), maxU: maxU, count: slim.length, points: slim });
     progress.phase = '完成';
     console.log(`[store] 全量刷新完成：${slim.length} 家，耗时 ${Date.now() - t0}ms`);
-    return { ok: true, count: slim.length, ms: Date.now() - t0 };
+    // ⭐ 2026-10-12 老板（用壳程序、看不到后台黑窗口）：「点更新数据到底是从哪拉的？」
+    //   → 把"数据来源"放进返回，前端在弹窗里**直接显示给他看**（不用翻日志）。
+    return { ok: true, count: slim.length, ms: Date.now() - t0, from: fromPg ? 'pg' : 'cloud' };
   } catch (e) {
     // ⚠️ 失败**不清空**旧缓存（架构文档：拉取失败也要能看到地图）
     progress.phase = '失败：' + (e && e.message ? e.message : e);
