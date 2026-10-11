@@ -101,12 +101,28 @@ async function refresh(callApi, cred) {
         //   → PG 这条路（平时走的就是它）原来**根本不报进度**，所以浮层一直是"正在连接你的服务器…"不动。
         progress.phase = '正在连接你的服务器…';
         const _t0 = Date.now();
-        const url = String(_pgc.pgApiUrl).replace(/\/+$/, '') + '/points' +
+        const _base = String(_pgc.pgApiUrl).replace(/\/+$/, '') + '/points' +
           (_pgc.pgApiToken ? ('?token=' + encodeURIComponent(_pgc.pgApiToken)) : '');
-        const _resp = await fetch(url);
-        progress.phase = '已连上服务器，正在下载数据…（已等 ' + ((Date.now() - _t0) / 1000).toFixed(1) + ' 秒）';
-        const r = await _resp.json();
-        if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次拉取' }; }
+        // ⭐⭐ 2026-10-12 老板定（B 方案）：**分片拉取** —— 每片 2 万家，拉一片报一次进度。
+        //   （原来整包返回 178,755 家：看不到进度、断了得重来。pgapi 那边已按 id 游标分片。）
+        const _jl = (_base.indexOf('?') >= 0 ? '&' : '?');
+        let _after = '', _rows = [], _first = true;
+        for (let _p = 0; _p < 40; _p++) {
+          const _u = _base + _jl + 'limit=20000' + (_after ? ('&after=' + encodeURIComponent(_after)) : '');
+          const _resp = await fetch(_u);
+          if (_first) { progress.phase = '已连上服务器，正在分片下载…'; _first = false; }
+          const rr = await _resp.json();
+          if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次拉取' }; }
+          if (!rr || !rr.ok || !Array.isArray(rr.rows)) break;
+          progress.total = rr.total || progress.total;
+          _rows = _rows.concat(rr.rows);
+          progress.done = _rows.length;
+          progress.phase = '正在从服务器下载：已收 ' + _rows.length.toLocaleString() +
+            (progress.total ? (' / ' + progress.total.toLocaleString() + ' 家') : ' 家');
+          if (!rr.hasMore || !rr.rows.length) break;
+          _after = rr.last || '';
+        }
+        const r = _rows.length ? { ok: true, rows: _rows } : null;
         if (r && r.ok && Array.isArray(r.rows) && r.rows.length) {
           // pgapi 返回的是 PG 的 snake_case 列名 → 转成前端一直用的简写字段（与 custMapPoints 下发的完全一致）
           const M = [['i','id'],['n','name'],['nr','name_raw'],['la','lat'],['ln','lng'],['c','city'],['d','district'],

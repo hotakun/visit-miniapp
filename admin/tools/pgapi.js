@@ -148,8 +148,24 @@ const srv = http.createServer(async (req, res) => {
   try {
     // 全量客户点（地图用；首次给新电脑灌本地缓存也用它）
     if (u.pathname === '/points') {
+      // ⭐⭐ 2026-10-12 老板定（B 方案）：**支持分片** ——
+      //   原来一次性整包返回（178,755 家、几十 MB）：① 前端**看不到进度**（收完才知道）② 中途断了得重来。
+      //   现在带 `limit` 就分片返回（**按 id 游标**，比 OFFSET 快得多），返回里带 `total`/`hasMore`/`last`，
+      //   前端据此显示「已收 60,000 / 178,755 家」。**不传 limit = 老行为整包返回**（向后兼容）。
+      const _lim = Number(u.searchParams.get('limit') || 0);
+      if (_lim > 0) {
+        const lim = Math.min(_lim, 50000);
+        const after = String(u.searchParams.get('after') || '');
+        const tot = await q('SELECT count(*)::int AS n FROM customers WHERE deleted = false');
+        const total = tot.rows[0].n;
+        const r = after
+          ? await q(SELECT_CUST + ' WHERE c.deleted = false AND c.id > $1 ORDER BY c.id LIMIT $2', [after, lim])
+          : await q(SELECT_CUST + ' WHERE c.deleted = false ORDER BY c.id LIMIT $1', [lim]);
+        const last = r.rows.length ? r.rows[r.rows.length - 1].id : after;
+        return out(res, 200, { ok: true, rows: r.rows, total: total, last: last, hasMore: r.rows.length >= lim, at: Date.now() });
+      }
       const r = await q(SELECT_CUST + ' WHERE c.deleted = false');
-      return out(res, 200, { ok: true, rows: r.rows, at: Date.now() });
+      return out(res, 200, { ok: true, rows: r.rows, total: r.rows.length, hasMore: false, at: Date.now() });
     }
     // 增量：since = 上次水位（updated_at）；removed = 期间被删的 id（治"删了又复活"）
     if (u.pathname === '/sync') {
