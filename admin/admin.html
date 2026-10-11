@@ -12005,7 +12005,9 @@ function mallNewRender() {
     '<div><span style="color:#A8B0BB;display:inline-block;width:56px">地址</span><input id="mnAddr" value="' + esc(f.address) + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:320px"></div>' +
     '<div><span style="color:#F5531C;font-weight:800;display:inline-block;width:56px">经纬度*</span>' +
     '<input id="mnLL" placeholder="如 28.961303,120.181189（可粘贴）" value="' + esc(ll ? (ll.lat + ',' + ll.lng) : '') + '" style="border:1px solid #F5531C;border-radius:7px;padding:3px 8px;width:210px">' +
-    '<button class="btn ghost" style="height:26px;font-size:12px;padding:0 8px;margin-left:6px" onclick="mallNewPickMap()">🗺 地图选点</button></div>' +
+    '<button class="btn ghost" style="height:26px;font-size:12px;padding:0 8px;margin-left:6px" onclick="mallNewPickMap()">🗺 地图选点</button>' +
+    // ⚠️ 2026-10-12 老板：「我输入了经纬度，但是没有确认按钮」→ 补一个**显式确认**（读坐标 + 算商圈）
+    '<button class="btn p" style="height:26px;font-size:12px;padding:0 8px;margin-left:6px" onclick="mallNewApplyLL()">✓ 用这个坐标</button></div>' +
     '<div style="font-size:11.5px;color:#B77400;padding-left:56px">🔴 <b>必填</b> —— 没坐标 → 地图上没有点 → 业务员永远到不了这家</div>' +
     '</div>' +
     '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">' +
@@ -12020,6 +12022,20 @@ function mallNewRender() {
     '<div style="margin-top:12px"><button class="btn p" style="height:32px;font-size:13px" onclick="mallNewCreate()">✅ 建立并标记「已加入商城」</button>' +
     '<button class="btn g" style="height:32px;font-size:13px;margin-left:8px" onclick="mallNew=null;loadClaims()">取消</button>' +
     '<span style="color:#B77400;margin-left:8px;font-size:12px">' + esc(mallNew.msg || '') + '</span></div></div>';
+}
+// ⚠️ 2026-10-12 新加：把输入框里的经纬度**显式确认**下来（读 → 亮出坐标 → 算商圈）。
+//   老板原话：「我输入了经纬度，但是没有确认按钮」→ 补的就是这个按钮背后的动作。
+function mallNewApplyLL() {
+  if (!mallNew) return;
+  const ll = mallNewReadLL();
+  if (!ll) {
+    mallNew.msg = '⚠️ 格式不对：请填「纬度,经度」，例如 28.961303,120.181189';
+    mallNewRender(); return;
+  }
+  mallNew.ll = ll;
+  mallNew.msg = '✅ 坐标已确认：' + ll.lat.toFixed(6) + ',' + ll.lng.toFixed(6) + '（正在算商圈…）';
+  mallNewRender();
+  mallNewSuggestBiz();
 }
 function mallNewNearHtml() {
   if (!mallNew || !mallNew.nearDone) return '<span style="font-size:12px;color:#A8B0BB">（还没搜）</span>';
@@ -12044,6 +12060,10 @@ function mallNewReadLL() {
 let mallPickMap = null, mallPickPt = null;
 function mallNewPickMap() {
   if (!mallNew) return;
+  // ⚠️⚠️ 2026-10-12 修（老板实测：「我打开地图选店，也不是按照我输入的经纬度显示的点位」）：
+  //   **先读一下输入框里的经纬度** —— 原来是拿 `mallNew.ll`（只有"按地址解析 / 上次地图选点"才会赋值），
+  //   老板在输入框里手填了坐标，`mallNew.ll` 还是 null → 地图用了默认中心（永康市中心），不是他填的那个点。
+  mallNewReadLL();
   const cur = mallNew.ll || null;
   const box = document.createElement('div');
   box.id = 'mnPickOvl';
