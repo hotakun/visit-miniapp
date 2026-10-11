@@ -11816,10 +11816,13 @@ function renderClaimList() {
         <span style="color:#A8B0BB"> · ${esc(g.mallRegion || '')} · ${esc(g.mallAddress || '')} · ${esc(g.mallPhone || '无电话')}</span>
         <span style="float:right">${(g.cands || []).length} 个候选</span>
       </div>
-      <div style="padding:6px 2px">
-        <div style="font-size:12.5px;color:#B77400;margin-bottom:6px">系统里没有找到相似客户 —— 可以按商城这条**新建**（🔴 <b>经纬度必填</b>：没坐标 → 地图上没点 → 业务员到不了）</div>
+      <!-- ⚠️⚠️ 2026-10-12 修（老板截图：右上角写着"7 个候选"，下面却显示"没找到相似客户 + 新建"）：
+           上一轮我改这处时**把候选列表 cands 整个删掉了** → 无论有没有候选都只显示"新建"。
+           现在恢复成「有候选 → 列候选（点「✓ 就是这家」）；没候选 → 才提示新建」。 -->
+      ${cands ? '<div style="padding:8px 10px">' + cands + '</div>' : `<div style="padding:6px 2px">
+        <div style="font-size:12.5px;color:#B77400;margin-bottom:6px">系统里没有找到相似客户 —— 可以按商城这条新建（🔴 <b>经纬度必填</b>：没坐标 → 地图上没点 → 业务员到不了）</div>
         <button class="btn p" style="height:30px;font-size:12.5px" onclick="mallNewOpen(${gi})">➕ 新建这条客户</button>
-      </div>
+      </div>`}
     </div>`;
   }).join('');
 }
