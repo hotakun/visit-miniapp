@@ -2288,7 +2288,9 @@ tr.row-off td:not(.keep){opacity:.4}
 
     <!-- 导入商城客户列表弹层 -->
     <div class="ovl" id="mallOvl" style="display:none">
-      <div class="modal">
+      <!-- ⚠️ 2026-10-12 老板：「这个窗口做这么小干嘛？」—— 6 列预览表（名称/手机/注册/最近下单/最近浏览/等级）
+           被挤成一团、每格都在换行。加宽到 880px + 限高 88vh（内容长了内部滚动，不至于顶出屏幕）。 -->
+      <div class="modal" style="width:880px;max-height:88vh;overflow-y:auto">
         <div class="mt">🛒 导入商城客户列表（比对认领）</div>
         <div id="mallStep1">
           <div class="hint">选择商城导出的「客户列表.xls」→ 入库商城客户库（新客户新增、老客户有变化才更新）。<br>入库后点顶部「🔎 比对认领」把回访客户与商城库关联。</div>
