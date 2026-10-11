@@ -175,9 +175,12 @@ const srv = http.createServer(async (req, res) => {
       const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
       const fromMs = new Date(today + 'T00:00:00+08:00').getTime() - (days - 1) * 86400000;
       const from = new Date(fromMs + 8 * 3600 * 1000).toISOString().slice(0, 10);   // 'YYYY-MM-DD'（北京）
+      // ⚠️ 2026-10-11 实测踩到：pgapi 的 q() 返回的是**原始结果对象**（不是数组）→ 直接塞进 JSON 会
+      //   变成 {command,rowCount,rows,fields,...}，前端读 list 就废了。这里统一取 .rows。
+      const R = async (sql, params) => { const rs = await q(sql, params); return Array.isArray(rs) ? rs : ((rs && rs.rows) || []); };
       if (kind === 'day') {
         const day = String(u.searchParams.get('day') || today).slice(0, 10);
-        const rows = await q(
+        const rows = await R(
           'SELECT v.id, v.customer_id AS "customerId", v.salesman_id AS "salesmanId", v.salesman_name AS "salesmanName",' +
           ' v.result, v.status, v.duration, v.remark, v.samples, v.audios, v.photos, v.updated_at AS "at",' +
           ' c.name, c.name_raw AS "nameRaw", c.mall_code AS "mallCode"' +
@@ -187,15 +190,16 @@ const srv = http.createServer(async (req, res) => {
         return out(res, 200, { ok: true, from: 'pg', day: day, total: rows.length, rows: rows });
       }
       if (kind === 'shop') {
-        const list = await q(
+        const list = await R(
           "SELECT to_char(to_timestamp(created_at/1000) AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') AS day," +
-          ' count(*)::int AS n,' +
-          " count(*) FILTER (WHERE mall_pending IS TRUE)::int AS pending" +
+          ' count(*)::int AS n' +
+          // ⚠️ 2026-10-11 实测：原来这里还取 mall_pending（"待建档"家数），但 **PG 的 customers 表没有这一列**
+          //   → 整条 SQL 报错、shop 分支直接"服务器出错了"。老板要的是"哪天新增了几家"，先只回 n。
           " FROM customers WHERE source = 'field' AND deleted IS NOT TRUE AND created_at >= $1" +
           ' GROUP BY 1 ORDER BY 1 DESC', [fromMs]);
         return out(res, 200, { ok: true, from: 'pg', list: list });
       }
-      const list = await q(
+      const list = await R(
         'SELECT visited_at AS day, count(*)::int AS visits,' +
         ' count(DISTINCT customer_id)::int AS customers, count(DISTINCT salesman_id)::int AS salesmen' +
         " FROM visits WHERE visited_at >= $1 AND status IN ('normal','pending_review')" +
