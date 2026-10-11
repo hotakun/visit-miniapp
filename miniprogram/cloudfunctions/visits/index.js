@@ -321,7 +321,8 @@ async function deleteVisit(user, e, isBoss) {
   const vr = await db.collection('visits').doc(visitId).get().catch(() => null);
   const v = vr && vr.data;
   if (!v) return { ok: false, code: 'NOT_FOUND', msg: '拜访记录不存在' };
-  if (v.salesmanId !== user._id) return { ok: false, code: 'FORBIDDEN', msg: '只能删除自己的拜访记录' };
+  // ⚠️ 2026-10-11：**老板/管理员也放行**（老板要管数据）
+  if (v.salesmanId !== user._id && !isBoss) return { ok: false, code: 'FORBIDDEN', msg: '只能删除自己的拜访记录' };
   if (v.status === 'ongoing') return { ok: false, code: 'STATE', msg: '这条还在拜访中，请回拜访页正常取消' };
   // 1) 删拜访本体
   await db.collection('visits').doc(visitId).remove();
@@ -564,7 +565,8 @@ async function editSubmitted(user, event, isBoss) {
   const vr = await db.collection('visits').doc(visitId).get().catch(() => null);
   const v = vr && vr.data;
   if (!v) return { ok: false, code: 'NOT_FOUND', msg: '拜访记录不存在' };
-  if (v.salesmanId !== user._id) return { ok: false, code: 'FORBIDDEN', msg: '只能修改自己的拜访记录' };
+  // ⚠️ 2026-10-11：**老板/管理员也放行**（老板要管数据，不只是"改自己的"）
+  if (v.salesmanId !== user._id && !isBoss) return { ok: false, code: 'FORBIDDEN', msg: '只能修改自己的拜访记录' };
   if (v.status === 'ongoing') return { ok: false, code: 'STATE', msg: '这条还在拜访中，请回拜访页正常提交' };
   const now = Date.now();
   const upd = {

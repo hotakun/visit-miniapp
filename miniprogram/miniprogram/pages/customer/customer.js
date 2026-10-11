@@ -174,7 +174,11 @@ function buildD(res, photoUrls, recUrls) {
       shots: (v.thumbs || []).slice(0, 3),
       // ⭐ 2026-10-10 老板定：拜访记录可编辑 —— 记 visitId + 是不是"我"记的（只有自己的才显示「✎ 编辑」）
       vid: v._id || '',
-      mine: !!(meId && v.salesmanId === meId)
+      // ⚠️ 2026-10-11 老板报障（他进客户详情看不到编辑/删除按钮）：原来只给"自己记的"显示 ——
+      //   但**老板要管数据**，所以**老板模式 / 管理员账号**也一律给（云端 editSubmitted / deleteVisit 同步放行 isBoss）。
+      //   业务员仍然只能动自己记的那条。
+      mine: !!(meId && v.salesmanId === meId) ||
+        !!(getApp() && getApp().globalData && (getApp().globalData.bossMode || ((getApp().globalData.user || {}).role === 'admin')))
     };
   });
 
