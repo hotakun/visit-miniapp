@@ -1359,7 +1359,7 @@ async function visitRecordsByDay(event) {
   for (let skip = 0; skip < 3000; skip += 200) {
     const r = await db.collection('visits')
       .where({ visitedAt: day, status: _.in(['normal', 'pending_review']) })
-      .field({ customerId: true, salesmanId: true, salesmanName: true, result: true, finishedAt: true, startedAt: true })
+      .field({ customerId: true, taskId: true, salesmanId: true, salesmanName: true, result: true, finishedAt: true, startedAt: true })
       .skip(skip).limit(200).get().catch(() => ({ data: [] }));
     rows.push(...r.data);
     if (r.data.length < 200) break;
@@ -1376,6 +1376,7 @@ async function visitRecordsByDay(event) {
     rows: rows.map(v => {
       const c = cmap[v.customerId] || {};
       return {
+        visitId: v._id || '', taskId: v.taskId || '',        // ⭐ 2026-10-11：给后台「拜访详情」用（openVisitDetail 需要 taskId）
         customerId: v.customerId || '', customerName: c.name || '',
         mallCode: c.mallCode || (c.nameRaw || '').split(' ')[0] || '',
         salesmanId: v.salesmanId || '', salesmanName: v.salesmanName || '',

@@ -2366,11 +2366,19 @@ function vrTagCls(r) {
 }
 function vrCode(code) { return code ? '<span style="color:#98A2AE;font-weight:800;margin-right:6px">' + esc(code) + '</span>' : ''; }
 function vrCustBtn(id) { return '<button class="btn ghost" style="height:30px;font-size:12px" onclick="showCustDetail(\'' + id + '\')">客户详情</button>'; }
-function vrVisitBtn(id, has) {
-  return has
-    ? '<button class="btn ghost" style="height:30px;font-size:12px" onclick="openVisitDetail(\'' + id + '\')">拜访详情</button>'
+function vrVisitBtn(cid, tid, cname) {
+  return tid
+    ? '<button class="btn ghost" style="height:30px;font-size:12px" onclick="vrOpenVisit(\'' + cid + '\',\'' + tid + '\',\'' + String(cname || '').replace(/'/g, '') + '\')">拜访详情</button>'
     : '<button class="btn ghost" style="height:30px;font-size:12px;color:#C4CAD1;cursor:default;pointer-events:none">拜访详情</button>';
 }
+// ⚠️ 2026-10-11 修（老板报「拜访详情点击没有反馈」）：`openVisitDetail()` 是**任务详情页专用**的 ——
+//   它要求 detailCustCache 里能找到这家客户 + curDetailTaskId 有值，缺一个就**静默 return**（看着就是没反应）。
+//   这里在调用前把这两个前提**临时补上**（同一个 script 作用域，可直接赋值；任务详情页自己每次会重填，不受影响）。
+window.vrOpenVisit = function (cid, tid, cname) {
+  curDetailTaskId = tid;
+  detailCustCache = [{ _id: cid, name: cname || '' }];
+  openVisitDetail(cid);
+};
 window.vrGo = function (t) {
   vrTab = t;
   $('vrTabVisit').style.cssText = vrTabCss(t === 'visit');
@@ -2417,7 +2425,7 @@ window.vrOpenDay = async function (day) {
         vrCode(v.mallCode) + esc(v.customerName || '(未填店名)') + '</span>' +
         (v.result ? '<span class="pill ' + vrTagCls(v.result) + '">' + esc(v.result) + '</span>' : '') +
         '<span style="color:#98A2AE;font-size:12.5px;font-weight:600;min-width:42px;text-align:right">' + (v.at ? vrHM(v.at) : '') + '</span>' +
-        vrVisitBtn(v.customerId, true) + vrCustBtn(v.customerId) + '</div>').join('')).join('')
+        vrVisitBtn(v.customerId, v.taskId, v.customerName) + vrCustBtn(v.customerId) + '</div>').join('')).join('')
       : '<div class="empty" style="padding:26px;text-align:center;color:#A8B0BB">这一天没有拜访记录</div>') + '</div>';
   window.scrollTo(0, 0);
 };
@@ -2442,7 +2450,7 @@ async function vrLoadShop() {
         '<span style="color:#98A2AE;font-weight:500;margin-left:6px;font-size:12.5px">' + esc(c.address || '') + (c.phone ? ' · ' + esc(c.phone) : '') + '</span></span>' +
         (c.mallPending ? '<span class="pill warn">待商城建档</span>' : '<span class="pill blue">已入商城</span>') +
         '<span style="color:#98A2AE;font-size:12.5px;font-weight:600">' + esc(c.byName || '') + '</span>' +
-        vrVisitBtn(c.customerId, false) + vrCustBtn(c.customerId) + '</div>').join('');
+        vrVisitBtn(c.customerId, '', '') + vrCustBtn(c.customerId) + '</div>').join('');
   }).join('');
 }
 
