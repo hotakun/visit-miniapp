@@ -3166,7 +3166,12 @@ async function runMallMatch(event) {
       const r = matchMall(v, m, nName, nAddr, phones, mn, ma);
       if (r.score > best.score) best = r;
     }
-    if (best.score >= 75 && best.mall) {
+    // ⚠️⚠️ 2026-10-11 老板定【口径变更】：**导入商城表后不再自动认领** —— 全部改成人工确认。
+    //   旧逻辑「≥75 分自动认领」**已作废**（老板："自动配掉的看不见，配错了也不会知道"）。
+    //   ✅ 这里用 Infinity 把它关掉；下面那段「写商城字段 + 置 customerType='mall' / mallPending=false」
+    //      的逻辑**原样保留**，留给「🛒 商城配对确认」页里老板勾选之后调用（同样的字段、同样的口径）。
+    //   ⚠️ 要恢复旧行为：把 Infinity 改回 75（**仅此一处**）。
+    if (best.score >= Infinity && best.mall) {
       const m = best.mall;
       autoMatched++;
       // ⭐⭐ 2026-09-29【老板定：商城库 13 个字段**有信息就全倒**】
