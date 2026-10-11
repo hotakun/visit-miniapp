@@ -3832,7 +3832,12 @@ async function applyMallPair(event) {
 
   // ④ 顺带把对应的"待确认认领"记录收尾（有就改，没有就算了；失败不影响合并）
   try {
-    const cl = await db.collection('mall_claims').where({ customerId, mallKey, status: 'pending' }).limit(5).get();
+    // ⚠️⚠️ 2026-10-12 修（老板：「这两个我确定合并之后，为什么还在列表中没有自动消失，留下其他我去判断的？」）：
+    //   原来这里要求 `customerId` 也匹配 —— 但**候选现在是本地算的**，老板点的那家（如「水城羊肉粉」）
+    //   跟旧比对记录里的 `customerId`（当时配的是「水城羊肉粉赵」）**不是同一条** → 查不到 → 标不掉
+    //   → 合并完了还赖在列表里。✅ 改成**按 mallKey 收尾**：这家商城客户既然已经人工合并，
+    //   它名下所有待确认记录都该收掉（不区分是哪一批、当时配的是谁）。
+    const cl = await db.collection('mall_claims').where({ mallKey, status: 'pending' }).limit(20).get();
     for (const x of (cl.data || [])) {
       await db.collection('mall_claims').doc(x._id).update({
         data: { status: 'confirmed', resolvedAt: now, resolvedBy: (event._admin && event._admin.name) || '', byHand: true }
