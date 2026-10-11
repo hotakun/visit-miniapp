@@ -11859,9 +11859,14 @@ function renderClaimList() {
         <button class="btn ghost" style="height:26px;font-size:12px;color:var(--green);flex:none" onclick="pairConfirm(${gi},'${c.customerId}')">✓ 就是这家</button>
       </div>`).join('') +
       // ⭐ 2026-10-12：**有候选也留着"新建"**（都不是 → 才新建）—— 演示稿里就是这条「都不像 → 继续新建」
-      '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px dashed #E3E8EF;border-radius:9px;background:#FAFBFC">' +
-      '<div style="flex:1;min-width:0;font-size:12.5px;color:var(--sub)">都不是？那就按商城这条<b>新建</b>（🔴 经纬度必填，填完还能<b>搜周围相似的店</b>再确认一次）</div>' +
-      '<button class="btn p" style="height:26px;font-size:12px;flex:none" onclick="mallNewOpen(' + gi + ')">➕ 新建这条客户</button></div>';
+      // ⭐⭐ 2026-10-12 老板定：**每组下面都要这三个按钮** ——
+      //   ①「➕ 新建这条客户」 ②「📍 输入经纬度」（按坐标找附近的店） ③「🔍 自行搜索」（按名称搜客户）
+      //   老板原话：「这些方法都能让我选择并确定。」
+      '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px dashed #E3E8EF;border-radius:9px;background:#FAFBFC;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:120px;font-size:12.5px;color:var(--sub)">都不对？三种办法任选：</div>' +
+      '<button class="btn p" style="height:26px;font-size:12px;flex:none" onclick="mallNewOpen(' + gi + ')">➕ 新建这条客户</button>' +
+      '<button class="btn ghost" style="height:26px;font-size:12px;flex:none" onclick="mallGeoOpen(' + gi + ')">📍 输入经纬度</button>' +
+      '<button class="btn ghost" style="height:26px;font-size:12px;flex:none" onclick="mallSearchOpen(' + gi + ')">🔍 自行搜索</button></div>';
     return `<div style="border:1px solid #EDF1F7;border-radius:12px;margin-bottom:12px;overflow:hidden">
       <!-- ⚠️⚠️ 2026-10-12 老板定：「我商城导入的信息你灰色低调显示是错误的，这里反而要强调显示，用橙色」
            —— 这一行是**主角**（你导入的那条）。改成**浅橙底 + 橙字粗体**强调。 -->
@@ -11874,8 +11879,12 @@ function renderClaimList() {
            上一轮我改这处时**把候选列表 cands 整个删掉了** → 无论有没有候选都只显示"新建"。
            现在恢复成「有候选 → 列候选（点「✓ 就是这家」）；没候选 → 才提示新建」。 -->
       ${cands ? '<div style="padding:8px 10px">' + cands + '</div>' : `<div style="padding:6px 2px">
-        <div style="font-size:12.5px;color:#B77400;margin-bottom:6px">系统里没有找到相似客户 —— 可以按商城这条新建（🔴 <b>经纬度必填</b>：没坐标 → 地图上没点 → 业务员到不了）</div>
-        <button class="btn p" style="height:30px;font-size:12.5px" onclick="mallNewOpen(${gi})">➕ 新建这条客户</button>
+        <div style="font-size:12.5px;color:#B77400;margin-bottom:8px">系统里没有找到<b>名字完全一致</b>的客户 —— 三种办法任选：</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn p" style="height:30px;font-size:12.5px" onclick="mallNewOpen(${gi})">➕ 新建这条客户</button>
+          <button class="btn ghost" style="height:30px;font-size:12.5px" onclick="mallGeoOpen(${gi})">📍 输入经纬度</button>
+          <button class="btn ghost" style="height:30px;font-size:12.5px" onclick="mallSearchOpen(${gi})">🔍 自行搜索</button>
+        </div>
       </div>`}
     </div>`;
   }).join('');
@@ -12068,6 +12077,102 @@ function mallNewApplyLL() {
   mallNewRender();
   mallNewSuggestBiz();
 }
+// ⭐⭐ 2026-10-12 老板定：**每一组下面都要三个按钮** ——
+//   ① 「➕ 新建这条客户」 ② 「📍 输入经纬度」 ③ 「🔍 自行搜索」
+//   老板原话：「输入经纬度之后会进行更精确的范围匹配，自行搜索则会按照我输入的名称在下面列出客户列表，
+//              这些方法都能让我选择并确定。」
+//   ⚠️ 后两个都是**用本地缓存再搜一遍**（零云端请求）：结果列出来，每家带「✓ 就是这家」→ 直接合并。
+let mallProbe = null;   // { gi, mode:'geo'|'kw', ll, kw, rows, msg }
+
+function mallGeoOpen(gi) {
+  mallProbe = { gi: gi, mode: 'geo', ll: null, kw: '', rows: [], msg: '' };
+  mallProbeRender();
+}
+function mallSearchOpen(gi) {
+  mallProbe = { gi: gi, mode: 'kw', ll: null, kw: '', rows: [], msg: '' };
+  mallProbeRender();
+}
+function mallProbeReadLL() {
+  const el = document.getElementById('mpLL'); if (!el) return null;
+  const t = String(el.value || '').replace(/[（()）\s]/g, '');
+  const m = t.split(/[,，]/).filter(Boolean).map(Number);
+  if (m.length < 2 || isNaN(m[0]) || isNaN(m[1])) return null;
+  let a = m[0], b = m[1], lat, lng;
+  if (Math.abs(a) <= 90 && Math.abs(b) > 90) { lat = a; lng = b; }
+  else if (Math.abs(a) > 90 && Math.abs(b) <= 90) { lat = b; lng = a; }
+  else { lat = a; lng = b; }
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat: lat, lng: lng };
+}
+async function mallProbeRun() {
+  if (!mallProbe) return;
+  const inp = document.getElementById(mallProbe.mode === 'geo' ? 'mpLL' : 'mpKW');
+  const vals = inp ? String(inp.value || '') : '';
+  let out = [];
+  try {
+    const loc = await ensureCustLocal();
+    const pts = (loc && loc.points) || [];
+    const norm1 = s => String(s || '').replace(/[（(【\[].*?[)）】\]]/g, '').replace(/[\s，。、·—\-_/\\"'“”‘’':：]+/g, '');
+    if (mallProbe.mode === 'geo') {
+      const t = vals.replace(/[（()）\s]/g, '');
+      const m = t.split(/[,，]/).filter(Boolean).map(Number);
+      if (m.length < 2 || isNaN(m[0]) || isNaN(m[1])) { mallProbe.msg = '⚠️ 请填「纬度,经度」，例如 28.961303,120.181189'; mallProbeRender(); return; }
+      let a = m[0], b = m[1], lat, lng;
+      if (Math.abs(a) <= 90 && Math.abs(b) > 90) { lat = a; lng = b; }
+      else if (Math.abs(a) > 90 && Math.abs(b) <= 90) { lat = b; lng = a; }
+      else { lat = a; lng = b; }
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) { mallProbe.msg = '⚠️ 坐标超出范围，请检查'; mallProbeRender(); return; }
+      mallProbe.ll = { lat: lat, lng: lng };
+      const R = 500, cos = Math.cos(lat * Math.PI / 180);
+      for (const p of pts) {
+        if (!p.la || !p.ln) continue;
+        const dy = (p.la - lat) * 111320, dx = (p.ln - lng) * 111320 * cos;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d <= R) out.push({ id: p.i, name: p.nr || p.n || '', ad: p.ad || '', ph: p.ph || '', mc: p.mc || '', dist: Math.round(d) });
+      }
+      out.sort((x, y) => x.dist - y.dist);
+      mallProbe.msg = out.length ? ('📍 ' + R + ' 米内找到 ' + out.length + ' 家（按距离从近到远）—— 点「✓ 就是这家」直接合并')
+                                 : ('📍 ' + R + ' 米内没有客户。坐标确认填对了的话，就点上面的「➕ 新建这条客户」');
+    } else {
+      const kw = vals.trim(); mallProbe.kw = kw;
+      if (!kw) { mallProbe.msg = '⚠️ 请先输入店名里的几个字'; mallProbeRender(); return; }
+      const k = norm1(kw);
+      for (const p of pts) {
+        const nm = norm1(p.nr || p.n || '');
+        if (nm && nm.indexOf(k) >= 0) out.push({ id: p.i, name: p.nr || p.n || '', ad: p.ad || '', ph: p.ph || '', mc: p.mc || '', dist: 0 });
+        if (out.length >= 40) break;
+      }
+      mallProbe.msg = out.length ? ('🔍 找到 ' + out.length + ' 家含「' + kw + '」的客户 —— 点「✓ 就是这家」直接合并')
+                                 : ('🔍 没找到含「' + kw + '」的客户 —— 换个词试，或点上面的「➕ 新建这条客户」');
+    }
+  } catch (e) { mallProbe.msg = '搜索失败，请重试'; }
+  mallProbe.rows = out.slice(0, 20);
+  mallProbeRender();
+}
+function mallProbeRender() {
+  if (!mallProbe) return;
+  const P = mallProbe, gi = P.gi, g = claimGroups[gi] || {};
+  const rowsHtml = P.rows.map(r =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-top:1px solid #F1F3F7">' +
+    '<span style="flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+    (r.mc ? '<span style="color:#5B6472;font-weight:700;margin-right:4px">' + esc(r.mc) + '</span>' : '') + esc(r.name || '(未填店名)') +
+    '<span style="color:#98A2AE"> · ' + esc(r.ad || '') + ' · ' + esc(r.ph || '无电话') + '</span>' +
+    (P.mode === 'geo' ? '<span style="color:#F5531C;font-weight:700"> · ' + r.dist + ' 米</span>' : '') + '</span>' +
+    '<button class="btn ghost" style="height:26px;font-size:12px;flex:none;color:var(--green)" onclick="pairConfirm(' + gi + ',\'' + r.id + '\')">✓ 就是这家</button></div>').join('');
+  $('claimList').innerHTML =
+    '<div style="border:1px solid #FBE0CF;background:#FFFDFB;border-radius:12px;padding:12px 14px">' +
+    '<div style="font-weight:800;font-size:13px;margin-bottom:10px">' + (P.mode === 'geo' ? '📍 按坐标找附近的店' : '🔍 按名称搜客户') +
+    '<span style="font-weight:600;font-size:12px;color:var(--sub);margin-left:8px">要匹配：' + esc(g.mallName || '') + '</span></div>' +
+    (P.mode === 'geo'
+      ? '<div><input id="mpLL" placeholder="纬度,经度（如 28.961303,120.181189）" value="' + (P.ll ? (P.ll.lat + ',' + P.ll.lng) : '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:4px 8px;width:280px;font-size:12.5px">' +
+        '<button class="btn p" style="height:28px;font-size:12.5px;margin-left:6px" onclick="mallProbeRun()">📍 找附近的店</button></div>'
+      : '<div><input id="mpKW" placeholder="输入店名里的几个字" value="' + esc(P.kw || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:4px 8px;width:240px;font-size:12.5px">' +
+        '<button class="btn p" style="height:28px;font-size:12.5px;margin-left:6px" onclick="mallProbeRun()">🔍 搜索</button></div>') +
+    '<div style="font-size:12px;color:#B77400;margin-top:6px">' + esc(P.msg || '') + '</div>' +
+    (rowsHtml ? '<div style="margin-top:8px;border:1px solid #EDF1F7;border-radius:9px;overflow:hidden">' + rowsHtml + '</div>' : '') +
+    '<div style="margin-top:10px"><button class="btn ghost" style="height:30px;font-size:12.5px" onclick="mallProbe=null;renderClaimList()">← 返回</button></div></div>';
+}
+
 function mallNewNearHtml() {
   if (!mallNew || !mallNew.nearDone) return '<span style="font-size:12px;color:#A8B0BB">（还没搜）</span>';
   if (!mallNew.nearby.length) return '<span style="font-size:12px;color:#12A150">周围没有相似的店 —— 放心新建</span>';
