@@ -705,6 +705,13 @@ const server = http.createServer(async (req, res) => {
     })().catch(e => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: false, msg: e.message })); });
     return;
   }
+  // ⭐ 2026-10-12 老板要「能不能强行中断」→ 点进度浮层上的 ✕ 就调这里，让 store 放弃这次拉取
+  if (req.method === 'POST' && req.url === '/mapPoints/cancel') {
+    try { store.cancelRefresh(); } catch (e) { /* 没有也不报错 */ }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
   // ⭐ 2026-09-27 M3：写后回写 —— 前端改完（备注/坐标/字段/删除/建批次）把那几条同步进本地缓存
   if (req.method === 'POST' && req.url === '/mapPoints/patch') {
     let body = '';

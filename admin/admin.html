@@ -5645,12 +5645,27 @@ async function refreshMapData() {
     document.body.appendChild(pv);
   }
   const pvSet = function (t) { if (pv) pv.innerHTML = t; };
-  pvSet('🔄 正在拉取客户数据…<br><span style="color:#9AA4B2">正在连接你的服务器…</span>');
+  // ⭐⭐ 2026-10-12 老板：「有没有连接上、数据有没有在传输、传输进度有没有、能不能强行中断，这些信息你都没有，
+  //   我只能干看着」→ 浮层显示：**阶段 + 已收家数 + 已等秒数 + 【✕ 强行中断】按钮**。
+  const t0 = Date.now();
+  const pvRender = function (s) {
+    const sec = ((Date.now() - t0) / 1000).toFixed(1);
+    const got = (s && s.progress && s.progress.done) ? s.progress.done : 0;
+    const ph = (s && s.progress && s.progress.phase) ? s.progress.phase : '正在连接你的服务器…';
+    pvSet('🔄 正在拉取客户数据…' +
+      '<br><span style="color:#9AA4B2">' + esc(ph) + '</span>' +
+      (got ? '<br><span style="color:#7ED0A0">✓ 已收到 ' + got.toLocaleString() + ' 家</span>' : '') +
+      '<br><span style="color:#6B7688;font-size:12px">已等 ' + sec + ' 秒</span>' +
+      '<div style="margin-top:8px;text-align:right"><button id="mdCancel" style="background:#3A4557;color:#fff;border:0;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer">✕ 强行中断</button></div>');
+    const cb = document.getElementById('mdCancel');
+    if (cb) cb.onclick = function () {
+      cb.disabled = true; cb.textContent = '正在取消…';
+      fetch('/mapPoints/cancel', { method: 'POST' }).catch(function () {});
+    };
+  };
+  pvRender(null);
   const timer = setInterval(async function () {
-    try {
-      const s = await fetch('/mapPoints/status').then(x => x.json());
-      if (s && s.phase) pvSet('🔄 正在拉取客户数据…<br><span style="color:#9AA4B2">' + esc(s.phase) + '</span>');
-    } catch (e) { /* 进度拉不到不影响拉数 */ }
+    try { pvRender(await fetch('/mapPoints/status').then(x => x.json())); } catch (e) { /* 进度拉不到不影响拉数 */ }
   }, 700);
   try {
     const r = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json());

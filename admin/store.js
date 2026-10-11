@@ -25,7 +25,7 @@ const MAX_PAGES = 1000;         // 硬上限（100 万条），防死循环
 let syncing = false;            // 是否正在拉取（前端显示进度用）
 // ⭐ 2026-09-27 老板定：预热时前端要能看到「已准备 3.8万/6万」→ progress 里带上 total。
 //   total 取「上一次缓存的条数」作参考（首次无缓存时为 0，前端就只显示已拉多少）。
-let progress = { done: 0, total: 0, phase: '' };
+let progress = { done: 0, total: 0, phase: '', cancel: false };
 
 function ensureDir() {
   try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch (e) { /* 已存在 */ }
@@ -72,12 +72,19 @@ function status() {
 
 // 分片循环拉全量 → 写文件。callApi 由 server.js 注入（带 token）
 // ⚠️ **cred 必须带**（username/password）—— adminapi 需要认证，不带会返回“登录失效”（2026-09-27 踩过）
+// ⭐ 2026-10-12 老板要「能不能强行中断」→ 给 store 一个取消开关（server.js 的 /mapPoints/cancel 调它）
+function cancelRefresh() {
+  progress.cancel = true;
+  progress.phase = '正在取消…';
+  return true;
+}
+
 async function refresh(callApi, cred) {
   if (syncing) return { ok: false, msg: '正在拉取中，请稍候' };
   syncing = true;
   let expected = 0;
   try { const old = read(); if (old && Array.isArray(old.points)) expected = old.points.length; } catch (e) { /* 忽略 */ }
-  progress = { done: 0, total: expected, phase: '开始' };
+  progress = { done: 0, total: expected, phase: '开始', cancel: false };   // ⚠️ 每次开始都重置取消开关
   const auth = cred || {};
   const t0 = Date.now();
   try {
@@ -90,9 +97,16 @@ async function refresh(callApi, cred) {
     try { _pgc = require('./config.json'); } catch (e) { /* 没配就走云开发 */ }
     if (_pgc.pgApiUrl) {
       try {
+        // ⭐⭐ 2026-10-12 老板：「有没有连接上、数据有没有在传输、传输进度有没有、能不能强行中断，这些信息你都没有」
+        //   → PG 这条路（平时走的就是它）原来**根本不报进度**，所以浮层一直是"正在连接你的服务器…"不动。
+        progress.phase = '正在连接你的服务器…';
+        const _t0 = Date.now();
         const url = String(_pgc.pgApiUrl).replace(/\/+$/, '') + '/points' +
           (_pgc.pgApiToken ? ('?token=' + encodeURIComponent(_pgc.pgApiToken)) : '');
-        const r = await (await fetch(url)).json();
+        const _resp = await fetch(url);
+        progress.phase = '已连上服务器，正在下载数据…（已等 ' + ((Date.now() - _t0) / 1000).toFixed(1) + ' 秒）';
+        const r = await _resp.json();
+        if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次拉取' }; }
         if (r && r.ok && Array.isArray(r.rows) && r.rows.length) {
           // pgapi 返回的是 PG 的 snake_case 列名 → 转成前端一直用的简写字段（与 custMapPoints 下发的完全一致）
           const M = [['i','id'],['n','name'],['nr','name_raw'],['la','lat'],['ln','lng'],['c','city'],['d','district'],
@@ -105,12 +119,15 @@ async function refresh(callApi, cred) {
             return o;
           });
           console.log('[store] 从自己的服务器拿到 ' + points.length + ' 家（不走云开发）');
+          progress.phase = '从服务器收到 ' + points.length + ' 家';
           fromPg = true;
         }
       } catch (e) {
         console.warn('[store] 服务器只读 API 不可用，回退云开发：' + (e && e.message));
+        progress.phase = '服务器不可用，改用云端拉取…';
       }
     }
+    if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次拉取' }; }
     let cursor = '';
     if (!points.length) for (let i = 0; i < MAX_PAGES; i++) {
       const res = JSON.parse(await callApi(Object.assign({ action: 'custMapPoints', cursor: cursor, limit: PAGE_LIMIT }, auth)));
@@ -323,4 +340,4 @@ function startAutoRefresh(callApi, cred) {
     .catch(() => null);
 }
 
-module.exports = { read, write, status, refresh, patch, unbatch, checkDirty, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
+module.exports = { read, write, status, refresh, cancelRefresh, patch, unbatch, checkDirty, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
