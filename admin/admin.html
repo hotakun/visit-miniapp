@@ -1215,7 +1215,7 @@ tr.row-off td:not(.keep){opacity:.4}
             </div>
             <span style="margin-left:auto"></span>
             <button class="btn ghost" id="matchBtn" style="display:none" onclick="openMallMatch()">🔎 比对认领</button>
-            <button class="btn ghost" id="claimBtn" style="display:none" onclick="openClaims()">📋 待确认认领<span class="badge" id="claimBadge" style="display:none"></span></button>
+            <button class="btn ghost" id="claimBtn" style="display:none" onclick="openClaims()">🛒 商城配对确认<span class="badge" id="claimBadge" style="display:none"></span></button>
             <!-- 2026-09-25 老板定：从商城**更新**客户信息（可控：先预览将改哪些字段，确认后才写；只写白名单字段） -->
             <button class="btn ghost" id="refreshMallBtn" style="display:none" onclick="refreshFromMallClick()">🔄 从商城更新</button>
             <button class="btn ghost" id="manualBatchBtn" onclick="openManualBatch()">＋ 手工建批</button>
@@ -11755,13 +11755,17 @@ function openClaimsFor(batchId, batchName) {
   openClaims();
 }
 
+// ⭐ 2026-10-11 老板定【新口径】：「🛒 商城配对确认」—— **全部人工确认**（旧的"≥75 自动认领"已作废）。
+//   数据源从 listMallClaims 换成 mallPairList：**按商城客户分组**，每组带系统候选（分数从高到低）+ 两边关键信息。
+let claimGroups = [];          // 分组后的候选清单（每组 = 一个商城客户）
 async function loadClaims() {
   try {
-    const res = await api('listMallClaims', curClaimBatchId ? { batchId: curClaimBatchId } : {});
-    claimCache = res.ok ? res.claims : [];
+    const res = await api('mallPairList', { limit: 300 });
+    claimGroups = (res && res.ok && res.groups) ? res.groups : [];
   } catch (e) {
-    claimCache = [];
+    claimGroups = [];
   }
+  claimCache = claimGroups;      // 角标数 = 待确认的**商城客户数**（等价于"还有几组要过眼"）
   claimLoaded = true;
   updateClaimBadge();
   if ($('claimOvl').style.display === 'flex') renderClaimList();
@@ -11775,22 +11779,41 @@ function updateClaimBadge() {
 }
 
 function renderClaimList() {
-  if (!claimCache.length) {
-    $('claimList').innerHTML = '<div class="empty" style="padding:28px 0;text-align:center;color:var(--sub);font-size:13.5px">🎉 没有待确认的认领，全部处理完了</div>';
+  if (!claimGroups.length) {
+    $('claimList').innerHTML = '<div class="empty" style="padding:28px 0;text-align:center;color:var(--sub);font-size:13.5px">🎉 没有要确认的配对，全部处理完了</div>';
     return;
   }
-  $('claimList').innerHTML = `<table class="tbl"><thead><tr><th>回访客户</th><th>候选商城客户</th><th>匹配度</th><th>商城档案预览</th><th style="width:170px">操作</th></tr></thead><tbody>` +
-    claimCache.map(c => `<tr data-cid="${c._id}">
-      <td><b>${esc(c.customerName)}</b></td>
-      <td>${esc(c.mallName)}<div style="font-size:11px;color:var(--sub);margin-top:2px">${esc(c.reason || '')}</div></td>
-      <td><span class="pill ${c.score >= 60 ? 'warn' : 'gray'}">${c.score} 分</span></td>
-      <td style="font-size:12px;line-height:1.8">注册商城 ${esc(c.mallAddedAt || '—')}<br>最近下单 ${esc(c.mallLastOrderAt || '—')}<br>最近浏览 ${esc(c.mallLastBrowseAt || '—')}<br>签约业务员 ${esc(c.mallSalesman || '—')}</td>
-      <td><button class="btn ghost" style="height:28px;font-size:12px;color:var(--green)" onclick="resolveClaim('${c._id}','confirm')">✓ 确认识领</button>
-          <button class="btn ghost" style="height:28px;font-size:12px;color:var(--danger)" onclick="resolveClaim('${c._id}','reject')">✕ 拒绝</button></td>
-    </tr>`).join('') +
-    `</tbody></table>`;
+  // ⭐ 2026-10-11 新口径：一行 = 一个**商城客户**，右边列出**系统候选**（分数从高到低），老板点「就是这家」即合并。
+  $('claimList').innerHTML = claimGroups.map((g, gi) => {
+    const cands = (g.cands || []).map((c, ci) => `
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid #EDF1F7;border-radius:9px;margin-bottom:6px;background:${ci === 0 ? '#FFF9F6' : '#fff'}">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${esc(c.customerName)}${c.mallCode ? ' <span style="color:#A8B0BB;font-size:12px;font-weight:400">' + esc(c.mallCode) + '</span>' : ''}</div>
+          <div style="font-size:12px;color:var(--sub)">${esc(c.customerRegion || '')} · ${esc(c.customerAddress || '')} · ${esc(c.customerPhone || '')}${c.customerPhone2 ? ' / ' + esc(c.customerPhone2) : ''}</div>
+          <div style="font-size:11px;color:#98A2AE;margin-top:2px">${esc(c.reason || '')} · ${c.score} 分</div>
+        </div>
+        <button class="btn ghost" style="height:26px;font-size:12px;color:var(--green);flex:none" onclick="pairConfirm(${gi},'${c.customerId}')">✓ 就是这家</button>
+      </div>`).join('');
+    return `<div style="border:1px solid #EDF1F7;border-radius:12px;margin-bottom:12px;overflow:hidden">
+      <div style="padding:8px 12px;background:#F8F9FB;border-bottom:1px solid #EDF1F7;font-size:12.5px;color:var(--sub)">
+        <b style="color:#1F2430">商城导入的</b>：${esc(g.mallName || '(未填店名)')}
+        <span style="color:#A8B0BB"> · ${esc(g.mallRegion || '')} · ${esc(g.mallAddress || '')} · ${esc(g.mallPhone || '无电话')}</span>
+        <span style="float:right">${(g.cands || []).length} 个候选</span>
+      </div>
+      <div style="padding:8px 10px">${cands || '<div style="font-size:12.5px;color:#A8B0BB;padding:6px 2px">系统里没有找到相似客户 —— 可以到「🌱 新客开发」里按这条新建</div>'}</div>
+    </div>`;
+  }).join('');
 }
 
+// ⭐ 2026-10-11 新口径的合并入口：老板点「就是这家」→ applyMallPair（店名/电话/地址取商城的；经纬度/商圈保留系统内的）
+async function pairConfirm(gi, customerId) {
+  const g = claimGroups[gi] || {};
+  if (!window.confirm('确认「' + (g.mallName || '') + '」就是系统内的这家客户？\n\n合并后：店名 / 电话 / 地址 取商城的；经纬度 / 商圈 保留系统内的（现场采的为准）。')) return;
+  const res = await api('applyMallPair', { customerId: customerId, mallKey: g.mallKey });
+  if (!res || !res.ok) { alert((res && res.msg) || '合并失败，请稍后再试'); return; }
+  await loadClaims();          // 按项目铁律：改完必须**重新拉一次**（别让老板看到旧列表）
+  alert('已合并 ✅ 这家客户现在是「已加入商城」');
+}
 async function resolveClaim(id, decision) {
   if (!window.confirm(decision === 'confirm'
     ? '确认识领？将把该商城档案（注册时间/最近下单/签约业务员等）写入此回访客户。'
