@@ -1391,14 +1391,22 @@ async function visitRecordsByDay(event) {
 async function newShopDays(event) {
   const days = recDays(Math.min(Math.max(Number(event.days) || 7, 1), 31));
   const from = new Date(days[days.length - 1] + 'T00:00:00+08:00').getTime();
+  // ⭐ 2026-10-11 老板反馈「每日新店总是很慢」：原来这里只回计数，前端还要**按天各发一次请求**取明细
+  //   → 7 天就是 7 次云调用。现在**明细一起回**（7 天的新店就几十家，一次返回很小），前端 1 次就够。
   const rows = await fetchAll('customers', _.and([{ createdAt: _.gte(from), source: 'field' }, NOT_DELETED]),
-    { createdAt: true, mallPending: true }).catch(() => []);
-  const m = {}; days.forEach(d => { m[d] = { day: d, n: 0, pending: 0 }; });
+    { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
+  const m = {}; days.forEach(d => { m[d] = { day: d, n: 0, pending: 0, rows: [] }; });
   (rows || []).forEach(c => {
     const d = new Date((Number(c.createdAt) || 0) + 8 * 3600 * 1000).toISOString().slice(0, 10);
     if (!m[d]) return;
     m[d].n++; if (c.mallPending) m[d].pending++;
+    m[d].rows.push({
+      customerId: c._id, customerName: c.name || c.nameRaw || '', phone: c.phone || '',
+      address: c.address || '', mallCode: c.mallCode || '', mallPending: !!c.mallPending,
+      byName: c.createdByName || '', at: Number(c.createdAt) || 0
+    });
   });
+  days.forEach(d => m[d].rows.sort((a, b) => (b.at || 0) - (a.at || 0)));
   return { ok: true, list: days.map(d => m[d]) };
 }
 async function newShopsByDay(event) {

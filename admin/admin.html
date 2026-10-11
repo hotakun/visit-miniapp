@@ -1558,6 +1558,8 @@ tr.row-off td:not(.keep){opacity:.4}
         <div id="vrTabVisit" onclick="vrGo('visit')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid #F5531C;color:#F5531C">每日拜访</div>
         <div id="vrTabShop" onclick="vrGo('shop')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;color:#68727E">每日新店</div>
         <div id="vrStat" style="margin-left:auto;padding-bottom:12px;font-size:12.5px;color:var(--sub)"></div>
+        <!-- ⭐ 2026-10-11 老板定：加个**主动刷新**（那两页数据要重新拉时点它；每日新店原来很慢，已同时改成一次请求） -->
+        <div onclick="loadVisitRec()" title="重新拉一次" style="padding-bottom:12px;padding-left:12px;font-size:12.5px;font-weight:700;color:#F5531C;cursor:pointer">🔄 刷新</div>
       </div>
       <div id="vrPaneVisit">
         <div id="vrDates" class="card" style="padding:0"></div>
@@ -2440,9 +2442,9 @@ async function vrLoadShop() {
   const days = r.list.filter(d => d.n > 0);
   if (!days.length) { box.innerHTML = '<div class="empty" style="padding:26px;text-align:center;color:#A8B0BB">近 7 天没有新加的店</div>'; return; }
   $('vrStat').textContent = '近 7 天 · 新增 ' + days.reduce((a, x) => a + x.n, 0) + ' 家';
-  const all = await Promise.all(days.map(d => api('newShopsByDay', { day: d.day }).catch(() => null)));
-  box.innerHTML = days.map((d, i) => {
-    const rr = (all[i] && all[i].ok && all[i].rows) || [];
+  // ⚠️ 2026-10-11：明细**已随 newShopDays 一起返回**（原来这里按天各发一次请求 → 很慢）
+  box.innerHTML = days.map(d => {
+    const rr = d.rows || [];
     return '<div style="padding:11px 16px;background:#FAFBFC;font-weight:800;font-size:13.5px;border-top:1px solid #F0F2F6">' +
       d.day + ' ' + vrWeek(d.day) + '<span style="color:#F5531C;margin-left:8px">新增 ' + d.n + ' 家</span>' +
       (d.pending ? '<span style="font-weight:600;color:#C2410C;font-size:12.5px;margin-left:8px">其中待商城建档 ' + d.pending + '</span>' : '') + '</div>' +
