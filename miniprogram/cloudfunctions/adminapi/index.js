@@ -1378,7 +1378,10 @@ async function visitRecordsByDay(event) {
       return {
         visitId: v._id || '', taskId: v.taskId || '',        // ⭐ 2026-10-11：给后台「拜访详情」用（openVisitDetail 需要 taskId）
         customerId: v.customerId || '', customerName: c.name || '',
-        mallCode: c.mallCode || (c.nameRaw || '').split(' ')[0] || '',
+        // ⚠️⚠️ 2026-10-11 修（老板报「店名前面应该是编号，怎么文字也重复一遍」）：
+        //   **绝不能用 nameRaw 去"猜"编号** —— 没编号的店（现场录的）nameRaw 本身就是店名，
+        //   猜出来的"编号"== 店名 → 渲染成「吃货铺小酒馆 吃货铺小酒馆」这种重复。有编号才有，没有就空着。
+        mallCode: c.mallCode || '',
         salesmanId: v.salesmanId || '', salesmanName: v.salesmanName || '',
         result: v.result || '', at: v.finishedAt || v.startedAt || 0
       };
