@@ -3828,14 +3828,27 @@ async function fixDupCustomers(event) {
       if (r.phone !== undefined) data.phone = String(r.phone || '').trim();
       if (r.address) data.address = String(r.address).trim();
       if (r.region) data.region = String(r.region).trim();
-      // ⚠️ 还原「这条本来没进商城」：清掉上次误写的商城标记
+      // ⚠️⚠️ 2026-10-12【老板补要求】：「他们根本没有进商城，**不会有加入商城时间和业务员，更没有商城等级**」
+      //   —— 光清 mallKey / customerType 不够：`MALL_FIELD_PAIRS` 那 14 项落点**全要清**，
+      //      否则客户详情页上还会显示"聚·星火会员""商城业务员""最近下单"这些根本不该有的东西。
       if (r.unmall) {
         data.customerType = 'new';
+        data.mallPending = true;
+        // ① 商城侧 14 项落点（见 MALL_FIELD_PAIRS / mallFieldsFrom）—— 一个不留
         data.mallKey = '';
         data.mallCode = '';
-        data.mallPending = true;
-        data.mallMatchedAt = 0;
         data.mallJoinedAt = '';
+        data.mallSalesman = '';
+        data.mallLevel = '';
+        data.mallSource = '';
+        data.mallTags = '';
+        data.mallCategory = '';
+        data.lastOrderAt = '';
+        data.lastBrowseAt = '';
+        // ② 比对留下的痕迹也清掉
+        data.mallMatchScore = 0;
+        data.mallMatchedAt = 0;
+        data.mallPairedByHand = false;
       }
       await db.collection('customers').doc(r.id).update({ data: data });
       done++;
