@@ -2297,7 +2297,7 @@ tr.row-off td:not(.keep){opacity:.4}
           <p><input type="file" id="mallFile" accept=".xls,.xlsx" onchange="pickMallFile()"></p>
         </div>
         <div id="mallStep2" style="display:none">
-          <p>解析成功：共 <b id="mallTotal"></b> 条商城客户。前 5 条预览：</p>
+          <p>解析成功：共 <b id="mallTotal"></b> 条商城客户，全部如下（多了可滚动）：</p>
           <table class="tbl"><thead><tr><th>名称</th><th>手机</th><th>注册时间</th><th>最近下单</th><th>最近浏览</th><th>等级</th></tr></thead>
           <tbody id="mallPreview"></tbody></table>
         </div>
@@ -11704,7 +11704,9 @@ async function pickMallFile() {
     if (!j.ok) { alert(j.msg || '解析失败'); return; }
     mallRows = j.rows;
     $('mallTotal').textContent = j.total + ' 条';
-    $('mallPreview').innerHTML = j.preview.map(c => `<tr>
+    // ⚠️ 2026-10-12 老板：「为什么只预览前 5 条？你显示全部出来，多了就滚动」
+    //   原来渲染的是**云端只回的那 5 条**（j.preview）→ 改成渲染**全量**（mallRows），弹窗自己滚。
+    $('mallPreview').innerHTML = mallRows.map(c => `<tr>
       <td><b>${esc(c.name)}</b></td><td>${esc(c.phone)}</td><td>${esc(c.addedAt || '—')}</td>
       <td>${esc(c.lastOrderAt || '—')}</td><td>${esc(c.lastBrowseAt || '—')}</td>
       <td>${esc(c.level || '—')}</td></tr>`).join('');
