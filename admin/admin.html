@@ -470,6 +470,11 @@ tr.row-off td:not(.keep){opacity:.4}
 .title-bar .r{margin-left:auto}
 /* 导入弹层 */
 .ovl{position:fixed;inset:0;background:rgba(20,25,35,.5);display:flex;align-items:center;justify-content:center;z-index:60}
+/* ⭐ 2026-10-11 老板报障修（「商城配对确认」弹窗没关闭键、没滚动条、小得没法用，只能关整个系统）：
+   ① 加宽到 980px  ② 整体限高 88vh 并改成**列布局**  ③ 让**中间内容区自己滚动**（标题与底部按钮固定不动）
+   ④ 标题栏右上角常驻 ✕。⚠️ 只针对这个弹层 #claimModal，**不动公用 .modal** */
+#claimModal{max-height:88vh;display:flex;flex-direction:column}
+#claimModal #claimList{overflow-y:auto}
 /* ⭐ 2026-10-03：弹窗里的文字**允许选中** —— 全局 html,body 是 user-select:none，只放开了 input/textarea，
    所以老板想复制防重检测的报错信息时选不中。弹窗内容属于"信息"，放开是安全的。 */
 .modal{background:#fff;border-radius:16px;padding:22px;width:520px;max-width:92vw;max-height:84vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);-webkit-user-select:text;user-select:text}
@@ -2265,11 +2270,16 @@ tr.row-off td:not(.keep){opacity:.4}
 
     <!-- 待确认认领清单弹层 -->
     <div class="ovl" id="claimOvl" style="display:none">
-      <div class="modal" style="width:620px;max-width:92vw">
-        <div class="mt" id="claimTitle">📋 待确认认领清单</div>
-        <div class="hint" style="margin-bottom:12px">比对发现的"疑似匹配"客户需人工确认：<b>确认</b> = 把该商城档案（注册时间/最近下单/签约业务员等）写入回访客户；<b>拒绝</b> = 保持现状不关联。人工处理过的结果在下次比对时不会被覆盖。</div>
-        <div id="claimList"><div class="loading">加载中…</div></div>
-        <div style="display:flex;justify-content:flex-end;margin-top:16px">
+      <div class="modal" id="claimModal" style="width:980px;max-width:94vw">
+        <div class="mt" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span id="claimTitle">🛒 商城配对确认</span>
+          <!-- ⭐ 2026-10-11 修：右上角**常驻**关闭键（原来只有底部一个，内容一长就被顶到屏幕外 → 关不掉） -->
+          <span style="margin-left:auto;cursor:pointer;color:#A8B0BB;font-size:22px;line-height:1;padding:0 4px" title="关闭" onclick="$('claimOvl').style.display='none'">✕</span>
+        </div>
+        <div class="hint" style="margin-bottom:10px">每一条是<b>商城导入的</b>，下面按"像的程度"列出<b>系统里的候选</b>：点 <b>「✓ 就是这家」</b> 即合并（店名/电话/地址取商城的，<b>经纬度/商圈保留系统内的</b>）；系统里确实没有的，点 <b>「➕ 新建这条客户」</b>（<b>坐标必填</b>）。</div>
+        <!-- ⭐ 2026-10-11 修：这个区域**自己滚动**（标题与底部按钮固定不动）—— 原来没有滚动条，长内容够不着 -->
+        <div id="claimList" style="flex:1;min-height:0;overflow-y:auto;padding-right:4px"><div class="loading">加载中…</div></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
           <button class="btn ghost" onclick="$('claimOvl').style.display='none'">关闭</button>
         </div>
       </div>
