@@ -1551,7 +1551,9 @@ tr.row-off td:not(.keep){opacity:.4}
     <!-- ⭐ 2026-10-11 老板定：📝 拜访记录（口径见交接文档 §0.0z21；定稿 _scratch/拜访记录-演示.html）——
          两个标签页：①每日拜访（日期卡片 → 点进去 → 按业务员分组的客户行）②每日新店（按天列新录的店）
          ⚠️ 每行两个按钮与客户管理列表一致；没有拜访记录的行「拜访详情」置灰不可点 -->
-    <div id="page-visitrec" style="display:none">
+    <!-- ⚠️ 2026-10-11 老板报障「不能滚动查看」：`.main` 是 overflow:hidden，
+         每个页面**必须自己**声明 flex:1;min-height:0;overflow-y:auto（见本文件 CSS 区的铁律注释） -->
+    <div id="page-visitrec" style="display:none;flex:1;min-height:0;overflow-y:auto;padding-bottom:6px">
       <div style="display:flex;align-items:flex-end;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px">
         <div id="vrTabVisit" onclick="vrGo('visit')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid #F5531C;color:#F5531C">每日拜访</div>
         <div id="vrTabShop" onclick="vrGo('shop')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;color:#68727E">每日新店</div>

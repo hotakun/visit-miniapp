@@ -1401,7 +1401,9 @@ async function newShopsByDay(event) {
   const day = String(event.day || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, code: 'BAD_ARG', msg: '日期不合法' };
   const t0 = new Date(day + 'T00:00:00+08:00').getTime();
-  const rows = await fetchAll('customers', _.and([{ createdAt: _.gte(t0).and(_.lt(t0 + 86400000)), source: 'field' }, NOT_DELETED]),
+  // ⚠️ 2026-10-11 修（老板报「没有前两天新加的店铺」）：`_.gte(x).and(_.lt(y))` 这种**链式**写法在 where 里不稳
+  //   （症状：日期标题在、下面却列不出店）→ 拆成标准的 `_.and([...])` 多条件写法
+  const rows = await fetchAll('customers', _.and([{ source: 'field' }, { createdAt: _.gte(t0) }, { createdAt: _.lt(t0 + 86400000) }, NOT_DELETED]),
     { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
   return {
     ok: true, day, total: (rows || []).length,
