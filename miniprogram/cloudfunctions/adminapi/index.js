@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -753,6 +753,7 @@ exports.main = async (event) => {
     if (action === 'exportTasksForSync') return await exportTasksForSync(event);
     if (action === 'exportVisitedCustomers') return await exportVisitedCustomers(event);
     if (action === 'exportVisitsForSync') return await exportVisitsForSync(event);   // ⭐ 2026-10-11：拜访**明细**导出（给 pgsync）
+    if (action === 'applyMallPair') return await applyMallPair(event);              // ⭐ 2026-10-11：商城**人工配对**的合并（「🛒 商城配对确认」页用）
     if (action === 'finishTask') return await finishTask(event);
     if (action === 'deleteCustomers') return await deleteCustomers(event);
     if (action === 'getTempFileURL') return await getTempFileURL(event);
@@ -3538,6 +3539,65 @@ async function listMallClaims(event) {
       };
     })
   };
+}
+
+// ⭐ 2026-10-11 老板定：「商城配对确认」—— 老板在页面上勾选"这两家是同一家"之后，由它来**合并**。
+//   口径（权威文档：`_scratch/商城配对确认-口径与实测.md`）：
+//     · 店名 / 电话 / 地址 / 地区 → **商城优先**（商城有值就覆盖）
+//     · **经纬度 / 商圈 → 一律保留系统内的**（商城表不附带经纬度；坐标硬拦在 MALL_NO_TOUCH）
+//     · **电话**（老板定）：两边不同 → 按 `1`（商城）· `2`（系统）排、**两个都留着**；
+//                            加起来**三个**不同 → **只保留「商城的 + 系统的第一个」**
+//     · 标记：`customerType='mall'` + `mallPending=false` → 代表「已加入商城」
+//   ⚠️ 与老的 `resolveMallClaim` 的区别：那个是旧三档时代的"同意认领"（字段表手写、没电话规则）；
+//      这个是**新口径的人工配对**，字段抽取复用 `mallFieldsFrom()`（与导入/刷新同一张表，口径不会漂移）。
+async function applyMallPair(event) {
+  const customerId = String((event && event.customerId) || '');
+  const mallKey = String((event && event.mallKey) || '');
+  if (!customerId || !mallKey) return { ok: false, code: 'BAD_ARG', msg: '缺少参数' };
+  const now = Date.now();
+  const custRes = await db.collection('customers').doc(customerId).get().catch(() => null);
+  const c = custRes && custRes.data;
+  if (!c || c.deleted === true) return { ok: false, code: 'CUST_NOT_FOUND', msg: '系统内客户不存在' };
+  const mRes = await db.collection('mall_customers').where({ mallKey }).limit(1).get().catch(() => ({ data: [] }));
+  const m = (mRes.data || [])[0];
+  if (!m) return { ok: false, code: 'MALL_NOT_FOUND', msg: '商城库里找不到这条（可能已被清掉）' };
+
+  // ① 商城侧字段（复用同一张表 + 同一个坐标硬拦 —— 见 MALL_FIELD_PAIRS / MALL_NO_TOUCH）
+  const data = Object.assign(mallFieldsFrom(m), {
+    updatedAt: now,
+    mallMatchScore: 100,        // 人工确认 = 满分
+    mallMatchedAt: now,
+    mallPairedByHand: true      // ⭐ 标记：这条是**人工配对**的（区别于旧的自动认领）
+  });
+
+  // ② ⭐ 电话规则（老板 2026-10-11）
+  const mallPhone = String(m.phone || m.contactPhone || '').trim();
+  const sysPhone = String(c.phone || '').trim();
+  if (mallPhone) {
+    data.phone = mallPhone;                                            // 商城优先
+    if (sysPhone && sysPhone !== mallPhone) data.phone2 = sysPhone;    // 不同 → 系统的排 2
+    if (sysPhone && sysPhone === mallPhone) data.phone2 = '';          // 相同 → 只留一个
+    // ⚠️ 系统原有的 phone2（第 3 个电话）**不保留** —— 老板："加起来有三个不同电话，就保留商城和系统第一个电话号码"
+  }
+
+  // ③ 标记「已加入商城」
+  data.customerType = 'mall';
+  data.mallPending = false;
+  data.mallPendingDoneAt = now;
+
+  await db.collection('customers').doc(customerId).update({ data });
+
+  // ④ 顺带把对应的"待确认认领"记录收尾（有就改，没有就算了；失败不影响合并）
+  try {
+    const cl = await db.collection('mall_claims').where({ customerId, mallKey, status: 'pending' }).limit(5).get();
+    for (const x of (cl.data || [])) {
+      await db.collection('mall_claims').doc(x._id).update({
+        data: { status: 'confirmed', resolvedAt: now, resolvedBy: (event._admin && event._admin.name) || '', byHand: true }
+      });
+    }
+  } catch (e) { console.error('[applyMallPair] 收尾 claims 失败（不影响合并）', e); }
+
+  return { ok: true, customerId: customerId, mallKey: mallKey };
 }
 
 async function resolveMallClaim(event) {
