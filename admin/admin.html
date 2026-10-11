@@ -11800,7 +11800,10 @@ function renderClaimList() {
         <span style="color:#A8B0BB"> · ${esc(g.mallRegion || '')} · ${esc(g.mallAddress || '')} · ${esc(g.mallPhone || '无电话')}</span>
         <span style="float:right">${(g.cands || []).length} 个候选</span>
       </div>
-      <div style="padding:8px 10px">${cands || '<div style="font-size:12.5px;color:#A8B0BB;padding:6px 2px">系统里没有找到相似客户 —— 可以到「🌱 新客开发」里按这条新建</div>'}</div>
+      <div style="padding:6px 2px">
+        <div style="font-size:12.5px;color:#B77400;margin-bottom:6px">系统里没有找到相似客户 —— 可以按商城这条**新建**（🔴 <b>经纬度必填</b>：没坐标 → 地图上没点 → 业务员到不了）</div>
+        <button class="btn p" style="height:30px;font-size:12.5px" onclick="mallNewOpen(${gi})">➕ 新建这条客户</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -11814,6 +11817,128 @@ async function pairConfirm(gi, customerId) {
   await loadClaims();          // 按项目铁律：改完必须**重新拉一次**（别让老板看到旧列表）
   alert('已合并 ✅ 这家客户现在是「已加入商城」');
 }
+// ⭐ 2026-10-11 老板定：「系统里确实没有」→ 文员手工新建，**经纬度必填**
+//   （老板："没有经纬度，地图上无法选点，业务员永远不能到达，那就没有意义了"）。
+//   · 坐标：从腾讯/高德地图**复制粘贴**（兼容「纬度,经度」和「经度,纬度」两种）或手输
+//   · 填完坐标 → 【🔍 搜周围相似的店】：用**本地缓存**的全库客户点算距离（零请求 —— 符合"看数据先读本地"铁律）
+//   · 商圈：调 bizSuggest（200→500 米）给建议，可改
+//   · 建立 → createMallCustomer（云端会**再校验一次坐标**）
+let mallNew = null;
+function mallNewOpen(gi) {
+  const g = claimGroups[gi] || {};
+  mallNew = {
+    gi: gi, mallKey: g.mallKey || '',
+    form: { name: g.mallName || '', phone: g.mallPhone || '', address: g.mallAddress || '', bizCircle: '' },
+    nearby: [], nearDone: false, suggest: '', busy: false, msg: ''
+  };
+  mallNewRender();
+}
+function mallNewRender() {
+  if (!mallNew) return;
+  const f = mallNew.form, ll = mallNew.ll || null;
+  $('claimList').innerHTML =
+    '<div style="border:1px solid #FBE0CF;background:#FFFDFB;border-radius:12px;padding:12px 14px">' +
+    '<div style="font-weight:800;font-size:13px;margin-bottom:8px">➕ 新建这条客户（商城有、系统里没有）</div>' +
+    '<div style="font-size:12.5px;line-height:2.2">' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">店名</span><input id="mnName" value="' + esc(f.name) + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:220px"></div>' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">电话</span><input id="mnPhone" value="' + esc(f.phone) + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:220px"></div>' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">地址</span><input id="mnAddr" value="' + esc(f.address) + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:320px"></div>' +
+    '<div><span style="color:#F5531C;font-weight:800;display:inline-block;width:56px">经纬度*</span>' +
+    '<input id="mnLL" placeholder="如 28.961303,120.181189（微信/腾讯地图长按可复制）" value="' + esc(ll ? (ll.lat + ',' + ll.lng) : '') + '" style="border:1px solid #F5531C;border-radius:7px;padding:3px 8px;width:230px"></div>' +
+    '<div style="font-size:11.5px;color:#B77400;padding-left:56px">🔴 <b>必填</b> —— 没坐标 → 地图上没有点 → 业务员永远到不了这家</div>' +
+    '</div>' +
+    '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">' +
+    '<button class="btn g" style="height:28px;font-size:12.5px" onclick="mallNewNearby()">🔍 搜索周围相似的店</button>' +
+    '<span style="font-size:11.5px;color:var(--sub);margin-left:6px">万一系统里其实有（名字/电话不像），这一步能救回来</span>' +
+    '<div id="mnNear" style="margin-top:8px">' + mallNewNearHtml() + '</div></div>' +
+    '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.5px">' +
+    '<div>📍 <b>商圈</b>（有坐标就自动算：先 200 米，参考少再 500 米）</div>' +
+    '<div style="margin-top:6px"><input id="mnBiz" value="' + esc(f.bizCircle) + '" placeholder="点右边自动算，或手填" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:190px">' +
+    '<button class="btn ghost" style="height:26px;font-size:12px;padding:0 8px;margin-left:6px" onclick="mallNewSuggestBiz()">按坐标算商圈</button>' +
+    '<span style="color:#12A150;margin-left:8px">' + esc(mallNew.suggest || '') + '</span></div></div>' +
+    '<div style="margin-top:12px"><button class="btn p" style="height:32px;font-size:13px" onclick="mallNewCreate()">✅ 建立并标记「已加入商城」</button>' +
+    '<button class="btn g" style="height:32px;font-size:13px;margin-left:8px" onclick="mallNew=null;loadClaims()">取消</button>' +
+    '<span style="color:#B77400;margin-left:8px;font-size:12px">' + esc(mallNew.msg || '') + '</span></div></div>';
+}
+function mallNewNearHtml() {
+  if (!mallNew || !mallNew.nearDone) return '<span style="font-size:12px;color:#A8B0BB">（还没搜）</span>';
+  if (!mallNew.nearby.length) return '<span style="font-size:12px;color:#12A150">周围没有相似的店 —— 放心新建</span>';
+  return mallNew.nearby.map(c =>
+    '<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid #EDF1F7;border-radius:8px;margin-bottom:5px;background:#fff">' +
+    '<div style="flex:1;min-width:0;font-size:12.5px"><b>' + esc(c.name || '') + '</b><span style="color:var(--sub)"> · ' + c.dist + ' 米 · ' + esc(c.addr || '') + '</span></div>' +
+    '<button class="btn ghost" style="height:24px;font-size:12px;color:var(--green)" onclick="mallNewMergeTo(\'' + c.id + '\')">就是它 → 合并</button></div>').join('');
+}
+// 读坐标输入框：兼容「纬度,经度」与「经度,纬度」（按中国范围判断）
+function mallNewReadLL() {
+  const s = String(($('mnLL') && $('mnLL').value) || '').trim();
+  const a = s.split(/[,\s，、]+/).map(Number).filter(x => x);
+  if (a.length < 2 || !a[0] || !a[1]) return null;
+  if (a[0] > 60 && a[1] < 60) return { lat: a[1], lng: a[0] };   // 粘的是 经度,纬度
+  return { lat: a[0], lng: a[1] };
+}
+async function mallNewNearby() {
+  if (!mallNew) return;
+  const ll = mallNewReadLL();
+  if (!ll) { mallNew.msg = '⚠️ 先填经纬度再搜'; mallNewRender(); return; }
+  mallNew.ll = ll;
+  try {
+    await ensureCustLocal();                                   // 本地缓存（全库客户点）
+    const pts = (typeof custPoints === 'function') ? custPoints() : [];
+    const R = 500;                                             // 搜 500 米（200 米太少会漏）
+    const out = [];
+    for (const p of pts) {
+      if (!p.la || !p.ln) continue;
+      const dm = Math.pow((p.la - ll.lat) * 111320, 2) + Math.pow((p.ln - ll.lng) * 111320 * Math.cos(ll.lat * Math.PI / 180), 2);
+      const d = Math.sqrt(dm);
+      if (d <= R) out.push({ id: p.i, name: p.nr || p.n || '', addr: p.ad || '', dist: Math.round(d) });
+    }
+    out.sort((x, y) => x.dist - y.dist);
+    mallNew.nearby = out.slice(0, 8);
+    mallNew.nearDone = true;
+  } catch (e) { mallNew.msg = '搜索失败（本地缓存没准备好？）'; }
+  mallNewRender();
+}
+async function mallNewSuggestBiz() {
+  const ll = mallNewReadLL();
+  if (!ll) { mallNew.msg = '⚠️ 先填经纬度'; mallNewRender(); return; }
+  mallNew.ll = ll; mallNew.suggest = '计算中…'; mallNewRender();
+  const r = await api('bizSuggest', { lat: ll.lat, lng: ll.lng }).catch(() => null);
+  if (r && r.ok) {
+    mallNew.suggest = '建议：' + (r.suggest || '（附近没有参考）') + '（' + r.radius + ' 米内 ' + r.total + ' 家有商圈）';
+    if (r.suggest) { mallNew.form.bizCircle = r.suggest; }
+  } else { mallNew.suggest = '算不出来，可手填'; }
+  mallNewRender();
+}
+async function mallNewCreate() {
+  if (!mallNew) return;
+  const ll = mallNewReadLL();
+  if (!ll) { mallNew.msg = '⚠️ 必须先填经纬度（否则业务员导航不到）'; mallNewRender(); return; }
+  mallNew.form.name = ($('mnName') && $('mnName').value) || mallNew.form.name;
+  mallNew.form.phone = ($('mnPhone') && $('mnPhone').value) || '';
+  mallNew.form.address = ($('mnAddr') && $('mnAddr').value) || '';
+  mallNew.form.bizCircle = ($('mnBiz') && $('mnBiz').value) || '';
+  if (!String(mallNew.form.name || '').trim()) { mallNew.msg = '⚠️ 店名不能空'; mallNewRender(); return; }
+  mallNew.msg = '建立中…'; mallNewRender();
+  const r = await api('createMallCustomer', {
+    mallKey: mallNew.mallKey, name: mallNew.form.name, phone: mallNew.form.phone,
+    address: mallNew.form.address, lat: ll.lat, lng: ll.lng,
+    region: (claimGroups[mallNew.gi] || {}).mallRegion || '', bizCircle: mallNew.form.bizCircle
+  }).catch(() => null);
+  if (!r || !r.ok) { mallNew.msg = '❌ ' + ((r && r.msg) || '建立失败'); mallNewRender(); return; }
+  mallNew = null;
+  await loadClaims();
+  alert('已建立 ✅ 这家客户带坐标，业务员能导航到了');
+}
+async function mallNewMergeTo(customerId) {
+  if (!mallNew) return;
+  const keys = mallNew.mallKey;
+  mallNew = null;
+  const r = await api('applyMallPair', { customerId: customerId, mallKey: keys }).catch(() => null);
+  if (!r || !r.ok) { alert((r && r.msg) || '合并失败'); await loadClaims(); return; }
+  await loadClaims();
+  alert('已合并 ✅（这家系统里其实有，没重复建）');
+}
+
 async function resolveClaim(id, decision) {
   if (!window.confirm(decision === 'confirm'
     ? '确认识领？将把该商城档案（注册时间/最近下单/签约业务员等）写入此回访客户。'
