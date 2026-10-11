@@ -11793,6 +11793,35 @@ async function loadClaims() {
   try {
     const res = await api('mallPairList', { limit: 300 });
     claimGroups = (res && res.ok && res.groups) ? res.groups : [];
+    // ⭐⭐ 2026-10-12【老板定案：**不用云端的"客户池"，候选在本地算**】
+    //   老板原话：「缓存里面有库，服务器上面有库，你为什么要建立什么池子？」
+    //   → 云端只给"这次导入的那几家"（店名/电话/地址），**候选拿本地缓存的全库**逐条比：
+    //     零请求、毫秒级、**不可能漏**。
+    //   （原来那个"池子"是早期"整个商城库 ↔ 整个客户库"对着扫的产物，得先把客户拉到云端内存里；
+    //     它拉不全 → 连「安顺屯滋味」这种**同名店**都配不上 —— 就是这两天所有怪现象的根。）
+    //   规则（老板 2026-10-12 定）：① 电话相同 → 100 分 ② **店名一个字都不差** → 95 分（地址也一字不差 98）；其余不列。
+    try {
+      const loc = await ensureCustLocal();
+      const pts = (loc && loc.points) || [];
+      const norm1 = s => String(s || '').replace(/[（(【\[].*?[)）】\]]/g, '').replace(/[\s，。、·—\-_/\\"'“”‘’':：]+/g, '');
+      claimGroups.forEach(g => {
+        const mName = norm1(g.mallName || ''), mPhone = String(g.mallPhone || '').trim();
+        const out = [];
+        for (let k = 0; k < pts.length; k++) {
+          const p = pts[k];
+          const pName = norm1(p.nr || p.n || ''), pPhone = String(p.ph || '').trim();
+          let score = 0, reason = '';
+          if (mPhone && pPhone && mPhone === pPhone) { score = 100; reason = '电话一致'; }
+          else if (mName && pName && mName === pName) { score = 95; reason = '店名完全一致'; }
+          if (!score) continue;
+          out.push({ customerId: p.i, customerName: p.nr || p.n || '', customerPhone: p.ph || '',
+                     customerPhone2: '', customerAddress: p.ad || '', customerRegion: p.rg || '',
+                     mallCode: p.mc || '', lat: p.la || 0, lng: p.ln || 0, score: score, reason: reason });
+        }
+        out.sort((a, b) => b.score - a.score);
+        g.cands = out.slice(0, 5);
+      });
+    } catch (e2) { console.warn('[商城配对] 本地算候选失败（先用云端给的）', e2); }
   } catch (e) {
     claimGroups = [];
   }
