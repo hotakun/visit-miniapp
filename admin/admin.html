@@ -1545,7 +1545,10 @@ tr.row-off td:not(.keep){opacity:.4}
              （老板 2026-10-07 原话"一个页面才符合逻辑"）。今天老板又问："为什么一件事情我要分别到两个
              不同的页面去操作？" → 「🛒 商城配对确认」搬回这里（我 10-11 把它放到「📥 导入信息」页，是错的）。 -->
         <button class="btn primary btn-sm" id="claimBtn" style="display:none" onclick="openClaims()">🛒 商城配对确认<span class="badge" id="claimBadge" style="display:none"></span></button>
-        <button class="btn primary btn-sm" onclick="openMallMatchForField()">🔎 与商城库比对</button>
+        <!-- ⚠️⚠️ 2026-10-12 撤掉「🔎 与商城库比对」：它是**旧入口**，带着老板早已作废的
+             「✅ 自动认领 N 家（≥75 分直接写档案）」三档逻辑（老板截图质问"你还在搞什么"）。
+             它和「🛒 商城配对确认」（老板定的：**全部人工确认**）做同一件事、规矩却相反
+             → 一并撤掉，只留一条路。函数 openMallMatchForField 保留为死代码（要恢复从这里加回按钮即可）。 -->
       </div>
       <div class="card" style="padding:0">
         <div id="fieldList" class="np-list" style="padding:10px"><div class="np-empty">加载中…</div></div>
