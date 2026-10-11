@@ -685,7 +685,7 @@ tr.row-off td:not(.keep){opacity:.4}
     <div class="grp">工作台</div>
     <div class="ni dis" title="开发中">📊 仪表盘</div>
     <div class="ni on" data-p="tasks" onclick="nav('tasks')">🧭 任务管理</div>
-    <div class="ni dis" title="开发中">📝 拜访记录</div>
+    <div class="ni" data-p="visitrec" onclick="nav('visitrec'); loadVisitRec()">📝 拜访记录</div>
     <div class="ni dis" title="开发中（销售导入后可用）">📈 效果报表</div>
     <div class="ni" data-p="customers" onclick="nav('customers')">🗃️ 批次管理</div>
     <div class="ni" data-p="geo" onclick="nav('geo')">🏪 客户管理</div>
@@ -1548,6 +1548,24 @@ tr.row-off td:not(.keep){opacity:.4}
          两个 Tab：**重点消息**（要人做决定 → 计入角标数字）/ **滚动消息**（业务员动态流水 → 只读）。
          重点消息里**就地审核**：坐标修正 / 现场提报 → 直接采纳/忽略；注册审核 / 任务审核 → 跳原页处理。
          数字只在**这里处理完**才减（点开铃铛不清零）。 -->
+    <!-- ⭐ 2026-10-11 老板定：📝 拜访记录（口径见交接文档 §0.0z21；定稿 _scratch/拜访记录-演示.html）——
+         两个标签页：①每日拜访（日期卡片 → 点进去 → 按业务员分组的客户行）②每日新店（按天列新录的店）
+         ⚠️ 每行两个按钮与客户管理列表一致；没有拜访记录的行「拜访详情」置灰不可点 -->
+    <div id="page-visitrec" style="display:none">
+      <div style="display:flex;align-items:flex-end;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px">
+        <div id="vrTabVisit" onclick="vrGo('visit')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid #F5531C;color:#F5531C">每日拜访</div>
+        <div id="vrTabShop" onclick="vrGo('shop')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;color:#68727E">每日新店</div>
+        <div id="vrStat" style="margin-left:auto;padding-bottom:12px;font-size:12.5px;color:var(--sub)"></div>
+      </div>
+      <div id="vrPaneVisit">
+        <div id="vrDates" class="card" style="padding:0"></div>
+        <div id="vrDay" style="display:none"></div>
+      </div>
+      <div id="vrPaneShop" style="display:none">
+        <div id="vrShop" class="card" style="padding:0"></div>
+      </div>
+    </div>
+
     <div id="page-msg" style="display:none">
       <!-- ⭐ 2026-09-28 晚 老板定：**两张卡并排** —— 左半边「滚动消息」、右半边「重点消息」（不分 Tab） -->
       <div style="display:flex;gap:14px;align-items:flex-start">
@@ -2324,6 +2342,108 @@ let nwSalesman = null;
 let custCache = [];
 let taskCache = [];
 
+// ===== ⭐ 2026-10-11 老板定：📝 拜访记录（两个 Tab；口径见交接文档 §0.0z21，定稿 _scratch/拜访记录-演示.html）=====
+//   ①「每日拜访」日期卡片 → 点进去 → **按业务员分组**的客户行（编号+店名+结果+时间+两个按钮）
+//   ②「每日新店」按天列新录的店（店名+地址电话+录入人+已入商城/待商城建档）
+//   ⚠️ 两个按钮与客户管理列表一致；**没有拜访记录的行「拜访详情」置灰不可点**
+let vrTab = 'visit';
+function vrTabCss(on) {
+  return 'padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid ' +
+    (on ? '#F5531C;color:#F5531C' : 'transparent;color:#68727E');
+}
+function vrWeek(day) { const t = new Date(String(day) + 'T00:00:00+08:00'); return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][t.getDay()] || ''; }
+function vrHM(ms) { const d = new Date(Number(ms) || 0); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+function vrTagCls(r) {
+  const s = String(r || '');
+  if (/正常回访|加入商城|已下单/.test(s)) return 'green';
+  if (/需要样品/.test(s)) return 'r-warm';
+  if (/有抵触/.test(s)) return 'r-resist';
+  if (/关门/.test(s)) return 'warn';
+  if (/闭店|搬迁/.test(s)) return 'r-close';
+  return 'gray';
+}
+function vrCode(code) { return code ? '<span style="color:#98A2AE;font-weight:800;margin-right:6px">' + esc(code) + '</span>' : ''; }
+function vrCustBtn(id) { return '<button class="btn ghost" style="height:30px;font-size:12px" onclick="showCustDetail(\'' + id + '\')">客户详情</button>'; }
+function vrVisitBtn(id, has) {
+  return has
+    ? '<button class="btn ghost" style="height:30px;font-size:12px" onclick="openVisitDetail(\'' + id + '\')">拜访详情</button>'
+    : '<button class="btn ghost" style="height:30px;font-size:12px;color:#C4CAD1;cursor:default;pointer-events:none">拜访详情</button>';
+}
+window.vrGo = function (t) {
+  vrTab = t;
+  $('vrTabVisit').style.cssText = vrTabCss(t === 'visit');
+  $('vrTabShop').style.cssText = vrTabCss(t === 'shop');
+  $('vrPaneVisit').style.display = (t === 'visit') ? '' : 'none';
+  $('vrPaneShop').style.display = (t === 'shop') ? '' : 'none';
+  $('vrStat').textContent = '';
+};
+window.loadVisitRec = async function () { if (vrTab === 'visit') await vrLoadDays(); else await vrLoadShop(); };
+async function vrLoadDays() {
+  const box = $('vrDates');
+  box.style.display = ''; $('vrDay').style.display = 'none';
+  box.innerHTML = '<div class="loading">加载中…</div>';
+  const r = await api('visitRecordDays', { days: 7 }).catch(() => null);
+  if (!r || !r.ok) { box.innerHTML = '<div class="empty">加载失败，请稍后再试</div>'; return; }
+  const sum = r.list.reduce((a, x) => a + (x.visits || 0), 0);
+  $('vrStat').textContent = '近 7 天 · 共 ' + sum + ' 家拜访';
+  box.innerHTML = r.list.map(d =>
+    '<div onclick="vrOpenDay(\'' + d.day + '\')" style="display:flex;align-items:center;gap:14px;padding:15px 16px;border-top:1px solid #F7F8FA;cursor:pointer">' +
+    '<span style="font-size:17px;font-weight:800;min-width:104px">' + d.day.slice(5) +
+    '<span style="font-size:12.5px;font-weight:600;color:#98A2AE;margin-left:4px">' + vrWeek(d.day) + '</span></span>' +
+    '<span style="color:#68727E">拜访 <b style="color:#F5531C">' + d.visits + '</b> 家 · 覆盖 ' + d.customers + ' 位客户 · ' + d.salesmen + ' 名业务员</span>' +
+    '<span style="margin-left:auto;color:#C3CAD4;font-size:20px">›</span></div>').join('');
+}
+window.vrOpenDay = async function (day) {
+  const box = $('vrDay');
+  $('vrDates').style.display = 'none'; box.style.display = '';
+  box.innerHTML = '<div class="card" style="padding:16px"><div class="loading">加载中…</div></div>';
+  const r = await api('visitRecordsByDay', { day: day }).catch(() => null);
+  const back = '<div style="display:inline-flex;align-items:center;gap:6px;color:#68727E;font-weight:700;cursor:pointer;padding:6px 2px 12px" onclick="vrLoadDays()">‹ 返回日期列表</div>';
+  if (!r || !r.ok) { box.innerHTML = back + '<div class="card" style="padding:16px"><div class="empty">加载失败，请稍后再试</div></div>'; return; }
+  const g = {};
+  r.rows.forEach(v => { const k = v.salesmanId || '_'; (g[k] = g[k] || { name: v.salesmanName || '未署名', rows: [] }).rows.push(v); });
+  const keys = Object.keys(g).sort((a, b) => g[b].rows.length - g[a].rows.length);
+  box.innerHTML = back + '<div class="card" style="padding:0">' +
+    '<div style="padding:13px 16px;border-bottom:1px solid #F0F2F6;font-weight:800">' + day + ' ' + vrWeek(day) +
+    '<span style="margin-left:8px;font-weight:600;color:#98A2AE;font-size:12.5px">' + r.total + ' 家 · ' + keys.length + ' 名业务员</span></div>' +
+    (keys.length ? keys.map(k =>
+      '<div style="padding:11px 16px;background:#FAFBFC;font-weight:800;font-size:13.5px;border-top:1px solid #F0F2F6">' + esc(g[k].name) +
+      '<span style="color:#F5531C;margin-left:8px">' + g[k].rows.length + ' 家</span></div>' +
+      g[k].rows.map(v =>
+        '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid #F7F8FA">' +
+        '<span style="flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        vrCode(v.mallCode) + esc(v.customerName || '(未填店名)') + '</span>' +
+        (v.result ? '<span class="pill ' + vrTagCls(v.result) + '">' + esc(v.result) + '</span>' : '') +
+        '<span style="color:#98A2AE;font-size:12.5px;font-weight:600;min-width:42px;text-align:right">' + (v.at ? vrHM(v.at) : '') + '</span>' +
+        vrVisitBtn(v.customerId, true) + vrCustBtn(v.customerId) + '</div>').join('')).join('')
+      : '<div class="empty" style="padding:26px;text-align:center;color:#A8B0BB">这一天没有拜访记录</div>') + '</div>';
+  window.scrollTo(0, 0);
+};
+async function vrLoadShop() {
+  const box = $('vrShop');
+  box.innerHTML = '<div class="loading">加载中…</div>';
+  const r = await api('newShopDays', { days: 7 }).catch(() => null);
+  if (!r || !r.ok) { box.innerHTML = '<div class="empty">加载失败，请稍后再试</div>'; return; }
+  const days = r.list.filter(d => d.n > 0);
+  if (!days.length) { box.innerHTML = '<div class="empty" style="padding:26px;text-align:center;color:#A8B0BB">近 7 天没有新加的店</div>'; return; }
+  $('vrStat').textContent = '近 7 天 · 新增 ' + days.reduce((a, x) => a + x.n, 0) + ' 家';
+  const all = await Promise.all(days.map(d => api('newShopsByDay', { day: d.day }).catch(() => null)));
+  box.innerHTML = days.map((d, i) => {
+    const rr = (all[i] && all[i].ok && all[i].rows) || [];
+    return '<div style="padding:11px 16px;background:#FAFBFC;font-weight:800;font-size:13.5px;border-top:1px solid #F0F2F6">' +
+      d.day + ' ' + vrWeek(d.day) + '<span style="color:#F5531C;margin-left:8px">新增 ' + d.n + ' 家</span>' +
+      (d.pending ? '<span style="font-weight:600;color:#C2410C;font-size:12.5px;margin-left:8px">其中待商城建档 ' + d.pending + '</span>' : '') + '</div>' +
+      rr.map(c =>
+        '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid #F7F8FA">' +
+        '<span style="flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        vrCode(c.mallCode) + esc(c.customerName) +
+        '<span style="color:#98A2AE;font-weight:500;margin-left:6px;font-size:12.5px">' + esc(c.address || '') + (c.phone ? ' · ' + esc(c.phone) : '') + '</span></span>' +
+        (c.mallPending ? '<span class="pill warn">待商城建档</span>' : '<span class="pill blue">已入商城</span>') +
+        '<span style="color:#98A2AE;font-size:12.5px;font-weight:600">' + esc(c.byName || '') + '</span>' +
+        vrVisitBtn(c.customerId, false) + vrCustBtn(c.customerId) + '</div>').join('');
+  }).join('');
+}
+
 async function api(action, extra = {}) {
   const body = { action, username: admin ? admin.username : $('lgUser').value, password: admin ? admin.pwd : $('lgPwd').value, ...extra };
   const r = await fetch('/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -2488,7 +2608,7 @@ function nav(p) {
   //    其他页保持原样（1200px 上限）。窗口多宽，表格就铺多宽。
   const mainEl = document.querySelector('main.main');
   if (mainEl) mainEl.style.maxWidth = (p === 'geo') ? 'none' : '';
-  const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理', msg: '消息中心', field: '待商城建档' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
+  const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理', msg: '消息中心', field: '待商城建档', visitrec: '拜访记录' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
   if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (p === 'msg' ? '待处理的重点消息 · 业务员动态流水' : (p === 'field' ? '业务员现场录入 · 等商城表来对上' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台')))); }
   // ⭐ 2026-09-28 晚 老板定：进入消息中心 → 实时拉数据（**不是"读过了就清零"**）
   if (p === 'msg') loadMsgCenter();

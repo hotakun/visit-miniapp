@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -642,6 +642,11 @@ exports.main = async (event) => {
     if (action === 'rescheduleTask') return await rescheduleTask(event);
     if (action === 'listLatestLocations') return await listLatestLocations(event);
     if (action === 'clearSalesmanLoc') return await clearSalesmanLoc(event);   // ⭐ 2026-10-11：清某人的脏位置（定位异常上报到外地）
+    // ⭐ 2026-10-11 老板定：后台「📝 拜访记录」栏目（§0.0z21）
+    if (action === 'visitRecordDays') return await visitRecordDays(event);
+    if (action === 'visitRecordsByDay') return await visitRecordsByDay(event);
+    if (action === 'newShopDays') return await newShopDays(event);
+    if (action === 'newShopsByDay') return await newShopsByDay(event);
     if (action === 'getDayTrack') return await getDayTrack(event);
     if (action === 'getVisitTrack') return await getVisitTrack(event);
     if (action === 'uploadAdminDist') return await uploadAdminDist(event);
@@ -1320,6 +1325,94 @@ async function autoArchiveExpired(event) {
 }
 
 // ===== 位置监控接口（2026-09-08 M2：实时位置/当天轨迹/拜访轨迹回放） =====
+// ===== ⭐ 2026-10-11 老板定：后台「📝 拜访记录」栏目的 4 个只读接口（见交接文档 §0.0z21）=====
+//   ① visitRecordDays   近 N 天每天「拜访家数 / 去重客户数 / 去重业务员数」（日期卡片）
+//   ② visitRecordsByDay 某天拜访明细（前端按 salesmanId 分组；带客户名与编号）
+//   ③ newShopDays       近 N 天每天「新增店数 / 其中待商城建档」
+//   ④ newShopsByDay     某天新加的店明细
+//   口径：**过 NOT_DELETED**（回收站客户不出现）；统计**排除 trial**（实习不进统计，与战况同口径）。
+function recDays(n) {                                  // 近 n 天的 'YYYY-MM-DD'（北京时间）
+  const base = Date.now() + 8 * 3600 * 1000;
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(new Date(base - i * 86400000).toISOString().slice(0, 10));
+  return out;
+}
+async function visitRecordDays(event) {
+  const days = recDays(Math.min(Math.max(Number(event.days) || 7, 1), 31));
+  const rows = [];
+  for (let skip = 0; skip < 6000; skip += 1000) {
+    const r = await db.collection('visits')
+      .where({ visitedAt: _.in(days), status: _.in(['normal', 'pending_review']) })
+      .field({ visitedAt: true, customerId: true, salesmanId: true })
+      .skip(skip).limit(1000).get().catch(() => ({ data: [] }));
+    rows.push(...r.data);
+    if (r.data.length < 1000) break;
+  }
+  const m = {}; days.forEach(d => { m[d] = { day: d, v: 0, c: {}, s: {} }; });
+  rows.forEach(v => { const b = m[v.visitedAt]; if (!b) return; b.v++; if (v.customerId) b.c[v.customerId] = 1; if (v.salesmanId) b.s[v.salesmanId] = 1; });
+  return { ok: true, list: days.map(d => ({ day: d, visits: m[d].v, customers: Object.keys(m[d].c).length, salesmen: Object.keys(m[d].s).length })) };
+}
+async function visitRecordsByDay(event) {
+  const day = String(event.day || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, code: 'BAD_ARG', msg: '日期不合法' };
+  const rows = [];
+  for (let skip = 0; skip < 3000; skip += 200) {
+    const r = await db.collection('visits')
+      .where({ visitedAt: day, status: _.in(['normal', 'pending_review']) })
+      .field({ customerId: true, salesmanId: true, salesmanName: true, result: true, finishedAt: true, startedAt: true })
+      .skip(skip).limit(200).get().catch(() => ({ data: [] }));
+    rows.push(...r.data);
+    if (r.data.length < 200) break;
+  }
+  const cids = [...new Set(rows.map(v => v.customerId).filter(Boolean))];
+  const cmap = {};
+  for (let i = 0; i < cids.length; i += 100) {
+    const r = await db.collection('customers').where(_.and([{ _id: _.in(cids.slice(i, i + 100)) }, NOT_DELETED]))
+      .field({ name: true, nameRaw: true, mallCode: true }).get().catch(() => ({ data: [] }));
+    r.data.forEach(c => { cmap[c._id] = c; });
+  }
+  return {
+    ok: true, day, total: rows.length,
+    rows: rows.map(v => {
+      const c = cmap[v.customerId] || {};
+      return {
+        customerId: v.customerId || '', customerName: c.name || '',
+        mallCode: c.mallCode || (c.nameRaw || '').split(' ')[0] || '',
+        salesmanId: v.salesmanId || '', salesmanName: v.salesmanName || '',
+        result: v.result || '', at: v.finishedAt || v.startedAt || 0
+      };
+    }).sort((a, b) => (a.at || 0) - (b.at || 0))
+  };
+}
+async function newShopDays(event) {
+  const days = recDays(Math.min(Math.max(Number(event.days) || 7, 1), 31));
+  const from = new Date(days[days.length - 1] + 'T00:00:00+08:00').getTime();
+  const rows = await fetchAll('customers', _.and([{ createdAt: _.gte(from), source: 'field' }, NOT_DELETED]),
+    { createdAt: true, mallPending: true }).catch(() => []);
+  const m = {}; days.forEach(d => { m[d] = { day: d, n: 0, pending: 0 }; });
+  (rows || []).forEach(c => {
+    const d = new Date((Number(c.createdAt) || 0) + 8 * 3600 * 1000).toISOString().slice(0, 10);
+    if (!m[d]) return;
+    m[d].n++; if (c.mallPending) m[d].pending++;
+  });
+  return { ok: true, list: days.map(d => m[d]) };
+}
+async function newShopsByDay(event) {
+  const day = String(event.day || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, code: 'BAD_ARG', msg: '日期不合法' };
+  const t0 = new Date(day + 'T00:00:00+08:00').getTime();
+  const rows = await fetchAll('customers', _.and([{ createdAt: _.gte(t0).and(_.lt(t0 + 86400000)), source: 'field' }, NOT_DELETED]),
+    { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
+  return {
+    ok: true, day, total: (rows || []).length,
+    rows: (rows || []).map(c => ({
+      customerId: c._id, customerName: c.name || c.nameRaw || '', phone: c.phone || '',
+      address: c.address || '', mallCode: c.mallCode || '', mallPending: !!c.mallPending,
+      byName: c.createdByName || '', at: Number(c.createdAt) || 0
+    })).sort((a, b) => (b.at || 0) - (a.at || 0))
+  };
+}
+
 // ⭐ 2026-10-11 老板定：**清掉某个业务员的脏位置** —— 定位异常 / 旧测试残留会把位置上报到外地
 //   （实例：某业务员明明在浙江，latest 里却是**广州市中心** 23.129163, 113.264435）。
 //   老板原话：「不管是谁，现在先把广州这个地址去掉，不要展示在任何战况地图之中」+「不要动我的账号」。
