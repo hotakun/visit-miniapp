@@ -2087,6 +2087,11 @@ async function custDetail(salesmanId, event, isBoss) {
     duration: Number(v.duration) || 0,
     remark: v.remark || v.text || '',
     salesmanName: v.salesmanName || '',
+    // ⚠️⚠️ 2026-10-11 修（老板报「用聚火配送a 的手机看自己的拜访，却没有编辑/删除按钮」）：
+    //   **这里原来漏了 salesmanId** —— 前端拿不到它，就永远配不上"我"，那两个按钮**从不显示**。
+    //   顺手由**云端直接算好 mine**（云端知道真实身份，前端不必猜）：自己记的，或者老板/管理员。
+    salesmanId: v.salesmanId || '',
+    mine: (v.salesmanId === salesmanId) || !!isBoss,
     audioCount: (Array.isArray(v.audios) && v.audios.length) || (v.audio && v.audio.fileID ? 1 : 0),
     trText: (v.trEdited && v.trEdited.text) || '',
     // ⭐ 2026-09-27：手机端详情页的「拜访历史」要**真播放录音 + 显示样品**

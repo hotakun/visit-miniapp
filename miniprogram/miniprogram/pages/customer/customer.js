@@ -177,7 +177,9 @@ function buildD(res, photoUrls, recUrls) {
       // ⚠️ 2026-10-11 老板报障（他进客户详情看不到编辑/删除按钮）：原来只给"自己记的"显示 ——
       //   但**老板要管数据**，所以**老板模式 / 管理员账号**也一律给（云端 editSubmitted / deleteVisit 同步放行 isBoss）。
       //   业务员仍然只能动自己记的那条。
-      mine: !!(meId && v.salesmanId === meId) ||
+      // ⭐ 2026-10-11：**优先用云端算好的 mine**（云端知道真实身份，最可靠 —— custDetail 现在会下发它）；
+      //   本地那两段留作兜底（老版本云端、或字段缺失时）。
+      mine: !!v.mine || !!(meId && v.salesmanId === meId) ||
         !!(getApp() && getApp().globalData && (getApp().globalData.bossMode || ((getApp().globalData.user || {}).role === 'admin')))
     };
   });
