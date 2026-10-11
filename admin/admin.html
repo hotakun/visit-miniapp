@@ -5633,6 +5633,25 @@ async function loadCustData(force) {
 async function refreshMapData() {
   const b = $('mapDataBtn');
   if (b) { b.disabled = true; b.textContent = '🔄 拉取中…'; }
+  // ⭐⭐ 2026-10-12 老板（用壳程序、看不到后台黑窗口）：
+  //   「你拉取数据时候，弹出窗口给进度，然后告诉来源，这样我心里有底啊。」
+  //   → 拉取期间挂一个**进度浮层**（轮询 /mapPoints/status 的 phase），结束连同"数据来源"一起弹。
+  let pv = document.getElementById('mdProgress');
+  if (!pv) {
+    pv = document.createElement('div');
+    pv.id = 'mdProgress';
+    pv.style.cssText = 'position:fixed;right:22px;bottom:22px;z-index:2147483000;background:#1F2430;color:#fff;' +
+      'border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.8;box-shadow:0 8px 26px rgba(0,0,0,.35);min-width:230px';
+    document.body.appendChild(pv);
+  }
+  const pvSet = function (t) { if (pv) pv.innerHTML = t; };
+  pvSet('🔄 正在拉取客户数据…<br><span style="color:#9AA4B2">正在连接你的服务器…</span>');
+  const timer = setInterval(async function () {
+    try {
+      const s = await fetch('/mapPoints/status').then(x => x.json());
+      if (s && s.phase) pvSet('🔄 正在拉取客户数据…<br><span style="color:#9AA4B2">' + esc(s.phase) + '</span>');
+    } catch (e) { /* 进度拉不到不影响拉数 */ }
+  }, 700);
   try {
     const r = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json());
     if (!r || !r.ok) { alert('更新失败：' + ((r && r.msg) || '未知错误')); return; }
@@ -5647,6 +5666,8 @@ async function refreshMapData() {
   } catch (e) {
     alert('更新失败：' + (e && e.message ? e.message : e));
   } finally {
+    clearInterval(timer);                                    // ⚠️ 停掉进度轮询
+    if (pv && pv.parentNode) pv.parentNode.removeChild(pv);   // ⚠️ 摘掉进度浮层（不摘就永远挂着）
     if (b) { b.disabled = false; b.textContent = '🔄 更新地图数据'; }
   }
 }
