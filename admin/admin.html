@@ -1219,7 +1219,9 @@ tr.row-off td:not(.keep){opacity:.4}
               <div class="bs-num"><b id="bsVisited" class="green">0</b><span>已拜访过</span></div>
             </div>
             <span style="margin-left:auto"></span>
-            <button class="btn ghost" id="matchBtn" style="display:none" onclick="openMallMatch()">🔎 比对认领</button>
+            <!-- ⚠️⚠️ 2026-10-12 撤掉「🔎 比对认领」顶栏按钮：**旧入口**，带着老板早已作废的
+                 「≥75 分自动认领」三档。与「🛒 商城配对确认」（全部人工确认）做同一件事、规矩相反
+                 → 一并撤掉，只留一条路。函数 openMallMatch 保留为死代码。 -->
             <!-- 2026-09-25 老板定：从商城**更新**客户信息（可控：先预览将改哪些字段，确认后才写；只写白名单字段） -->
             <button class="btn ghost" id="refreshMallBtn" style="display:none" onclick="refreshFromMallClick()">🔄 从商城更新</button>
             <button class="btn ghost" id="manualBatchBtn" onclick="openManualBatch()">＋ 手工建批</button>
@@ -2296,7 +2298,7 @@ tr.row-off td:not(.keep){opacity:.4}
       <div class="modal" style="width:880px;max-height:88vh;overflow-y:auto">
         <div class="mt">🛒 导入商城客户列表（比对认领）</div>
         <div id="mallStep1">
-          <div class="hint">选择商城导出的「客户列表.xls」→ 入库商城客户库（新客户新增、老客户有变化才更新）。<br>入库后点顶部「🔎 比对认领」把回访客户与商城库关联。</div>
+          <div class="hint">选择商城导出的「客户列表.xls」→ 入库商城库。<br>入库后系统会自动和你导入的这几家做比对，然后点「🛒 商城配对确认」逐条人工确认（有候选点「就是这家」，没有就点「➕ 新建」）。</div>
           <p><input type="file" id="mallFile" accept=".xls,.xlsx" onchange="pickMallFile()"></p>
         </div>
         <div id="mallStep2" style="display:none">
@@ -9163,7 +9165,8 @@ function renderBatchCards(batches, unbatched) {
       </div>
       <div class="bc-ops" onclick="event.stopPropagation()">
         <button class="btn primary" id="batchNewBtn" style="height:32px;font-size:12.5px;padding:0 14px;margin-left:12px;margin-right:auto" onclick="playTkClick();event.stopPropagation();openNewTaskForBatch('${b._id}', '${esc(b.name)}')">＋ 新建任务</button>
-        <button class="btn-clear" onclick="openMallMatchFor('${b._id}', '${esc(b.name)}')">🔎 比对认领</button>
+        <!-- ⚠️ 2026-10-12 撤掉批次卡上的「🔎 比对认领」：同上，旧入口（openMallMatchFor） -->
+
         <button class="btn-clear" onclick="openClaimsFor('${b._id}', '${esc(b.name)}')">📋 待确认认领</button>
         <button class="btn-clear" onclick="openImport(true, '${b._id}')">📥 追加导入</button>
         <button class="btn-clear" onclick="deleteBatch('${b._id}', '${esc(b.name)}', ${total})">🗑 删除</button>
