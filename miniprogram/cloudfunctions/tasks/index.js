@@ -718,6 +718,19 @@ async function correctCustomer(salesmanId, event) {
   } catch (err) {
     console.error('[correctCustomer] 留痕失败（不影响更正）', err);
   }
+  // ⚠️⚠️ 2026-10-11 修（老板报：「今天新加的店改了名，客户管理里还显示原来的名字」）：
+  //   **这里原来漏发「客户有变动」的信号** —— 后台「🏪 客户管理 / 📦 批次管理」读的是**本地缓存快照**
+  //   （方案 C，为提速），而只有「加新店」会写 `settings.custDirtyAt`、**「更正信息」不写**
+  //   → 后台的缓存**永远不刷新** → 一直显示旧店名。
+  //   与 newShopSubmit 里那段完全同源（失败只 log，绝不耽误更正本身）。
+  try {
+    const dr = await db.collection('settings').where({ key: 'custDirtyAt' }).limit(1).get();
+    if (dr.data && dr.data.length) {
+      await db.collection('settings').doc(dr.data[0]._id).update({ data: { value: now, updatedAt: now } });
+    } else {
+      await db.collection('settings').add({ data: { key: 'custDirtyAt', value: now, updatedAt: now } });
+    }
+  } catch (err) { console.error('[custDirtyAt] 更正信息后写变动信号失败：', err); }
   return { ok: true, changed: changed, msg: '已更正（' + changed.join('、') + '）' };
 }
 // 写「可能还不存在」的集合：接住 -502005 自愈创建后重试一次（项目铁律：别指望用户先跑 init）
