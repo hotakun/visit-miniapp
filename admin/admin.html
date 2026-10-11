@@ -12137,9 +12137,17 @@ async function mallProbeRun() {
       const kw = vals.trim(); mallProbe.kw = kw;
       if (!kw) { mallProbe.msg = '⚠️ 请先输入店名里的几个字'; mallProbeRender(); return; }
       const k = norm1(kw);
+      // ⚠️ 2026-10-12 老板实测：「表格里为什么显示有18家？只有一家呀？？」——
+      //   系统里「沙县小吃 余」确实有**十几条一模一样的档案**（同名/同电话/同地址，以前反复建店留下的）。
+      //   ✅ 这里按「店名+电话+地址」**去重**，同一条只显示一次（重复档案本身要不要清，老板另定）。
+      const seenDk = {};
       for (const p of pts) {
         const nm = norm1(p.nr || p.n || '');
-        if (nm && nm.indexOf(k) >= 0) out.push({ id: p.i, name: p.nr || p.n || '', ad: p.ad || '', ph: p.ph || '', mc: p.mc || '', dist: 0 });
+        if (!nm || nm.indexOf(k) < 0) continue;
+        const dk = nm + '|' + String(p.ph || '').trim() + '|' + String(p.ad || '').trim();
+        if (seenDk[dk]) continue;
+        seenDk[dk] = 1;
+        out.push({ id: p.i, name: p.nr || p.n || '', ad: p.ad || '', ph: p.ph || '', mc: p.mc || '', dist: 0 });
         if (out.length >= 40) break;
       }
       mallProbe.msg = out.length ? ('🔍 找到 ' + out.length + ' 家含「' + kw + '」的客户 —— 点「✓ 就是这家」直接合并')
