@@ -374,7 +374,8 @@ Page({
       recordingDurationLimit: this.task.recordingDurationLimit,
       visitDurationLimit: this.task.visitDurationLimit
     });
-    wx.navigateTo({ url: '/pages/customer/customer' });
+    // ⚠️⚠️ 2026-10-12 串档根除：**身份必须走 URL**（与 task.js 同一口径）
+    wx.navigateTo({ url: '/pages/customer/customer?id=' + c._id });
   },
   goHome() { wx.switchTab({ url: '/pages/home/home' }); }, // 2026-09-10：tab 页常驻，切页不再重建（消白闪）
   tabWar() { wx.switchTab({ url: '/pages/bossWar/bossWar' }); }, // 老板四栏：战况（2026-09-09）

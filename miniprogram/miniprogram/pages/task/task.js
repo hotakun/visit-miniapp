@@ -281,8 +281,11 @@ Page({
   },
   goCustomer(e) {
     const c = this.allCustomers.find(x => x._id === e.currentTarget.dataset.id);
+    if (!c || !c._id) return;
     wx.setStorageSync('curCustomer', { ...c, taskId: this.taskId, taskName: this.data.task.name, locCheck: this.data.task.locCheck, locKeyRefresh: this.data.task.locKeyRefresh, recordingDurationLimit: this.data.task.recordingDurationLimit, visitDurationLimit: this.data.task.visitDurationLimit });
-    wx.navigateTo({ url: '/pages/customer/customer' });
+    // ⚠️⚠️ 2026-10-12 串档根除：**身份必须走 URL**（详情页已改成"只认 URL 的 id"）；
+    //   storage 只负责带"任务设置"这类辅助信息（它仍会被 goVisit 接力）。
+    wx.navigateTo({ url: '/pages/customer/customer?id=' + c._id });
   }
 });
 

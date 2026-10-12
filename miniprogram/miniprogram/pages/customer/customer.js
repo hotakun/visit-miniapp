@@ -353,9 +353,13 @@ Page({
     //      pages/task 和 pages/map 点客户时都会先 setStorageSync('curCustomer', 客户对象) 再跳过来。
     //      （那两处 navigateTo 不带 url 参数；这里兜底读 storage 更稳，也兼容将来新入口。）
     const cc = wx.getStorageSync('curCustomer') || {};
-    const id = (query && (query.id || query.customerId)) || cc._id || '';
+    // ⚠️⚠️⚠️ 2026-10-12 老板严令「绝对绝对要避免再出现（串档）」—— **身份只认 URL，绝不从 storage 兜底**。
+    //   以前是 `query.id || cc._id`：storage 里恰好留着"上一家"时，整页就认成上一家
+    //   → 点「开始拜访」记录写到别人头上（当天连串几家的事故就是这么来的）。
+    //   现在：**URL 没带 id 就明确报错**（入口必须传），**宁可报错也不猜**。
+    const id = (query && (query.id || query.customerId)) || '';
     this._cid = id;
-    this._taskId = (query && query.taskId) || cc.taskId || '';   // 开始拜访要用（任务设置也从 cc 兜底）
+    this._taskId = (query && query.taskId) || '';   // 任务 id 同样只从 URL 来（storage 里的可能是上一家的）
     // ⭐ 2026-10-07 老板定：「我新加的店」的按钮改成「客户详情」→ 从这里进来时带 freeVisit=1。
     //   ⚠️ 必须在这里**清掉 taskId**：goVisit() 是 Object.assign **接力 storage 里的 curCustomer**，
     //      而 storage 里可能还留着上次任务拜访的 taskId → 点「开始拜访」会变成"任务拜访"

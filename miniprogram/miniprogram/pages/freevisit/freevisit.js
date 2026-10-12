@@ -84,7 +84,8 @@ Page({
       lat: Number(c.lat) || 0, lng: Number(c.lng) || 0,
       taskId: '', freeTripId: (this.data.cur || {}).id || ''
     });
-    wx.navigateTo({ url: '/pages/customer/customer' });
+    // ⚠️⚠️ 2026-10-12 串档根除：身份必须走 URL（freeVisit=1 让详情页把"当前客户"刷成本家）
+    wx.navigateTo({ url: '/pages/customer/customer?id=' + c.id + '&freeVisit=1' });
   },
 
   // ⏹ 结束这张卡（老板 2026-10-03 定：能结束也能唤醒；「结束」= 暂时收工，不是作废）
