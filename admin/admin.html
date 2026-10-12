@@ -2748,7 +2748,12 @@ function nav(p) {
     const isNew = curMode === 'new';
     $('custPageTitle').textContent = isNew ? '新客户列表' : '批次管理';
     $('impCustBtn').textContent = isNew ? '📥 导入新客户' : '📥 导入新批次';
-    $('matchBtn').style.display = 'none'; // 2026-09-08：比对/待确认下沉到批次卡，顶部按钮停用
+    // ⚠️⚠️ 2026-10-12 修（老板报「批次管理页看不到批次了」）—— **这是今天撤按钮留下的连带 bug**：
+    //   `#matchBtn`（「🔎 与商城库比对」）今天已按老板要求**撤掉**，但这行还在引用它
+    //   → `$('matchBtn')` 是 null → 读 `.style` 抛异常 → **nav() 当场中断**
+    //   → 后面的 `loadBatches()` / 顶栏 / 汇总**全都不执行**（现象 = 批次页空白）。
+    //   教训：**删掉一个元素时，必须全库搜它的 id**（`grep -n "matchBtn"`）。
+    const mb = $('matchBtn'); if (mb) mb.style.display = 'none';   // 2026-09-08：比对/待确认下沉到批次卡，顶部按钮停用
     $('claimBtn').style.display = 'none';
     // 2026-09-25 老板定：新增「🔄 从商城更新」—— 与商城库/比对同属**回访工作台**（新客工作台不显示）
     $('refreshMallBtn').style.display = isNew ? 'none' : '';
