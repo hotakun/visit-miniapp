@@ -2159,7 +2159,9 @@ async function custDetail(salesmanId, event, isBoss) {
     // ⚠️⚠️ 2026-10-12 老板定：「**只有我主动编辑过的照片才能裁剪，其他一律原比例**」——
     //   原来这里优先取 `thumbID`（缩略图 = 320×240 **中心裁切**的那份）→ 详情页点开大图看到的是**被裁过的**（老板实测发现）。
     //   改成**优先 `fileID`（原图）**：小格子照样排得齐（那是"显示时"裁，不是把照片裁掉），点开看的就是原比例。
-    thumbs: (v.photos || []).map(p => (p && (p.fileID || p.thumbID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 3)
+    // ⚠️ 2026-10-12 老板定：**最多 9 张都带上**（原来写死 slice(0,3) → 现场拍了 5 张也只看得到 3 张）；
+    //   前端改成**一行左右滑** + 下面小字"共 N 张照片"。
+    thumbs: (v.photos || []).map(p => (p && (p.fileID || p.thumbID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 9)
   }));
 
   // —— ③b 这家客户**是否正处于拜访中** ——

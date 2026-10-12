@@ -200,7 +200,7 @@ function buildD(res, photoUrls, recUrls) {
         if (!au.length) return null;
         return { url: recUrls[au[0].fileID], dur: fmtDur(au[0].duration), txt: esc(v.trText) || '', playing: false, pct: 0 };
       })(),
-      shots: (v.thumbs || []).slice(0, 3),
+      shots: (v.thumbs || []).slice(0, 9),   // ⭐ 2026-10-12：最多 9 张（原来 3 张 → 拍了 5 张只显示 3 张）
       // ⭐ 2026-10-10 老板定：拜访记录可编辑 —— 记 visitId + 是不是"我"记的（只有自己的才显示「✎ 编辑」）
       vid: v._id || '',
       // ⚠️ 2026-10-11 老板报障（他进客户详情看不到编辑/删除按钮）：原来只给"自己记的"显示 ——
