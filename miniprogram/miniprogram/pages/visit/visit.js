@@ -403,7 +403,11 @@ Page({
     if (this.data.prepBusy) return;
     if (this.data.pics.length >= this.data.maxPics) { api.toast('最多 ' + this.data.maxPics + ' 张现场照片'); return; }
     let files;
-    try { files = await media.chooseImage(1, ['camera', 'album']); } catch (e) { return; }  // 取消 → 直接返回
+    // ⭐⭐ 2026-10-12 老板定：**相册可以一次选多张**（老板："从相册上传能做到一次性选择多张吗？"）
+    //   底层 `media.chooseImage` 走的是 `wx.chooseMedia`，**天生支持多选**，原来写死 1 张 → 相册里只能一张一张点。
+    //   改成"还差几张就能一次选几张"；超上限由 `_addPics` 自动截断。⚠️ 走相机时微信本来就只给 1 张，不受影响。
+    const left = Math.max(1, this.data.maxPics - this.data.pics.length);
+    try { files = await media.chooseImage(left, ['camera', 'album']); } catch (e) { return; }  // 取消 → 直接返回
     if (!files || !files.length) return;
     await this._addPics(files);
   },
