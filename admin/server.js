@@ -613,12 +613,86 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+// ⭐⭐⭐ 2026-10-12 老板最高红线：**改客户前必须留备案（可回退）**
+//   老板原话：「绝对绝对不能自主添加和更改合并任何店铺信息，必须要操作员同意之后才能更改，而且必须留下备案，以便回退！！」
+//   ① CHANGE_ACTIONS：哪些 action 会改客户档案（→ 改前存快照）
+//   ② snapBeforeChange：改前按 id 调 getCustomerDetail 拿**全字段原值**
+//   ③ writeChangeLog：追加写本地 `admin/cache/cust_change_log.jsonl`（❌ 不走云端，老板定的）
+//   ④ changePayloadOf：这次"改了什么"（新值）
+const CHANGE_ACTIONS = {
+  updateCustomerFields: 1, updateCustomerCoords: 1, fixDupCustomers: 1,
+  deleteCustomers: 1, restoreCustomers: 1, applyMallPair: 1, applyMallMatch: 1
+};
+function changeIdsOf(act, p) {
+  const ids = [];
+  const push = x => { if (x && typeof x === 'string') ids.push(x); };
+  if (act === 'updateCustomerFields' || act === 'updateCustomerCoords') push(p.customerId);
+  else if (act === 'fixDupCustomers') (p.rows || []).forEach(r => push(r && r.id));
+  else if (act === 'deleteCustomers' || act === 'restoreCustomers') (p.ids || []).forEach(push);
+  else if (act === 'applyMallPair') push(p.customerId);
+  else if (act === 'applyMallMatch') (p.claims || []).forEach(c => push(c && c.customerId));
+  return ids;
+}
+function changePayloadOf(act, p) {
+  if (act === 'updateCustomerFields') return { customerId: p.customerId, fields: p.fields };
+  if (act === 'updateCustomerCoords') return { customerId: p.customerId, lat: p.lat, lng: p.lng };
+  if (act === 'fixDupCustomers') return { rows: p.rows };
+  if (act === 'deleteCustomers') return { ids: p.ids };
+  if (act === 'restoreCustomers') return { ids: p.ids };
+  if (act === 'applyMallPair') return { customerId: p.customerId, mallKey: p.mallKey };
+  if (act === 'applyMallMatch') return { claims: p.claims, pendings: p.pendings };
+  return null;
+}
+async function snapBeforeChange(act, p) {
+  const ids = changeIdsOf(act, p).slice(0, 300);   // 单次最多快照 300 条（防手滑跑全库）
+  const out = [];
+  for (const id of ids) {
+    try {
+      const t = await callApi({ action: 'getCustomerDetail', username: p.username, password: p.password, customerId: id });
+      const j = JSON.parse(t || '{}');
+      out.push({ id: id, before: (j && (j.customer || j.data || j.detail)) || null });
+    } catch (e) { out.push({ id: id, before: null, err: e.message }); }
+  }
+  return out;
+}
+const CHANGE_LOG_FILE = path.join(__dirname, 'cache', 'cust_change_log.jsonl');
+function writeChangeLog(rec) {
+  try {
+    fs.mkdirSync(path.dirname(CHANGE_LOG_FILE), { recursive: true });
+    fs.appendFileSync(CHANGE_LOG_FILE, JSON.stringify(rec) + '\n', 'utf8');
+    console.log('[changelog] 已留档：' + rec.action + '（原值 ' + ((rec.before || []).length) + ' 条）');
+  } catch (e) { console.warn('[changelog] 写入失败：', e.message); }
+}
+
   if (req.method === 'POST' && req.url === '/api') {
     let body = '';
     req.on('data', c => { body += c; });
     req.on('end', async () => {
       try {
-        const text = await callApi(JSON.parse(body || '{}'));
+        const payload = JSON.parse(body || '{}');
+        // ⭐⭐⭐ 2026-10-12 老板最高红线（原话）：
+        //   「绝对绝对不能自主添加和更改合并任何店铺信息，必须要操作员同意之后才能更改，
+        //     而且**必须留下备案，以便回退**！！」
+        //   落地：凡是**会改客户档案**的 action —— **改之前先把原值读出来、存进本地日志**，然后再转发。
+        //   ⚠️ 只写**本地文件** `admin/cache/cust_change_log.jsonl`（老板定：**不走云端**，省云开发的量）。
+        //   ⚠️ 快照失败**绝不挡住**正常操作（宁可少一条日志，也不能让老板改不动）。
+        let text;
+        const act = payload && payload.action;
+        if (CHANGE_ACTIONS[act]) {
+          let before = null;
+          try { before = await snapBeforeChange(act, payload); } catch (e) { console.warn('[changelog] 快照失败（不影响操作）：', e.message); }
+          text = await callApi(payload);
+          try {
+            let result = null;
+            try { result = JSON.parse(text || '{}'); } catch (e) { /* 非 JSON 就不记结果 */ }
+            writeChangeLog({
+              at: Date.now(), action: act, by: payload.username || '', ip: (req.socket && req.socket.remoteAddress) || '',
+              before: before, payload: changePayloadOf(act, payload), result: result
+            });
+          } catch (e2) { console.warn('[changelog] 写日志失败：', e2.message); }
+        } else {
+          text = await callApi(payload);
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(text);
       } catch (e) {
