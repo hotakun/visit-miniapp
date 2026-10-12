@@ -759,6 +759,22 @@ tr.row-off td:not(.keep){opacity:.4}
         </div>
       </div>
 
+      <!-- ⭐⭐ 2026-10-12 老板定：「检测 + 清理」按钮（放「📥 导入信息」页）——
+           检测在**本地缓存**算（零花费、不查云端）；清理走**回收站（软删、可恢复）**；
+           ⚠️ 严格按老板立的红线：**只出清单、他勾选确认、才动**，绝不自动删任何一条。 -->
+      <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid #E5484D">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">🧹 重复客户检测 / 清理</div>
+        <div class="sb-d">
+          在<b>本地缓存</b>里找「<b>店名 + 电话 + 地址</b>」完全一样的客户（<b>零花费、不查云端、不动任何数据</b>）。<br>
+          ⚠️ 检测<b>只出清单</b>；清理要<b>你勾选确认</b>，走<b>回收站（软删、可恢复）</b>，<b>有订单 / 有拜访的会被拦下</b>。
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn primary" id="dupScanBtn" onclick="dupScan()">🔍 开始检测</button>
+          <span class="sb-d" id="dupScanMsg" style="flex:1;min-width:200px"></span>
+        </div>
+        <div id="dupResultBox" style="display:none;margin-top:12px"></div>
+      </div>
+
       <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid var(--primary)">
         <div style="font-size:15px;font-weight:700;margin-bottom:6px">📥 从表格导入（推荐 · 一步到位）</div>
         <div class="sb-d">
@@ -7999,6 +8015,86 @@ async function ensureCustLocal(force) {
     return custLocal;
   })();
   return custLocalLoading;
+}
+
+// ⭐⭐ 2026-10-12 老板定：重复客户「检测 + 清理」（放「📥 导入信息」页）
+//   口径：**店名 + 电话 + 地址**三者全同 = 重复。
+//   检测在**本地缓存**算（零花费、不查云端）；清理走 `deleteCustomers`（**回收站软删**，有订单/拜访会被云端拦下）。
+//   ⚠️ 严格按老板立的责任红线：**只出清单、老板勾选确认、才动** —— 绝不自动删任何一条。
+let dupGroups = [];
+function dupScoreOf(p) {          // 信息完整度 → 决定哪条当"主档"（保留）
+  let n = 0;
+  ['nr', 'ph', 'ad', 'mc', 'mj', 'b', 'rm', 'ct'].forEach(k => { if (String(p[k] || '').trim()) n++; });
+  if (p.la && p.ln) n++;
+  return n;
+}
+async function dupScan() {
+  const b = $('dupScanBtn'), m = $('dupScanMsg');
+  if (b) { b.disabled = true; b.textContent = '🔍 检测中…'; }
+  if (m) m.textContent = '正在读本地缓存（约 18 万家）…';
+  try {
+    const loc = await ensureCustLocal();
+    const pts = (loc && loc.points) || [];
+    if (!pts.length) { if (m) m.textContent = '⚠️ 本地缓存还没准备好 —— 先点上面的「🔄 立即拉取最新数据」'; return; }
+    const map = {};
+    pts.forEach(p => {
+      const nm = String(p.n || '').trim(); if (!nm) return;
+      const k = nm + '|' + String(p.ph || '').trim() + '|' + String(p.ad || '').trim();
+      (map[k] = map[k] || []).push(p);
+    });
+    dupGroups = Object.values(map).filter(g => g.length > 1)
+      .map(g => { g.sort((a, b) => dupScoreOf(b) - dupScoreOf(a)); return g; })
+      .sort((a, b) => b.length - a.length);
+    const cleanable = dupGroups.reduce((s, g) => s + g.length - 1, 0);
+    if (m) m.textContent = dupGroups.length ? ('发现 ' + dupGroups.length + ' 组重复（可清 ' + cleanable + ' 条）') : '✅ 没发现重复';
+    renderDupGroups();
+  } catch (e) {
+    if (m) m.textContent = '检测失败：' + ((e && e.message) || e);
+  } finally {
+    if (b) { b.disabled = false; b.textContent = '🔍 重新检测'; }
+  }
+}
+function renderDupGroups() {
+  const box = $('dupResultBox'); if (!box) return;
+  box.style.display = 'block';
+  if (!dupGroups.length) {
+    box.innerHTML = '<div class="sb-d" style="color:#18A058;font-weight:700">✅ 没有发现「店名 + 电话 + 地址」全同的重复</div>';
+    return;
+  }
+  let h = '<div class="sb-d" style="margin-bottom:8px">每组<b>第 1 条 = 保留</b>（信息最全），其余打勾后点最下面「确认清理」→ 进<b>回收站</b>（可恢复）。</div>';
+  dupGroups.forEach(g => {
+    const keep = g[0], rest = g.slice(1);
+    h += '<div style="border:1px solid #EFF1F5;border-radius:10px;padding:10px 12px;margin-bottom:8px">';
+    h += '<div style="font-weight:800;font-size:13px">' + esc(keep.n || '') +
+      '<span class="pill" style="margin-left:8px;background:#EAF7EF;color:#18A058">保留 · 共 ' + g.length + ' 条</span></div>';
+    h += '<div class="sb-d">保留：' + esc((keep.mc || '无编号') + ' · ' + (keep.ph || '无电话') + ' · ' + (keep.ad || '无地址')) + '</div>';
+    rest.forEach(r => {
+      h += '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;cursor:pointer">' +
+        '<input type="checkbox" class="dupck" data-id="' + esc(r.i) + '" checked style="margin-top:3px">' +
+        '<span class="sb-d">清理：' + esc((r.mc || '无编号') + ' · ' + (r.ph || '无电话') + ' · ' + (r.ad || '无地址')) + '</span></label>';
+    });
+    h += '</div>';
+  });
+  h += '<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
+    '<button class="btn" style="background:#E5484D;color:#fff;border:0" onclick="dupClean()">🗑 确认清理选中的（进回收站）</button>' +
+    '<span class="sb-d" id="dupCleanMsg"></span></div>';
+  box.innerHTML = h;
+}
+async function dupClean() {
+  const msg = $('dupCleanMsg');
+  const ids = Array.from(document.querySelectorAll('.dupck')).filter(c => c.checked).map(c => c.dataset.id);
+  if (!ids.length) { if (msg) msg.textContent = '没有勾选任何一条'; return; }
+  if (!confirm('确认把选中的 ' + ids.length + ' 条客户移入回收站？\n\n（软删、可恢复；有订单或拜访的会被云端拦下、不会删）')) return;
+  if (msg) msg.textContent = '正在清理…';
+  try {
+    const r = await api('deleteCustomers', { ids: ids });
+    const blocked = (r && r.blocked) || [];
+    if (msg) msg.textContent = '✅ 已移入回收站 ' + ((r && r.deleted) || 0) + ' 条' +
+      (blocked.length ? ('；⚠️ ' + blocked.length + ' 条被拦下（有订单/拜访或任务中）') : '');
+    dupScan();   // 清完重新检测一次（项目铁律：改完必须真的刷新）
+  } catch (e) {
+    if (msg) msg.textContent = '清理失败：' + ((e && e.message) || e);
+  }
 }
 
 // ⭐⭐ 2026-09-29【方案 C】缓存"保鲜"
