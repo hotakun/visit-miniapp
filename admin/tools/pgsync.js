@@ -20,7 +20,13 @@ const MAP = [['id','i'],['name','n'],['name_raw','nr'],['code','mc'],['ctype','c
 const COLS = MAP.map(x => x[0]);
 const UPSERT = 'INSERT INTO customers (' + COLS.join(',') + ') VALUES (' +
   COLS.map((_, i) => '$' + (i + 1)).join(',') + ') ON CONFLICT (id) DO UPDATE SET ' +
-  COLS.filter(c => c !== 'id').map(c => c + '=EXCLUDED.' + c).join(',');
+  COLS.filter(c => c !== 'id').map(c => c + '=EXCLUDED.' + c).join(',') +
+  // ⭐⭐ 2026-10-12（老板追问「云端与服务器之间会漏信息，你弥补了吗」逼出来的**对称修复**）：
+  //   `custSync` **只返回"未删"的客户** → 凡是同步过来的，就一定是"活的"。
+  //   所以这里顺手把 `deleted` 设回 false —— 正好与「已删名单」那句 `UPDATE ... deleted=true` 对称：
+  //   **删掉的能标上、恢复的也能自动纠回**（否则从回收站恢复的客户会被那句标删、永远卡在"已删"）。
+  //   ⚠️ 两者天然互斥：同一时刻，一条客户要么出现在 custSync 的结果里、要么出现在 deletedIds 里。
+  ', deleted = false';
 
 let db = null;
 const cfgPath = path.join(__dirname, 'config.json');   // 微信凭据（appid/appsecret/envId）——与脚本同级
