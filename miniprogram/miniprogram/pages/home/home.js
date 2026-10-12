@@ -536,9 +536,10 @@ Page({
           };
           const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
           this.setData({ tasks, showTasks: tasks, bossStats: res.stats || null });
-          // ⭐ 2026-10-12 老板定：首页第 4 格「新店」要显示**累计数量** → 顺手问一次（老板端本来就只这一次，可接受）
-          api.call('adminapi', { action: 'msgCount' }).then(mc => {
-            if (mc && mc.ok && typeof mc.shopNew === 'number') this.setData({ bossNewShops: mc.shopNew });
+          // ⭐ 2026-10-12 老板定：首页第 4 格「新店」的**累计数量** —— 与「新店」列表页**同一口径**
+          //   （现场录入 + **最近 3 天**）→ 直接问列表接口的总数，避免两处数字对不上。
+          api.call('adminapi', { action: 'listNewShops' }).then(ns => {
+            if (ns && ns.ok && typeof ns.total === 'number') this.setData({ bossNewShops: ns.total });
           }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
           prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）
         } else {
