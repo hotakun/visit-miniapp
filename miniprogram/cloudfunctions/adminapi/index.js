@@ -1324,7 +1324,11 @@ async function listNewShops(event) {
   const out = [];
   for (let i = 0; i < 30; i++) {
     const r = await db.collection('customers')
-      .where(_.and([{ mallPending: true }, NOT_DELETED]))
+      // ⚠️⚠️ 2026-10-12 实测修正（老板：「你把前两天加的新店都放在里面，你应该找的到的」）：
+      //   原来只捞 `mallPending: true` → 只出 8 家（对上商城 / 被按老店清理过的都消失了）。
+      //   实测库里现场录入写的 `source` 只有这三类：「**自主添加**」(336) / 「**商城自主申请**」(208) / `field`(8)
+      //   （而"导入的"是 mall-import 等）→ 就按这三类捞 = 所有现场录的店，按时间倒序。
+      .where(_.and([{ source: _.in(['field', '自主添加', '商城自主申请']) }, NOT_DELETED]))
       .field({ _id: true, name: true, nameRaw: true, phone: true, address: true, district: true,
         bizCircle: true, lng: true, lat: true, photos: true, createdByName: true, createdAt: true,
         customerType: true })
