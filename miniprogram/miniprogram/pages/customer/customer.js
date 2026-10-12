@@ -340,7 +340,7 @@ Page({
     //   （弹层版（含大半屏那版）被老板真机否掉："卡片太小、操作实在不方便"）
     //   → 所以 fixShow / fixNote / fixPick 三个字段都不需要了
     sheetShow: false,
-    viewerShow: false, viewerUrl: '',
+    viewerShow: false, viewerUrl: '', viewerList: [], viewerCur: 0,
     notesN: 0          // ⭐ 2026-09-28：本机「我的记事」条数（只读 storage，不联网）
   },
 
@@ -879,9 +879,36 @@ Page({
     //   拜访历史的照片不带 data-i → 记 -1（那两个按钮不显示，仍只有「关闭」）
     const ds = e.currentTarget.dataset || {};
     const idx = (ds.i === undefined || ds.i === null || ds.i === '') ? -1 : Number(ds.i);
-    this.setData({ viewerShow: true, viewerUrl: url, viewerIdx: idx });
+    // ⭐⭐ 2026-10-12 老板定：**大图要能左右滑**（老板："门店照片和拜访详情中的照片，相互之间应该可以滑动切换"）
+    //   做法：把**这一组**照片一起带进弹窗（swiper 渲染），左右滑、滑到哪张就对哪张操作。
+    //   ① 门店三格（带 data-i）→ 一组 = 这家店的 3 格（去掉空位）
+    //   ② 拜访历史的照片（不带 data-i）→ 一组 = 那条拜访的 shots
+    let list = [url];
+    if (idx >= 0) {
+      const ps = (this.data.d.photos || []).filter(Boolean);
+      if (ps.length) list = ps;
+    } else {
+      const hs = (this.data.d.history || []);
+      for (let i = 0; i < hs.length; i++) {
+        const s = (hs[i] && hs[i].shots) || [];
+        if (s.indexOf(url) >= 0) { list = s.slice(); break; }
+      }
+    }
+    let cur = list.indexOf(url);
+    if (cur < 0) { list = [url]; cur = 0; }
+    this.setData({ viewerShow: true, viewerUrl: url, viewerIdx: idx, viewerList: list, viewerCur: cur });
+  },
+  // ⭐ 2026-10-12：大图左右滑 → 记住滑到第几张（「重拍/编辑/删除」跟着它走；门店三格的格位号也同步）
+  onViewerSwipe(e) {
+    const i = (e && e.detail && Number(e.detail.current)) || 0;
+    const list = this.data.viewerList || [];
+    const patch = { viewerCur: i, viewerUrl: list[i] || this.data.viewerUrl };
+    if (this.data.viewerIdx >= 0) patch.viewerIdx = i;
+    this.setData(patch);
   },
   closePhoto() { this.setData({ viewerShow: false }); },
+  // ⭐ 2026-10-12：空处理 —— 只为**吃掉 swiper 上的点击**，别冒泡到外层（外层是"点一下关闭"）
+  noop() { /* 什么都不做 */ },
   // ⭐ 2026-10-10 老板定：门店照片大图里「📷 重拍」—— 直接开相机，复用现有上传链路（覆盖同一格）
   retakePhoto() {
     const i = Number(this.data.viewerIdx);
