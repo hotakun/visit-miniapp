@@ -114,6 +114,7 @@ Page({
     // 营业时间：两个**整点下拉**（老板 2026-09-29 定；默认 08:00 — 21:00）
     hourList: HOUR_LIST, hour1: '08:00', hour2: '21:00', hourIdx1: 8, hourIdx2: 21,
     catRange: [[], [], []], catIdx: [0, 0, 0], catText: '', cat1: '', cat2: '', cat3: '',
+    catRecs: [],                                   // ⭐ 2026-10-12：本地猜品类的推荐（点一下就选）
     // ⭐ 自绘三级滚轮的状态（2026-10-02）：pkShow = 弹层显隐；pkTmp = 弹层内的临时选择（点"确定"才写回）；
     //   catTop = 三列各自的 scroll-top（吸附用，30px = 一行）
     pkShow: false, pkTmp: [0, 0, 0], catTop: [0, 0, 0],
@@ -739,7 +740,37 @@ Page({
   // ⚠️ 2026-09-29 老板要求去掉「录音转文字」→ 原 transcribe() 方法已整段删除（同步删掉 utils 里对应引用）
 
   // ===================== 表单 =====================
-  onName(e) { this.setData({ name: e.detail.value }); this._refresh(); },
+  onName(e) {
+    this.setData({ name: e.detail.value });
+    this._refresh();
+    this._guessCat(e.detail.value);          // ⭐ 2026-10-12：填店名 → 本地猜品类（0 云端调用）
+  },
+  // ⭐⭐ 2026-10-12 老板定：「品类的输入对业务员来说有点头疼，选择也比较耽误时间，能做个自动化操作吗？
+  //   根据店名你尝试匹配一下或者推荐几个」「只要在本地算，肯定就没错」
+  //   规则（三条）：① 店名一填就**本地猜**（词表打包在小程序里 utils/catwords.js，0 调用、0 等待）
+  //     ② **只在还没选过品类时**自动填第一个 —— **绝不覆盖业务员手选的**；
+  //     ③ 旁边给几个备选（点一下换）；**猜不出来就什么都不变**（照旧用原生滚轮手选）。
+  _guessCat(name) {
+    try {
+      const cm = require('../../utils/catwords.js');
+      const recs = cm.suggest(name, this.data.dishRaw, 4);
+      this.setData({ catRecs: recs });
+      if (recs.length && !String(this.data.catText || '').trim()) this._applyCat(recs[0]);
+    } catch (err) { console.warn('[newshop] 猜品类失败（不影响手选）', err); }
+  },
+  // 点某个推荐 → 写进品类三项（与 picker 确定时同一套字段；cat1 去掉图标，与 _plainCat 口径一致）
+  pickCatRec(e) {
+    const i = Number(e.currentTarget.dataset.i);
+    const r = (this.data.catRecs || [])[i];
+    if (!r) return;
+    this._applyCat(r);
+  },
+  _applyCat(r) {
+    this.setData({
+      cat1: this._plainCat(r.big), cat2: r.mid || '', cat3: r.small || '',
+      catText: [r.big, r.mid, r.small].filter(Boolean).join(' · ')
+    });
+  },
   // ⚠️⚠️ 2026-09-29 修【真凶】：老板报"点了防重检测什么都不出来（绿黄红都没有）"。
   //   根因就在原来这行 `dupShow: false` —— 点按钮那一刻，店名输入框会**失焦**，
   //   而移动端 blur 往往**晚于 tap** 触发 → doDup 刚把结果显示出来，紧接着就被这里清掉。

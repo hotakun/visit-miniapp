@@ -300,6 +300,15 @@
             <view class="rpick">{{catText || '选品类（大 / 中 / 小）'}}<text class="arw">›</text></view>
           </picker>
         </view>
+        <!-- ⭐⭐ 2026-10-12 老板定：填完店名**本地自动猜品类**（词表在小程序里，0 调用）→
+             这里给几个备选，点一下就换；猜不出来这一行不出现（照旧手选）。 -->
+        <view wx:if="{{catRecs.length}}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <text style="font-size:12px;color:#98A2AE">推荐</text>
+          <view wx:for="{{catRecs}}" wx:key="small" data-i="{{index}}" bindtap="pickCatRec"
+            style="font-size:12px;color:#F5531C;border:1px solid #FFD9C9;background:#FFF6F1;border-radius:999px;padding:3px 10px">
+            {{item.mid}}<text wx:if="{{item.small && item.small !== item.mid}}"> · {{item.small}}</text>
+          </view>
+        </view>
       </view>
 
       <!-- ⭐ 2026-10-02 老板定：**招牌菜卡从第 3 步搬到第 2 步**（接在品类后面）——
