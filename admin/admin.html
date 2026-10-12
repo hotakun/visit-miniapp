@@ -6143,15 +6143,24 @@ async function autoTick() {
   if (autoBusy) return;
   autoBusy = true;
   try {
-    // 0：过期任务自动归档（2026-09-08 老板定：幂等；归档发生则刷新任务页）
-    try {
-      const ar = await api('autoArchiveExpired');
-      if (ar.ok && ar.archived > 0 && $('page-tasks').style.display !== 'none') { loadTasks(); return; }
-    } catch (e) { /* 归档失败，下一轮再试 */ }
-    // A：全局事件检测（不挑页面）：15 秒一次拉数据做 diff，新审核/新过期 → 响铃/语音/浮窗
-    const list = await pollEvents();
-    // A2：注册审核增量（2026-09-09 老板定：有新人员注册 → 两角标 + 男声「有新的人员需要您审核」两遍）
-    await checkRegAlerts();
+    // ⭐⭐⭐ 2026-10-12 老板定：把每轮的 4~5 个调用**合并成 1 个** ——
+    //   原来打：autoArchiveExpired + listTasks + listCoordFixes + listRegistrations（4 个），
+    //   现在只打一个 pollAll（云端并发查完一次返回）→ 一天省 ~1 万次/客户端。
+    const poll = await api('pollAll');
+    let list = null;
+    if (poll && poll.ok) {
+      if (poll.archived > 0 && $('page-tasks').style.display !== 'none') { loadTasks(); return; }
+      // A：任务（下面拿它做行级 diff）
+      if (Array.isArray(poll.tasks)) {
+        taskCache = poll.tasks;
+        list = filterByMode(taskCache);
+        syncTaskAlerts(list);
+      }
+      // 坐标报错（新 pending → 响铃 + 播报 + 浮窗）
+      try { syncCoordFixAlerts(poll.fixes || []); } catch (e) { /* 静默 */ }
+      // 注册审核（复用 pollAll 带回来数据，不再单独打一次）
+      try { await checkRegAlerts(poll.reg); } catch (e) { /* 静默 */ }
+    }
     // 页面内容刷新（指纹对比，无变化不碰 DOM）
     if ($('page-taskDetail').style.display !== 'none') {
       if (curDetailTaskId) await refreshDetail();
@@ -10817,12 +10826,13 @@ let regKnownIds = null;   // null=首次（只建立基线不播报）
 let regKnownCount = 0;
 let regBusy = false;      // 防并发：startAuto 立即调用与 5 秒轮询可能重叠，重叠时基线竞态会漏报
 
-async function checkRegAlerts() {
+async function checkRegAlerts(prefetched) {
   if (regBusy) return;
   regBusy = true;
   try {
-    const res = await api('listRegistrations');
-    if (!res.ok) return;
+    // ⭐ 2026-10-12：支持"预取" —— pollAll 已经把 listRegistrations 的结果带回来了，省掉这次调用。
+    const res = prefetched || await api('listRegistrations');
+    if (!res || !res.ok) return;
     const pend = res.pending || [];
     const ids = pend.map(r => r._id);
     updateRegBadges(ids.length);

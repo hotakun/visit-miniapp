@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'mallPairList', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'mallPairList', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -722,6 +722,7 @@ exports.main = async (event) => {
     if (action === 'unbindUser') return await unbindUser(event);
     if (action === 'deleteUser') return await deleteUser(event);
     if (action === 'listRegistrations') return await listRegistrations(event);
+    if (action === 'pollAll') return await pollAll(event);   // ⭐ 2026-10-12：后台每轮的 4~5 个调用合并成 1 个
     if (action === 'reviewRegistration') return await reviewRegistration(event);
     if (action === 'getSettings') return await getSettings(event);
     if (action === 'setSetting') return await setSetting(event);
@@ -1313,6 +1314,27 @@ async function visitTimeoutTick() {
 
 // 过期任务自动归档（2026-09-08 老板定：自然完成的进历史；过期达设置档位天数的自动归档终态）
 // 档位 settings.expireArchiveDays：2/3/5 天（默认 3）；后台 15 秒轮询静默触发（幂等）
+// ⭐⭐⭐ 2026-10-12 老板定：把后台每轮那 4~5 个调用**合并成 1 个** ——
+//   原来 autoTick 一次要打：autoArchiveExpired + listTasks + listCoordFixes + listRegistrations（+ 当前页的）
+//   → 现在一个 pollAll 全带回来，前端**只打 1 次**（一天省 ~1 万次/客户端）。
+//   ⚠️ 每一块各自 catch：任何一块失败都不影响其它块（前端拿到的还是"能用的那部分"）。
+async function pollAll(event) {
+  const out = { ok: true, at: Date.now() };
+  // ① 过期任务自动归档（幂等；失败不影响别的）
+  try { const a = await autoArchiveExpired(event); out.archived = (a && a.archived) || 0; }
+  catch (e) { out.archived = 0; }
+  // ② 任务 ③ 坐标报错 ④ 注册审核（并发跑，各自失败不影响整体）
+  const [t, fx, reg] = await Promise.all([
+    listTasks(event).catch(() => null),
+    listCoordFixes(event).catch(() => null),
+    listRegistrations(event).catch(() => null)
+  ]);
+  out.tasks = (t && t.ok && t.tasks) || [];
+  out.fixes = (fx && fx.ok && fx.fixes) || [];
+  out.reg = (reg && reg.ok) ? reg : null;   // 完整返回给 checkRegAlerts 复用（它要 {ok, pending}）
+  return out;
+}
+
 async function autoArchiveExpired(event) {
   const setRes = await db.collection('settings').where({ key: 'expireArchiveDays' }).limit(1).get();
   const raw = Number(setRes.data[0] && setRes.data[0].value) || 3;
