@@ -25,6 +25,7 @@ Page({
     address: '', hourList: HOUR_LIST, hour1: '08:00', hour2: '21:00', hourIdx1: 8, hourIdx2: 21,
     areaList: AREA_LIST, area: '', areaIdx: 0, bizCircle: '',
     catRange: [[], [], []], catIdx: [0, 0, 0], catText: '', cat1: '', cat2: '', cat3: '',
+    catRecs: [],                                   // ⭐ 2026-10-12：本地猜品类的推荐（点一下就选）
     dishRaw: '', dishes: []
   },
   onShareAppMessage() { return require('../../utils/share').cfg(); },
@@ -70,7 +71,33 @@ Page({
     this._syncCatIdx(c1, c2, c3);
   },
   // ---------- 输入 handler（与 newshop 一致）----------
-  onName(e) { this.setData({ name: e.detail.value }); },
+  onName(e) {
+    this.setData({ name: e.detail.value });
+    this._guessCat(e.detail.value);          // ⭐ 2026-10-12：填店名 → 本地猜品类（0 云端调用）
+  },
+  // ⭐⭐ 2026-10-12 老板定：**「更正信息」页也补上品类自动推荐**（上轮只做了「加新店」，老板在这页试没看到）。
+  //   三条规则与「加新店」完全一致：① 本地算（词表在小程序里，0 调用）
+  //     ② **只在还没选过品类时**自动填第一个（绝不覆盖手选）③ 猜不出就什么都不变（照旧滚轮手选）。
+  _guessCat(name) {
+    try {
+      const cm = require('../../utils/catwords.js');
+      const recs = cm.suggest(name, this.data.dishRaw, 4);
+      this.setData({ catRecs: recs });
+      if (recs.length && !String(this.data.catText || '').trim()) this._applyCat(recs[0]);
+    } catch (err) { console.warn('[custedit] 猜品类失败（不影响手选）', err); }
+  },
+  pickCatRec(e) {
+    const i = Number(e.currentTarget.dataset.i);
+    const r = (this.data.catRecs || [])[i];
+    if (!r) return;
+    this._applyCat(r);
+  },
+  _applyCat(r) {
+    this.setData({
+      cat1: this._plainCat(r.big), cat2: r.mid || '', cat3: r.small || '',
+      catText: [r.big, r.mid, r.small].filter(Boolean).join(' · ')
+    });
+  },
   onContact(e) { this.setData({ contact: e.detail.value }); },
   onPhone(e) { this.setData({ phone: e.detail.value }); },
   onPhone2(e) { this.setData({ phone2: e.detail.value }); },
