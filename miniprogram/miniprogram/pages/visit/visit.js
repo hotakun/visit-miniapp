@@ -88,7 +88,7 @@ Page({
   //   ⚠️ 离开前必须 `_unlockLeave()` 放行，否则"提交完自己也退不出去"（见 clearStart / goBackFromBlock）。
   _lockLeave() {
     if (wx.enableAlertBeforeUnload) {
-      wx.enableAlertBeforeUnload({ message: '请取消此弹窗，在页面下方选择“提交拜访”或“取消拜访”。' });
+      wx.enableAlertBeforeUnload({ message: '离开会自动保存：填过内容（照片/录音/文字）= 自动提交，什么都没有 = 自动取消。建议回页面点「提交拜访」或「取消拜访」。' });
     }
   },
   _unlockLeave() {
