@@ -1278,6 +1278,10 @@ async function detail(salesmanId, taskId, isBoss) {
       remark: c.remark,
       coordFixPending: !!fixSet[c._id],
       visitedToday: !!last,
+      // ⭐⭐ 2026-10-12 老板定：任务详情页的客户卡上，把「已拜访」三个字**换成最近一次拜访的结果**
+      //   （老板："在任务详情页面，已拜访过的店家，卡片上的已拜访三个字，要换成显示最近一次拜访的结果。"）
+      //   `last` 就是这家最近那条正常拜访记录 → 直接取它的 `result`（空就留空，前端回退显示"已拜访"）。
+      lastResult: (last && last.result) || '',
       visitOngoing: ongSet.has(c._id),
       lastVisit: last ? { visitedAt: last.visitedAt, result: last.result, salesmanName: last.salesmanName } : null
     });

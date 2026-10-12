@@ -35,7 +35,7 @@
       </view>
       <view class="cright">
         <view wx:if="{{item.distText}}" class="dist">{{item.distText}}</view>
-        <view class="st {{item.visitedToday ? 'st-done' : (item.visitOngoing ? 'st-cur' : '')}}">{{item.visitedToday ? '已拜访' : (item.visitOngoing ? '拜访中' : '未拜访')}}</view>
+        <view class="st {{item.visitedToday ? 'st-done' : (item.visitOngoing ? 'st-cur' : '')}}">{{item.visitedToday ? (item.lastResult || '已拜访') : (item.visitOngoing ? '拜访中' : '未拜访')}}</view>
         <view wx:if="{{item.lastVisit}}" class="last">上次 {{item.lastVisit.visitedAt}}</view>
       </view>
     </view>
