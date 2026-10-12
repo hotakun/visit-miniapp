@@ -56,7 +56,7 @@
           <block wx:if="{{item.pic}}">
             <image class="picimg" src="{{item.pic.thumb}}" data-src="{{item.pic.orig}}" catchtap="previewPhoto" mode="scaleToFill"/>
             <view class="picno">{{item.no}}</view>
-            <view class="picdel" data-id="{{item.pic.id}}" catchtap="delPhoto">✕</view>
+            <view class="picdel" data-id="{{item.pic.id}}" catchtap="askDelPhoto">✕</view>
           </block>
           <block wx:else>
             <text class="f-ic">📷</text>
@@ -111,6 +111,17 @@
         <view class="trgo {{trBusy ? 'busy' : ''}}" bindtap="startTranscribe">{{trBusy ? '提交中…' : '📝 开始转录'}}</view>
         <view class="trmsg" wx:if="{{trMsg}}">{{trMsg}}</view>
       </view>
+    </view>
+  </view>
+
+  <!-- 删除一张现场照片：二次确认（⭐ 2026-10-12 老板定：「照片上有个 X 符号，点击之后照片就删除了，
+       应该弹窗问一下是否确认删除的，否则太容易误触删除了」）—— 与「删除录音」同一套页内弹层 -->
+  <view class="c-mask" wx:if="{{delPicId}}">
+    <view class="c-box">
+      <view class="ct">删除这张照片？</view>
+      <view class="csub">删除后不可恢复；这张照片不会再上传。</view>
+      <view class="btn-primary" style="background:#FDEDED;color:#E5484D;font-weight:800;box-shadow:none;border:1px solid #F7D9D9" bindtap="doDelPhoto">确认删除</view>
+      <view class="again" bindtap="hideDelPhoto">再看看</view>
     </view>
   </view>
 

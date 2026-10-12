@@ -427,8 +427,18 @@ Page({
     this._refreshSlots();   // ⭐ 拍完重排框（拍满一排自动补下一排）
     if (failed) api.toast(failed + ' 张处理失败，请重试');
   },
-  delPhoto(e) {
-    this.setData({ pics: this.data.pics.filter(p => p.id !== e.currentTarget.dataset.id) });
+  // ⭐⭐ 2026-10-12 老板定：照片右上角的 ✕ **不能一点就删**（太容易误触）→ 先弹页内确认。
+  //   口径与「删除录音」一字不差（项目铁律：页内弹层，不用 wx.showModal）。
+  askDelPhoto(e) {
+    const id = e.currentTarget.dataset.id;
+    if (!id) return;
+    this.setData({ delPicId: id });          // 非空 = 弹层显示
+  },
+  hideDelPhoto() { this.setData({ delPicId: '' }); },
+  doDelPhoto() {
+    const id = this.data.delPicId;
+    if (!id) return;
+    this.setData({ delPicId: '', pics: this.data.pics.filter(p => p.id !== id) });
     this._refreshSlots();   // ⭐ 删完重排框（少一张就收回一排空框）
   },
   previewPhoto(e) {
