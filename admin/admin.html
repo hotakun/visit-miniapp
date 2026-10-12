@@ -1591,7 +1591,9 @@ tr.row-off td:not(.keep){opacity:.4}
           <button class="btn ghost btn-sm" onclick="loadNewShops()">刷新</button>
           <span class="fl-cnt" id="nsCount">—</span>
         </div>
-        <div id="nsList" class="ns-list" style="flex:1;min-height:0;overflow-y:auto"></div>
+        <!-- ⭐ 2026-10-12 老板：「下面一张白色大卡片盖住了客户卡片」—— 根因：列表区被白卡包着、自己又是白的，
+             撑满之后下半屏就是一整片白，看起来像"一张空的大白卡"。这里给列表区铺一层**浅灰底**，和白卡区分开。 -->
+        <div id="nsList" class="ns-list" style="flex:1;min-height:0;overflow-y:auto;background:#F5F7FA;border-radius:10px;padding:10px"></div>
       </div>
       <div class="fl-bar">
         <input id="fieldQ" class="ginp" style="width:220px" placeholder="店名 / 电话 / 地址"
