@@ -1249,8 +1249,13 @@ tr.row-off td:not(.keep){opacity:.4}
             <!-- ⚠️⚠️ 2026-10-12 撤掉「🔎 比对认领」顶栏按钮：**旧入口**，带着老板早已作废的
                  「≥75 分自动认领」三档。与「🛒 商城配对确认」（全部人工确认）做同一件事、规矩相反
                  → 一并撤掉，只留一条路。函数 openMallMatch 保留为死代码。 -->
-            <!-- 2026-09-25 老板定：从商城**更新**客户信息（可控：先预览将改哪些字段，确认后才写；只写白名单字段） -->
+            <!-- ⚠️⚠️ 2026-10-13 老板：「这个按钮和代码先去掉吧，后面再重新构思这个功能。你保留这个按钮的小文档，以后查阅。」
+                 → **撤下「🔄 从商城更新」**。功能说明 / 设计口径 / 重构思清单：`_scratch/从商城更新-功能备忘.md`。
+                 ⚠️ 将来要恢复，**必须三处一起**：① 放开下面这个按钮 ② 恢复 `nav()` 里对 `#refreshMallBtn` 的显隐（已删）
+                 ③ `refreshFromMallClick()` 的实现（**留着没删**）。
+                 原位原样（2026-09-25 老板定：可控 —— 先预览将改哪些字段、确认后才写；只写白名单字段）：
             <button class="btn ghost" id="refreshMallBtn" style="display:none" onclick="refreshFromMallClick()">🔄 从商城更新</button>
+            -->
             <button class="btn ghost" id="manualBatchBtn" onclick="openManualBatch()">＋ 手工建批</button>
             <button class="btn primary" id="impCustBtn" onclick="playTkClick();openImport()">📥 导入新批次</button>
           </div>
@@ -2755,8 +2760,10 @@ function nav(p) {
     //   教训：**删掉一个元素时，必须全库搜它的 id**（`grep -n "matchBtn"`）。
     const mb = $('matchBtn'); if (mb) mb.style.display = 'none';   // 2026-09-08：比对/待确认下沉到批次卡，顶部按钮停用
     $('claimBtn').style.display = 'none';
-    // 2026-09-25 老板定：新增「🔄 从商城更新」—— 与商城库/比对同属**回访工作台**（新客工作台不显示）
-    $('refreshMallBtn').style.display = isNew ? 'none' : '';
+    // ⚠️⚠️ 2026-10-13 老板撤下「🔄 从商城更新」（说明见 `_scratch/从商城更新-功能备忘.md`）——
+    //   这里**原来有一行 `$('refreshMallBtn').style.display = isNew ? 'none' : '';`，连着按钮一起去掉了**。
+    //   ⚠️ 撤按钮**必须一起撤这里的引用**：2026-10-12 就因为漏删 `#matchBtn` 的引用，
+    //      `nav()` 读到 null 抛异常 → **整个批次页空白**（老板报障）。以后撤任何元素，先全库 `grep -n "元素id"`。
     $('manualBatchBtn').style.display = isNew ? 'none' : ''; // 2026-09-08 恢复：手工建批仅在回访工作台显示
     $('batchListView').style.display = isNew ? 'none' : '';
     $('bsStats').style.display = isNew ? 'none' : ''; // 汇总统计区仅回访（批次）工作台显示（2026-09-09）
@@ -12673,6 +12680,10 @@ async function resolveClaim(id, decision) {
 }
 
 // ===== 从商城更新客户信息（2026-09-25 老板定）=====
+// ⚠️⚠️ 2026-10-13 老板撤下这个功能：「这个按钮和代码先去掉吧，后面再重新构思这个功能。」
+//   —— 按钮（`#refreshMallBtn`）与 `nav()` 里的显隐引用**都已去掉**；
+//      **这个函数与云端 `adminapi.refreshFromMall` 保留为死代码**（一行没删，以后重构思时照它改）。
+//   功能说明书（含"重新构思要先想清 4 件事"）：`_scratch/从商城更新-功能备忘.md`
 // 老板要的是**可控**：点一下先看"将更新哪几家、改哪几个字段（原值 → 新值）"，确认后**才**写。
 // 云端 refreshFromMall 只写**白名单字段**（最近下单 / 最近浏览 / 地址 / 电话 / 区域 / 商城等级 /
 // 签约业务员 / 商城来源 / 标签 / 品类）；客户自己的资料（店名、坐标、客户备注、现场照片、所属批次）**一概不碰**。
