@@ -33,10 +33,20 @@ function mdShort(at) {                           // 时间戳/日期 → 'MM-DD'
   if (isNaN(d.getTime())) return '';
   return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-function mdCn(dateStr) {                         // 'YYYY-MM-DD' → '8月24日'（订单列表用）
+function mdCn(dateStr) {                 // 'YYYY-MM-DD' → '8月24日'；⭐ 2026-10-12 起**也认时间戳**
   if (!dateStr) return '';
-  const p = String(dateStr).slice(0, 10).split('-');
-  return p.length === 3 ? (Number(p[1]) + '月' + Number(p[2]) + '日') : String(dateStr);
+  const s = String(dateStr).trim();
+  // ⭐ 2026-10-12 老板报障（手机端客户详情页「时间是一串数字，没有被转换成正确的时间」）——
+  //   原因：这里原来只认 'YYYY-MM-DD'，而 `visits.visitedAt` 常常是**毫秒时间戳**（如 1760…）→
+  //   解析不出 '-' → 走 else → **把那串数字原样吐出来**。
+  //   现在三种都认：10/13 位时间戳、'YYYY-MM-DD'（含 ISO 串）、其它原样返回。
+  if (/^\d{10,}$/.test(s)) {
+    const n = Number(s);
+    const d = new Date(n > 1e12 ? n : n * 1000);   // 13 位=毫秒；10 位=秒
+    if (!isNaN(d.getTime())) return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
+  const p = s.slice(0, 10).split('-');
+  return p.length === 3 ? (Number(p[1]) + '月' + Number(p[2]) + '日') : s;
 }
 function fmtDur(sec) {                           // 秒 → '2 分 30 秒' / '45 秒'（录音时长，2026-09-27）
   const n = Math.round(Number(sec) || 0);

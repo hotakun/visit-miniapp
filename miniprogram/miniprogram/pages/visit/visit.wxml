@@ -43,7 +43,7 @@
   <view class="step">
     <view class="fc-head" bindtap="toggleFold" data-k="pic">
       <text class="st-no">1</text>
-      <text class="fc-t">现场拍照</text>
+      <text class="fc-t">样品拍照</text>
       <text class="fc-sum">{{pics.length ? ('已拍 ' + pics.length + '/' + maxPics + ' 张') : '未拍照'}}</text>
       <text class="fc-ar">{{foldPic ? '▸' : '▾'}}</text>
     </view>
