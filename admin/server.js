@@ -844,7 +844,11 @@ function writeChangeLog(rec) {
     //   有变动就在后台**补增量进缓存** → 下次取就是新的 —— 老板不用再手动点「🔄 更新地图数据」。
     //   ⚠️ 异步、**不等待**、失败只 log：本次响应仍返回现有缓存（前端靠 count 变化感知到更新）。
     //   ⚠️ 正在预热(warming)时不查 —— 全量拉取本来就包含变动，避免两件事打架。
-    if (!warming && c) store.checkDirty(callApi, STORE_AUTH).catch(() => null);
+    // ⭐⭐⭐ 2026-10-12 老板定（B 方案）：「问服务器，不问云端」——
+    //   原来是 store.checkDirty(...) 问**云端** custDirty（一天 ~5,760 次/客户端，花钱）；
+    //   现在改成 checkDirtyFromPg()：只问**自己的服务器**（它本来就在同步云端增量）→ 后台侧 0 云端调用。
+    //   ⚠️ 服务器拉不到就什么都不做 —— **绝不回退云端**。
+    if (!warming && c) store.checkDirtyFromPg().catch(() => null);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     // ⭐ 2026-09-27：一并把预热进度带给前端（老板要看到「已准备 3.8万/6万」）
     const prog = (store.status() || {}).progress || { done: 0, total: 0, phase: '' };

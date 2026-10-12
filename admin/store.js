@@ -317,6 +317,61 @@ async function syncIncremental(callApi, cred, since) {
   return { ok: true, changed: got.length, count: merged.length };
 }
 
+// ⭐⭐⭐ 2026-10-12 老板定（B 方案）：「**问服务器，不问云端**」——
+//   原来 checkDirty 每 15 秒问**云端** `custDirty`（一天 ~5,760 次/客户端，花钱）；
+//   而**服务器上的 pgsync 本来就在同步云端增量**（它已经在花钱干这件事）→ 改成**只问服务器**：
+//   后台每 15 秒问服务器 `/stat`（水位）→ 变了 → 从 `/sync` 拉增量 → 合并进本地缓存。
+//   ⚠️ **后台侧 0 云端调用**；手机端建的店，服务器同步到之后 15 秒内就能看到（pgsync 默认 1 分钟一轮）。
+//   ⚠️ 服务器拉不到 → 什么都不做（**绝不回退云端**，老板 2026-10-12 定）。
+async function checkDirtyFromPg() {
+  let cfg = {};
+  try { cfg = require('./config.json'); } catch (e) { /* 没配就走不了 */ }
+  if (!cfg.pgApiUrl) return { ok: false, msg: '没配 pgApiUrl（按设定：不拉云端）' };
+  const base = String(cfg.pgApiUrl).replace(/\/+$/, '');
+  const tok = cfg.pgApiToken ? ('?token=' + encodeURIComponent(cfg.pgApiToken)) : '';
+  const jl = (tok ? '&' : '?');
+  // ① 问水位（极轻，几字节）
+  const st = await (await fetch(base + '/stat' + tok)).json();
+  if (!st || !st.ok) return { ok: false, msg: '服务器没返回' };
+  const wm = Number(st.watermark) || 0;
+  if (!wm || wm <= _lastDirtyAt) return { ok: false, msg: '没有新变动' };
+  _lastDirtyAt = wm;
+  // ② 从服务器拉增量（since = 本地缓存水位）
+  const c = read();
+  if (!c || !Array.isArray(c.points)) return { ok: false, msg: '本地缓存还不存在' };
+  const since = watermark(c);
+  const t0 = Date.now();
+  const sy = await (await fetch(base + '/sync' + tok + jl + 'since=' + encodeURIComponent(String(since)))).json();
+  if (!sy || !sy.ok) return { ok: false, msg: '服务器拉增量失败' };
+  // pgapi 返回 PG 的 snake_case 列名 → 转成前端一直用的简写字段（与 /points 同一张映射表）
+  const M = [['i', 'id'], ['n', 'name'], ['nr', 'name_raw'], ['la', 'lat'], ['ln', 'lng'], ['c', 'city'], ['d', 'district'],
+    ['b', 'biz_circle'], ['ad', 'address'], ['cs', 'coord_source'], ['cst', 'coord_status'], ['mc', 'code'], ['mk', 'mall_key'],
+    ['u', 'updated_at'], ['ca', 'created_at'], ['ct', 'ctype'], ['ph', 'phone'], ['rm', 'remark'], ['bi', 'batch_ids'],
+    ['mj', 'mall_joined_at'], ['so', 'source']];
+  const got = (sy.rows || []).map(row => {
+    const o = {};
+    M.forEach(p => { const v = row[p[1]]; o[p[0]] = (v === null || v === undefined) ? '' : v; });
+    return o;
+  });
+  // ③ 合并（与 syncIncremental 同一套：覆盖同 id / 其余保留 / 新增追加）
+  const byId = {};
+  got.forEach(p => { if (p && p.i) byId[p.i] = p; });
+  const removed = {}; (sy.removed || []).forEach(x => { removed[x] = 1; });
+  const merged = [];
+  const seen = {};
+  c.points.forEach(p => {
+    if (removed[p.i]) return;                                  // 服务器说"这条删了" → 从缓存摘掉
+    if (byId[p.i]) { merged.push(byId[p.i]); seen[p.i] = 1; } else { merged.push(p); }
+  });
+  got.forEach(p => { if (p && p.i && !seen[p.i]) merged.push(p); });
+  let maxU = since;
+  got.forEach(p => { const u = Number(p.u) || 0; if (u > maxU) maxU = u; });
+  write({ v: VERSION, syncedAt: c.syncedAt, maxU: maxU, count: merged.length, points: merged });
+  console.log('[store] 从服务器补增量：' + got.length + ' 条变动、' + (sy.removed || []).length + ' 条删除，缓存 ' +
+    c.points.length + ' → ' + merged.length + ' 家，耗时 ' + (Date.now() - t0) + 'ms');
+  return { ok: true, changed: got.length, count: merged.length };
+}
+
 // 检查云端有没有变动；有就拉增量补进缓存。返回 true = 这次补了数据（前端据此重取列表）
 async function checkDirty(callApi, cred) {
   if (_dirtyBusy) return false;                        // 正在处理，别叠
@@ -367,4 +422,4 @@ function startAutoRefresh(callApi, cred) {
     .catch(() => null);
 }
 
-module.exports = { read, write, status, refresh, cancelRefresh, patch, unbatch, checkDirty, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
+module.exports = { read, write, status, refresh, cancelRefresh, patch, unbatch, checkDirty, checkDirtyFromPg, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };

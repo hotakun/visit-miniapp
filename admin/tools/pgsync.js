@@ -9,7 +9,7 @@ const path = require('path');
 const { Client } = require('pg');
 
 const CFG = JSON.parse(fs.readFileSync(path.join(__dirname, 'pgsync.config.json'), 'utf8'));
-const MIN = Number(CFG.intervalMinutes) || 5;
+const MIN = Number(CFG.intervalMinutes) || 1;   // ⭐ 2026-10-12 老板定：5 分钟 → **1 分钟**（后台改问服务器后，靠它把手机端建的店带过来）
 
 // 云端简写字段 → PG 列名（必须与 admin/tools/pg_import.sql 的列顺序一致）
 const MAP = [['id','i'],['name','n'],['name_raw','nr'],['code','mc'],['ctype','ct'],['source','so'],
