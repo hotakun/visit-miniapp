@@ -199,6 +199,10 @@ Page({
   },
   // 「切换到那家」：把那家写成 curCustomer → redirectTo 重进本页（替换掉当前这家的页面栈）
   switchToOngoing() {
+    // ⚠️⚠️ 2026-10-12：这个按钮是 `redirectTo` → **会触发 onUnload**。
+    //   若不先清掉 `_startKey`，就会被"强行离开"的自动提交逻辑误判（把当前这家给提交/取消掉）。
+    this.clearStart();
+
     const oc = this.data.ongoingCust;
     if (!oc || !oc._id) { api.toast('拿不到那家的信息，请返回重进'); return; }
     wx.setStorageSync('curCustomer', oc);
@@ -334,6 +338,28 @@ Page({
     loc.stopBackground(); // 后台定位严格关闭（2026-09-08 M2：提交/取消即停）
   },
   onUnload() {
+    // ⭐⭐ 2026-10-12 老板定（新规矩）：**拜访页强行离开 —— 有内容自动提交、全空自动取消**
+    //   场景：滑动返回 → `enableAlertBeforeUnload` 弹窗 → 点「确认」→ 页面卸载（拦不住，只能补救）。
+    //   判断"有没有内容"：结果 / 文字 / 样品 / 照片(pics) / 录音段(recs) 任一非空 = 有内容。
+    //   ⚠️ 只在**没走过正常提交或取消**时才接管：`clearStart()` 会清掉 `_startKey`，
+    //      所以「_startKey 还在」= 这次拜访还没被处置 → 才需要在这儿补救。
+    //   ⚠️ 编辑模式（_editId）不碰；游客（trial）不写库，照旧。
+    //   ⚠️ 自动提交**不要求先选结果**（结果空着也交，内容先保住，结果可以事后补）。
+    if (this._startKey && !this._editId && !api.isTrialUser()) {
+      const c = this.data.c || {};
+      const has = !!(this.data.result || String(this.data.text || '').trim() || String(this.data.samples || '').trim()
+        || (this.data.pics || []).length || (this.data.recs || []).length);
+      if (has) {
+        api.call('visits', {
+          action: 'submit', taskId: c.taskId || '', customerId: c._id || '', freeTripId: c.freeTripId || '',
+          result: this.data.result || '', text: this.data.text || '', samples: this.data.samples || '',
+          durationSeconds: Math.floor((Date.now() - (this.t0 || Date.now())) / 1000), skipLoc: true
+        }).catch(() => { /* 静默：页面已在卸载，失败只能靠草稿 */ });
+      } else {
+        api.call('visits', { action: 'cancel', taskId: c.taskId || '', customerId: c._id || '' }).catch(() => { /* 静默 */ });
+      }
+      this.clearStart();
+    }
     this._dead = true;
     clearInterval(this.timer);
     clearInterval(this._spinTimer);
