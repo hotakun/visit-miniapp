@@ -218,6 +218,10 @@ Page({
       }
     }
     this.setData({ step: n, stepName: STEP_NAMES[n - 1] || '' });
+    // ⭐⭐ 2026-10-12 老板定（兜底）：**「加新店」定位完、走到第 2 页（信息页）时 → 强行结束所有「拜访中」**
+    //   老板原话：「在新加店定位之后的下一步进入第二页的时候，也要强行结束所有仍在拜访中的状态。」
+    //   ⚠️ 无参数（云端按微信身份找"我自己的"ongoing 删掉）；失败静默，绝不挡建店流程。
+    if (n === 2) { try { api.call('visits', { action: 'endMyOngoing' }).catch(() => { /* 静默 */ }); } catch (e) { /* 静默 */ } }
     this._refresh();
     wx.pageScrollTo({ scrollTop: 0, duration: 180 });
     return true;

@@ -359,6 +359,13 @@ Page({
     //   现在：**URL 没带 id 就明确报错**（入口必须传），**宁可报错也不猜**。
     const id = (query && (query.id || query.customerId)) || '';
     this._cid = id;
+    // ⭐⭐ 2026-10-12 老板定（兜底）：**进"别的"客户详情页 → 把上一家的「拜访中」强行结束**
+    //   判据：手机里存的"当前客户"（storage.curCustomer._id）**不是这家** = 上一家没正常收尾（漏网之鱼）。
+    //   ⚠️ 同一家（从拜访页返回）**不调** —— 否则会把正在进行的拜访自己结束掉。
+    try {
+      const ccPrev = wx.getStorageSync('curCustomer') || {};
+      if (ccPrev._id && ccPrev._id !== id) api.call('visits', { action: 'endMyOngoing' }).catch(() => { /* 静默 */ });
+    } catch (e) { /* 静默 */ }
     this._taskId = (query && query.taskId) || '';   // 任务 id 同样只从 URL 来（storage 里的可能是上一家的）
     // ⭐ 2026-10-07 老板定：「我新加的店」的按钮改成「客户详情」→ 从这里进来时带 freeVisit=1。
     //   ⚠️ 必须在这里**清掉 taskId**：goVisit() 是 Object.assign **接力 storage 里的 curCustomer**，

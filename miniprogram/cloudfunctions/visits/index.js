@@ -102,6 +102,7 @@ exports.main = async (event) => {
   if (action === 'reportLocation') return await reportLocation(meUser, event, isBoss);
   if (action === 'reportTrack') return await reportTrack(meUser, event, isBoss);
   if (action === 'cancel') return await cancelVisit(meUser, event, isBoss);
+  if (action === 'endMyOngoing') return await endMyOngoing(meUser);   // ⭐ 2026-10-12 兜底：结束我自己的所有「拜访中」
   if (action === 'deleteVisit') return await deleteVisit(meUser, event, isBoss);   // ⭐ 2026-10-11 老板定：删掉某条拜访（只能删自己的）
   if (action === 'history') return await history(meUser, event.customerId, isBoss);
   if (action === 'editSubmitted') return await editSubmitted(meUser, event, isBoss);   // ⭐ 2026-10-10：编辑已提交的拜访记录
@@ -340,6 +341,21 @@ async function deleteVisit(user, e, isBoss) {
     } catch (err) { /* 重算失败不影响删除 */ }
   }
   return { ok: true, msg: '已删除' };
+}
+
+// ⭐⭐ 2026-10-12 老板定（兜底）：**结束"我自己"的所有「拜访中」**
+//   背景：新规矩（离开拜访页 = 有内容自动提交 / 全空自动取消）之后，理论上不该再有"拜访中"残留；
+//   这一条专门兜**漏网之鱼** —— 由「进别的客户详情页」和「加新店进第二页」两处调用。
+//   ⚠️ 只删**我自己的**、只删 `status:'ongoing'`（**绝不碰已提交的**）；语义上等于"取消拜访"。
+//   ⚠️ 自由拜访卡跟着重算（`_resyncFreeTrip`）——"拜访中"本来就不计入家数，这里只是保底清脏数据。
+async function endMyOngoing(user) {
+  const r = await db.collection('visits').where({ salesmanId: user._id, status: 'ongoing' }).limit(20).get();
+  const list = (r && r.data) || [];
+  if (!list.length) return { ok: true, ended: 0 };
+  for (const o of list) { await db.collection('visits').doc(o._id).remove(); }
+  const tripIds = Array.from(new Set(list.map(o => String(o.freeTripId || '')).filter(Boolean)));
+  for (const t of tripIds) { try { await _resyncFreeTrip(t); } catch (e) { /* 静默 */ } }
+  return { ok: true, ended: list.length };
 }
 
 async function cancelVisit(user, e, isBoss) {
