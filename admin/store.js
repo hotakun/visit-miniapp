@@ -139,13 +139,24 @@ async function refresh(callApi, cred) {
           fromPg = true;
         }
       } catch (e) {
-        console.warn('[store] 服务器只读 API 不可用，回退云开发：' + (e && e.message));
-        progress.phase = '服务器不可用，改用云端拉取…';
+        // ⭐⭐⭐ 2026-10-12 老板：「现在更新地图数据和立即拉取最新数据，全部都走服务器，
+        //   服务器拉不了就提示，**任何情况下都不拉取云端**！」
+        //   → 这里原来是"服务器不可用 → 回退云开发分片拉取"（一次 22MB × N 片，很花钱）
+        //     —— **已删除，绝不回退**。
+        console.warn('[store] 服务器只读 API 不可用（按设定：不回退云端）：' + (e && e.message));
+        progress.phase = '失败：服务器拉不到（不回退云端）';
+        throw new Error('服务器只读接口拉不到数据（按设定：任何情况下都不拉取云端）。请检查服务器是否在运行，或稍后再试。');
       }
     }
     if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次拉取' }; }
-    let cursor = '';
-    if (!points.length) for (let i = 0; i < MAX_PAGES; i++) {
+    if (!points.length) {
+      // 没配 pgApiUrl、或服务器返回了空 —— 同样**不回退云端**，直接失败让人看见。
+      progress.phase = '失败：没拿到数据（不回退云端）';
+      throw new Error('没从服务器拿到客户数据（按设定：任何情况下都不拉取云端）。请检查 admin/config.json 里的 pgApiUrl 是否正确、服务器是否在运行。');
+    }
+    // ⚠️ 墓碑（2026-10-12）：下面这段原来是"云开发分片回退"（custMapPoints 分页拉全库）——
+    //   按老板要求**已整段停用**，留个壳子免得以后又被加回来。
+    if (false) for (let i = 0; i < MAX_PAGES; i++) {
       const res = JSON.parse(await callApi(Object.assign({ action: 'custMapPoints', cursor: cursor, limit: PAGE_LIMIT }, auth)));
       if (!res || !res.ok) throw new Error((res && res.msg) || '云函数返回异常');
       const got = res.points || [];
