@@ -1,0 +1,22 @@
+page { background: #F5F6F8; }
+.page { padding: 10px 12px 30px; }
+.bar { background: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.sbox { display: flex; align-items: center; background: #F3F5F8; border-radius: 9px; padding: 7px 10px; }
+.ico { font-size: 13px; margin-right: 6px; }
+.sin { flex: 1; font-size: 13px; }
+.sclr { color: #B7BEC7; font-size: 14px; padding: 0 4px; }
+.modes { display: flex; gap: 8px; margin-top: 9px; }
+.m { flex: 1; text-align: center; font-size: 12.5px; font-weight: 700; color: #68727E; background: #F3F5F8; border-radius: 8px; padding: 6px 0; }
+.m.on { background: #F5531C; color: #fff; }
+.cnt { font-size: 12px; color: #98A2AE; margin-top: 8px; }
+.gtitle { font-size: 12.5px; font-weight: 800; color: #68727E; padding: 10px 2px 6px; }
+.gn { color: #F5531C; font-weight: 700; margin-left: 6px; }
+.card { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.pic { width: 52px; height: 52px; border-radius: 9px; flex: none; background: #F0F2F6; }
+.cin { flex: 1; min-width: 0; }
+.nm { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub { font-size: 12px; color: #98A2AE; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: 11.5px; color: #68727E; margin-top: 3px; }
+.by { color: #98A2AE; }
+.arw { color: #C3CAD4; font-size: 17px; }
+.empty { text-align: center; color: #98A2AE; font-size: 13px; padding: 60px 0; }

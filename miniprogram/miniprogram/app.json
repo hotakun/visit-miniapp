@@ -12,7 +12,8 @@
     "pages/notes/notes",
     "pages/notes/editor/editor",
     "pages/newshop/newshop",
-    "pages/myshops/myshops"
+    "pages/myshops/myshops",
+    "pages/newshops/newshops"
   ,
     "pages/freevisit/freevisit",
     "pages/freevisit/map",

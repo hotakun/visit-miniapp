@@ -38,7 +38,8 @@
     <view class="bs"><view class="bs-n">{{bossStats.todayDone}}/{{bossStats.todayTotal}}</view><view class="bs-l">今日完成</view></view>
     <view class="bs"><view class="bs-n c-blue">{{bossStats.ongoing}}</view><view class="bs-l">拜访中</view></view>
     <view class="bs"><view class="bs-n c-orange">{{bossStats.online}}</view><view class="bs-l">在线</view></view>
-    <view class="bs"><view class="bs-n c-red">{{bossStats.review}}</view><view class="bs-l">待审核</view></view>
+    <!-- ⭐⭐ 2026-10-12 老板定：第 4 格「待审核」改成「新店」+ **累计数量**；点它进「新店」列表页 -->
+    <view class="bs" bindtap="goNewShops"><view class="bs-n c-red">{{bossNewShops}}</view><view class="bs-l">新店</view></view>
   </view>
 
   <!-- 今日总览条（2026-09-10 质感升级新增：数据取自已有 bossStats，无云端改动） -->

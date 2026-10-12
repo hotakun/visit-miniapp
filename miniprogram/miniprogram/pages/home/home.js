@@ -238,7 +238,7 @@ Page({
   onShareAppMessage() {
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false },
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', bossNewShops: 0, welShow: false },
   // ⭐⭐ 2026-10-10 老板定：**任务心跳回调**（`app.js` 每 15 秒问一次云端"变了没"，变了才叫到这里）
   //   场景：后台派了新任务 / 把任务结束了 / 延期撤回 —— 首页几秒内自己刷新，业务员不用手动下拉。
   //   ⚠️ 只做一次轻刷新、**不弹任何提示** —— 免得打扰正在干活的人。
@@ -536,6 +536,10 @@ Page({
           };
           const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
           this.setData({ tasks, showTasks: tasks, bossStats: res.stats || null });
+          // ⭐ 2026-10-12 老板定：首页第 4 格「新店」要显示**累计数量** → 顺手问一次（老板端本来就只这一次，可接受）
+          api.call('adminapi', { action: 'msgCount' }).then(mc => {
+            if (mc && mc.ok && typeof mc.shopNew === 'number') this.setData({ bossNewShops: mc.shopNew });
+          }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
           prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）
         } else {
           api.toast(res.msg || '加载失败');
@@ -599,6 +603,8 @@ Page({
     if (n === '自由拜访') { wx.navigateTo({ url: '/pages/freevisit/freevisit' }); return; }   // ⭐ 2026-10-03：原「团队」占位卡改成自由拜访
     api.toast((n ? '「' + n + '」' : '该功能') + '开发中，敬请期待');
   },
+  // ⭐⭐ 2026-10-12 老板定：点数字卡第 4 格「新店」→ 新店列表页（搜索 + 三种排列，点卡片进客户详情）
+  goNewShops() { wx.navigateTo({ url: '/pages/newshops/newshops' }); },
   goTodayTask() {
     const t = this.data.tasks.find(x => x.status !== 'done') || this.data.tasks[0];
     if (!t) return;

@@ -1,0 +1,37 @@
+<!-- ⭐⭐ 2026-10-12 老板定：新店列表页（老板首页「新店」卡片点进来）——
+     顶部搜索框（只搜这一页内）+ 三种排列（按日期 / 按顺序 / 按商圈）；点卡片进客户详情页。 -->
+<view class="page">
+  <view class="bar">
+    <view class="sbox">
+      <text class="ico">🔍</text>
+      <input class="sin" value="{{kw}}" bindinput="onKw" placeholder="搜这一页里的店名 / 地址 / 电话 / 商圈" confirm-type="search" />
+      <text class="sclr" wx:if="{{kw}}" bindtap="clearKw">✕</text>
+    </view>
+    <view class="modes">
+      <view class="m {{mode === 'date' ? 'on' : ''}}" bindtap="setMode" data-m="date">按日期</view>
+      <view class="m {{mode === 'card' ? 'on' : ''}}" bindtap="setMode" data-m="card">按顺序</view>
+      <view class="m {{mode === 'circle' ? 'on' : ''}}" bindtap="setMode" data-m="circle">按商圈</view>
+    </view>
+    <view class="cnt">共 {{total}} 家新店<text wx:if="{{kw}}"> · 筛出 {{list.length}} 家</text></view>
+  </view>
+
+  <view wx:if="{{loading}}" class="empty">正在加载…</view>
+  <view wx:elif="{{!list.length}}" class="empty">还没有新店<text wx:if="{{kw}}">（换个词搜搜）</text></view>
+
+  <block wx:for="{{groups}}" wx:key="title" wx:for-item="g">
+    <view class="gtitle" wx:if="{{g.title}}">{{g.title}}<text class="gn">{{g.items.length}} 家</text></view>
+    <view class="card" wx:for="{{g.items}}" wx:key="id" wx:for-item="s" bindtap="openShop" data-id="{{s.id}}">
+      <image class="pic" wx:if="{{s.photos[0]}}" src="{{s.photos[0]}}" mode="aspectFill"></image>
+      <view class="cin">
+        <view class="nm">{{s.name}}</view>
+        <view class="sub">{{s.address || '（未填地址）'}}</view>
+        <view class="tag">
+          <text wx:if="{{s.area}}">{{s.area}}</text>
+          <text wx:if="{{s.bizCircle}}"> · {{s.bizCircle}}</text>
+          <text wx:if="{{s.by}}" class="by"> · {{s.by}} 录</text>
+        </view>
+      </view>
+      <text class="arw">›</text>
+    </view>
+  </block>
+</view>
