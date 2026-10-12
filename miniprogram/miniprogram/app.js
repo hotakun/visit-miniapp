@@ -155,7 +155,7 @@ App({
     const cfg = (this.globalData && this.globalData.sysCfg) || {};
     if (cfg.reviewWatchEnabled === false) return;
     this.reviewTick();
-    this.reviewTimer = setInterval(() => this.reviewTick(), 15000);
+    this.reviewTimer = setInterval(() => this.reviewTick(), 60000);   // ⭐ 2026-10-12 老板定：15 秒 → 1 分钟（它自己还会在"没有待审核"时停）
   },
   async reviewTick() {
     try {
