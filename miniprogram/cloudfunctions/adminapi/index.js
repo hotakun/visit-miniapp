@@ -1328,9 +1328,11 @@ async function listNewShops(event) {
       //   原来只捞 `mallPending: true` → 只出 8 家（对上商城 / 被按老店清理过的都消失了）。
       //   实测库里现场录入写的 `source` 只有这三类：「**自主添加**」(336) / 「**商城自主申请**」(208) / `field`(8)
       //   （而"导入的"是 mall-import 等）→ 就按这三类捞 = 所有现场录的店，按时间倒序。
-      // ⭐⭐ 2026-10-12 老板定：「只加前三天之内的，更久之前的就不用了」
-      //   → 时间条件用**滚动 3 天**（不是自然日，免得刚过零点就少一天）
-      .where(_.and([{ source: _.in(['field', '自主添加', '商城自主申请']) },
+      // ⚠️⚠️ 2026-10-12 老板定：「**只计算业务员添加的，其他方式都不计算**」——
+      //   业务员在手机端「加新店」写的就是 `source: 'field'`（见 tasks/index.js newShopSubmit）；
+      //   「自主添加」/「商城自主申请」**都不算**（那是别的入口写进去的）。
+      //   时间：只算**最近 3 天**（老板定：「只加前三天之内的，更久之前的就不用了」）——滚动 3 天，不是自然日。
+      .where(_.and([{ source: 'field' },
         { createdAt: _.gt(Date.now() - 3 * 86400000) }, NOT_DELETED]))
       .field({ _id: true, name: true, nameRaw: true, phone: true, address: true, district: true,
         bizCircle: true, lng: true, lat: true, photos: true, createdByName: true, createdAt: true,
