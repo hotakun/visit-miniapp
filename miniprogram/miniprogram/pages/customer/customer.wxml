@@ -471,6 +471,8 @@
          ⚠️ 必须 catchtap（阻止冒泡）—— 否则点按钮会顺带触发整层的 closePhoto。 -->
     <view class="viewer-btns" wx:if="{{viewerIdx >= 0}}">
       <view class="viewer-b" catchtap="retakePhoto">📷 重拍</view>
+      <!-- ⭐⭐ 2026-10-12 老板定：「编辑只要裁剪功能就可以了」→ 微信自带编辑界面（wx.editImage，可裁剪/旋转）→ 覆盖同一格 -->
+      <view class="viewer-b" catchtap="editPhoto">✂️ 编辑</view>
       <view class="viewer-b danger" catchtap="delPhoto">🗑 删除</view>
     </view>
     <view class="viewer-x">关闭</view>

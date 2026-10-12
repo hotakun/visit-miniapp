@@ -856,6 +856,59 @@ Page({
     this.setData({ viewerShow: false });
     this.takePhotoBySource(i, 'camera');
   },
+  // ⭐ 2026-10-12：把"一个本地文件"上传到第 i 格（从 takePhotoBySource 里抽出来 —— 裁剪后复用它）
+  async uploadPhotoFile(i, filePath) {
+    const cid = this._cid;
+    if (!cid) { wx.showToast({ title: '缺少客户参数', icon: 'none' }); return; }
+    wx.showLoading({ title: '上传中…', mask: true });
+    try {
+      const up = await wx.cloud.uploadFile({
+        cloudPath: 'custphotos/' + cid + '/' + Date.now() + '_' + i + '.jpg',
+        filePath: filePath
+      });
+      const res = await api.call('tasks', { action: 'saveCustPhoto', customerId: cid, fileID: up.fileID, index: i });
+      wx.hideLoading();
+      if (!res || !res.ok) { api.toast((res && res.msg) || '保存失败，请稍后再试'); return; }
+      const d = this.data.d;
+      const photos = d.photos.slice();
+      photos[i] = filePath;
+      d.photos = photos;
+      this.setData({ d });
+      wx.showToast({ title: '已保存到客户档案', icon: 'success' });
+    } catch (err) {
+      wx.hideLoading();
+      console.error('[customer] 上传失败（裁剪后）', err);
+      api.toast('保存失败，请稍后再试');
+    }
+  },
+  // ⭐⭐ 2026-10-12 老板定：门店照片大图里加「✂️ 编辑」—— **只要裁剪**（用微信自带的编辑界面 wx.editImage，可裁剪/旋转）
+  //   流程：先下载成本地临时文件 → wx.editImage → 拿回临时文件 → **覆盖同一格**（复用上传链路）。
+  //   ⚠️ wx.editImage 要基础库 2.11.0+；不支持时给人话提示（不静默）。
+  editPhoto() {
+    const i = Number(this.data.viewerIdx);
+    if (!(i >= 0)) return;
+    const url = this.data.viewerUrl;
+    if (!url) return;
+    if (!wx.editImage) { api.toast('当前微信版本不支持裁剪，请升级微信'); return; }
+    wx.showLoading({ title: '准备中…', mask: true });
+    wx.downloadFile({
+      url: url,
+      success: (d) => {
+        wx.hideLoading();
+        if (!d || d.statusCode !== 200 || !d.tempFilePath) { api.toast('拿不到这张图，稍后再试'); return; }
+        wx.editImage({
+          src: d.tempFilePath,
+          success: (r) => {
+            if (!r || !r.tempFilePath) return;
+            this.setData({ viewerShow: false });
+            this.uploadPhotoFile(i, r.tempFilePath);      // ← 覆盖同一格
+          },
+          fail: (e) => { console.warn('[customer] editImage 取消/失败', e); }
+        });
+      },
+      fail: (e) => { wx.hideLoading(); api.toast('拿不到这张图，稍后再试'); console.error('[customer] 下载原图失败', e); }
+    });
+  },
   // ⭐ 2026-10-10 老板定：门店照片大图里「🗑 删除」—— 云端删记录（+ 尽力删云存储文件）→ 重拉详情
   async delPhoto() {
     const i = Number(this.data.viewerIdx);
