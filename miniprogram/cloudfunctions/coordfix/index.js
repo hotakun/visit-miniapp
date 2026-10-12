@@ -82,6 +82,13 @@ exports.main = async (event) => {
       .update({ data: { status: 'superseded', supersededAt: Date.now(), supersededBy: me.data[0]._id } });
   } catch (e) { /* 老数据/权限异常都不影响提交，忽略 */ }
 
+  // ⭐ 2026-10-12：写「变化时间戳」（后台靠它判断"要不要叫云端"，省调用量；失败不影响提交）
+  try {
+    const _now = Date.now();
+    const _dr = await db.collection('settings').where({ key: 'pollDirtyAt' }).limit(1).get();
+    if (_dr.data && _dr.data.length) await db.collection('settings').doc(_dr.data[0]._id).update({ data: { value: _now, updatedAt: _now } });
+    else await db.collection('settings').add({ data: { key: 'pollDirtyAt', value: _now, updatedAt: _now } });
+  } catch (e) { console.error('[pollDirtyAt] 写变动信号失败', e); }
   await db.collection('coord_fix_requests').add({
     data: {
       type: 'coord',                       // ⭐ 2026-09-27：记录打类型（后台按 type 分流：坐标报错 / 现场提报）
@@ -123,6 +130,13 @@ async function submitField(user, event, isBoss) {
     .where({ customerId: customerId, status: 'pending', type: 'field', kind: kind, value: dedupVal })
     .count().catch(() => ({ total: 0 }));
   if (dup.total > 0) return { ok: false, code: 'DUPLICATED', msg: '这条已经提过了，等管理员审核' };
+  // ⭐ 2026-10-12：写「变化时间戳」（后台靠它判断"要不要叫云端"，省调用量；失败不影响提交）
+  try {
+    const _now = Date.now();
+    const _dr = await db.collection('settings').where({ key: 'pollDirtyAt' }).limit(1).get();
+    if (_dr.data && _dr.data.length) await db.collection('settings').doc(_dr.data[0]._id).update({ data: { value: _now, updatedAt: _now } });
+    else await db.collection('settings').add({ data: { key: 'pollDirtyAt', value: _now, updatedAt: _now } });
+  } catch (e) { console.error('[pollDirtyAt] 写变动信号失败', e); }
   await db.collection('coord_fix_requests').add({
     data: {
       type: 'field',

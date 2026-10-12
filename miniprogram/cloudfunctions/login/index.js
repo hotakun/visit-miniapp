@@ -312,6 +312,13 @@ async function register(OPENID, e) {
     } catch (err) { /* 传了不存在的 id：忽略 */ }
   }
   try {
+    // ⭐ 2026-10-12：写「变化时间戳」（后台靠它判断"要不要叫云端"，省调用量；失败不影响注册）
+    try {
+      const _now = Date.now();
+      const _dr = await db.collection('settings').where({ key: 'pollDirtyAt' }).limit(1).get();
+      if (_dr.data && _dr.data.length) await db.collection('settings').doc(_dr.data[0]._id).update({ data: { value: _now, updatedAt: _now } });
+      else await db.collection('settings').add({ data: { key: 'pollDirtyAt', value: _now, updatedAt: _now } });
+    } catch (e2) { console.error('[pollDirtyAt] 写变动信号失败', e2); }
     await db.collection('registrations').add({
       data: {
         openid: OPENID, name, phone, status: 'pending', reason: '', createdAt: Date.now(),

@@ -508,6 +508,13 @@ async function submit(user, e, isBoss) {
     const add = await db.collection('visits').add({ data: doc });
     doc._id = add._id;
   }
+  // ⭐ 2026-10-12：写「变化时间戳」`pollDirtyAt` —— 后台靠它判断"要不要叫云端"（省调用量；失败不影响提交）
+  try {
+    const _now = Date.now();
+    const _dr = await db.collection('settings').where({ key: 'pollDirtyAt' }).limit(1).get();
+    if (_dr.data && _dr.data.length) await db.collection('settings').doc(_dr.data[0]._id).update({ data: { value: _now, updatedAt: _now } });
+    else await db.collection('settings').add({ data: { key: 'pollDirtyAt', value: _now, updatedAt: _now } });
+  } catch (e) { console.error('[pollDirtyAt] 写变动信号失败', e); }
 
   // ⭐ 2026-10-03 自由拜访：拜访成功 → 把客户加进该卡的 customerIds（去重，见 _resyncFreeTrip）
   await _resyncFreeTrip(doc.freeTripId);
