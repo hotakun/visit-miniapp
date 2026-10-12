@@ -19,7 +19,9 @@
   </view>
 
   <!-- 卡片列表 -->
-  <view class="shopcard" wx:for="{{list}}" wx:key="id" bindtap="openShop" data-id="{{item.id}}">
+  <!-- ⭐⭐ 2026-10-12 老板定：**点卡片 = 进客户详情页**（原来是进「加新店」修改页，不对）——
+       要编辑走详情页里的「更正信息」；右边的「客户详情」小按钮保留（同一个去处）。 -->
+  <view class="shopcard" wx:for="{{list}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
     <view class="r1">
       <text class="nm">{{item.name}}</text>
       <!-- ⭐ 2026-10-03 老板定：这张卡是「**我自己现场采集的店**」，胶囊固定显示「新店采集」。
