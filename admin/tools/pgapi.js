@@ -189,7 +189,17 @@ const srv = http.createServer(async (req, res) => {
     // 状态：条数 + 水位（后台用来判断"要不要更新"）
     if (u.pathname === '/stat') {
       const r = await q('SELECT count(*)::int AS n, max(updated_at) AS w FROM customers');
-      return out(res, 200, { ok: true, count: r.rows[0].n, watermark: Number(r.rows[0].w) || 0, at: Date.now() });
+      // ⭐ 2026-10-12 省调用量 ③：多带两个「变化时间戳」—— 后台据此决定"要不要叫云端"（问了不花钱）
+      let pd = 0, cd = 0;
+      try {
+        const s = await q("SELECT name, watermark FROM sync_state WHERE name IN ('pollDirtyAt','custDirtyAt')");
+        (s.rows || []).forEach(x => {
+          if (x.name === 'pollDirtyAt') pd = Number(x.watermark) || 0;
+          if (x.name === 'custDirtyAt') cd = Number(x.watermark) || 0;
+        });
+      } catch (e) { /* 表里还没有这两行 → 当 0 */ }
+      return out(res, 200, { ok: true, count: r.rows[0].n, watermark: Number(r.rows[0].w) || 0,
+        pollDirtyAt: pd, custDirtyAt: cd, at: Date.now() });
     }
     // ⭐ 2026-10-11 老板定：「📝 拜访记录」两页改走轻量服务器（点「🔄 刷新」来这里拉，不花云开发的量）。
     //   一个路由三个功能（kind 区分）：

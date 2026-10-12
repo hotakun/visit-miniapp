@@ -78,6 +78,23 @@ async function setWatermark(w) {
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// ⭐ 2026-10-12 省调用量 ③：把云端的「变化时间戳」同步到 PG（后台据此决定"要不要叫云端"）
+//   云端 `pollDirtyAt`（拜访/坐标报错/注册）与 `custDirtyAt`（加新店）—— 都存进 sync_state。
+//   ⚠️ 失败只记日志（下轮再试），绝不影响其它同步。
+async function syncPollDirty() {
+  try {
+    const r = await callCloud('pollDirty', {});
+    if (!r || !r.ok) throw new Error('pollDirty 返回异常');
+    const put = async (name, w) => {
+      await (await conn()).query(
+        'INSERT INTO sync_state (name,watermark,synced_at) VALUES ($1,$2,$3) ' +
+        'ON CONFLICT (name) DO UPDATE SET watermark=$2, synced_at=$3', [name, w, Date.now()]);
+    };
+    await put('pollDirtyAt', Number(r.pollDirtyAt) || 0);
+    await put('custDirtyAt', Number(r.custDirtyAt) || 0);
+  } catch (e) { console.error('[sync] pollDirty 同步失败（下轮再试）:', e.message); }
+}
+
 async function round() {
   let since = await watermark(), got = 0, maxU = since;
   for (let i = 0; i < 40; i++) {                               // 一次最多 4 万条，防跑太久
@@ -99,6 +116,8 @@ async function round() {
   }
   if (got) { await setWatermark(maxU); console.log(`[sync] 补了 ${got} 条，水位 → ${new Date(maxU).toLocaleString()}`); }
   // ⭐ 顺带同步批次成员（失败不影响上面 customers 的结果，下轮再试）
+  // ⭐ 2026-10-12 省调用量 ③：先把云端「变化时间戳」同步进 PG（后台据此决定"要不要叫云端"，0 成本）
+  try { await syncPollDirty(); } catch (e) { console.error('[sync] pollDirty 失败（下轮再试）:', e.message); }
   try { await syncBatchMembers(); } catch (e) { console.error('[sync] batch_members 同步失败（下轮再试）:', e.message); }
   // ⭐⭐ 2026-10-10 指针表模式第 5 步：批次卡 / 任务 / 已拜访客户也进 PG ——
   //    后台「📦 批次管理」从此**彻底不再问云开发**（批次页每个数字 = 一条 SQL）。
