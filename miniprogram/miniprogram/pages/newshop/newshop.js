@@ -1018,24 +1018,30 @@ Page({
     });
   },
   async _take(i, src) {
+    // ⭐⭐ 2026-10-12 老板定：**相册可以一次选多张**（与拜访页同一口径）——
+    //   一次最多选"还剩几个空格"，从第 i 格起依次往后填；走相机时微信本来只给 1 张，不受影响。
+    const photos0 = (this.data.photos || ['', '', '']);
+    const left = Math.max(1, 3 - photos0.filter(Boolean).length);
     let files;
-    try { files = await media.chooseImage(1, [src]); } catch (e) { return; }
-    const f = (files || [])[0];
-    if (!f || !f.tempFilePath) return;
+    try { files = await media.chooseImage(src === 'album' ? left : 1, [src]); } catch (e) { return; }
+    const list = (files || []).filter(f => f && f.tempFilePath);
+    if (!list.length) return;
     this.setData({ photoBusy: true });
-    try {
-      const r = await media.prepPhoto(f.tempFilePath);            // 压缩（原图 ≤1280/q70）
-      const fileID = await media.uploadFile(r.orig.path, '.jpg'); // 直传云存储
-      const photos = (this.data.photos || ['', '', '']).slice();
-      const ids = (this.data.photoIds || ['', '', '']).slice();
-      photos[i] = r.orig.path;      // 本机路径：当场预览用
-      ids[i] = fileID;              // fileID：随提交入库
-      this.setData({ photos, photoIds: ids, photoBusy: false });
-      this._refresh();
-    } catch (err) {
-      this.setData({ photoBusy: false });
-      api.toast('照片上传失败，请重试');
+    const photos = (this.data.photos || ['', '', '']).slice();
+    const ids = (this.data.photoIds || ['', '', '']).slice();
+    for (let n = 0; n < list.length; n++) {
+      let k = i;                                  // 从被点的那一格起，往后找第一个空格
+      while (k < 3 && photos[k]) k++;
+      if (k >= 3) break;                          // 满了就停
+      try {
+        const r = await media.prepPhoto(list[n].tempFilePath);      // 压缩（原图 ≤1280/q70）
+        const fileID = await media.uploadFile(r.orig.path, '.jpg'); // 直传云存储
+        photos[k] = r.orig.path;    // 本机路径：当场预览用
+        ids[k] = fileID;            // fileID：随提交入库
+      } catch (err) { /* 单张失败跳过，剩下的继续 */ }
     }
+    this.setData({ photos, photoIds: ids, photoBusy: false });
+    this._refresh();
   },
 
   // ===================== 🔧 防重调试（老板 2026-09-29）=====================
