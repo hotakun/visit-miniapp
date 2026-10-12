@@ -26,7 +26,12 @@ function daysAgo(dateStr) {                      // 'YYYY-MM-DD' / 时间戳 →
   const s = String(dateStr).trim();
   let d;
   if (/^\d{10,}$/.test(s)) { const n = Number(s); d = new Date(n > 1e12 ? n : n * 1000); }
-  else d = new Date(s.replace(/-/g, '/') + ' 00:00:00');
+  else {
+    const n0 = Number(s);
+    // ⚠️ 2026-10-12：商城表那几个日期是 **Excel 序列号**（46306.70…）→ 也要认，否则"（X 天前）"不显示
+    if (!isNaN(n0) && n0 > 20000 && n0 < 80000) d = new Date(Math.round((n0 - 25569) * 86400000));
+    else d = new Date(s.replace(/-/g, '/') + ' 00:00:00');
+  }
   if (isNaN(d.getTime())) return '';
   const days = Math.floor((Date.now() - d.getTime()) / 86400000);
   return days > 0 ? days + ' 天前' : '今天';
@@ -48,6 +53,16 @@ function mdCn(dateStr) {                 // 'YYYY-MM-DD' → '8月24日'；⭐ 2
     const n = Number(s);
     const d = new Date(n > 1e12 ? n : n * 1000);   // 13 位=毫秒；10 位=秒
     if (!isNaN(d.getTime())) return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
+  {
+    const n0 = Number(s);
+    // ⚠️⚠️ 2026-10-12 老板截图实测（铁证）：**商城表那些日期列存的是 Excel 日期序列号**，
+    //   如 46306.70516079861（= 2026-10-12），**不是毫秒时间戳** —— 上面那个分支匹配不上，
+    //   于是原样吐出来就是"一串数字"。Excel 序列号 ≈ 20000~80000（1954~2064 年）→ 按区间识别，不会误伤其它数字。
+    if (!isNaN(n0) && n0 > 20000 && n0 < 80000) {
+      const d0 = new Date(Math.round((n0 - 25569) * 86400000));   // 25569 = 1970-01-01 的 Excel 序列号
+      if (!isNaN(d0.getTime())) return (d0.getUTCMonth() + 1) + '月' + d0.getUTCDate() + '日';
+    }
   }
   const p = s.slice(0, 10).split('-');
   return p.length === 3 ? (Number(p[1]) + '月' + Number(p[2]) + '日') : s;
