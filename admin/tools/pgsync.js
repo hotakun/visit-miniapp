@@ -104,6 +104,13 @@ async function syncPollDirty() {
       for (const id of r.deletedIds) {
         await d.query('INSERT INTO deleted_ids (id,tbl,deleted_at) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [String(id), 'customers', Date.now()]);
       }
+      // ⭐⭐ 2026-10-12 老板实测：「我让你删掉的移动水果摊位，客户管理里还在，回收站也有一个」——
+      //   根因：云端的增量同步**刻意跳过已删客户** → PG 的 `customers.deleted` 永远是 false
+      //   → 所有 `WHERE deleted = false` 的查询（/points 拉缓存、/newshops、统计…）全把它当"没删"。
+      //   修法：**顺手把 PG 里这些客户也标成已删** —— 一处治全（以后谁写 `deleted = false` 都自动对）。
+      if (r.deletedIds.length) {
+        await d.query('UPDATE customers SET deleted = true WHERE id = ANY($1::text[])', [r.deletedIds.map(String)]);
+      }
     }
   } catch (e) { console.error('[sync] pollDirty 同步失败（下轮再试）:', e.message); }
 }
