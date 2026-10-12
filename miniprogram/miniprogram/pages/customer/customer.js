@@ -609,9 +609,16 @@ Page({
           const res = await api.call('tasks', { action: 'saveCustPhoto', customerId: cid, fileID: up.fileID, index: i });
           wx.hideLoading();
           if (!res || !res.ok) { api.toast((res && res.msg) || '保存失败，请稍后再试'); return; }
+          // ⚠️ 2026-10-12：与 uploadPhotoFile 同一个雷（本地临时路径不能当 image src 用）→ 换成云上的地址回显
+          let showUrl = f.tempFilePath;
+          try {
+            const us = await wx.cloud.getTempFileURL({ fileList: [up.fileID] });
+            const f0 = (us && us.fileList && us.fileList[0]) || null;
+            if (f0 && f0.tempFileURL) showUrl = f0.tempFileURL;
+          } catch (e2) { /* 换不到就先用本地路径顶着 */ }
           const d = this.data.d;
           const photos = d.photos.slice();
-          photos[i] = f.tempFilePath;
+          photos[i] = showUrl;
           d.photos = photos;
           this.setData({ d });
           wx.showToast({ title: '已保存到客户档案', icon: 'success' });
@@ -884,9 +891,19 @@ Page({
       const res = await api.call('tasks', { action: 'saveCustPhoto', customerId: cid, fileID: up.fileID, index: i });
       wx.hideLoading();
       if (!res || !res.ok) { api.toast((res && res.msg) || '保存失败，请稍后再试'); return; }
+      // ⚠️⚠️ 2026-10-12 老板报「裁剪之后，界面上的小图就看不到了」：
+      //   原来拿**本地临时路径**塞进 photos[i] 回显 —— 而 wx.editImage 给的临时路径
+      //   在部分机型**不能直接当 image src**（重拍那条路也埋着同一个雷）。
+      //   修法：上传成功后**用云存储的 fileID 换临时 URL** 来显示（与 onLoad 读照片同一条路）。
+      let showUrl = filePath;
+      try {
+        const us = await wx.cloud.getTempFileURL({ fileList: [up.fileID] });
+        const f0 = (us && us.fileList && us.fileList[0]) || null;
+        if (f0 && f0.tempFileURL) showUrl = f0.tempFileURL;
+      } catch (e2) { /* 换不到就先用本地路径顶着 */ }
       const d = this.data.d;
       const photos = d.photos.slice();
-      photos[i] = filePath;
+      photos[i] = showUrl;
       d.photos = photos;
       this.setData({ d });
       wx.showToast({ title: '已保存到客户档案', icon: 'success' });
