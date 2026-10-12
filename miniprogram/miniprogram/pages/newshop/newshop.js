@@ -619,6 +619,10 @@ Page({
       if (r.recEnabled !== undefined) set.recEnabled = !!r.recEnabled;
       this.setData(set);
       this._refresh();
+      // ⭐ 2026-10-12 老板定（参考防重检测这手感：「按一下 → 给出选择」）：
+      //   **按了防重检测 → 品类推荐也跟着重算一次**（这时店名已填定）。
+      //   仍然只在"还没选过品类"时自动填第一个（绝不覆盖业务员手选的）。
+      this._guessCat(this.data.name || '');
     } catch (e) {
       // ⚠️ 手动点的时候要看得见（只 toast 会一闪而过，在用户眼里就是"没反应"）；
       //    自动跑的时候静默（否则一进第 2 步就弹红卡）。
