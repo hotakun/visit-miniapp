@@ -857,7 +857,7 @@ async function getCustomerDetail(event) {
     remark: v.remark || v.text || '',
     audioCount: (Array.isArray(v.audios) && v.audios.length) || (v.audio && v.audio.fileID ? 1 : 0),
     trText: (v.trEdited && v.trEdited.text) || '',
-    thumbs: (v.photos || []).map(p => (p && (p.thumbID || p.fileID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 3)
+    thumbs: (v.photos || []).map(p => (p && (p.fileID || p.thumbID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 9)   // ⭐ 2026-10-12：与 tasks 同口径（最多 9 张 + 优先原图）
   }));
 
   // —— ④ 备注历史（新 → 旧）——
