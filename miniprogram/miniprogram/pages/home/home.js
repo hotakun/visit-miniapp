@@ -536,9 +536,10 @@ Page({
           };
           const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
           this.setData({ tasks, showTasks: tasks, bossStats: res.stats || null });
-          // ⭐ 2026-10-12 老板定：首页第 4 格「新店」的**累计数量** —— 与「新店」列表页**同一口径**
-          //   （现场录入 + **最近 3 天**）→ 直接问列表接口的总数，避免两处数字对不上。
-          api.call('adminapi', { action: 'listNewShops' }).then(ns => {
+          // ⭐ 2026-10-12 老板定：首页第 4 格「新店」的数量 —— 与「新店」列表页**同一口径**。
+          //   ⚠️⚠️ 必须调 **tasks**（不是 adminapi！）：adminapi 是「后台账号密码」专属入口，
+          //   手机端只有微信身份、没有密码 → 调它一律 NO_AUTH → 首页会显示 0（2026-10-12 实测踩到）。
+          api.call('tasks', { action: 'listNewShops' }).then(ns => {
             if (ns && ns.ok && typeof ns.total === 'number') this.setData({ bossNewShops: ns.total });
           }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
           prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）

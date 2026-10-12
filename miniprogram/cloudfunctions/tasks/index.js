@@ -140,6 +140,7 @@ exports.main = async (event) => {
   if (action === 'correctCustomer') return await correctCustomer(salesmanId, event);  // ⭐ 2026-10-10「更正信息」保存（直接生效 + 留痕）
   // ⭐ 2026-10-03 自由拜访：按坐标+半径取附近客户点
   if (action === 'nearbyCustomers') return await nearbyCustomers(salesmanId, event);
+  if (action === 'listNewShops') return await listNewShops();   // ⭐ 2026-10-12：手机端老板「新店」卡片/列表页（只算业务员录的 + 最近 3 天）
   // ⭐ 2026-10-03 自由拜访卡（独立集合 free_trips，不绑任务）
   if (action === 'freeTripCreate') return await freeTripCreate(salesmanId, meDoc, event);
   if (action === 'freeTripList') return await freeTripList(salesmanId, meDoc, event);
@@ -1684,6 +1685,36 @@ function fallbackPts(start, ordered, ids) {
 //   ⚠️ **返回上限 500 条**（按距离升序取最近的）—— 2 公里内可能有几千家，不封顶会把手机画卡
 //   ⚠️ 查询方式与 dupCheck 同源：先用**矩形**在库里粗筛（走 lat/lng 索引），再用 haversine **精筛**成圆
 //   ⚠️ 排除已删客户（回收站里的不在图上）
+// ⭐⭐ 2026-10-12 老板定：手机端老板首页「新店」卡片 + 新店列表页（pages/newshops）。
+//   ⚠️ **为什么放 tasks 而不是 adminapi**：adminapi 是「后台账号密码」专属入口
+//      （verifyAdmin 要 username+password，手机端只有微信身份 → 一律 NO_AUTH）→ 放那儿手机端永远拿不到数据（首页显示 0）。
+//   口径（老板 2026-10-12）：**只算业务员在手机端「加新店」录的**（source='field'）+ **最近 3 天**（滚动 3 天）+ 没进回收站。
+//   （更名 / 改信息 / 合并都照常显示 —— 它们都不写 deleted，只有回收站删除才写。）
+async function listNewShops() {
+  const out = [];
+  for (let i = 0; i < 30; i++) {
+    const r = await db.collection('customers')
+      .where(_.and([{ source: 'field' },
+        { createdAt: _.gt(Date.now() - 3 * 86400000) },
+        { deleted: _.neq(true) }]))
+      .field({ _id: true, name: true, nameRaw: true, phone: true, address: true, district: true,
+        bizCircle: true, lng: true, lat: true, photos: true, createdByName: true, createdAt: true,
+        customerType: true })
+      .skip(i * 100).limit(100).get();
+    const rows = r.data || [];
+    rows.forEach(c => out.push({
+      id: c._id, name: c.nameRaw || c.name || '(未填店名)', phone: c.phone || '',
+      address: c.address || '', area: c.district || '', bizCircle: c.bizCircle || '',
+      lng: (c.lng === undefined ? null : c.lng), lat: (c.lat === undefined ? null : c.lat),
+      photos: Array.isArray(c.photos) ? c.photos.slice(0, 1) : [],
+      by: c.createdByName || '', at: c.createdAt || 0, ctype: c.customerType || ''
+    }));
+    if (rows.length < 100) break;
+  }
+  out.sort((a, b) => (b.at || 0) - (a.at || 0));   // 新的在前
+  return { ok: true, total: out.length, shops: out };
+}
+
 async function nearbyCustomers(salesmanId, event) {
   const lat = Number(event.lat), lng = Number(event.lng);
   if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) {

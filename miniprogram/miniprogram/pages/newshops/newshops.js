@@ -19,7 +19,8 @@ Page({
 
   load(cb) {
     this.setData({ loading: true });
-    api.call('adminapi', { action: 'listNewShops' }).then(r => {
+    // ⚠️ 调 **tasks**（不是 adminapi）—— 后者是「后台账号密码」专属入口，手机端调会被 NO_AUTH 拒掉
+    api.call('tasks', { action: 'listNewShops' }).then(r => {
       this._all = (r && r.shops) || [];
       this.setData({ total: this._all.length, loading: false }, () => this.apply());
       if (cb) cb();
