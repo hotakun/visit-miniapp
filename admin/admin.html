@@ -1564,6 +1564,16 @@ tr.row-off td:not(.keep){opacity:.4}
         .fl-tag.ok { background:#EAF6EE; color:#14663A; }
         .fl-tag.pend { background:#F1F3F7; color:#6B7688; }
         .fl-act { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; }
+        /* ⭐ 2026-10-12 老板定：后台「新店」标签页的卡片 —— 整理成规整的一条一条（左信息 / 右按钮） */
+        .ns-card { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #EFF1F5;
+          border-radius:12px; padding:11px 14px; box-shadow:0 2px 8px rgba(31,36,48,.05); margin-bottom:8px; }
+        .ns-main { flex:1; min-width:0; }
+        .ns-nm { font-size:13.5px; font-weight:800; color:#22262E; }
+        .ns-day { font-size:11px; font-weight:700; color:#6B7688; background:#F1F3F7; border-radius:999px;
+          padding:2px 8px; margin-left:8px; }
+        .ns-line { font-size:12px; color:#5B6472; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ns-line.mut { color:#94A0B2; font-size:11.5px; }
+        .ns-btns { flex:none; display:flex; gap:8px; }
       </style>
       <div class="title-bar"><span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span></div>
       <!-- ⭐⭐ 2026-10-12 老板定：这一页加「新店」标签页 —— 业务员手机端「加新店」录的店，
@@ -8150,11 +8160,18 @@ function renderNewShops() {
       const n = Number(v); const d = new Date(n > 1e12 ? n : n * 1000);
       return isNaN(d.getTime()) ? '' : (d.getMonth() + 1) + '月' + d.getDate() + '日';
     })(x.created_at) : '';
-    return '<div class="fl-row" style="margin-bottom:8px"><div class="fl-mid">' +
-      '<div class="fl-nm">' + esc(x.name_raw || x.name || '(未填店名)') +
-      (t ? '<span class="fl-tag pend">' + t + '</span>' : '') + '</div>' +
-      '<div class="fl-sub">' + esc(x.phone || '') + (x.phone ? ' · ' : '') + esc(x.address || '(未填地址)') + '</div>' +
-      '<div class="fl-sub mut">' + esc(x.district || '') + (x.biz_circle ? ' · ' + esc(x.biz_circle) : '') + '</div></div></div>';
+    return '<div class="ns-card">' +
+      '<div class="ns-main">' +
+      '<div class="ns-nm">' + esc(x.name_raw || x.name || '(未填店名)') +
+      (t ? '<span class="ns-day">' + t + '</span>' : '') + '</div>' +
+      '<div class="ns-line">' + esc(x.phone || '（无电话）') + '　' + esc(x.address || '（未填地址）') + '</div>' +
+      '<div class="ns-line mut">' + esc(x.district || '') +
+      (x.biz_circle ? ' · ' + esc(x.biz_circle) : '') + '</div>' +
+      '</div>' +
+      // ⭐ 2026-10-12 老板定：每张卡右边一个「客户详情」按钮（打开后台的客户详情弹窗）
+      '<div class="ns-btns">' +
+      '<button class="btn ghost btn-sm" onclick="openCustProfile(\'' + x.id + '\')">客户详情</button>' +
+      '</div></div>';
   }).join('');
 }
 function closeDupOvl() { const o = $('dupOvl'); if (o) o.style.display = 'none'; }
