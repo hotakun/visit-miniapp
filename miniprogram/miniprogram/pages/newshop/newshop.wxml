@@ -449,8 +449,7 @@
       <view class="done-t">已提交</view>
       <view class="done-s">「{{doneName}}」已进你的客户列表，现在就能再拜访、记笔记。<text class="br"></text>同时进了后台的「现场录入 · 待商城建档」，等商城表导入时自动对上。</view>
       <view class="done-btns">
-        <view class="db ghost" bindtap="goCustomer">看这位客户</view>
-        <view class="db" bindtap="again">再录一家</view>
+        <view class="db" bindtap="goCustomer">看这位客户</view>
       </view>
     </view>
   </view>
