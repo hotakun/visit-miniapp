@@ -1711,7 +1711,7 @@ async function listNewShops() {
       //   客户详情页「重拍/裁剪」存的是**对象 { fileID, thumbID }**（原来没处理 → 页面拿到 `[object Object]` → 灰块）。
       //   这里统一归一化成 fileID 字符串（微信 <image> 支持 cloud:// 直接显示）。
       photos: Array.isArray(c.photos)
-        ? c.photos.slice(0, 1).map(p => (p && typeof p === 'object') ? (p.thumbID || p.fileID || '') : String(p || '')).filter(Boolean)
+        ? c.photos.slice(0, 1).map(p => (p && typeof p === 'object') ? (p.fileID || p.thumbID || '') : String(p || '')).filter(Boolean)
         : [],
       by: c.createdByName || '', at: c.createdAt || 0, ctype: c.customerType || ''
     }));
@@ -2150,7 +2150,10 @@ async function custDetail(salesmanId, event, isBoss) {
       .map(a => ({ fileID: (a && a.fileID) || '', duration: Number(a && a.duration) || 0 }))
       .filter(a => a.fileID).slice(0, 6),
     samples: String(v.samples || ''),
-    thumbs: (v.photos || []).map(p => (p && (p.thumbID || p.fileID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 3)
+    // ⚠️⚠️ 2026-10-12 老板定：「**只有我主动编辑过的照片才能裁剪，其他一律原比例**」——
+    //   原来这里优先取 `thumbID`（缩略图 = 320×240 **中心裁切**的那份）→ 详情页点开大图看到的是**被裁过的**（老板实测发现）。
+    //   改成**优先 `fileID`（原图）**：小格子照样排得齐（那是"显示时"裁，不是把照片裁掉），点开看的就是原比例。
+    thumbs: (v.photos || []).map(p => (p && (p.fileID || p.thumbID)) || (typeof p === 'string' ? p : '')).filter(Boolean).slice(0, 3)
   }));
 
   // —— ③b 这家客户**是否正处于拜访中** ——
