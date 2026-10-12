@@ -1368,6 +1368,16 @@ async function pollDirty(event) {
       if (s.key === 'custDirtyAt') out.custDirtyAt = Number(s.value) || 0;
     });
   } catch (e) { /* 静默：没有这两条就当 0 */ }
+  // ⭐⭐ 2026-10-12 老板定（**零额外调用版**）：**顺路捎带"最近删掉的客户 id"** ——
+  //   背景：云端的增量同步**刻意跳过已删客户** → 服务器的库里永远收不到"这条被删了"
+  //   → 后台「新店」列表里**删掉的店还显示着**（老板实测）。
+  //   ⚠️ 关键：搭在**同一次调用**里返回，**不增加任何云端调用次数**（老板关心费用，已拍板这个方案）。
+  //   ⚠️ 只捎**最近 7 天**删的（够用、结果小）；服务器侧写进 `deleted_ids` 表、查询时排除。
+  try {
+    const since = Date.now() - 7 * 86400000;
+    const d = await db.collection('customers').where({ deleted: true, deletedAt: _.gt(since) }).field({ _id: true }).limit(1000).get();
+    out.deletedIds = (d.data || []).map(x => x._id);
+  } catch (e) { out.deletedIds = []; }
   return out;
 }
 

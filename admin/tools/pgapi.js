@@ -266,6 +266,7 @@ const srv = http.createServer(async (req, res) => {
       const since = Date.now() - days * 86400000;
       const r = await q('SELECT id, name, name_raw, phone, address, district, biz_circle, lat, lng, created_at, ctype ' +
         "FROM customers WHERE source = 'field' AND created_at > $1 AND coalesce(deleted,false) = false " +
+        'AND id NOT IN (SELECT id FROM deleted_ids) ' +   // ⭐ 2026-10-12：已删名单也排除（云端同步刻意跳过已删，PG 靠这张名单才知道谁被删了）
         'ORDER BY created_at DESC LIMIT 500', [since]);
       return out(res, 200, { ok: true, days: days, rows: (r.rows || []), at: Date.now() });
     }

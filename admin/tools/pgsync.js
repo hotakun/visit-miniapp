@@ -92,6 +92,16 @@ async function syncPollDirty() {
     };
     await put('pollDirtyAt', Number(r.pollDirtyAt) || 0);
     await put('custDirtyAt', Number(r.custDirtyAt) || 0);
+    // ⭐⭐ 2026-10-12 老板定（零额外调用）：**顺路收下"最近删掉的客户 id"写进 PG** ——
+    //   云端 `pollDirty` 在同一次回答里捎带 `deletedIds`（不增加云端调用次数，老板拍板这个方案）；
+    //   `pgapi /newshops` 用它排除 —— 后台「新店」列表里**删掉的店就不会再显示**。
+    if (Array.isArray(r.deletedIds)) {
+      const d = await conn();
+      await d.query('CREATE TABLE IF NOT EXISTS deleted_ids (id text PRIMARY KEY, at bigint)');
+      for (const id of r.deletedIds) {
+        await d.query('INSERT INTO deleted_ids (id,at) VALUES ($1,$2) ON CONFLICT (id) DO NOTHING', [String(id), Date.now()]);
+      }
+    }
   } catch (e) { console.error('[sync] pollDirty 同步失败（下轮再试）:', e.message); }
 }
 
