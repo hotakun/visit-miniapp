@@ -22,6 +22,14 @@
   border-top: 1px solid #EEF1F6;
 }
 .savebtn {
+  /* ⭐ 2026-10-12 老板定：「下面的保存更正按钮，请居中并保持合理大小，现在很难看。」
+     原来**没设宽度**（要么铺满、要么被挤得怪）→ 现在给合理宽度（62%、上限 320px）+ 水平居中。
+     ⚠️ margin:0 auto 管普通块容器；align-self:center 管 flex 列容器（不是 flex 时无副作用）。 */
+  width: 62%;
+  min-width: 200px;
+  max-width: 320px;
+  margin: 0 auto;
+  align-self: center;
   height: 46px;
   border-radius: 23px;
   background: linear-gradient(135deg, #F5531C, #FF7A45);
