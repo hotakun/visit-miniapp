@@ -8139,7 +8139,25 @@ function loadNewShops() {
   if (cnt) cnt.textContent = '正在从你的服务器拉…';
   fetch('/newshops?days=3', { cache: 'no-store' }).then(r => r.json()).then(j => {
     if (!j || !j.ok) { if (cnt) cnt.textContent = '⚠️ 服务器拉不到：' + ((j && j.msg) || '未知原因'); return; }
-    _nsAll = j.rows || []; _nsLoaded = true; renderNewShops();
+    _nsAll = j.rows || []; _nsLoaded = true;
+    // ⭐⭐ 2026-10-12 修（老板报：「后面的客户详情页不是通往他们的详情页面」+「白色大卡片盖住客户卡片」）：
+    //   「客户详情」那个弹层（openCustProfile）是从 `custListCache`（客户管理页的缓存）里找店的，
+    //   而「新店」页的数据来自**服务器**、**不在那个缓存里** → 找不到 → 弹层一片空白 + 盖住列表。
+    //   这里把新店每一行**转成缓存同款格式**塞进去（两边字段名不一样：服务器是 id/name_raw/district/biz_circle…）。
+    try {
+      (_nsAll || []).forEach(x => {
+        const id = x.id || x._id; if (!id) return;
+        if (custListCache.some(y => (y._id || y.id) === id)) return;
+        custListCache.push({
+          _id: id, name: x.name || '', nameRaw: x.name_raw || x.name || '',
+          phone: x.phone || '', address: x.address || '',
+          district: x.district || '', bizCircle: x.biz_circle || '',
+          lat: x.lat, lng: x.lng, createdAt: x.created_at, customerType: x.ctype || 'new',
+          coord_status: (x.lat && x.lng) ? 'ok' : 'pending'
+        });
+      });
+    } catch (e) { console.warn('[newshops] 塞缓存失败（不影响列表）', e); }
+    renderNewShops();
   }).catch(e => {
     if (cnt) cnt.textContent = '⚠️ 服务器拉不到（按设定：不回退云端）';
     console.warn('[newshops]', e);
