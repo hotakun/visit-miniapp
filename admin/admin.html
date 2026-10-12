@@ -2695,7 +2695,12 @@ function nav(p) {
     $('newCustView').style.display = isNew ? '' : 'none';
     if (!isNew) { loadLastMallImport(); loadClaims(); }
   }
-  $('page-' + p).style.display = (p === 'tasks' || p === 'customers' || p === 'track' || p === 'geo') ? 'flex' : 'block';   // geo：竖排 flex（表格占满剩余高度、内部滚动）
+  // ⭐⭐ 2026-10-12 老板（第三次）：「是到底部了，根本不能滚动查看了，你这头猪！」
+  //   真凶就在这一行 —— `nav()` 给页面设的是**内联** display，**内联优先级高过 CSS 规则**，
+  //   所以我在 #page-field 里写的 display:flex **从来没生效** → .card / #fieldList 的 flex:1 全空转
+  //   → 内容按 1780px 撑开 → 被 .main 的 overflow:hidden 裁掉、还滚不动。
+  //   → 把 field 也加进「用 flex 的页面」（它和 geo 一样，是"列表占满剩余高度、内部滚动"的结构）。
+  $('page-' + p).style.display = (p === 'tasks' || p === 'customers' || p === 'track' || p === 'geo' || p === 'field') ? 'flex' : 'block';   // geo/field：竖排 flex（内容占满剩余高度、内部滚动）
   if (p === 'track') {
     // 2026-09-24 修（老板发现的规律："先去别的页、再回战况就看不到地图"）：
     // 地图一旦在「容器宽高还没算好」时创建过，腾讯 GL 就渲染成空白、且**不会自愈**（补 resize 也救不回）。
