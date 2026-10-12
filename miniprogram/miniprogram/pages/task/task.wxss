@@ -42,6 +42,7 @@
 .mdot.todo { background: linear-gradient(135deg,#FF8A50,#F5531C); }
 .mdot.new { background: linear-gradient(135deg,#5B9DFF,#2F80ED); }
 .mdot.cur { background: var(--blue); }
+.mdot.closed { background: #E5484D; }   /* ⭐ 2026-10-12 老板定：最近一次拜访是「闭店」→ 红底 ✕ */
 .info { flex: 1; min-width: 0; }
 .cname { font-size: 15px; font-weight: 700; }
 .cname .tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--primary-tint); color: var(--primary-deep); margin-left: 6px; }

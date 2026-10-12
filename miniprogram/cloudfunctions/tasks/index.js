@@ -1282,6 +1282,8 @@ async function detail(salesmanId, taskId, isBoss) {
       //   （老板："在任务详情页面，已拜访过的店家，卡片上的已拜访三个字，要换成显示最近一次拜访的结果。"）
       //   `last` 就是这家最近那条正常拜访记录 → 直接取它的 `result`（空就留空，前端回退显示"已拜访"）。
       lastResult: (last && last.result) || '',
+      // ⭐ 2026-10-12 老板定：拜访结果是**闭店**的 → 任务卡上的对勾换成 ✕（客户详情页顶部也把"正常"改成"闭店"）
+      lastClosed: !!(last && last.result && String(last.result).indexOf('闭店') >= 0),
       visitOngoing: ongSet.has(c._id),
       lastVisit: last ? { visitedAt: last.visitedAt, result: last.result, salesmanName: last.salesmanName } : null
     });

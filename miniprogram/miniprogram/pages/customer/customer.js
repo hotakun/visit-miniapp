@@ -220,7 +220,14 @@ function buildD(res, photoUrls, recUrls) {
     code: esc(c.mallCode || ''),
     // ⭐ 2026-10-07 修：营业时间**平台优先、现场兜底** —— 平台写在 plat.hours，现场（「加新店」）写在顶层 hours。
     hours: flatHours(p.hours || c.hours),
-    status: esc(p.bizStatus) || '',
+    // ⭐⭐ 2026-10-12 老板定：**拜访时选了「闭店」→ 顶部营业状态显示"闭店"**（覆盖平台给的"正常"）
+    //   ⚠️ 拜访历史在页面上是**时间正序**（老的在上）→ 取**最后一条**当"最近一次"。
+    status: (function () {
+      const vs = c.visits || [];
+      const last = vs.length ? vs[vs.length - 1] : null;
+      if (last && String(last.result || '').indexOf('闭店') >= 0) return '闭店';
+      return esc(p.bizStatus) || '';
+    })(),
     // 游客（实习）打码：后四位 ****（2026-09-08 口径「游客不能看完整电话」；maskTrialPhone 对已打码串幂等）
     tel: api.isTrialUser() ? api.maskTrialPhone(esc(c.phone) || esc(p.phone1) || '') : (esc(c.phone) || esc(p.phone1) || ''),
     contact: esc(c.contactName) || '', hasMall: hasMall,
