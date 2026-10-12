@@ -3831,6 +3831,16 @@ async function fixDupCustomers(event) {
       // ⚠️⚠️ 2026-10-12【老板补要求】：「他们根本没有进商城，**不会有加入商城时间和业务员，更没有商城等级**」
       //   —— 光清 mallKey / customerType 不够：`MALL_FIELD_PAIRS` 那 14 项落点**全要清**，
       //      否则客户详情页上还会显示"聚·星火会员""商城业务员""最近下单"这些根本不该有的东西。
+      // ⭐⭐⭐ 2026-10-12 老板：「待商城建档那十几个沙县的不要显示了，本来就是你误改的，实际他们也没有商城建档需求。
+      //   你还把他们显示成加新店，这都是原来就有的店铺，加个屁的新店啊！」
+      //   —— 根因：系统判"加新店"的**唯一依据**是 `mallPending === true`（见 msgCount / msgCenter 的 shopNew），
+      //      而上一轮清那 18 条时顺手写了 `mallPending: true` → 它们既进「⏳ 待商城建档」又进「📬 重点消息 · 加新店」，
+      //      边栏角标也跟着虚高。但它们其实是**点评表导入的老店**（createdAt = 导入日、createdByName 为空），
+      //      **不是业务员现场新录的**，更没有"等商城建档"这回事。
+      //   —— 这里给一个显式开关：`notNew: true` → **把 mallPending 清成 false**（不是新店、也没有建档需求）。
+      if (r.notNew) {
+        data.mallPending = false;
+      }
       if (r.unmall) {
         data.customerType = 'new';
         data.mallPending = true;
