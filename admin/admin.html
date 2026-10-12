@@ -1666,6 +1666,9 @@ tr.row-off td:not(.keep){opacity:.4}
                 <option value="12">12 秒</option>
                 <option value="15">15 秒</option>
                 <option value="20">20 秒</option>
+                <option value="60">1 分钟</option>
+                <option value="120">2 分钟</option>
+                <option value="180">3 分钟（推荐 · 省调用量）</option>
               </select></label>
               <label style="font-weight:700;font-size:13px">拜访录音上限<select class="inp" id="recLimit" style="width:100px;margin-left:6px">
                 <option value="180">3 分钟</option>
@@ -11355,7 +11358,7 @@ async function loadSettings() {
   $('locEnabled').checked = !!loc.enabled;
   $('locThreshold').value = loc.threshold;
   $('locRefresh').value = String(res.settings.locRefreshInterval || 30);
-  $('locKeyRefresh').value = String(res.settings.locKeyRefreshInterval || 15);
+  $('locKeyRefresh').value = String(res.settings.locKeyRefreshInterval || 180);
   const rl = $('recLimit');
   if (rl) rl.value = String([180, 300, 600].includes(Number(res.settings.recordingDurationLimit)) ? res.settings.recordingDurationLimit : 300);
   const vl = $('visitLimit');
@@ -11531,7 +11534,7 @@ async function saveLocSetting() {
   if (!res.ok) { alert(res.msg || '保存失败'); return; }
   // 距离刷新双档位（2026-09-06 老板定）：正常页 30/45/60，重要页 8/12/15/20，云端钳制
   const lr = parseInt($('locRefresh').value, 10) || 30;
-  const lkr = parseInt($('locKeyRefresh').value, 10) || 15;
+  const lkr = parseInt($('locKeyRefresh').value, 10) || 180;
   const res2 = await api('setSetting', { key: 'locRefreshInterval', value: lr });
   if (!res2.ok) { alert(res2.msg || '距离刷新间隔保存失败'); return; }
   const res3 = await api('setSetting', { key: 'locKeyRefreshInterval', value: lkr });

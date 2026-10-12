@@ -559,7 +559,7 @@ Page({
   onShow() {
     this.locateNow();
     clearInterval(this._locTimer);
-    const sec = (this.data.c && this.data.c.locKeyRefresh) || 15;
+    const sec = (this.data.c && this.data.c.locKeyRefresh) || 180;   // ⭐ 2026-10-12 老板定：兜底也改 3 分钟（原 15 秒 → 一天上万个调用）
     this._locTimer = setInterval(() => this.locateNow(), sec * 1000);
   },
   onHide() {

@@ -34,7 +34,9 @@ Page({
       return;
     }
     this.load();
-    this._timer = setInterval(() => this.load(true), 60000); // ⭐ 2026-10-10 老板定：30 秒 → 60 秒（省一半调用量；战况本来就是"看着"的，晚 30 秒无感）
+    // ⭐ 2026-10-10 老板定：30 秒 → 60 秒（省一半调用量；战况本来就是"看着"的，晚 30 秒无感）
+    // ⭐ 2026-10-12 老板定：60 秒 → **5 分钟**（当天云端调用量 14 万，老板拍板砍：战况地图 5 分钟一刷）
+    this._timer = setInterval(() => this.load(true), 300000);
   },
   onHide() { this.clearTimer(); },
   onUnload() { this.clearTimer(); },
