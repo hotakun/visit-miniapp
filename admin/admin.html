@@ -773,6 +773,17 @@ tr.row-off td:not(.keep){opacity:.4}
           <span class="sb-d" id="dupScanMsg" style="flex:1;min-width:200px"></span>
         </div>
         <div id="dupResultBox" style="display:none;margin-top:12px"></div>
+
+      <!-- ⭐⭐ 2026-10-12 老板：「刚才我按下了重复监测，然后出来了很多很多，又没有滚动条，让人看的发狂…
+           以后这种情况你能不能弹出单独窗口并且又滚动条。」
+           → 检测结果改到**独立弹窗**（宽 980px、限高 88vh、**内部滚动**；跟「🛒 商城配对确认」同一个样式）。 -->
+      <div class="ovl" id="dupOvl" style="display:none"><div class="modal" style="width:980px;max-height:88vh;overflow-y:auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:16px;font-weight:800">🧹 重复客户检测结果</div>
+          <button class="btn ghost btn-sm" onclick="closeDupOvl()">✕ 关闭</button>
+        </div>
+        <div id="dupOvlBody"></div>
+      </div></div>
       </div>
 
       <div class="card" style="max-width:1040px;padding:16px 20px;margin-bottom:14px;border-left:3px solid var(--primary)">
@@ -8066,13 +8077,21 @@ async function dupScan() {
     if (b) { b.disabled = false; b.textContent = '🔍 重新检测'; }
   }
 }
+function closeDupOvl() { const o = $('dupOvl'); if (o) o.style.display = 'none'; }
 function renderDupGroups() {
-  const box = $('dupResultBox'); if (!box) return;
+  // ⭐ 2026-10-12 老板：「刚才我按下了重复监测，然后出来了很多很多，又没有滚动条，让人看的发狂…
+  //   以后这种情况你能不能弹出单独窗口并且又滚动条。」
+  //   → 结果改渲染进**独立弹窗**（宽 980、限高 88vh、内部滚动）；页面上那行只留一句摘要。
+  const box = $('dupResultBox'), body = $('dupOvlBody'), ovl = $('dupOvl');
+  if (!box || !body || !ovl) return;
   box.style.display = 'block';
   if (!dupGroups.length) {
+    ovl.style.display = 'none';
     box.innerHTML = '<div class="sb-d" style="color:#18A058;font-weight:700">✅ 没有发现「店名 + 电话 + 地址」全同的重复</div>';
     return;
   }
+  box.innerHTML = '<div class="sb-d">共 <b>' + dupGroups.length + '</b> 组重复，已在弹窗里列出 —— 看完点「✕ 关闭」即可。</div>';
+  ovl.style.display = 'flex';
   let h = '<div class="sb-d" style="margin-bottom:8px">每组<b>第 1 条 = 保留</b>（信息最全），其余打勾后点最下面「确认清理」→ 进<b>回收站</b>（可恢复）。</div>';
   dupGroups.forEach(g => {
     const keep = g[0], rest = g.slice(1);
@@ -8090,7 +8109,7 @@ function renderDupGroups() {
   h += '<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
     '<button class="btn" style="background:#E5484D;color:#fff;border:0" onclick="dupClean()">🗑 确认清理选中的（进回收站）</button>' +
     '<span class="sb-d" id="dupCleanMsg"></span></div>';
-  box.innerHTML = h;
+  body.innerHTML = h;
 }
 async function dupClean() {
   const msg = $('dupCleanMsg');
