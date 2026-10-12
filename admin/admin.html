@@ -6157,7 +6157,18 @@ async function autoTick() {
     // ⭐⭐⭐ 2026-10-12 老板定：把每轮的 4~5 个调用**合并成 1 个** ——
     //   原来打：autoArchiveExpired + listTasks + listCoordFixes + listRegistrations（4 个），
     //   现在只打一个 pollAll（云端并发查完一次返回）→ 一天省 ~1 万次/客户端。
-    const poll = await api('pollAll');
+    // ⭐⭐⭐ 2026-10-12 省调用量 ③-d：**先问自己的服务器"变了没" → 变了才叫云端** ——
+    //   原来每 30 秒无脑叫一次 pollAll（2,880 次/天/客户端）；现在没变化时**0 次云端调用**。
+    //   ⚠️ 手机端建的店 / 拜访 / 坐标报错 / 注册，都会打「变化时间戳」，服务器每分钟同步到 PG。
+    let _needPoll = true;
+    try {
+      const _r = await fetch('/pollDirty', { cache: 'no-store' }).then(x => x.json());
+      if (_r && _r.ok && _r.pollDirtyAt) {
+        if (_r.pollDirtyAt === window._lastPollDirtyAt) _needPoll = false;   // 没变 → 跳过云端
+        else window._lastPollDirtyAt = _r.pollDirtyAt;
+      }
+    } catch (e) { _needPoll = true; }   // 服务器不可用 → 照旧叫云端（宁可多叫，别漏提醒）
+    const poll = _needPoll ? await api('pollAll') : null;
     let list = null;
     if (poll && poll.ok) {
       if (poll.archived > 0 && $('page-tasks').style.display !== 'none') { loadTasks(); return; }

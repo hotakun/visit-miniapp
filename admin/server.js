@@ -766,6 +766,31 @@ function writeChangeLog(rec) {
   }
   // ===== 2026-09-27 新增：客户点本地缓存（架构文档 §十 M1）=====
   // 前端地图不再直接请求云端，改读本地缓存；拖动/缩放 0 网络请求。
+  // ⭐ 2026-10-12 省调用量 ③-d：后台问**自己的服务器**"云端有没有变化"（0 云端调用）——
+  //   转发到 pgapi /stat 的 pollDirtyAt（服务器上的 pgsync 每分钟从云端同步它）。
+  //   ⚠️ 服务器不可用 → 返回 ok:false，前端按"该叫就叫"处理（宁可多叫一次，也别漏提醒）。
+  if (req.method === 'GET' && req.url.indexOf('/pollDirty') === 0) {
+    (async () => {
+      try {
+        let cfg = {}; try { cfg = require('./config.json'); } catch (e) { cfg = {}; }
+        if (!cfg.pgApiUrl) {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify({ ok: false, msg: '没配 pgApiUrl' }));
+          return;
+        }
+        const base = String(cfg.pgApiUrl).replace(/\/+$/, '');
+        const tok = cfg.pgApiToken ? ('?token=' + encodeURIComponent(cfg.pgApiToken)) : '';
+        const j = await (await fetch(base + '/stat' + tok)).json();
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: !!(j && j.ok),
+          pollDirtyAt: Number(j && j.pollDirtyAt) || 0, custDirtyAt: Number(j && j.custDirtyAt) || 0 }));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: false, msg: String((e && e.message) || e) }));
+      }
+    })();
+    return;
+  }
   if (req.method === 'GET' && req.url.indexOf('/mapPoints/status') === 0) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(store.status()));
