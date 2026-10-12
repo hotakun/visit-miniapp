@@ -5,6 +5,7 @@
 // ⚠️ 只读：连的是 juhuo_ro（只有 SELECT 权限，就算口令泄露也改不了数据）
 // ⚠️ PG 只在服务器本机被访问（listen 127.0.0.1），公网只暴露这个 18081 + 口令
 const http = require('http');
+const zlib = require('zlib');
 const { Client } = require('pg');
 
 let CFG = {};
@@ -103,6 +104,17 @@ function out(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(s) });
   res.end(s);
 }
+// ⭐⭐ 2026-10-12 老板定：「关掉服务干完活再启动」+ 实测一片 2 万家 = **9.5MB / 12.7 秒** →
+//   慢在**公网带宽**（不是数据库，聚合只要几十毫秒）。加 gzip：JSON 压完约 15%（9.5MB → 1.4MB），
+//   每片降到 2~3 秒（总量 2 分钟 → 20 秒左右）。
+//   ⚠️ 只给 /points 用（监控页 HTML 与别的接口一律不动）；Node 的 fetch 会自动解压 → **前端零改动**。
+function outGz(res, code, obj) {
+  const buf = Buffer.from(JSON.stringify(obj), 'utf8');
+  const gz = zlib.gzipSync(buf);
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8',
+    'Content-Encoding': 'gzip', 'Content-Length': gz.length });
+  res.end(gz);
+}
 
 let db = null;
 async function q(sql, params) {
@@ -162,10 +174,10 @@ const srv = http.createServer(async (req, res) => {
           ? await q(SELECT_CUST + ' WHERE c.deleted = false AND c.id > $1 ORDER BY c.id LIMIT $2', [after, lim])
           : await q(SELECT_CUST + ' WHERE c.deleted = false ORDER BY c.id LIMIT $1', [lim]);
         const last = r.rows.length ? r.rows[r.rows.length - 1].id : after;
-        return out(res, 200, { ok: true, rows: r.rows, total: total, last: last, hasMore: r.rows.length >= lim, at: Date.now() });
+        return outGz(res, 200, { ok: true, rows: r.rows, total: total, last: last, hasMore: r.rows.length >= lim, at: Date.now() });
       }
       const r = await q(SELECT_CUST + ' WHERE c.deleted = false');
-      return out(res, 200, { ok: true, rows: r.rows, total: r.rows.length, hasMore: false, at: Date.now() });
+      return outGz(res, 200, { ok: true, rows: r.rows, total: r.rows.length, hasMore: false, at: Date.now() });
     }
     // 增量：since = 上次水位（updated_at）；removed = 期间被删的 id（治"删了又复活"）
     if (u.pathname === '/sync') {
