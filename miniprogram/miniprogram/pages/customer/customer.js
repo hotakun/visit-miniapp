@@ -20,9 +20,13 @@ const api = require('../../utils/api');
 
 // ---------- 工具 ----------
 function esc(s) { return String(s == null ? '' : s); }
-function daysAgo(dateStr) {                      // 'YYYY-MM-DD' → 'X 天前' / '今天'
+function daysAgo(dateStr) {                      // 'YYYY-MM-DD' / 时间戳 → 'X 天前' / '今天'
   if (!dateStr) return '';
-  const d = new Date(String(dateStr).replace(/-/g, '/') + ' 00:00:00');
+  // ⭐ 2026-10-12：也认时间戳（原来只认 'YYYY-MM-DD'，是时间戳时算不出来 → "X 天前"整段消失）
+  const s = String(dateStr).trim();
+  let d;
+  if (/^\d{10,}$/.test(s)) { const n = Number(s); d = new Date(n > 1e12 ? n : n * 1000); }
+  else d = new Date(s.replace(/-/g, '/') + ' 00:00:00');
   if (isNaN(d.getTime())) return '';
   const days = Math.floor((Date.now() - d.getTime()) / 86400000);
   return days > 0 ? days + ' 天前' : '今天';
@@ -214,7 +218,7 @@ function buildD(res, photoUrls, recUrls) {
     cat: uniqueJoin(p.cat1 || c.cat1, p.cat2 || c.cat2, p.cat3 || c.cat3),
     rank: esc(p.rank),
     mallRows: [
-      ['注册商城时间', esc(c.mallJoinedAt) || '—'],
+      ['注册商城时间', mdCn(c.mallJoinedAt) || '—'],   // ⭐ 2026-10-12：原来直接显示原值 → 时间戳就成"一串数字"
       ['签约业务员', esc(c.salesman) || '—'],
       ['最近下单', esc(c.lastOrderAt) ? (mdCn(c.lastOrderAt) + (daysAgo(c.lastOrderAt) ? '（' + daysAgo(c.lastOrderAt) + '）' : '')) : '—'],
       ['最近浏览商城', esc(c.lastBrowseAt) ? (mdCn(c.lastBrowseAt) + (daysAgo(c.lastBrowseAt) ? '（' + daysAgo(c.lastBrowseAt) + '）' : '')) : '—']
