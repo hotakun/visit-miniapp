@@ -760,6 +760,10 @@ Page({
       const recs = cm.suggest(name, this.data.dishRaw, 4);
       this.setData({ catRecs: recs });
       if (recs.length && !String(this.data.catText || '').trim()) this._applyCat(recs[0]);
+      // ⭐ 2026-10-12 老板定：**推不出来就兜底给「品牌」** —— 看不出品类线索的品牌名/花名
+      //   （原麦珍享 / 悠果维 / 老婆大人…）也能一键选，省得纠结。
+      //   ⚠️ 只**多给一个胶囊**、**不自动填**（免得把本该手选的店自动打成"品牌"）。
+      if (!recs.length) this.setData({ catRecs: [{ big: '🏷 品牌 / 其他', mid: '品牌', small: '品牌', score: 0, hit: '' }] });
     } catch (err) { console.warn('[newshop] 猜品类失败（不影响手选）', err); }
   },
   // 点某个推荐 → 写进品类三项（与 picker 确定时同一套字段；cat1 去掉图标，与 _plainCat 口径一致）

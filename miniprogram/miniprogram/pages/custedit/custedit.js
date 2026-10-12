@@ -84,6 +84,8 @@ Page({
       const recs = cm.suggest(name, this.data.dishRaw, 4);
       this.setData({ catRecs: recs });
       if (recs.length && !String(this.data.catText || '').trim()) this._applyCat(recs[0]);
+      // ⭐ 2026-10-12 老板定：**推不出来就兜底给「品牌」**（只给胶囊、不自动填 —— 与「加新店」同一套）
+      if (!recs.length) this.setData({ catRecs: [{ big: '🏷 品牌 / 其他', mid: '品牌', small: '品牌', score: 0, hit: '' }] });
     } catch (err) { console.warn('[custedit] 猜品类失败（不影响手选）', err); }
   },
   pickCatRec(e) {
