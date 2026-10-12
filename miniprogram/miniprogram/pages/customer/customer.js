@@ -1006,9 +1006,16 @@ Page({
   goVisit() {
     const d = this.data.d;
     const c = wx.getStorageSync('curCustomer') || {};
+    // ⚠️⚠️ 2026-10-12 修【严重串档】老板报：「一家家往下跑，当前一家的拜访记录跑到上一家的拜访历史里去了」
+    //   根因：这行原来写 `_id: c._id || this._cid` —— **优先用了 storage 里的旧值**！
+    //   当这家是从**带 ?id= 的入口**进来的（我新加的店 / 新店列表 / 拜访历史里跳转），
+    //   storage 里的 curCustomer 还是**上一条** → 点「开始拜访」就把记录写到了上一家头上。
+    //   正解：**当前页面的客户（this._cid）优先** —— 它是 onLoad 时按 URL/入口定死的，最可靠。
+    //   顺带：**换了客户就不带旧任务**（否则拜访还会挂到上一家的任务上）。
+    const sameCust = !!this._cid && c._id === this._cid;
     wx.setStorageSync('curCustomer', Object.assign({}, c, {
-      _id: c._id || this._cid || '',
-      taskId: c.taskId || this._taskId || '',
+      _id: this._cid || c._id || '',
+      taskId: sameCust ? (c.taskId || '') : '',
       name: d.name || c.name || '',
       phone: api.isTrialUser() ? api.maskTrialPhone(d.tel || c.phone || '') : (d.tel || c.phone || ''),
       contactName: d.contact || c.contactName || '',
