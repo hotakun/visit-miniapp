@@ -1514,6 +1514,10 @@ tr.row-off td:not(.keep){opacity:.4}
          等以后导商城表来对上；也可以在这一页手工「已建档」。 -->
     <div id="page-field" style="display:none">
       <style>
+        /* ⭐⭐ 2026-10-12 老板：「你这个卡片为什么显示的这么矮？利用屏幕的高度呀？」
+           —— 列表复用了公共类 .np-list（max-height:360px，那是给「消息中心」那个小弹窗定的），
+              这里要**撑到屏幕底部**；用 id 覆盖，**不动那个公共类**（消息中心还在用）。 */
+        #fieldList { max-height: none; height: calc(100vh - 330px); min-height: 420px; }
         .fl-bar { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
         .fl-bar .fl-cnt { font-size:12.5px; color:var(--sub); font-weight:700; }
         .fl-row { display:flex; gap:12px; align-items:flex-start; background:#fff; border:1px solid #EFF1F5;
