@@ -965,8 +965,16 @@ async function taskVer(salesmanId) {
     .limit(200)
     .get().catch(() => null);
   let mx = 0, st = '';
-  ((r && r.data) || []).forEach(t => { const u = t.updatedAt || 0; if (u >= mx) { mx = u; st = t.status || ''; } });
-  return { ok: true, ver: mx + '-' + st };
+  let hasTask = false;   // ⭐ 2026-10-12：手上还有没有"正在跑"的任务
+  ((r && r.data) || []).forEach(t => {
+    const u = t.updatedAt || 0;
+    if (u >= mx) { mx = u; st = t.status || ''; }
+    if (t.status === 'published' || t.status === 'reviewing') hasTask = true;
+  });
+  // ⭐⭐ 2026-10-12 老板定：心跳间隔**按"有没有任务"分档** ——
+  //   **没任务 5 分钟**（好尽快知道"新任务来了"）/ **有任务 30 分钟**（任务已在手、要看最新就下拉刷新）。
+  //   ⚠️ 上面本来就查了这批任务的 status，所以这个判断**不增加任何调用**。
+  return { ok: true, ver: mx + '-' + st, hasTask: hasTask };
 }
 
 async function reviewStatus(salesmanId, isBoss) {

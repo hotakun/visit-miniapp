@@ -113,26 +113,40 @@ App({
   //   覆盖四件事：**新任务派下来 / 任务被后台结束 / 被延期撤回 / 拜访审核结果**。
   //   ⚠️ 省钱省电三条：① **只在前台跑**（onHide 停）② **只回一个戳**（几十字节）③ **变了才通知页面去拉数据**。
   //   ⚠️ 页面想响应变化，**自己实现 `onTaskVerChanged()` 就行**；不实现 = 什么都不发生（零副作用）。
+  // ⭐⭐ 2026-10-12 老板定：心跳间隔**按"手上有没有任务"分档** ——
+  //   **没任务 → 5 分钟**（好尽快知道新任务派下来了）；**有任务 → 30 分钟**（任务已在手、不急；要看最新就下拉刷新）。
+  //   实现：`setInterval` 换成**递归 setTimeout**（每轮按云端回的 `hasTask` 决定下一轮多久）。
+  //   覆盖的四件事不变：新任务派下来 / 任务被后台结束 / 被延期撤回 / 拜访审核结果。
+  //   ⚠️ 省钱省电三条不变：① 只在前台跑（onHide 停）② 只回一个戳（几十字节）③ 变了才通知页面去拉数据。
   startTaskHeartbeat() {
     if (this.taskVerTimer) return;
     this.taskHeartbeatTick();
-    this.taskVerTimer = setInterval(() => this.taskHeartbeatTick(), 15000);
   },
   async taskHeartbeatTick() {
     try {
       const r = await wx.cloud.callFunction({ name: 'tasks', data: { action: 'ver' } });
       const v = (r && r.result && r.result.ver) || '';
-      if (!v) return;
-      if (!this._taskVer) { this._taskVer = v; return; }   // 第一次只记下来，不当"变化"
-      if (v === this._taskVer) return;                      // 没变 → 什么都不做（绝大多数时候走这里）
-      this._taskVer = v;
-      const pages = getCurrentPages();
-      const cur = pages && pages[pages.length - 1];
-      if (cur && typeof cur.onTaskVerChanged === 'function') cur.onTaskVerChanged();
+      this._hasTask = !!(r && r.result && r.result.hasTask);   // ⭐ 分档依据（云端顺带回的，不额外花调用）
+      if (v) {
+        if (!this._taskVer) this._taskVer = v;                    // 第一次只记下来，不当"变化"
+        else if (v !== this._taskVer) {                           // 没变 → 什么都不做（绝大多数时候走这里）
+          this._taskVer = v;
+          const pages = getCurrentPages();
+          const cur = pages && pages[pages.length - 1];
+          if (cur && typeof cur.onTaskVerChanged === 'function') cur.onTaskVerChanged();
+        }
+      }
     } catch (e) { /* 心跳失败静默 —— 绝不能因为心跳把页面搞出问题 */ }
+    this._scheduleNextHeartbeat();
+  },
+  // 按"有没有任务"排下一轮：没任务 5 分钟 / 有任务 30 分钟
+  _scheduleNextHeartbeat() {
+    if (this.taskVerTimer) { clearTimeout(this.taskVerTimer); this.taskVerTimer = null; }
+    const ms = (this._hasTask ? 30 : 5) * 60000;
+    this.taskVerTimer = setTimeout(() => { this.taskVerTimer = null; this.taskHeartbeatTick(); }, ms);
   },
   stopTaskHeartbeat() {
-    if (this.taskVerTimer) { clearInterval(this.taskVerTimer); this.taskVerTimer = null; }
+    if (this.taskVerTimer) { clearTimeout(this.taskVerTimer); this.taskVerTimer = null; }
   },
 
   startReviewWatcher() {
