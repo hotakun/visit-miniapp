@@ -357,14 +357,19 @@
           <view class="htrans-h">🎙 录音转文字</view>
           <view class="htrans-b">{{item.rec.txt}}</view>
         </view>
-        <!-- ③ 现场照片（⭐ 2026-10-12 老板定：**一行左右滑**，下面一行小字提示张数 —— 原来写死 3 张，拍了 5 张也看不到） -->
+        <!-- ③ 现场照片（⭐ 2026-10-12 老板定：**一行左右滑** + **两边各一个小三角形**提示能滑；
+             原来写死 3 张，拍了 5 张也看不到） -->
         <view class="hshots" wx:if="{{item.shots}}">
-          <scroll-view class="hshots-sw" scroll-x>
-            <view class="hshot" wx:for="{{item.shots}}" wx:for-item="s" wx:for-index="si" wx:key="*this"
-                  data-url="{{s}}" bindtap="openPhoto">
-              <image class="hshot-img" src="{{s}}" mode="aspectFill"></image>
-            </view>
-          </scroll-view>
+          <view class="hshots-row">
+            <view class="hshots-l" wx:if="{{item.shots.length > 3}}"></view>
+            <scroll-view class="hshots-sw" scroll-x>
+              <view class="hshot" wx:for="{{item.shots}}" wx:for-item="s" wx:for-index="si" wx:key="*this"
+                    data-url="{{s}}" bindtap="openPhoto">
+                <image class="hshot-img" src="{{s}}" mode="aspectFill"></image>
+              </view>
+            </scroll-view>
+            <view class="hshots-r" wx:if="{{item.shots.length > 3}}"></view>
+          </view>
           <view class="hshots-n">共 {{item.shots.length}} 张照片</view>
         </view>
         <!-- ⭐ 2026-10-10 老板定：「拜访记录」要能再次编辑 —— 自己记的这条，**右下角**给一个「✎ 编辑」

@@ -272,9 +272,14 @@
 .htrans-b { font-size: 12.5px; color: #4A5360; line-height: 1.65; }
 .hshots { margin-top: 9px; }
 /* ⭐ 2026-10-12 老板定：现场照片**一行左右滑**（原来 flex:1 三张等分铺满、写死 3 张；拍 5 张只显示 3 张） */
-.hshots-sw { white-space: nowrap; }
+.hshots-row { display: flex; align-items: center; }
+.hshots-sw { white-space: nowrap; flex: 1; min-width: 0; }
 .hshot { display: inline-block; width: 92px; height: 68px; margin-right: 6px; border-radius: 9px; overflow: hidden; background: #F0F2F5; border: 1px solid #EFF1F5; vertical-align: top; }
 .hshot-img { width: 100%; height: 100%; display: block; }
+/* ⭐ 能滑的时候，左右各一个小三角（纯 CSS，灰色、很小） */
+.hshots-l, .hshots-r { width: 0; height: 0; flex: none; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.hshots-l { border-right: 6px solid #C3CAD4; margin-right: 4px; }
+.hshots-r { border-left: 6px solid #C3CAD4; margin-left: 4px; }
 .hshots-n { margin-top: 5px; font-size: 11px; color: var(--sub); }
 
 /* 商圈与位置的小地图（2026-09-13）：圆角 12px / 宽占满
