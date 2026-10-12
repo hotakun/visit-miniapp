@@ -1706,7 +1706,13 @@ async function listNewShops() {
       id: c._id, name: c.nameRaw || c.name || '(未填店名)', phone: c.phone || '',
       address: c.address || '', area: c.district || '', bizCircle: c.bizCircle || '',
       lng: (c.lng === undefined ? null : c.lng), lat: (c.lat === undefined ? null : c.lat),
-      photos: Array.isArray(c.photos) ? c.photos.slice(0, 1) : [],
+      // ⚠️⚠️ 2026-10-12 老板报「五号隆江猪脚饭 / 云贵川小吃的小图是灰的」（截图铁证）：
+      //   库里 photos 有**两种格式** —— 拜访页拍的是**字符串**（能显示），
+      //   客户详情页「重拍/裁剪」存的是**对象 { fileID, thumbID }**（原来没处理 → 页面拿到 `[object Object]` → 灰块）。
+      //   这里统一归一化成 fileID 字符串（微信 <image> 支持 cloud:// 直接显示）。
+      photos: Array.isArray(c.photos)
+        ? c.photos.slice(0, 1).map(p => (p && typeof p === 'object') ? (p.thumbID || p.fileID || '') : String(p || '')).filter(Boolean)
+        : [],
       by: c.createdByName || '', at: c.createdAt || 0, ctype: c.customerType || ''
     }));
     if (rows.length < 100) break;
