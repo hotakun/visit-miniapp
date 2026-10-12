@@ -598,6 +598,23 @@ const server = http.createServer(async (req, res) => {
   // ⭐ 2026-10-11 老板定：「📝 拜访记录」两页改走轻量服务器（点「🔄 刷新」来这里拉，不花云开发的量）。
   //   前端打本地 GET /visitrec?kind=daily|day|shop&days=7[&day=YYYY-MM-DD] → 这里转发到 pgapi 的 /visitrec。
   //   ⚠️ 服务器拿不到就回 {ok:false}，**前端自己回退云开发**（与批次那套同一思路：服务器挂了后台照样能用）。
+  // ⭐⭐ 2026-10-12 老板定：后台「待商城建档」页新增「新店」标签页 —— **数据走服务器**（不花云开发）。
+  //   前端打本地 GET /newshops?days=3 → 转发到 pgapi 的 /newshops。
+  //   ⚠️ 服务器拿不到就回 {ok:false}，前端**直说拉不到**（按老板设定：**不回退云端**）。
+  if (req.method === 'GET' && req.url.indexOf('/newshops') === 0) {
+    try {
+      const u0 = new URL(req.url, 'http://localhost');
+      const target = String(cfg.pgApiUrl || '').replace(/\/+$/, '') + '/newshops' + u0.search +
+        (cfg.pgApiToken ? ((u0.search ? '&' : '?') + 'token=' + encodeURIComponent(cfg.pgApiToken)) : '');
+      const r = await (await fetch(target)).json();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify(r));
+    } catch (e) {
+      console.warn('[newshops] 服务器不可用：' + (e && e.message));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, msg: '服务器不可用（按设定：不回退云端）' }));
+    }
+  }
   if (req.method === 'GET' && req.url.indexOf('/visitrec') === 0) {
     try {
       const u0 = new URL(req.url, 'http://localhost');

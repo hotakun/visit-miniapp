@@ -1566,6 +1566,23 @@ tr.row-off td:not(.keep){opacity:.4}
         .fl-act { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; }
       </style>
       <div class="title-bar"><span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span></div>
+      <!-- ⭐⭐ 2026-10-12 老板定：这一页加「新店」标签页 —— 业务员手机端「加新店」录的店，
+           **数据走你自己的服务器**（server.js 转发 pgapi /newshops），不花云开发；拉不到就直说，不回退云端。 -->
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <span class="btn ghost btn-sm on-tab" id="ftb-field" onclick="fieldTab('field')"
+          style="cursor:pointer;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
+        <span class="btn ghost btn-sm" id="ftb-ns" onclick="fieldTab('ns')" style="cursor:pointer">🆕 新店（业务员录的）</span>
+      </div>
+      <div id="nsWrap" style="display:none;flex:1;min-height:0;display:none;flex-direction:column">
+        <div class="fl-bar">
+          <input id="nsQ" class="ginp" style="width:220px" placeholder="搜店名 / 电话 / 地址 / 商圈"
+            onkeydown="if(event.key==='Enter')nsSearch()">
+          <button class="btn ghost btn-sm" onclick="nsSearch()">🔍 搜索</button>
+          <button class="btn ghost btn-sm" onclick="loadNewShops()">刷新</button>
+          <span class="fl-cnt" id="nsCount">—</span>
+        </div>
+        <div id="nsList" class="ns-list" style="flex:1;min-height:0;overflow-y:auto"></div>
+      </div>
       <div class="fl-bar">
         <input id="fieldQ" class="ginp" style="width:220px" placeholder="店名 / 电话 / 地址"
           onkeydown="if(event.key==='Enter')fieldSearch()">
@@ -8087,6 +8104,58 @@ async function dupScan() {
   } finally {
     if (b) { b.disabled = false; b.textContent = '🔍 重新检测'; }
   }
+}
+// ⭐⭐ 2026-10-12 老板定：「⏳ 待商城建档」页新增「新店」标签页 —— 业务员手机端「加新店」录的店。
+//   **数据走你自己的服务器**（本地 fetch('/newshops') → server.js 转发 pgapi），不花云开发；
+//   拉不到就直说（按设定：**不回退云端**）。口径与手机端一致：业务员录的（source=field）+ 最近 3 天 + 没进回收站。
+let _nsAll = [], _nsLoaded = false;
+function fieldTab(t) {
+  const isNs = (t === 'ns');
+  const wrap = $('nsWrap'), fl = $('fieldList'), q = $('fieldQ');
+  const tlb = q ? q.closest('.fl-bar') : null;
+  if (wrap) wrap.style.display = isNs ? 'flex' : 'none';
+  if (fl) fl.style.display = isNs ? 'none' : '';
+  if (tlb) tlb.style.display = isNs ? 'none' : '';
+  [['ftb-field', !isNs], ['ftb-ns', isNs]].forEach(p => {
+    const e = $(p[0]); if (!e) return;
+    e.style.background = p[1] ? '#F5531C' : '';
+    e.style.color = p[1] ? '#fff' : '';
+    e.style.borderColor = p[1] ? '#F5531C' : '';
+  });
+  if (isNs && !_nsLoaded) loadNewShops();
+}
+function loadNewShops() {
+  const cnt = $('nsCount');
+  if (cnt) cnt.textContent = '正在从你的服务器拉…';
+  fetch('/newshops?days=3', { cache: 'no-store' }).then(r => r.json()).then(j => {
+    if (!j || !j.ok) { if (cnt) cnt.textContent = '⚠️ 服务器拉不到：' + ((j && j.msg) || '未知原因'); return; }
+    _nsAll = j.rows || []; _nsLoaded = true; renderNewShops();
+  }).catch(e => {
+    if (cnt) cnt.textContent = '⚠️ 服务器拉不到（按设定：不回退云端）';
+    console.warn('[newshops]', e);
+  });
+}
+function nsSearch() { renderNewShops(); }
+function renderNewShops() {
+  const box = $('nsList'), cnt = $('nsCount');
+  const kw = String(($('nsQ') || {}).value || '').trim().toLowerCase();
+  const list = kw ? _nsAll.filter(x => ((x.name || '') + (x.name_raw || '') + (x.phone || '') +
+    (x.address || '') + (x.biz_circle || '')).toLowerCase().indexOf(kw) >= 0) : _nsAll;
+  if (cnt) cnt.textContent = '共 ' + _nsAll.length + ' 家' + (kw ? '（筛出 ' + list.length + ' 家）' : '') +
+    ' · 数据来自你自己的服务器 · 最近 3 天';
+  if (!box) return;
+  if (!list.length) { box.innerHTML = '<div class="sb-d" style="padding:24px;text-align:center">没有匹配的新店</div>'; return; }
+  box.innerHTML = list.map(x => {
+    const t = x.created_at ? (function (v) {
+      const n = Number(v); const d = new Date(n > 1e12 ? n : n * 1000);
+      return isNaN(d.getTime()) ? '' : (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    })(x.created_at) : '';
+    return '<div class="fl-row" style="margin-bottom:8px"><div class="fl-mid">' +
+      '<div class="fl-nm">' + esc(x.name_raw || x.name || '(未填店名)') +
+      (t ? '<span class="fl-tag pend">' + t + '</span>' : '') + '</div>' +
+      '<div class="fl-sub">' + esc(x.phone || '') + (x.phone ? ' · ' : '') + esc(x.address || '(未填地址)') + '</div>' +
+      '<div class="fl-sub mut">' + esc(x.district || '') + (x.biz_circle ? ' · ' + esc(x.biz_circle) : '') + '</div></div></div>';
+  }).join('');
 }
 function closeDupOvl() { const o = $('dupOvl'); if (o) o.style.display = 'none'; }
 function renderDupGroups() {

@@ -259,6 +259,16 @@ const srv = http.createServer(async (req, res) => {
     // ⭐⭐ 2026-10-10 指针表模式：批次页数据 —— 输出与云端 `listCustomerBatches` **同构**，
     //   后台 server.js 的 `/batches` 优先读这里（免费、秒出），读不到自动回退云开发。
     //   ⚠️ 所有统计一律从 batch_members 算（customers.batch_ids 已废弃）。
+    // ⭐⭐ 2026-10-12 老板定：后台「待商城建档」页新增「新店」标签页 —— **数据走服务器**（不花云开发）。
+    //   口径与手机端一致：**业务员在手机端「加新店」录的**（source='field'）+ 最近 N 天（默认 3）+ 没进回收站。
+    if (u.pathname === '/newshops') {
+      const days = Math.min(365, Math.max(1, Number(u.searchParams.get('days') || 3)));
+      const since = Date.now() - days * 86400000;
+      const r = await q('SELECT id, name, name_raw, phone, address, district, biz_circle, lat, lng, created_at, ctype ' +
+        "FROM customers WHERE source = 'field' AND created_at > $1 AND coalesce(deleted,false) = false " +
+        'ORDER BY created_at DESC LIMIT 500', [since]);
+      return out(res, 200, { ok: true, days: days, rows: (r.rows || []), at: Date.now() });
+    }
     if (u.pathname === '/batches') {
       const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);   // 与云端 todayStr() 同口径
       // ① 批次卡 + 每批统计（total / in_task / visited）
