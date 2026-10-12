@@ -1617,7 +1617,11 @@ tr.row-off td:not(.keep){opacity:.4}
              它和「🛒 商城配对确认」（老板定的：**全部人工确认**）做同一件事、规矩却相反
              → 一并撤掉，只留一条路。函数 openMallMatchForField 保留为死代码（要恢复从这里加回按钮即可）。 -->
       </div>
-      <div class="card" style="padding:0">
+      <!-- ⚠️⚠️ 2026-10-12 老板第三次质问（「下面那个大白卡挡住是怎么回事？」）——
+           真凶就是这一层 `.card`：切到「🆕 新店」时，`fieldTab` 只藏了里面的 `#fieldList` 和它的工具条，
+           **外面这层白卡没藏** → 它 `flex:1` 撑满下半屏，把后面的客户全盖住（"共 8 家"只看得见 3 家）。
+           → 给它一个 id，`fieldTab` 里连它一起显隐。 -->
+      <div class="card" id="fieldCard" style="padding:0">
         <div id="fieldList" class="np-list" style="padding:10px"><div class="np-empty">加载中…</div></div>
       </div>
     </div>
@@ -8127,6 +8131,10 @@ function fieldTab(t) {
   const tlb = q ? q.closest('.fl-bar') : null;
   if (wrap) wrap.style.display = isNs ? 'flex' : 'none';
   if (fl) fl.style.display = isNs ? 'none' : '';
+  // ⚠️⚠️ 2026-10-12 老板第三次质问「下面那个大白卡挡住是怎么回事？」—— 真凶：`#fieldList` 外面那层 `.card`
+  //   没被藏（只藏了列表和工具条）→ 白卡 flex:1 撑满下半屏、盖住后面的客户。这里连它一起显隐。
+  const fc = $('fieldCard');
+  if (fc) fc.style.display = isNs ? 'none' : '';
   if (tlb) tlb.style.display = isNs ? 'none' : '';
   [['ftb-field', !isNs], ['ftb-ns', isNs]].forEach(p => {
     const e = $(p[0]); if (!e) return;

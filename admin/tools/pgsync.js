@@ -97,9 +97,12 @@ async function syncPollDirty() {
     //   `pgapi /newshops` 用它排除 —— 后台「新店」列表里**删掉的店就不会再显示**。
     if (Array.isArray(r.deletedIds)) {
       const d = await conn();
-      await d.query('CREATE TABLE IF NOT EXISTS deleted_ids (id text PRIMARY KEY, at bigint)');
+      // ⚠️⚠️ 2026-10-12 实测踩坑（老板连问三次的病根）：这张表**早就存在**，真实列是 `id / tbl / deleted_at`
+      //   —— 我按自己想的 `at` 写 → 每分钟报「关系 "deleted_ids" 的 "at" 字段不存在」→ **名单一条都进不去**。
+      //   以后动这张表，先看一眼 `SELECT column_name FROM information_schema.columns`。
+      await d.query('CREATE TABLE IF NOT EXISTS deleted_ids (id text PRIMARY KEY, tbl text, deleted_at bigint)');
       for (const id of r.deletedIds) {
-        await d.query('INSERT INTO deleted_ids (id,at) VALUES ($1,$2) ON CONFLICT (id) DO NOTHING', [String(id), Date.now()]);
+        await d.query('INSERT INTO deleted_ids (id,tbl,deleted_at) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [String(id), 'customers', Date.now()]);
       }
     }
   } catch (e) { console.error('[sync] pollDirty 同步失败（下轮再试）:', e.message); }
