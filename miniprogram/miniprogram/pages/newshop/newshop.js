@@ -1125,7 +1125,10 @@ Page({
   goCustomer() {
     const id = this.data.doneId;
     if (!id) return wx.navigateBack();
-    wx.redirectTo({ url: '/pages/customer/customer?id=' + id });
+    // ⚠️⚠️ 2026-10-12 修【串档真凶】老板报：「一家家往下跑，记录跑到上一家去了」
+    //   少这一个 freeVisit=1 → 详情页 onLoad **不会把"当前客户"刷成本家** →
+    //   storage 里还留着上一家 → 点「开始拜访」记到上一家头上（当天连着几家全串）。
+    wx.redirectTo({ url: '/pages/customer/customer?id=' + id + '&freeVisit=1' });
   },
   again() {
     this._stopRecTicker();                     // ⚠️ 换一家店：万一计时器还在跑，先清掉
@@ -1164,6 +1167,7 @@ Page({
   openDup() {
     const t = this.data.blk || this.data.same;
     if (!t || !t.id) return;
-    wx.navigateTo({ url: '/pages/customer/customer?id=' + t.id });
+    // ⚠️⚠️ 2026-10-12 同上（串档真凶）：这里也必须带 freeVisit=1，否则"当前客户"不会刷成本家、记录会记到上一家
+    wx.navigateTo({ url: '/pages/customer/customer?id=' + t.id + '&freeVisit=1' });
   }
 });
