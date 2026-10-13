@@ -8307,14 +8307,55 @@ function mpRender() {
 }
 async function mpConfirm(mallKey, customerId) {
   const row = _mpRows.filter(x => x.mall_key === mallKey)[0] || {};
-  const c = mpCands(row.name, row.phone).filter(v => v.id === customerId)[0] || {};
-  if (!confirm('确认这家？\n\n商城那条（' + (row.name || '') + '）合并到：\n' + (c.name || customerId) +
-    '\n\n· 店名 / 电话 / 地址取商城的\n· 经纬度、商圈保留系统内的（绝不动）')) return;
+  // ⭐⭐⭐ 2026-10-13 老板：「我点击了就是这家，你怎么没有弹出信息对比框让我确认呢？万一错了怎么办？
+  //   之前的弹窗就很好呀？那些代码拿过来直接用呀。」
+  //   → 直接把「🛒 商城配对确认」里那套**合并预览表**（字段 / 商城的 / 系统内的 / 合并结果 / 依据）
+  //     搬过来用（同一个 confirmBox），让老板**看清楚到底把什么合并到什么上**，再决定。
+  let cLat = 0, cLng = 0, cBiz = '', pts = [];
+  try { const loc = await ensureCustLocal(); pts = (loc && loc.points) || []; } catch (e) { }
+  const p = pts.filter(x => x.i === customerId)[0] || {};
+  const cName = p.nr || p.n || '', cPhone = p.ph || '', cAddr = p.ad || '', cRegion = p.rg || '', cCode = p.mc || '';
+  cLat = p.la || 0; cLng = p.ln || 0; cBiz = p.b || '';
+  // 电话：商城 = 1、系统 = 2；相同只留一个
+  const mp2 = String(row.phone || '').trim(), sp = String(cPhone || '').trim();
+  let phoneShow = '', phoneNote = '';
+  if (mp2 && sp && mp2 !== sp) { phoneShow = '1️⃣ ' + esc(mp2) + '<br>2️⃣ ' + esc(sp); phoneNote = '不同 → 按 1、2 排'; }
+  else if (mp2 && sp) { phoneShow = esc(mp2); phoneNote = '相同 → 只留一个'; }
+  else { phoneShow = esc(mp2 || sp || '（两边都空）'); phoneNote = '只有一边有'; }
+  // 商圈：两边都空 → 按坐标本地算（200 米不够再 500 米）
+  let bizShow = esc(cBiz || ''), bizNote = cBiz ? '系统内的' : '';
+  if (!cBiz && cLat && cLng) {
+    try { const r = localBizSuggest(pts, cLat, cLng); if (r && r.suggest) { bizShow = esc(r.suggest); bizNote = '按坐标算（' + r.radius + ' 米内 ' + r.total + ' 家有商圈）'; } } catch (e) { }
+  }
+  if (!bizShow) { bizShow = '<span style="color:#B77400">两边都没有</span>'; bizNote = '可手工填'; }
+  const cell = 'padding:6px 10px;border-top:1px solid #EDF1F7';
+  const trow = function (k, m, s, fin, why, hl) {
+    return '<tr' + (hl ? ' style="background:#FBFFFC"' : '') + '>' +
+      '<td style="' + cell + ';color:#A8B0BB">' + k + '</td>' +
+      '<td style="' + cell + '">' + m + '</td>' +
+      '<td style="' + cell + ';color:#98A2AE">' + s + '</td>' +
+      '<td style="' + cell + ';font-weight:700;color:#0E7A3E">' + fin + '</td>' +
+      '<td style="' + cell + ';color:#98A2AE;font-size:11.5px">' + (why || '') + '</td></tr>';
+  };
+  const th = 'text-align:left;padding:6px 10px;background:#F8F9FB;font-size:11.5px;color:#68727E';
+  const html = '<div style="font-size:12.5px;margin-bottom:8px">确认「<b>' + esc(row.name || '') + '</b>」就是系统内的这家？下面是<b>合并后的结果</b>：</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<tr><th style="' + th + '">字段</th><th style="' + th + '">商城的</th><th style="' + th + '">系统内的</th><th style="' + th + '">合并结果</th><th style="' + th + '">依据</th></tr>' +
+    trow('店名', esc(row.name || '（空）'), esc(cName || '（空）'), esc(row.name || cName || ''), '商城优先') +
+    trow('电话', esc(mp2 || '（空）'), esc(sp || '（空）'), phoneShow, phoneNote, true) +
+    trow('地址', esc(row.address || '（空）'), esc(cAddr || '（空）'), esc(row.address || cAddr || ''), '商城优先') +
+    trow('地区', esc(row.region || '（空）'), esc(cRegion || '（空）'), esc(row.region || cRegion || ''), '商城优先') +
+    trow('编号', esc(row.mall_code || '（商城没给）'), esc(cCode || '（空）'), esc(row.mall_code || cCode || ''), '商城优先') +
+    trow('经纬度', '（商城没有）', cLat ? (cLat.toFixed(6) + ', ' + cLng.toFixed(6)) : '（系统也没）', cLat ? (cLat.toFixed(6) + ', ' + cLng.toFixed(6)) : '—', '<b>用系统内的</b>', true) +
+    trow('商圈', '（商城没有）', esc(cBiz || '（空）'), bizShow, bizNote, true) +
+    trow('标记', '—', '—', '已加入商城', '') +
+    '</table>';
+  if (!(await confirmBox('🛒 合并预览', html, '✅ 确认合并'))) return;
   const r = await api('applyMallPair', { customerId: customerId, mallKey: mallKey }).catch(() => null);
   if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '请稍后再试')); return; }
   // ⭐ 老板：「输入的经纬度，是对导入的客户补充经纬度信息」→ 把补的坐标一起存回服务器那一行
   const g = String(_mpGeoVal || '').split(',');
-  await mpMark(mallKey, 'paired', customerId, c.name || '', g[0], g[1]);
+  await mpMark(mallKey, 'paired', customerId, cName || row.name || '', g[0], g[1]);
   await mpLoad(true);                                   // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
 }
 async function mpSkip(mallKey) {
