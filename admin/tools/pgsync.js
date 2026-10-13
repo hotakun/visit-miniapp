@@ -204,18 +204,67 @@ async function round() {
   try { await syncMallPending(); } catch (e) { console.error('[sync] mall_pending 同步失败（下轮再试）:', e.message); }
 }
 
+// ⭐⭐ 2026-10-14 老板定（省数据库读量 / 压 QPS 尖峰）：**batch_members 改成「增量 + 定期全量对账」**。
+//   原来：**每 5 分钟** `DELETE FROM batch_members` + 从第一页**全量重拉 5585 条** ——
+//    一天 288 轮 → 累计约 160 万次数据库读写，是「数据库请求占调用量 80%」和「QPS 冲到 460（限额 500）」的主因。
+//   现在：① 平时走 **_id 游标增量**（只拉新增，通常 0~几条，云端导出接口本来就支持 `after`，不用改云函数）；
+//         ② **每 15 分钟做一次全量对账**（`DELETE` 全表 + 从头发）—— 因为**增量感知不到"删除"**，
+//            删成员/删批次必须靠全量兜底，否则 PG 里会留幽灵、把"未分批数"算错（这是单边记账最容易踩的坑）。
+//   ⚠️ 水位存在 PG 的 `sync_state` 表（name='batch_members'），与 `custSync` 同一套路。
+//   ⚠️ 水位是**字符串**（集合 `_id`），不是时间戳 —— 所以单独用下面两个函数，别复用 customers 的 Number 版。
+//   ⚠️ 顺带把每页 1000 降到 500、页间等 400ms → **把 QPS 尖峰压下来一半**（离 500 红线更远）。
+const BM_PAGE = 500;
+const BM_FULL_MIN = Number(CFG.batchMemberFullSyncMinutes) || 15;   // 全量对账间隔（分钟）；配置可在 pgsync.config.json 调
+let _lastBmFullSync = 0;
+// ⚠️⚠️ 2026-10-14 实测（部署前用探针脚本验过，拦下一次事故）：
+//   `sync_state.watermark` 的列类型是 **bigint**（它一直是给时间戳用的），
+//   **存不了字符串游标**（`batch_members._id` 是 CloudBase 生成的字符串）——
+//   直接往里写会报 `invalid input syntax for type bigint`，那样**每轮写水位都失败**、
+//   PG 里那张表再也不更新（表面上看还在跑，数据却不刷新 —— 最阴的那种事故）。
+//   → 所以另立一张 `sync_cursor`（游标列用 **text**），与 sync_state **平行、互不干扰**。
+let _bmCursorTableReady = false;
+async function ensureCursorTable() {
+  if (_bmCursorTableReady) return;
+  await (await conn()).query('CREATE TABLE IF NOT EXISTS sync_cursor (name text PRIMARY KEY, cursor text, synced_at bigint)');
+  _bmCursorTableReady = true;
+}
+async function bmWatermark() {
+  try {
+    await ensureCursorTable();
+    const r = await (await conn()).query("SELECT cursor FROM sync_cursor WHERE name='batch_members'");
+    return String((r.rows[0] && r.rows[0].cursor) || '');
+  } catch (e) { return ''; }          // 读不到 → 当作首次（这轮走全量，安全）
+}
+async function setBmWatermark(w) {
+  if (!w) return;                     // ⚠️ 空值不写 —— 否则会把水位抹掉，下轮退化成全量
+  await ensureCursorTable();
+  await (await conn()).query(
+    "INSERT INTO sync_cursor (name,cursor,synced_at) VALUES ('batch_members',$1,$2) " +
+    'ON CONFLICT (name) DO UPDATE SET cursor=$1, synced_at=$2', [String(w), Date.now()]);
+}
+
 // ⭐⭐ 2026-10-10 老板定（批次「指针表」模式）第 2 步：**同步 batch_members 进 PG**。
 //   云端 `batch_members` 是"谁被哪个批次选中"的**唯一真相**；同步过来后，后台的
 //   「批内列表 / 未分批数 / 每批家数」全部改查 PG（一条 SQL 秒出、零成本），**不用再问云端**。
-//   ⚠️ **每轮先 `DELETE` 再全量拉** —— 否则"删掉的批次成员"会一直留在 PG 里，
-//      「未分批数」会把那些客户**错误地算成"已入批"**（这是单边记账后最容易踩的坑）。
 //   ⚠️ 用**游标**（`after` = 上一页最后一条 _id），**不用 skip** —— skip 在没索引时会越翻越慢（我踩过）。
 async function syncBatchMembers() {
-  const c0 = await conn();
-  await c0.query('DELETE FROM batch_members');
-  let after = '', total = 0;
-  for (let i = 0; i < 60; i++) {                       // 最多 6 万条，防跑飞
-    const r = await callCloud('exportBatchMembers', { after, limit: 1000 });
+  const full = !_lastBmFullSync || (Date.now() - _lastBmFullSync >= BM_FULL_MIN * 60 * 1000);
+  let after = '', total = 0, lastSeen = '';
+  if (full) {
+    // ── 全量对账：先清空 PG 再从头拉（与旧行为一致，兜住"删除"）──
+    const c0 = await conn();
+    await c0.query('DELETE FROM batch_members');
+    after = '';
+  } else {
+    // ── 增量：从上次位置接着拉（只拉新增）──
+    after = await bmWatermark();
+    if (!after) {                      // 水位认不出来（首次 / 表被清过）→ 这轮当全量
+      const c0 = await conn();
+      await c0.query('DELETE FROM batch_members');
+    }
+  }
+  for (let i = 0; i < 240; i++) {                      // 全量 5585 条按 500/页约 12 页；240 页兜底防跑飞
+    const r = await callCloud('exportBatchMembers', { after, limit: BM_PAGE });
     if (!r || !r.ok) throw new Error('exportBatchMembers 返回异常: ' + JSON.stringify(r).slice(0, 200));
     const list = r.list || [];
     if (!list.length) break;
@@ -228,11 +277,15 @@ async function syncBatchMembers() {
       );
       total++;
     }
+    lastSeen = r.last || after;                        // 游标：留着更新水位（空值不会覆盖旧水位）
     after = r.last || '';
     if (!r.hasMore) break;
-    await sleep(200);
+    await sleep(400);                                  // ⭐ 1000→500 页 + 等 400ms：压低 QPS 尖峰
   }
-  console.log('[sync] batch_members 同步 ' + total + ' 条');
+  if (full) _lastBmFullSync = Date.now();
+  await setBmWatermark(lastSeen);                      // 记住水位（空值不会覆盖）
+  console.log('[sync] batch_members ' + (full ? '**全量对账**' : '增量') + ' ' + total + ' 条' +
+    (full ? '（下次全量 ' + BM_FULL_MIN + ' 分钟后）' : ''));
 }
 
 // ⭐⭐ 2026-10-10 指针表模式第 5 步 · 三张新表的同步（云端导出接口在 adminapi 里）
