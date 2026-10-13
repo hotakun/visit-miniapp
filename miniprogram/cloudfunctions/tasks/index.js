@@ -1709,7 +1709,13 @@ async function listNewShops() {
   for (let i = 0; i < 30; i++) {
     const r = await db.collection('customers')
       .where(_.and([{ source: 'field' },
-        { createdAt: _.gt(Date.now() - 3 * 86400000) },
+        // ⭐⭐ 2026-10-13 老板要（原话：「手机端老板首页的『新店』内显示为什么还没有调整过来？
+        //   我希望从 10 月 7 日的贵州原汤羊肉粉孔开始显示，**不要隐藏任何一天的**」）——
+        //   原来这里写死 **"最近 3 天"**（`createdAt > now - 3 天`）：第 4 天起新店就凭空消失，
+        //   与后台那个 `days=3` 是**同一个毛病**（后台已于 2026-10-13 改成 365；手机端这条当时漏了）。
+        //   ✅ 现在**不设时间下限**：只要是业务员现场录的（source='field'）且没进回收站，
+        //      就一直留在「新店」列表里（首页第 4 格的数量与列表页**同一口径**，不会打架）。
+        //   ⚠️ 排序在下面内存里做（新的在前），所以这里不需要 orderBy；分页上限 30×100=3000 条，够用。
         { deleted: _.neq(true) }]))
       .field({ _id: true, name: true, nameRaw: true, phone: true, address: true, district: true,
         bizCircle: true, lng: true, lat: true, photos: true, createdByName: true, createdAt: true,
