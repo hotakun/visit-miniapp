@@ -8604,7 +8604,11 @@ function mpCandRow(key, c, extra) {
 function loadNewShops() {
   const cnt = $('nsCount');
   if (cnt) cnt.textContent = '正在从你的服务器拉…';
-  fetch('/newshops?days=3', { cache: 'no-store' }).then(r => r.json()).then(j => {
+  // ⭐⭐⭐ 2026-10-13 老板：「为什么我的新店里面的信息会消失呢？这个不应该消失的啊！」
+  //   根因：这里原来写死 `days=3` → **录进去第 4 天起就从列表消失**（数据没丢，只是不显示了）。
+  //   修法：改成 365（服务器端上限也是 365）＝ 实际上"不再按时间消失"。
+  //   这个列表的语义 = "现场录入且还没对上商城的店"，**处理完（对上商城）才该离开**，不该按天数走。
+  fetch('/newshops?days=365', { cache: 'no-store' }).then(r => r.json()).then(j => {
     if (!j || !j.ok) { if (cnt) cnt.textContent = '⚠️ 服务器拉不到：' + ((j && j.msg) || '未知原因'); return; }
     _nsAll = j.rows || []; _nsLoaded = true;
     // ⭐⭐ 2026-10-12 修（老板报：「后面的客户详情页不是通往他们的详情页面」+「白色大卡片盖住客户卡片」）：
