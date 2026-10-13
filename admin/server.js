@@ -601,6 +601,26 @@ const server = http.createServer(async (req, res) => {
   // ⭐⭐ 2026-10-12 老板定：后台「待商城建档」页新增「新店」标签页 —— **数据走服务器**（不花云开发）。
   //   前端打本地 GET /newshops?days=3 → 转发到 pgapi 的 /newshops。
   //   ⚠️ 服务器拿不到就回 {ok:false}，前端**直说拉不到**（按老板设定：**不回退云端**）。
+  // ⭐⭐ 2026-10-13 老板定：**待配对池**（老板和文员两台电脑共用）——
+  //   前端打本地 `GET /mallPending`（列表）/ `POST /mallPending/mark`（标记）→ **转发到 pgapi**。
+  //   ⚠️ 数据全在你自己的服务器上（PG 的 mall_pending），**不花云端一分钱**；
+  //      服务器拿不到就直说（按老板设定：**不回退云端**）。
+  //   ⚠️ 2026-10-13 教训：**在 pgapi 加了接口，忘了在 server.js 加转发** → 前端一直"服务器拉不到"。
+  //      以后加"服务器侧接口"，**必须两处一起加**（pgapi 路由 + server.js 转发）。
+  if (req.url.indexOf('/mallPending') === 0) {
+    try {
+      const u0 = new URL(req.url, 'http://localhost');
+      const target = String(cfg.pgApiUrl || '').replace(/\/+$/, '') + u0.pathname + u0.search +
+        (cfg.pgApiToken ? ((u0.search ? '&' : '?') + 'token=' + encodeURIComponent(cfg.pgApiToken)) : '');
+      const r = await (await fetch(target, { method: req.method })).json();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify(r));
+    } catch (e) {
+      console.warn('[mallPending] 服务器不可用：' + (e && e.message));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, msg: '服务器不可用（按设定：不回退云端）' }));
+    }
+  }
   if (req.method === 'GET' && req.url.indexOf('/newshops') === 0) {
     try {
       const u0 = new URL(req.url, 'http://localhost');
