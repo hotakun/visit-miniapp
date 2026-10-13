@@ -1602,12 +1602,12 @@ tr.row-off td:not(.keep){opacity:.4}
         .mp-acts { display:flex; align-items:center; gap:7px; padding:7px 10px; border:1px dashed #E3E8EF; border-radius:9px; background:#FAFBFC; flex-wrap:wrap; }
         .mp-acts .t { flex:1; min-width:100px; font-size:12px; color:var(--sub); }
       </style>
-      <div class="title-bar"><span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span></div>
-      <!-- ⭐ 2026-10-13 老板：「上面的待商城建档有个大标题了，下面的小标题重复了…上面三个标签，也可以放到和大标题一行，这样能节约很多空间」
-           → 删掉重复的小标题行；三个页签**挪到标题同一行**（右侧），腾出来的空间全给列表。 -->
-      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+      <!-- ⭐ 2026-10-13 老板：「上面的待商城建档有个大标题了，下面的小标题重复了…上面三个标签，也可以放到和大标题一行」
+           → 三个页签**并进标题这一行**（左：大标题+说明；右：三个页签），下面直接就是统计和列表。 -->
+      <div class="title-bar" style="margin-bottom:10px">
+        <span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span>
         <span class="btn ghost btn-sm" id="ftb-field" onclick="fieldTab('field')"
-          style="cursor:pointer;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
+          style="cursor:pointer;margin-left:auto;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
         <span class="btn ghost btn-sm" id="ftb-ns" onclick="fieldTab('ns')" style="cursor:pointer">🆕 新店（业务员录的）</span>
         <span class="btn ghost btn-sm" id="ftb-mp" onclick="fieldTab('mp')" style="cursor:pointer">🛒 商城待配对</span>
       </div>
