@@ -221,7 +221,7 @@ Page({
       //   多选组合时按"越需要注意越优先"：闭店·搬迁(红) → 无需拜访(玫红) → 关门·休息中(蓝)。
       const resCls = /闭店|搬迁/.test(_r) ? 'st-red'
         : (/无需拜访/.test(_r) ? 'st-rose'
-          : (/关门·休息中/.test(_r) ? 'st-blue' : ''));
+          : (/休息中/.test(_r) ? 'st-blue' : ''));
       return {
         ...c,
         seq: i + 1,

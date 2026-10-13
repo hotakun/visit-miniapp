@@ -2517,7 +2517,7 @@ function vrWeek(day) { const t = new Date(String(day) + 'T00:00:00+08:00'); retu
 function vrHM(ms) { const d = new Date(Number(ms) || 0); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 function vrTagCls(r) {
   const s = String(r || '');
-  if (/正常回访|加入商城|已下单/.test(s)) return 'green';
+  if (/正常回访|加入商城|促进下单/.test(s)) return 'green';   // ⭐ 2026-10-13：「已下单」已改名「促进下单」—— 这里必须同步，否则新结果拿不到绿色
   if (/需要样品/.test(s)) return 'r-warm';
   if (/有抵触/.test(s)) return 'r-resist';
   if (/关门/.test(s)) return 'warn';
@@ -3453,7 +3453,7 @@ const ST_MAP = { visited: ['已回访', 'green'], ongoing: ['拜访中', 'blue']
 // 拜访结果 → 胶囊配色（语义：绿系=正向，蓝=入商城，灰=中性，红=抵触，黄=关门·休息中，紫=闭店）
 // ⭐ 2026-10-07 老板定改名：「不愿改」→「已有供应商」、「联系不上」→「关门·休息中」
 //   ⚠️ 键名必须跟云函数 visits 的 RESULT_ENUM_MALL 一字不差，否则后台显示不出配色
-const RESULT_PILL = { '加入商城': 'green', '正常回访': 'green', '需要样品': 'r-warm', '已下单': 'r-deal', '已签约商城': 'blue', '未签约': 'gray', '已有供应商': 'gray', '换老板了': 'gray', '有抵触': 'r-resist', '关门·休息中': 'warn', '闭店': 'r-close', '搬迁': 'r-close', '无需拜访': 'gray', '其他': 'r-other' };   // ⭐ 2026-10-13：新增「无需拜访」（中性灰，与「已有供应商/换老板了」同类调性）
+const RESULT_PILL = { '加入商城': 'green', '正常回访': 'green', '需要样品': 'r-warm', '促进下单': 'r-deal', '已签约商城': 'blue', '未签约': 'gray', '已有供应商': 'gray', '换老板了': 'gray', '有抵触': 'r-resist', '休息中': 'warn', '不方便': 'warn', '闭店': 'r-close', '搬迁': 'r-close', '无需拜访': 'gray', '其他': 'r-other' };   // ⭐ 2026-10-13：「已下单」→「促进下单」、「关门·休息中」→「休息中」、新增「不方便」（同"休息中"用黄调）、新增「无需拜访」
 
 // 地址瘦身：去省与地级市，保留县级市及以后（浙江省金华市永康市东城街道… → 永康市东城街道…）
 // 仅当第一个"市"后面紧跟 2~5 字行政区划（XX市/区/县）时才去掉——防止"永康市…"开头被误删、远离的"小区"字样干扰
