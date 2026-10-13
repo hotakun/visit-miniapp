@@ -234,6 +234,8 @@
       <view class="r" wx:if="{{d.lat}}">
         <text class="k">经纬度</text>
         <text class="v mut">{{fixing ? fixLat : d.lat}}, {{fixing ? fixLng : d.lng}}<text class="dist" wx:if="{{fixing && fixDist}}">　距原位置 {{fixDist}}</text></text>
+        <!-- ⭐ 2026-10-13 老板：「经纬度后面跟一个复制按钮，能点击产生复制功能」—— 一点进剪贴板，省得手抄到后台/地图里用 -->
+        <text class="ccopy" catchtap="copyLL">复制</text>
       </view>
       <!-- 小地图（2026-09-13 老板要求加上）：以客户坐标为中心、不可拖、可缩 10~20 级、初始 16 级
            ⚠️ <map> 是原生组件，卡片折叠用的 CSS display:none 压不住它 → 必须用 wx:if 跟展开状态走

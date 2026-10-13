@@ -89,6 +89,9 @@
   font-size: 13.5px; border-bottom: 1px solid #EFF1F5; }
 .r:last-child { border-bottom: none; }
 .r .k { color: var(--sub); font-weight: 600; flex: 0 0 auto; }
+/* ⭐ 2026-10-13 老板要的「复制」小按钮（经纬度那一行后面）：点一下把坐标复制进剪贴板 */
+.ccopy { margin-left: 8px; flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--primary);
+  border: 1px solid var(--primary); border-radius: 6px; padding: 1px 8px; line-height: 1.5; }
 .r .v { font-weight: 700; text-align: right; word-break: break-all; }
 .r .v.warn { color: var(--primary-deep); }
 .r .v.mut { color: var(--sub); font-weight: 600; }

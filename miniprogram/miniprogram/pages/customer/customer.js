@@ -682,6 +682,19 @@ Page({
   },
   // ⭐⭐ 2026-10-10 老板定：点「✎ 编辑」→ 回拜访页（编辑模式）改这条拜访记录
   //   ⚠️ 拜访页 onLoad 会读 storage 里的 curCustomer → 先把它补好（这家店）
+  // ⭐ 2026-10-13 老板：「经纬度后面跟一个复制按钮，能点击产生复制功能」
+  //   复制**当前显示的那一组**（修正模式下就是地图中心的新坐标）—— 纬度在前（项目口径），
+  //   复制出来的格式正好能直接粘到后台「📍 输入经纬度」框里用。
+  copyLL() {
+    const d = this.data || {};
+    const lat = (d.fixing && d.fixLat) ? d.fixLat : d.lat;
+    const lng = (d.fixing && d.fixLng) ? d.fixLng : d.lng;
+    if (!lat || !lng) { wx.showToast({ title: '这家还没有坐标', icon: 'none' }); return; }
+    wx.setClipboardData({
+      data: lat + ',' + lng
+      // ⚠️ setClipboardData 自己会弹「内容已复制」，别再叠一个 toast（会打架）
+    });
+  },
   editVisit(e) {
     const vid = e.currentTarget.dataset.vid;
     if (!vid) return;
