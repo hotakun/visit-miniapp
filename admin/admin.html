@@ -8362,14 +8362,24 @@ function mpRender() {
   const kw = String(($('mpQ') || {}).value || '').trim().toLowerCase();
   let list = _mpRows.filter(x => _mpTab === 'pending' ? (!x.status || x.status === 'pending') : (_mpTab === 'done' ? DONE.indexOf(x.status) >= 0 : true));
   if (kw) list = list.filter(x => ((x.name || '') + (x.phone || '') + (x.address || '') + (x.mall_code || '')).toLowerCase().indexOf(kw) >= 0);
-  // ⭐⭐⭐ 2026-10-13 老板定：「匹配对上的就自动排列到上面，梳理完毕之后，就成为上面是匹配上的，下面是暂时还没有匹配上的」
-  //   排出顺序：已配对/已新建 → 发送失败（要去重发）→ 已跳过 → 待处理；同档内按原名稳定排。
-  if (_mpTab === 'all') {
+  // ⭐⭐⭐ 2026-10-13 老板定（原话：「商城待配对 → 已处理列表，这个顺序不对吧，应该是**最近发送通过的在上面**才对」）：
+  //   · 「已处理」页签：**按处理时间倒序**（最近发送通过 / 最近梳理的在最上面）。
+  //     ⚠️ 原来这个页签**压根没排序** → 直接吃服务器给的 `mall_key` 字母序（`cs20apqf…`、`cs20aq…` 混着排），看着就是乱的。
+  //   · 「全部」页签：保留"已处理在上、待处理在下"的分档，**档内也按处理时间倒序**（原来档内同样没排）。
+  //   ⚠️ `handled_at` 是 PG 的 bigint，接口回来是**字符串** → 用 Number() 比；待处理那批没有这个值 → 回退按 mall_key 稳定排。
+  const byHandled = function (a, b) {
+    const ha = Number(a.handled_at) || 0, hb = Number(b.handled_at) || 0;
+    if (ha !== hb) return hb - ha;                                                  // 最近处理的在上
+    return String(a.mall_key || '').localeCompare(String(b.mall_key || ''));        // 都没处理过 → 原名稳定排
+  };
+  if (_mpTab === 'done') {
+    list = list.slice().sort(byHandled);
+  } else if (_mpTab === 'all') {
     const ORD = { paired: 0, created: 0, failed: 1, pushed: 0, skipped: 2, pending: 3 };
     list = list.slice().sort(function (a, b) {
       const oa = ORD[a.status] === undefined ? 3 : ORD[a.status];
       const ob = ORD[b.status] === undefined ? 3 : ORD[b.status];
-      return oa - ob;
+      return oa !== ob ? (oa - ob) : byHandled(a, b);
     });
   }
   if (cnt) cnt.textContent = '共 ' + list.length + ' 家 · 数据来自你自己的服务器';
