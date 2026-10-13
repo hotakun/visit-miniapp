@@ -784,7 +784,7 @@ tr.row-off td:not(.keep){opacity:.4}
       <!-- ⭐⭐ 2026-10-12 老板：「刚才我按下了重复监测，然后出来了很多很多，又没有滚动条，让人看的发狂…
            以后这种情况你能不能弹出单独窗口并且又滚动条。」
            → 检测结果改到**独立弹窗**（宽 980px、限高 88vh、**内部滚动**；跟「🛒 商城配对确认」同一个样式）。 -->
-      <div class="ovl" id="dupOvl" style="display:none"><div class="modal" style="width:980px;max-height:88vh;overflow-y:auto">
+      <div class="ovl" id="dupCustOvl" style="display:none"><div class="modal" style="width:980px;max-height:88vh;overflow-y:auto">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="font-size:16px;font-weight:800">🧹 重复客户检测结果</div>
           <button class="btn ghost btn-sm" onclick="closeDupOvl()">✕ 关闭</button>
@@ -8665,12 +8665,12 @@ function renderNewShops() {
       '</div></div>';
   }).join('');
 }
-function closeDupOvl() { const o = $('dupOvl'); if (o) o.style.display = 'none'; }
+function closeDupOvl() { const o = $('dupCustOvl'); if (o) o.style.display = 'none'; }
 function renderDupGroups() {
   // ⭐ 2026-10-12 老板：「刚才我按下了重复监测，然后出来了很多很多，又没有滚动条，让人看的发狂…
   //   以后这种情况你能不能弹出单独窗口并且又滚动条。」
   //   → 结果改渲染进**独立弹窗**（宽 980、限高 88vh、内部滚动）；页面上那行只留一句摘要。
-  const box = $('dupResultBox'), body = $('dupOvlBody'), ovl = $('dupOvl');
+  const box = $('dupResultBox'), body = $('dupOvlBody'), ovl = $('dupCustOvl');
   if (!box || !body || !ovl) return;
   box.style.display = 'block';
   if (!dupGroups.length) {
