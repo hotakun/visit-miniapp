@@ -32,9 +32,18 @@
     监控页 `http://124.222.29.73:18081/status?pw=juhuo` 看「数据截至 / 距今多久」。
 - 语音缓存接口：`curl -X POST http://localhost:18080/tts -H "Content-Type: application/json" -d '{"name":"范宇琨","type":"review"}'`（type=coordfix 为坐标报错文案）
 - 调后台接口（含中文一律 UTF-8 文件 + `curl --data-binary @file`，命令行中文必乱码）
-- ⭐ **一键体检（2026-10-05 新增，改完代码跑一次）**：`node admin/tools/check.js`（只读，不改任何文件）
-  · 一次过 5 项：① 全量 JS 语法 ② `admin.html` 内嵌 `script` 提取后 `node --check` ③ **行尾字节级**（只对 `CRLF_FILES` 明文清单 + `.bat` 硬判，其余只提醒 —— 因为本项目 `core.autocrlf=true`，工作区出现 CRLF 是正常现象）④ JSON 语法 ⑤ WXML 标签配对 + 禁 HTML 标签（**已剥离注释**，所以注释里写"`<br>` 会白屏"不会误报）
-  · 外加 ⑥ **`adminapi` 的 `ACTIONS` 白名单 vs dispatch 对账**（治「坑 32」）—— 不一致就报错并给修法；有意放行的两条（`getAdminDistMeta` / `getAdminDistPart`，后台热更新拉分片用）登记在脚本的 `ACTIONS_EXTRA` 里
+- ⭐⭐ **一键体检（2026-10-05 新增，2026-10-14 扩到 12 项；改完代码跑一次）**：`node admin/tools/check.js`（只读，不改任何文件）
+  · 一次过 6 项：① 全量 JS 语法 ② `admin.html` 内嵌 `script` 提取后 `node --check` ③ **行尾字节级**（只对 `CRLF_FILES` 明文清单 + `.bat` 硬判，其余只提醒 —— 因为本项目 `core.autocrlf=true`，工作区出现 CRLF 是正常现象）④ JSON 语法 ⑤ WXML 标签配对 + 禁 HTML 标签（**已剥离注释**，所以注释里写"`<br>` 会白屏"不会误报）⑥ **`adminapi` 的 `ACTIONS` 白名单 vs dispatch 对账**（治「坑 32」）—— 不一致就报错并给修法；有意放行的两条（`getAdminDistMeta` / `getAdminDistPart`，后台热更新拉分片用）登记在脚本的 `ACTIONS_EXTRA` 里
+  · ⭐⭐ **外加 6 组「跨文件对账」（2026-10-14 新增）** —— 治的都是同一类病：**同一件事散在多处、漏改一处不报错、只能肉眼发现**：
+    · **⑦ 拜访结果名一致性**：`visit.js` 的 MALL ↔ 云函数 `RESULT_ENUM_MALL`（逐字含顺序）；每项都要有话术（PRAISE）和后台胶囊色（RESULT_PILL）；`task.js` 的配色判定、`admin.html` 的绿系正则里出现的名字必须都在 MALL 里；旧名（已下单 / 关门·休息中）不许残留
+    · **⑧ 前端 action 调用对账**：`admin.html` 里 `api('xxx')` 必须在 adminapi 的 ACTIONS 白名单里（150 个全核）⚠️ 带 `_cfn` 的是调别的云函数（如 importdata），不算
+    · **⑨ 页面跳转路径对账**：`navigateTo/redirectTo/switchTab/reLaunch` 的 url 必须在 `app.json` 的 pages 里（18 个全核）⚠️ 路径**可含连字符**（`tasks-all`），抓取正则别漏
+    · **⑩ 合规 / 事故护栏**：`requiredPrivateInfos` **只准四个定位类**（2026-10-02「加日历项 → 模拟器起不来」的护栏）；**不许新增老接口 `/cgi-bin/token`**（新写的直接拦，历史遗留 5 处登记在 `KNOWN_LEGACY_TOKEN`、只提示）
+    · **⑪ 本地缓存字段对账**：`custMapPoints` 的 21 个短键 ↔ 基线 ↔ 前台有没有读过；并报出 `store.js` 的 VERSION（**改了字段清单就要 +1**，否则老缓存不作废）
+    · **⑫ 商城字段链路对账**：`MALL_FIELD_PAIRS` ↔ `server.js` 的 `MALL_HEADER_ALIAS` ↔ 导入侧 `STATIC_FIELDS`；护栏：**`lastOrderAt` 不许再加回来**
+  · ⭐⭐⭐ **规矩（2026-10-14 立）：以后凡新增一处「同步点」（同一个清单 / 同一套名字要在两个地方各写一份），就必须顺手在 `admin/tools/check.js` 里加一条对账。**
+    理由：**加检查的成本是一次性的，漏改的代价是「不报错、只能肉眼发现」** —— 本项目 100 多条坑，多半就是这么攒出来的。
+    ⚠️ 加完检查必须**双向验证**：先正常跑一遍（应绿），再**故意改坏一处**（必须报错），最后恢复并**逐字节核对** —— 永远绿的检查等于没加。
   · `-v` 列出每个文件明细；**退出码 0 = 全过 / 1 = 有问题**（可当提交前把关）
   · 它替代了原来"改完再数一遍行尾"的人工纪律；老的 `_fix_eol.py` / `notes_selfcheck.py` / `_verify_20260930.js` 仍可单独用
 - ⭐ **代码备份（2026-10-05 起，三层）**：① 本地工作区 ② GitHub `hotakun/visit-miniapp` ③ **腾讯云服务器 `124.222.29.73` → `D:\WFR\visit-miniapp-备份\`**
