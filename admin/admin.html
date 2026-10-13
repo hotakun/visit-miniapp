@@ -6762,11 +6762,52 @@ function cdGeoRow(c) {
         '<input class="geo-inp" id="cdGeoLng" placeholder="经度" value="' + (has ? Number(c.lng).toFixed(6) : '') + '">' +
         '<button class="btn editbtn btn-sm" style="height:28px" onclick="cdGeoAsk()">✓ 确定</button>' +
       '</span>' +
+      // ⭐⭐ 2026-10-13 老板要：把手机端「加新店」第二步那套「识别区域/商圈」搬到后台客户详情 ——
+      //   按坐标就近投票算出**区域 + 商圈**，一键填进编辑态的两个格子（确认无误再按「保存」）。
+      //   算法与手机端/云端 `tasks.geoVote` **同一把尺子**（半径 100 米、按距离加权），数据走**本地缓存**（零请求）。
+      '<button class="btn ghost btn-sm" style="height:26px;padding:0 8px" onclick="cdGeoDetect()" ' +
+        'title="按坐标算这家店的区域和商圈（本地算，与手机端「加新店」同一把尺子）">📍 商圈检测</button>' +
       '<span class="cd-fmtag" style="' + cdSrcStyleAttr(src) + '" data-geosrc>' + src + '</span>' +
       '<span class="cd-fmtag" data-geodist style="display:none"></span>' +
     '</span>' +
     '<div class="cd-note" data-geonote></div>' +
   '</span></div>';
+}
+
+// ⭐⭐ 2026-10-13 老板要：「客户详情 → 🛎 服务与设施 → 经纬度后面加个「商圈检测」，能自动填写区域和商圈」。
+//   口径**照搬手机端「加新店」第二步的防重检测**（云端 `tasks.geoVote`）：
+//     拿坐标找**半径 100 米内**的已有客户 → **按距离加权投票**（越近权重越大、8 米兜底防爆）→
+//     ① 票数最高的「区域」= 区域；② 票数最高的「区域|商圈」组合里的商圈 = 商圈。
+//   ⚠️ 数据源 = **本地缓存**（`admin/cache/map-points.json` 的 `d`=区域 / `b`=商圈，全库 17.8 万家）
+//      → **零请求、毫秒级**（老板铁律：看数据先读本地）。
+//   ⚠️ 只**填进编辑态的两个格子**，不直接写库 —— 老板看过/改过再按「💾 保存」才落库（红线：改店铺信息要留痕、要人确认）。
+async function cdGeoDetect() {
+  if (!cdCurId) return;
+  const c = (cdCur && cdCur.customer) || {};
+  // ① 坐标：编辑态优先用输入框里**当前**的值（可能刚改过、还没点「✓ 确定」），否则用档案上的
+  const ea = $('cdGeoLat'), el = $('cdGeoLng');
+  const lat = Number((ea && ea.value) || c.lat), lng = Number((el && el.value) || c.lng);
+  if (!lat || !lng) { alert('这家店还没有经纬度 —— 先填坐标（或让业务员现场采点），再做商圈检测。'); return; }
+  let loc = null;
+  try { loc = await ensureCustLocal(); } catch (e) { /* 下面统一提示 */ }
+  const pts = (loc && loc.points) || [];
+  if (!pts.length) { alert('本地客户库还没准备好 —— 先在「战况监控」点一次「🔄 更新地图数据」，再回来试。'); return; }
+  const r = localGeoVote(pts, lat, lng);
+  if (!r.hit) { alert('这家店周围 100 米内没有其他客户，没有可参考的（区域/商圈可以手填）。'); return; }
+  // ② 填进「区域」「商圈」—— 只有编辑态才有输入框，所以先切编辑态
+  if (!cdEditing) { try { cdOpenEdit(); } catch (e) { } }
+  const put = (f, v) => {
+    if (!v) return;
+    const box = document.querySelector('#custModal [data-cdfield="' + f + '"]');
+    const inp = box && box.querySelector('input');
+    if (inp) inp.value = v;
+  };
+  put('district', r.area); put('bizCircle', r.bizCircle);
+  const candTxt = (r.cands || []).slice(0, 3).map((x, i) => (i + 1) + '. ' + (x.area || '—') + ' / ' + (x.biz || '—')).join('\n');
+  alert('📍 商圈检测完成（参考 ' + r.hit + ' 家 · 半径 100 米）\n\n' +
+    '区域：' + (r.area || '—') + '\n商圈：' + (r.bizCircle || '—') + '\n' +
+    (candTxt ? '\n其他候选（按票数）：\n' + candTxt + '\n' : '') +
+    '\n已填进上面的「区域 / 商圈」两格 —— 不对可以手改，确认无误点右上角「💾 保存」生效。');
 }
 
 function cdRender() {
@@ -12686,6 +12727,38 @@ function localBizSuggest(pts, lat, lng) {
     }
   } catch (e) { console.warn('[localBizSuggest]', e); }
   return null;
+}
+
+// ⭐⭐ 2026-10-13（老板要的「📍 商圈检测」核心）：与云端 `tasks.geoVote`（手机端「加新店」用的那套）
+//   **同一套算法**，但跑在**本地缓存**上：
+//     · 半径 **100 米**（= 手机端 `BIZ_RADIUS`，老板留一验证过的最佳值）
+//     · 距离加权 `w = 1 / max(dd, 8)`（8 米兜底，免得 dd→0 时权重爆炸）
+//     · **区域** = 区域票数最高者；**商圈** = 「区域|商圈」组合票数最高者
+//   ⚠️ 这比 `localBizSuggest` 更贴近手机端口径 —— 后者只算商圈、且用的是"计数"而不是"距离加权"。
+function localGeoVote(pts, lat, lng) {
+  const R = 100, cosLat = Math.cos(lat * Math.PI / 180);
+  const dLat = 150 / 111320, dLng = 150 / (111320 * cosLat);   // 粗筛 ±150 米（包住 R）
+  const areaW = {}, pairW = {};
+  let hit = 0;
+  for (const p of pts) {
+    if (!p.la || !p.ln) continue;
+    if (Math.abs(p.la - lat) > dLat || Math.abs(p.ln - lng) > dLng) continue;
+    const dy = (p.la - lat) * 111320, dx = (p.ln - lng) * 111320 * cosLat;
+    const dd = Math.sqrt(dx * dx + dy * dy);
+    if (dd > R) continue;
+    hit++;
+    const w = 1 / Math.max(dd, 8);
+    const a = String(p.d || '').trim(), b = String(p.b || '').trim();
+    if (a) areaW[a] = (areaW[a] || 0) + w;
+    if (a && b) { const k = a + '|' + b; pairW[k] = (pairW[k] || 0) + w; }
+  }
+  const cands = Object.keys(pairW).map(k => {
+    const x = k.split('|');
+    return { area: x[0], biz: x[1], w: Math.round(pairW[k] * 100) / 100 };
+  }).sort((x, y) => y.w - x.w).slice(0, 3);
+  let area = '', best = 0;
+  Object.keys(areaW).forEach(k => { if (areaW[k] > best) { best = areaW[k]; area = k; } });
+  return { hit: hit, area: area, bizCircle: cands[0] ? cands[0].biz : '', cands: cands };
 }
 
 // ⭐ 2026-10-12 老板定（铁律同上）：**按坐标搜周围相似的店，全用本地缓存算**（零请求）。
