@@ -34,6 +34,10 @@
  *   ⑪ ⭐ 本地缓存字段对账（2026-10-14 新增）—— 云函数 custMapPoints 下发**短键**客户点 → store.js 落盘
  *        （VERSION 控失效）→ admin.html 读短键。三处漂移都是**静默**的：多下发没人用（白拉）、
  *        前台读个不存在的短键（永远空白）、**字段清单变了却没把 VERSION +1**（老缓存不作废、读到缺字段的旧快照）。
+ *   ⑫ ⭐ 商城字段链路对账（2026-10-14 新增）—— 商城 Excel → server.js 的 `MALL_HEADER_ALIAS`（中文表头→字段）
+ *        → adminapi 的 `MALL_FIELD_PAIRS`（商城字段→库里落点）+ `STATIC_FIELDS`（导入写哪些）。
+ *        **少一个字段 = 那条信息整条链路都传不到、而且不报错**（历史上 `mallCode` 就这么丢过 →
+ *        直接导致「订单永远挂不上」）。另含一条护栏：**`lastOrderAt` 不许再加回来**（2026-10-07 移除）。
  *
  * 退出码：0 = 全过；1 = 有失败项（供 CI / 提交前把关用）
  *
@@ -461,6 +465,48 @@ function checkCacheFields() {
   console.log(`  ✔ 本地缓存字段：custMapPoints 下发 ${keys.length} 个短键 · store.js 的 VERSION=${ver}${notRead.length ? '' : ' · 前台都读得到'}`);
 }
 
+// ---------- ⑫ 商城 14 字段链路对账（2026-10-14 新增）----------
+// 链路：商城 Excel → server.js 的 MALL_HEADER_ALIAS（中文表头 → 字段名）→ adminapi 的
+//   MALL_FIELD_PAIRS（商城字段 → 库里落点）+ STATIC_FIELDS（导入时写哪些）。
+//   ⚠️ 少一个字段 = **那条信息整条链路都传不到，而且不报错** —— 历史上 `mallCode` 就这么丢过，
+//      后果是「订单按 customerCode 匹配 → 没编号的店订单永远挂不上」。所以三处必须互相对得上。
+const MALL_HEADER_EXPECT = 14;   // server.js 表头别名的条数基线（2026-10-14 实测）
+function checkMallFields() {
+  const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
+  const srvAbs = path.join(ROOT, 'admin/server.js');
+  if (!fs.existsSync(fnAbs) || !fs.existsSync(srvAbs)) { warns.push('商城字段对账：缺文件，跳过'); return; }
+  const fn = fs.readFileSync(fnAbs, 'utf8');
+  const srv = fs.readFileSync(srvAbs, 'utf8');
+
+  // ① MALL_FIELD_PAIRS 的**左值**（= 商城侧字段名）
+  //   ⚠️ 先去掉行注释：那段注释里也写着 ['lastOrderAt','lastOrderAt'] 的来历，不去掉会误抓。
+  const pm = fn.match(/const MALL_FIELD_PAIRS = \[([\s\S]*?)\n\];/);
+  if (!pm) { warns.push('商城字段对账：没抓到 MALL_FIELD_PAIRS（实现改了？），跳过'); return; }
+  const pairsSrc = pm[1].replace(/^\s*\/\/.*$/gm, '');
+  const mallSide = [...pairsSrc.matchAll(/\['([A-Za-z0-9_]+)'\s*,\s*'([A-Za-z0-9_]+)'\]/g)].map(x => x[1]);
+
+  // ② server.js 的表头别名**值**（= 解析端能产出的商城字段）
+  const hm = srv.match(/const MALL_HEADER_ALIAS = \{([\s\S]*?)\n\};/);
+  const headerVals = hm ? [...hm[1].matchAll(/:\s*'([A-Za-z0-9_]+)'/g)].map(x => x[1]) : [];
+
+  // ③ adminapi 导入侧 STATIC_FIELDS（导入时往客户档案写哪些商城字段）
+  const sm = fn.match(/const STATIC_FIELDS = \[([^\]]*)\]/);
+  const statics = sm ? [...sm[1].matchAll(/'([A-Za-z0-9_]+)'/g)].map(x => x[1]) : [];
+
+  let bad = 0;
+  const notParsed = mallSide.filter(f => !headerVals.includes(f));
+  if (notParsed.length) { bad++; fails.push(`商城字段：MALL_FIELD_PAIRS 里的商城侧字段，在 server.js 的表头映射里没有 → ${notParsed.join(', ')}\n   ⚠️ 这些字段**导不进来**（解析端根本不产出它们），而且不报错`); }
+  const noSource = statics.filter(f => !mallSide.includes(f));
+  if (noSource.length) { bad++; fails.push(`商城字段：导入侧的 STATIC_FIELDS 里有 MALL_FIELD_PAIRS 之外的字段 → ${noSource.join(', ')}\n   ⚠️ 写了也没有来源（补进 MALL_FIELD_PAIRS，或从这里删掉）`); }
+  if (mallSide.includes('lastOrderAt')) { bad++; fails.push('商城字段：MALL_FIELD_PAIRS 里又出现了 `lastOrderAt` —— 2026-10-07 已移除（商城快照会盖掉 orders 表的真实日期），**别再加回来**'); }
+  if (headerVals.length && headerVals.length !== MALL_HEADER_EXPECT) warns.push(`商城字段：server.js 的表头别名从基线 ${MALL_HEADER_EXPECT} 条变成了 ${headerVals.length} 条（若确实改了商城导出表头，记得同步 MALL_FIELD_PAIRS 与导入侧）`);
+
+  if (!bad) {
+    okFiles.push(`  [mall]  商城字段链路对账通过（商城侧 ${mallSide.length} 项 ↔ 表头映射 ${headerVals.length} 条 ↔ 导入侧 ${statics.length} 项）`);
+    console.log(`  ✔ 商城字段链路：商城侧 ${mallSide.length} 项 · 表头映射 ${headerVals.length} 条 · 导入侧 ${statics.length} 项 —— 三处对得上`);
+  }
+}
+
 // ============ 主流程 ============
 console.log('聚火拜访 · 一键体检（只读，不改任何文件）');
 console.log('根目录：' + ROOT);
@@ -487,6 +533,7 @@ checkAdminActionCalls();
 checkPagePaths();
 checkCompliance();
 checkCacheFields();
+checkMallFields();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
@@ -498,5 +545,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段 / 商城字段）');
 process.exit(0);
