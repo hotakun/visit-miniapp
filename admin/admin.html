@@ -717,11 +717,10 @@ tr.row-off td:not(.keep){opacity:.4}
       <div class="pt"><span id="pageTitle">任务管理</span><small id="pageSub">全部任务</small></div>
       <!-- ⭐⭐⭐ 2026-10-13 老板（纠正两次）：「上面三个标签…应该并入到第一行大标题后面和回访工作台按钮之间的空白地方」
            → 三个页签就放这儿（顶栏中间）；由 nav() 控制：**只在「⏳ 待商城建档」页显示**，别的页 display:none。 -->
-      <div id="ftbWrap" style="display:none;align-items:center;gap:8px;margin-left:26px">
-        <span class="btn ghost btn-sm" id="ftb-field" onclick="fieldTab('field')"
-          style="cursor:pointer;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
-        <span class="btn ghost btn-sm" id="ftb-ns" onclick="fieldTab('ns')" style="cursor:pointer">🆕 新店（业务员录的）</span>
-        <span class="btn ghost btn-sm" id="ftb-mp" onclick="fieldTab('mp')" style="cursor:pointer">🛒 商城待配对</span>
+      <div id="ftbWrap" style="display:none;align-items:flex-end;gap:0;margin-left:26px">
+        <span class="ftb on" id="ftb-field" onclick="fieldTab('field')">⏳ 待商城建档</span>
+        <span class="ftb" id="ftb-ns" onclick="fieldTab('ns')">🆕 新店（业务员录的）</span>
+        <span class="ftb" id="ftb-mp" onclick="fieldTab('mp')">🛒 商城待配对</span>
       </div>
       <!-- ⭐ 2026-10-07 老板定：「🛒 导入所有客户列表」+「上次导入」**搬到「⏳ 待商城建档」页**了 ——
            老板原话："那样一个页面才符合逻辑"（导入商城表 → 比对合并是一条链，放同一页最顺）。
@@ -1587,6 +1586,14 @@ tr.row-off td:not(.keep){opacity:.4}
         .ns-line { font-size:12px; color:#5B6472; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .ns-line.mut { color:#94A0B2; font-size:11.5px; }
         .ns-btns { flex:none; display:flex; gap:8px; }
+        /* ⭐⭐⭐ 2026-10-13 老板定：三个页签做成**书签页**（浏览器标签那种）——
+           选中的那个与下面内容同底色（白）+ 顶部圆角；未选中的浅灰、稍下沉。
+           位置不变（第一行大标题后、回访工作台前）。先只用于「待商城建档」这一页。 */
+        .ftb { padding:5px 15px; border:1px solid var(--line); border-bottom:none; border-radius:9px 9px 0 0;
+          background:#EEF1F6; color:#68727E; font-size:12.5px; font-weight:700; cursor:pointer;
+          margin-right:-1px; position:relative; top:1px; white-space:nowrap; }
+        .ftb:hover { background:#E7EBF1; }
+        .ftb.on { background:#fff; color:#F5531C; top:2px; z-index:2; box-shadow:0 -2px 6px rgba(20,25,35,.06); }
         /* ⭐ 2026-10-13：「🛒 商城待配对」页样式（照演示稿） */
         .mp-stats { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:10px; display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
         .mp-stats b { font-size:19px; line-height:1.1; }
@@ -8196,9 +8203,10 @@ function fieldTab(t) {
   if (tlb) tlb.style.display = (isNs || isMp) ? 'none' : '';
   [['ftb-field', !isNs && !isMp], ['ftb-ns', isNs], ['ftb-mp', isMp]].forEach(p => {
     const e = $(p[0]); if (!e) return;
-    e.style.background = p[1] ? '#F5531C' : '';
-    e.style.color = p[1] ? '#fff' : '';
-    e.style.borderColor = p[1] ? '#F5531C' : '';
+    // ⭐ 2026-10-13 老板定：页签改成**书签页**样式 → 只切 `.on` 类（样式全在 CSS 里），
+    //   并把上一版留下的内联颜色清掉（否则会盖住书签样式）。
+    e.classList[p[1] ? 'add' : 'remove']('on');
+    e.style.background = ''; e.style.color = ''; e.style.borderColor = '';
   });
   if (isNs && !_nsLoaded) loadNewShops();
   if (isMp) mpLoad();                                // ⭐ 进这一页就拉一次（数据在你自己服务器上，很轻）
