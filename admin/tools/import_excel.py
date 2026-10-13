@@ -630,7 +630,7 @@ def build_orders(cust_docs):
             fp = os.path.join(path, fn)
             try:
                 if fn.lower().endswith('.csv'):
-                    frames.append(pd.read_csv(fp, dtype=str, keep_default_na=False, encoding='utf-8-sig'))
+                    frames.append(read_table(fp, dtype=str, keep_default_na=False))
                 else:
                     frames.append(pd.read_excel(fp, dtype=str))
                 R('     · %s → %d 行' % (fn, len(frames[-1])))
@@ -642,7 +642,10 @@ def build_orders(cust_docs):
     else:
         if not os.path.exists(path):
             raise SystemExit('找不到销售订单表：' + path)
-        df = pd.read_csv(path, dtype=str, keep_default_na=False)
+        # ⭐ 2026-10-13 修（老板导入销售订单表报 UnicodeDecodeError: byte 0xd0 in position 0）：
+        #   这里原来写死读 UTF-8 → 遇到 **GBK 编码**的销售订单 CSV 直接崩。
+        #   统一走 read_table()（先试 utf-8-sig/utf-8，再退 gbk/gb18030）—— 以后什么编码都进得来。
+        df = read_table(path, dtype=str, keep_default_na=False)
         R('')
     R('   合并后 %d 行 × %d 列' % (len(df), len(df.columns)))
 
@@ -722,7 +725,7 @@ def build_items():
         try:
             if ext == 'csv':
                 # 表头在第 2 行（第 1 行是"销售订单详细 - 订单号"）
-                df = pd.read_csv(path, dtype=str, keep_default_na=False, header=1, encoding='utf-8-sig')
+                df = read_table(path, dtype=str, keep_default_na=False, header=1)
             else:
                 df = pd.read_excel(path, dtype=str, header=1)   # .xls 走 xlrd
                 if ext == 'xls':
