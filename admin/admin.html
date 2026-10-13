@@ -1240,9 +1240,10 @@ tr.row-off td:not(.keep){opacity:.4}
 
     <!-- 🗃️ 批次管理（页签已改名：2026-09-26 老板定，原名「🏪 客户管理」；图标同日在 🗃️ 定下；内部 id 仍叫 page-customers） -->
     <div id="page-customers" style="display:none">
-      <div class="title-bar">
-        <span class="t" id="custPageTitle">批次管理</span>
-      </div>
+      <!-- ⭐⭐⭐ 2026-10-13 老板：「第二行批次管理的小字，去掉，节约空间」
+           → 页面内这行重复的「批次管理」已删（顶栏已有页名）；
+             ⚠️ 它原来的 id `custPageTitle` 在 nav() 里还会被改字 → 那边已同步改成**判空**（防 null 抛异常）。
+             ⚠️ 以后别再加回页面内标题（和「待商城建档」同一个毛病）。 -->
       <!-- 批次列表大卡：顶部按钮工具条 + 批次卡 + 未分批；点批次卡 → 单独进入批次详情页 -->
         <div class="batch-wrap">
           <div class="batch-tools">
@@ -2807,7 +2808,8 @@ function nav(p) {
   if (p === 'customers') {
     // 两工作台各自文案与按钮（2026-09-07 批次化：回访=批次卡片列表；新客=原客户表格）
     const isNew = curMode === 'new';
-    $('custPageTitle').textContent = isNew ? '新客户列表' : '批次管理';
+    // ⚠️ 2026-10-13：页面内那行标题已按老板要求删掉 → **判空**（顶栏 pageTitle 仍显示页名；防 null 抛异常把 nav 断掉）
+    const cpt = $('custPageTitle'); if (cpt) cpt.textContent = isNew ? '新客户列表' : '批次管理';
     $('impCustBtn').textContent = isNew ? '📥 导入新客户' : '📥 导入新批次';
     // ⚠️⚠️ 2026-10-12 修（老板报「批次管理页看不到批次了」）—— **这是今天撤按钮留下的连带 bug**：
     //   `#matchBtn`（「🔎 与商城库比对」）今天已按老板要求**撤掉**，但这行还在引用它
