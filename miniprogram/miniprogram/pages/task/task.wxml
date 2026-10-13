@@ -26,7 +26,8 @@
     <view class="cust {{item.visitOngoing ? 'cust-cur' : ''}}" wx:for="{{showCustomers}}" wx:key="_id"
           style="opacity:{{item.visitedToday ? 0.55 : 1}}"
           bindtap="goCustomer" data-id="{{item._id}}">
-      <view class="mdot {{item.visitedToday ? (item.lastClosed ? 'closed' : 'ok') : (item.visitOngoing ? 'cur' : (item.typeName === 'new' ? 'new' : 'todo'))}}">{{item.visitedToday ? (item.lastClosed ? '✕' : '✓') : item.seq}}</view>
+      <!-- ⭐ 2026-10-13 老板要：最近一次拜访结果是「无需拜访」→ 圆点显示 ⭕（判定优先于 ✕ / ✓） -->
+      <view class="mdot {{item.visitedToday ? (item.lastNoNeed ? 'noneed' : (item.lastClosed ? 'closed' : 'ok')) : (item.visitOngoing ? 'cur' : (item.typeName === 'new' ? 'new' : 'todo'))}}">{{item.visitedToday ? (item.lastNoNeed ? '⭕' : (item.lastClosed ? '✕' : '✓')) : item.seq}}</view>
       <view class="info">
         <view class="cname">{{item.name}}
           <text class="tag" style="{{item.typeName === 'new' ? 'background:#E8F1FD;color:#2F80ED' : ''}}">{{item.typeName === 'new' ? '新客户' : '回访'}}</text>

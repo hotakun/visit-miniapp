@@ -1293,6 +1293,9 @@ async function detail(salesmanId, taskId, isBoss) {
       lastResult: (last && last.result) || '',
       // ⭐ 2026-10-12 老板定：拜访结果是**闭店**的 → 任务卡上的对勾换成 ✕（客户详情页顶部也把"正常"改成"闭店"）
       lastClosed: !!(last && last.result && String(last.result).indexOf('闭店') >= 0),
+      // ⭐ 2026-10-13 老板要：「**无需拜访**」这个结果 → **任务详情页这个客户卡右边的图标变成 ⭕**。
+      //   判定与上面 lastClosed 同一套：只看**最近一条**（last）正常拜访记录的 result。
+      lastNoNeed: !!(last && last.result && String(last.result).indexOf('无需拜访') >= 0),
       visitOngoing: ongSet.has(c._id),
       lastVisit: last ? { visitedAt: last.visitedAt, result: last.result, salesmanName: last.salesmanName } : null
     });

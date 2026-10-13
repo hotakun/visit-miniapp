@@ -43,6 +43,9 @@
 .mdot.new { background: linear-gradient(135deg,#5B9DFF,#2F80ED); }
 .mdot.cur { background: var(--blue); }
 .mdot.closed { background: #E5484D; }   /* ⭐ 2026-10-12 老板定：最近一次拜访是「闭店」→ 红底 ✕ */
+/* ⭐ 2026-10-13 老板定：最近一次拜访是「**无需拜访**」→ 白底 + 灰边 + ⭕（中性、不抢眼：一眼看出"这家不用再跑"）
+   ⚠️ 显式写 box-sizing，免得 2px 边框把 40×40 撑成 44×44、跟别的圆点对不齐 */
+.mdot.noneed { box-sizing: border-box; background: #fff; border: 2px solid #C3C9D2; color: #8A94A2; }
 .info { flex: 1; min-width: 0; }
 .cname { font-size: 15px; font-weight: 700; }
 .cname .tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--primary-tint); color: var(--primary-deep); margin-left: 6px; }
