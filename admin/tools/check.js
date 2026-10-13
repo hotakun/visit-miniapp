@@ -31,6 +31,9 @@
  *        ② 代码里**不许新增老接口 `/cgi-bin/token`** —— 它会顶掉 pgsync / 后台正用的 token
  *           （2026-10-13「后台数据停更 46 分钟」就是这么来的）。历史遗留的 5 处登记在
  *           `KNOWN_LEGACY_TOKEN`（只提示），**新写的直接报错拦住**。
+ *   ⑪ ⭐ 本地缓存字段对账（2026-10-14 新增）—— 云函数 custMapPoints 下发**短键**客户点 → store.js 落盘
+ *        （VERSION 控失效）→ admin.html 读短键。三处漂移都是**静默**的：多下发没人用（白拉）、
+ *        前台读个不存在的短键（永远空白）、**字段清单变了却没把 VERSION +1**（老缓存不作废、读到缺字段的旧快照）。
  *
  * 退出码：0 = 全过；1 = 有失败项（供 CI / 提交前把关用）
  *
@@ -422,6 +425,42 @@ function checkCompliance() {
   if (still.length) warns.push(`老接口 token 还有 ${still.length} 处历史遗留未改：${still.join(' / ')}（云函数用老接口拿 token 会顶掉 pgsync/后台的 token，建议以后换成 stable_token）`);
 }
 
+// ---------- ⑪ 本地缓存字段对账（2026-10-14 新增）----------
+// 链路：云函数 custMapPoints 下发**短键**客户点 → store.js 落盘（VERSION 控失效）→ admin.html 读短键。
+//   三处任一漂移都是**静默**的：① 多下发一个字段没人用（白拉流量）；② 前台读个不存在的短键（永远空白）；
+//   ③ ⚠️ **字段清单改了却没把 store.js 的 VERSION +1** → 老缓存不作废 → 界面读到"缺字段的旧快照"。
+//   ⚠️ ③ 没法规机械判（要记历史），所以退一步：**把字段清单当基线**，变了就提醒人去同步 VERSION。
+const CACHE_FIELD_BASE = 21;   // custMapPoints 下发的短键个数（2026-10-14 实测；改字段要同步 store.js 的 VERSION）
+const CACHE_KEYS = ['i', 'n', 'la', 'ln', 'c', 'd', 'b', 'ad', 'cs', 'cst', 'mc', 'mk', 'u', 'nr', 'ca', 'ct', 'ph', 'rm', 'bi', 'mj', 'so'];
+function checkCacheFields() {
+  const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
+  const htmlAbs = path.join(ROOT, 'admin/admin.html');
+  const storeAbs = path.join(ROOT, 'admin/store.js');
+  if (!fs.existsSync(fnAbs) || !fs.existsSync(htmlAbs)) { warns.push('缓存字段对账：缺文件，跳过'); return; }
+
+  // ① 抓 custMapPoints 的返回对象里的短键
+  const m = fs.readFileSync(fnAbs, 'utf8').match(/const points = rows\.map\(c => \(\{([\s\S]*?)\}\)\)/);
+  if (!m) { warns.push('缓存字段对账：没抓到 custMapPoints 的返回对象（实现改了？），跳过'); return; }
+  const keys = [...new Set([...m[1].matchAll(/(?:^|[\s,{])([a-z][a-zA-Z0-9_]*)\s*:/g)].map(x => x[1]))];
+
+  // ② 前台有没有读过（扫整个 admin.html 的 `.xx`，不只 custLocalRow —— 别处也会用）
+  const html = fs.readFileSync(htmlAbs, 'utf8');
+  const notRead = keys.filter(k => !new RegExp('\\.' + k + '\\b').test(html));
+
+  if (notRead.length) warns.push(`缓存字段：custMapPoints 下发了、但前台从没读过 → ${notRead.join(', ')}（要么白拉、要么前台字段名写错了）`);
+  if (keys.length !== CACHE_FIELD_BASE) warns.push(`缓存字段：字段数从基线 ${CACHE_FIELD_BASE} 变成了 ${keys.length} —— 若确实改了字段清单，**记得把 store.js 的 VERSION +1**（否则老缓存不作废、界面会读到缺字段的旧快照）并同步前台读法`);
+  const missing = CACHE_KEYS.filter(k => !keys.includes(k));
+  if (missing.length) warns.push(`缓存字段：基线里有、代码里没了 → ${missing.join(', ')}（前台读它会永远空白）`);
+
+  let ver = '?';
+  if (fs.existsSync(storeAbs)) {
+    const vm = fs.readFileSync(storeAbs, 'utf8').match(/const VERSION\s*=\s*(\d+)/);
+    if (vm) ver = vm[1];
+  }
+  okFiles.push(`  [cache] custMapPoints 下发 ${keys.length} 个短键（基线 ${CACHE_FIELD_BASE}）· store VERSION=${ver}`);
+  console.log(`  ✔ 本地缓存字段：custMapPoints 下发 ${keys.length} 个短键 · store.js 的 VERSION=${ver}${notRead.length ? '' : ' · 前台都读得到'}`);
+}
+
 // ============ 主流程 ============
 console.log('聚火拜访 · 一键体检（只读，不改任何文件）');
 console.log('根目录：' + ROOT);
@@ -447,6 +486,7 @@ checkResultNames();
 checkAdminActionCalls();
 checkPagePaths();
 checkCompliance();
+checkCacheFields();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
@@ -458,5 +498,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段）');
 process.exit(0);
