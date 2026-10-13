@@ -686,9 +686,14 @@ Page({
   //   复制**当前显示的那一组**（修正模式下就是地图中心的新坐标）—— 纬度在前（项目口径），
   //   复制出来的格式正好能直接粘到后台「📍 输入经纬度」框里用。
   copyLL() {
-    const d = this.data || {};
-    const lat = (d.fixing && d.fixLat) ? d.fixLat : d.lat;
-    const lng = (d.fixing && d.fixLng) ? d.fixLng : d.lng;
+    // ⚠️⚠️ 2026-10-13 修（老板真机截图：坐标明明显示着，点复制却提示"还没有坐标"）：
+    //   根因 —— 本页客户数据在 `this.data.d` 里（wxml 写的是 {{d.lat}}），
+    //   而修正模式的两个临时字段（fixLat/fixLng）是**顶层**（wxml 写的是 {{fixLat}}）。
+    //   上一版我全写成了 this.data.lat / d.fixing → 永远取不到 → 误报。这次按真实层级取。
+    const s = this.data || {}, d = s.d || {};
+    const fLat = s.fixLat || d.fixLat, fLng = s.fixLng || d.fixLng;
+    const lat = (s.fixing && fLat) ? fLat : d.lat;
+    const lng = (s.fixing && fLng) ? fLng : d.lng;
     if (!lat || !lng) { wx.showToast({ title: '这家还没有坐标', icon: 'none' }); return; }
     wx.setClipboardData({
       data: lat + ',' + lng
