@@ -715,6 +715,14 @@ tr.row-off td:not(.keep){opacity:.4}
   <main class="main">
     <div class="topbar">
       <div class="pt"><span id="pageTitle">任务管理</span><small id="pageSub">全部任务</small></div>
+      <!-- ⭐⭐⭐ 2026-10-13 老板（纠正两次）：「上面三个标签…应该并入到第一行大标题后面和回访工作台按钮之间的空白地方」
+           → 三个页签就放这儿（顶栏中间）；由 nav() 控制：**只在「⏳ 待商城建档」页显示**，别的页 display:none。 -->
+      <div id="ftbWrap" style="display:none;align-items:center;gap:8px;margin-left:26px">
+        <span class="btn ghost btn-sm" id="ftb-field" onclick="fieldTab('field')"
+          style="cursor:pointer;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
+        <span class="btn ghost btn-sm" id="ftb-ns" onclick="fieldTab('ns')" style="cursor:pointer">🆕 新店（业务员录的）</span>
+        <span class="btn ghost btn-sm" id="ftb-mp" onclick="fieldTab('mp')" style="cursor:pointer">🛒 商城待配对</span>
+      </div>
       <!-- ⭐ 2026-10-07 老板定：「🛒 导入所有客户列表」+「上次导入」**搬到「⏳ 待商城建档」页**了 ——
            老板原话："那样一个页面才符合逻辑"（导入商城表 → 比对合并是一条链，放同一页最顺）。
            ⚠️ 容器**刻意保留成空的**：nav() 里还有两处会操作它的 display（删了要一起改，容易漏）；
@@ -1602,15 +1610,9 @@ tr.row-off td:not(.keep){opacity:.4}
         .mp-acts { display:flex; align-items:center; gap:7px; padding:7px 10px; border:1px dashed #E3E8EF; border-radius:9px; background:#FAFBFC; flex-wrap:wrap; }
         .mp-acts .t { flex:1; min-width:100px; font-size:12px; color:var(--sub); }
       </style>
-      <!-- ⭐ 2026-10-13 老板：「上面的待商城建档有个大标题了，下面的小标题重复了…上面三个标签，也可以放到和大标题一行」
-           → 三个页签**并进标题这一行**（左：大标题+说明；右：三个页签），下面直接就是统计和列表。 -->
-      <div class="title-bar" style="margin-bottom:10px">
-        <span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span>
-        <span class="btn ghost btn-sm" id="ftb-field" onclick="fieldTab('field')"
-          style="cursor:pointer;margin-left:auto;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
-        <span class="btn ghost btn-sm" id="ftb-ns" onclick="fieldTab('ns')" style="cursor:pointer">🆕 新店（业务员录的）</span>
-        <span class="btn ghost btn-sm" id="ftb-mp" onclick="fieldTab('mp')" style="cursor:pointer">🛒 商城待配对</span>
-      </div>
+      <!-- ⭐⭐⭐ 2026-10-13 老板（纠正两次）：「第二行还是显示的又待商城建档等黑体字」+「你应该并入到第一行大标题后面和回访工作台按钮之间的空白地方」
+           → 这一整行（重复的黑体标题 + 页签）**已删**；三个页签搬去了顶栏 `#ftbWrap`（见 .topbar 那边的注释），
+             由 nav() 控制「只在待商城建档页显示」。下面直接就是统计条和列表。 -->
       <div id="nsWrap" style="display:none;flex:1;min-height:0;display:none;flex-direction:column">
         <div class="fl-bar">
           <input id="nsQ" class="ginp" style="width:220px" placeholder="搜店名 / 电话 / 地址 / 商圈"
@@ -2783,6 +2785,9 @@ function nav(p) {
   // ⭐ 2026-09-28 晚：「⏳ 待商城建档」页 → 拉一次列表
   if (p === 'field') { loadFieldList(); loadLastMallImport(); loadClaims(); }   // ⭐ 2026-10-12：本页是"导入→比对→合并"一条链 → 进来顺手拉一次待配对（角标也跟着更新）
   // 顶部导航：仅回访工作台的**批次管理**页（内部 id=customers）显示「导入所有客户列表 + 上次导入时间」（商城库比对是回访专属）
+  // ⭐ 2026-10-13 老板：「三个标签…并入到第一行大标题后面和回访工作台按钮之间的空白」→ 只在「待商城建档」页显示
+  const fw = $('ftbWrap');
+  if (fw) fw.style.display = (p === 'field') ? 'flex' : 'none';
   $('topActions').style.display = (p === 'customers' && curMode === 'mall') ? 'flex' : 'none';
   // ⭐ 2026-10-12 老板定（归位）：「🛒 商城配对确认」在**「⏳ 待商城建档」页** ——
   //   那页本来就是"导入 → 比对 → 合并"整条链的家（老板 2026-10-07 定的）。
