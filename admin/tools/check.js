@@ -22,6 +22,9 @@
  *   ⑧ ⭐ 前端 action 调用对账（2026-10-14 新增）—— admin.html 里 `api('xxx')` 调的每个 action
  *        都必须在 adminapi 的 ACTIONS 白名单里（admin.html 的 api() 一律 POST /api → 转发到 adminapi）。
  *        调了个不存在的 action = 按钮一点就报「未知 action」，只有点下去才知道。
+ *   ⑨ ⭐ 页面跳转路径对账（2026-10-14 新增）—— 小程序里 wx.navigateTo / redirectTo / switchTab / reLaunch
+ *        的 url 必须在 app.json 的 pages 里注册过；跳个没注册的页面 = 点了没反应，静态看不出来。
+ *        ⚠️ 路径里**可以带连字符**（pages/tasks-all/tasks-all）—— 抓取正则别漏了 `-`（第一版就漏了、造成误报）。
  *
  * 退出码：0 = 全过；1 = 有失败项（供 CI / 提交前把关用）
  *
@@ -312,6 +315,47 @@ function checkAdminActionCalls() {
   }
 }
 
+// ---------- ⑨ 页面跳转路径对账（2026-10-14 新增）----------
+// 小程序里 wx.navigateTo / redirectTo / switchTab / reLaunch 的 url，必须在 app.json 的 pages 里注册过。
+//   ⚠️ 跳一个没注册的页面 = 点了**没反应**（控制台报 not found），静态看不出来、只有用户点才发现。
+//   ⚠️ 2026-10-14 教训：页面路径**可以含连字符**（`pages/tasks-all/tasks-all`）——
+//      第一版抓取正则漏了 `-`，把 `/pages/tasks-all/tasks-all` 截成 `/pages/tasks` → 误报。
+const NAV_FUNCS = ['navigateTo', 'redirectTo', 'switchTab', 'reLaunch'];
+function checkPagePaths() {
+  const appJsonAbs = path.join(ROOT, 'miniprogram/miniprogram/app.json');
+  if (!fs.existsSync(appJsonAbs)) { warns.push('页面路径对账：找不到 app.json，跳过'); return; }
+  let pages = [];
+  try { pages = JSON.parse(fs.readFileSync(appJsonAbs, 'utf8')).pages || []; }
+  catch (e) { fails.push('页面路径对账：app.json 解析失败：' + e.message); return; }
+  const pageSet = new Set(pages.map(p => '/' + String(p).replace(/^\//, '')));
+
+  const dir = path.join(ROOT, 'miniprogram/miniprogram');
+  const files = walk(dir).filter(f => /\.js$/i.test(f));
+  const bad = [], seen = new Set();
+  for (const abs of files) {
+    const src = fs.readFileSync(abs, 'utf8');
+    const relf = path.relative(ROOT, abs).replace(/\\/g, '/');
+    for (const fn of NAV_FUNCS) {
+      // 只扫"跳转调用对象里 url:" 的值；模板串里的 ${...} 会在 ? 或 $ 处停下
+      // ⚠️ 路径字符类**必须含 `-`**（tasks-all 这类目录名），否则会截断误报
+      const re = new RegExp(fn + '\\s*\\(\\s*\\{[^}]*?url\\s*:\\s*[`\'"]([^`\'"?#$]+)', 'g');
+      let m;
+      while ((m = re.exec(src))) {
+        let p = m[1].trim().replace(/\/+$/, '');
+        if (!p.startsWith('/pages/') || seen.has(p)) continue;
+        seen.add(p);
+        if (!pageSet.has(p)) bad.push(`${relf} → ${p}`);
+      }
+    }
+  }
+  if (bad.length) {
+    fails.push(`页面路径对账：跳转的路径没在 app.json 的 pages 里注册 →\n   ${bad.join('\n   ')}\n   ⚠️ 点了会没反应（控制台报 not found）。修法：补进 app.json 的 pages，或改掉跳转路径`);
+  } else if (seen.size) {
+    okFiles.push(`  [nav]  ${seen.size} 个跳转路径都在 app.json 里`);
+    console.log(`  ✔ 页面跳转路径：${seen.size} 个 —— 全部在 app.json 的 pages 里注册过`);
+  }
+}
+
 // ============ 主流程 ============
 console.log('聚火拜访 · 一键体检（只读，不改任何文件）');
 console.log('根目录：' + ROOT);
@@ -335,6 +379,7 @@ console.log(`检查了：JS ${checked.js} 个 · JSON ${checked.json} 个 · WXM
 checkActionsWhitelist();
 checkResultNames();
 checkAdminActionCalls();
+checkPagePaths();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
@@ -346,5 +391,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径）');
 process.exit(0);
