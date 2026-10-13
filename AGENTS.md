@@ -69,6 +69,17 @@
   · 链路：`业务员手机 ──写──> 云开发 ──同步器(每5分钟)──> 服务器 PG ──只读API(18081)──> 文员后台读`
   · 动因：后台每天全量拉客户，**实测 178,752 家**（不是早先文档写的 6~7 万，量级差 2.4 倍）。
   · 服务器（`124.222.29.73`，脚本在 `D:\WFR\visit-miniapp\` 根目录）：**PostgreSQL 18.6**（库 `juhuo`，**公网不开**）+ 两个用户（`juhuo_ro` 只读→给 API / `juhuo_rw` 读写→只给同步器）+ 4 张表（`customers` 30 列 / `orders` / `sync_state` 同步水位 / `deleted_ids` 删除名单）+ **`pgapi.js`**（只读 API + 监控页 + 地图服务重启）+ **`pgsync.js`**（每 5 分钟调 `adminapi.custSync` 拉增量）。
+  · ⭐⭐ **2026-10-14（老板看到 QPS 冲到 460/500、数据库请求占 80% 逼出来的）批次成员同步改造** ——
+    原来 `batch_members`（5585 条）是**每 5 分钟 `DELETE` 全表 + 全量重拉**：一天约 160 万次读写，也是 QPS 尖峰的成因。现在四件：
+    ① **平时走 `_id` 游标增量**（只拉新增，通常 0 条）。⚠️ 水位存 PG 的 **`sync_cursor`** 表（不是 `sync_state`）——
+       因为 `sync_state.watermark` 是 **`bigint`**，**存不了字符串 `_id`**（差点带着这个错发上去，**部署前用探针查列类型拦下的**）。
+    ② **有变动才全量对账**：后台建/删批次、加/移成员时写 `settings.batchDirtyAt`（云端 `adminapi` 的 `touchBatchDirty()`，
+       **5 个写点**：`importCustomers` / `addCustomerToBatch` / `addBatchMembersBulk` / `removeCustomerFromBatch` / `deleteCustomerBatch`；
+       带 **3 秒防抖**，因为批量加成员是在循环里调的）→ 靠 `pollDirty` **顺带带回**（**零额外云端调用**）。
+       —— 为什么必须留全量：**增量感知不到"删除"**（文档一删，游标再怎么往后扫也扫不到它）。
+    ③ **6 小时兜底**全量一次（防某处漏写信号）。
+    ④ 写库改**批量 upsert**（每页 500 条一次）—— 原来是**逐条 INSERT**，一轮 5585 次写；`upsert()` 加了 `conflictOn` 参数以支持复合主键 `(batch_id,customer_id)`。
+    ⚠️ **改了云函数写点就必须重传 `adminapi`**，否则信号不写、只剩 6 小时兜底（不会坏，但没到最优）。
   · **`admin/store.js`**：`refresh()` **优先从自己的服务器拿**（配置 `admin/config.json` 的 `pgApiUrl` + `pgApiToken`）→ 成功打 `[store] 从自己的服务器拿到…（不走云开发）`；**失败/没配自动回退云开发分片拉取**。⚠️ **改完必须重启后台**（壳程序也一样，光刷新网页不行）。
   · **监控页** `http://124.222.29.73:18081/status?pw=juhuo`（口令 `juhuo`；含「🔄 重启地图服务」按钮，POST `/restart-nginx?pw=`）；服务器桌面另有 `服务器监控.html`（双击即看）。
   · **5 个计划任务**（`JuhuoPgApi` / `JuhuoPgSync` / `JuhuoNginx` / `JuhuoReboot3` / `JuhuoReboot18` —— 均 BootTrigger + SYSTEM，**开机自启已真重启验证过**）；**每天 3:00 / 18:00 自动重启**服务器。
