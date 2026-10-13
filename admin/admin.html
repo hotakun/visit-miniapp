@@ -1609,6 +1609,12 @@ tr.row-off td:not(.keep){opacity:.4}
         .mp-bar { height:6px; border-radius:99px; background:#EEF1F6; overflow:hidden; display:flex; flex:1; min-width:160px; }
         .mp-bar i { display:block; height:100%; }
         .mp-card { background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; overflow:hidden; }
+        /* ⭐⭐ 2026-10-13 老板定：**「商城待配对」的卡片要能用鼠标选中、Ctrl+C 复制**（店名 / 地址 / 电话 / 编号）——
+           全站其它位置保持原来的"禁止选中"（桌面软件手感，免得拖拽时误选一片文字）。
+           ⚠️ **右键菜单仍然禁用**（壳程序里本来就是禁的，老板确认保持），所以复制走 **Ctrl+C**。
+           ⚠️ 卡片里的按钮文字不参与选中，免得"点按钮顺手选到半截字"。 */
+        .mp-card, .mp-card * { -webkit-user-select: text; user-select: text; }
+        .mp-card .btn { -webkit-user-select: none; user-select: none; }
         .mp-card.done { opacity:.62; }
         .mp-hd { display:flex; align-items:flex-start; gap:9px; padding:9px 13px; background:#FFF7F1; border-bottom:1px solid #FBE0CF; }
         .mp-hd .nm { font-weight:800; font-size:13.5px; }
