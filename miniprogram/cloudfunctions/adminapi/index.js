@@ -3236,6 +3236,17 @@ function mallFieldsFrom(m) {
   //   **同时写进 salesman**（= 后台详情页那个可下拉的「业务员」格）→ 商城表再导入一次，就把手选的盖掉。
   //   ⚠️ 商城值为空 → 上面 forEach 已经 return，两个字段都不动（不会把现场/手填的值抹掉）。
   if (out.mallSalesman !== undefined) out.salesman = out.mallSalesman;
+  // ⭐⭐⭐ 2026-10-13 老板铁律：「**只要是合并信息，店名一律以商城的店名为准**」
+  //   商城链路四处（自动比对 runMallMatch / 认领 applyMallMatch / 人工配对 applyMallPair / 从商城更新 refreshFromMall）
+  //   都靠本函数抽字段 → 商城名覆盖 `name` 时，**必须把 `nameRaw` 一起改成同一个名**。
+  //   ⚠️ 为什么必须一起改：`nameRaw` 是"展示名"的**另一个来源** ——
+  //      后台客户列表 / 回收站列表 / 手机端任务列表与邻近店，读的都是 `nameRaw || name`。
+  //      只改 name 不改 nameRaw → 合并完就是「标题与卡片是新名、列表还是旧名」，
+  //      老板连着两家截图投诉（水城羊肉粉周、安顺米粉周）。
+  //   ⚠️ 与 `updateCustomerFields`（改店名时同步 nameRaw）、`fixDupCustomers`（修正店名时同步 nameRaw）口径一致。
+  //   ⚠️ 副作用（老板已知并认可）：原 `nameRaw` 里带的**编号前缀 / 分店后缀**（如 `c1615 福仔🍴烧煲仔饭(东塔路店)`）
+  //      在"被合并过"的店上会按商城名收敛（商城名里没有分店信息，就显示不出来）—— 这是"以商城为准"的必然结果。
+  if (out.name) out.nameRaw = out.name;
   return out;
 }
 

@@ -253,6 +253,16 @@
   · ⚠️ **删除不会通过增量同步传给后台**（`custSync` 同样排除已删）→ 前端删完必须**自己调 `/mapPoints/patch` 的 removeIds** 把本地缓存摘掉（`geoDeletePicked` 已做）；**恢复**时客户重新符合 `NOT_DELETED`，会被 `custSync` 带回来（等下一轮 15 秒保鲜轮询即可）。
   · ⚠️ **彻底删除时的牵连清理**（**本轮没做**，留给以后"统一清理"）：云存储照片 / 录音、`coord_fix_requests` / `customer_remarks` / `transcripts`、以及 `tasks.customerIds` / `dayPlan` 的引用 —— **但最后这条已被"任务中的不能删"挡住**。
 - ⭐ **商城侧字段：一张表说了算（2026-09-29 老板定）** —— 老板原话：「就是库里这 13 个，**只要有信息就倒过来**」「**商城优先** —— 商城有值就写上（覆盖现场填的）」「**但是经纬度要以现场为准**」。
+  · 🔴🔴 **「合并的店名一律以商城的为准」= 铁律（2026-10-13 老板定，原话：「只要是合并信息，店名一律以商城的店名为准，这也是铁律」）** ——
+    **合并（人工配对 / 认领 / 从商城更新）拿商城名写 `name` 时，必须同时把 `nameRaw` 改成同一个名**
+    （落地就一行：`adminapi` 的 `mallFieldsFrom()` 末尾 `if (out.name) out.nameRaw = out.name;`，一处治四条链路）。
+    ⚠️ **为什么必须一起改**：`nameRaw` 是"展示名"的**第二个来源** —— 后台客户列表 / 回收站列表 / 手机端任务列表与邻近店
+    读的都是 `nameRaw || name`；只改 `name` 就会「详情页是新名、列表还是旧名」，老板 2026-10-13 连着两家截图投诉
+    （水城羊肉粉周、安顺米粉周）。
+    ⚠️ **同口径的三处**：`updateCustomerFields`（改店名）/ `fixDupCustomers`（修正店名）/ `mallFieldsFrom`（合并）——
+    **以后新增任何"会改店名"的链路，都必须同步 `nameRaw`**。
+    ⚠️ **副作用（老板认可）**：被合并过的店，`nameRaw` 里原有的**编号前缀 / 分店后缀**
+    （如 `c1615 福仔🍴烧煲仔饭(东塔路店)`）会按商城名收敛（商城名里没有分店信息就显示不出来）。
   · **唯一真相 = `adminapi` 的 `MALL_FIELD_PAIRS`（14 项）**：`mallKey` / `mallCode` / `addedAt→mallJoinedAt` / `name` / `region` / `address` / `phone` / `salesman→mallSalesman` / `level→mallLevel` / `source→mallSource` / `tags→mallTags` / `category→mallCategory` / `lastOrderAt` / `lastBrowseAt`。
   · **三条链路共用它**：`runMallMatch`（导入商城表后自动比对）/ `applyMallMatch`（浏览器本地比对认领）/ `refreshFromMall` 的 `REFRESH_MAP`（「从商城更新」按钮）—— **以前是三份手写清单，口径必然漂移**（比对只倒 7 个、刷新按钮 10 个、解析端 13 个）。
   · ⚠️ **`mallCode`（客户编号）曾被整条链路丢掉**（表头映射里有、`item` 初始化里漏了）→ 而**订单是按 `customerCode` 匹配的** → 没编号的店**订单永远挂不上**。链路各端都要有它：`admin/server.js` 的 `MALL_HEADER_ALIAS` + `item`、`importMallCustomers` 的 `doc` + `STATIC_FIELDS`、`runMallMatch` / `applyMallMatch` / `refreshFromMall` 的 field、前端 `toMall`。
