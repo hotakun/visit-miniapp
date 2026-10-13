@@ -127,8 +127,18 @@ Page({
       const k = (mode === 'circle') ? (x.bizCircle || '(未知商圈)') : dayCn(x.at);
       (map[k] = map[k] || []).push(x);
     });
-    Object.keys(map).forEach(k => groups.push({ title: k, items: map[k] }));
-    if (mode === 'date') groups.sort((a, b) => (a.title < b.title ? 1 : -1));   // 日期新的在前
+    // ⭐⭐ 2026-10-13 修（老板报「10月7号怎么排到最前面了？按照最近在最上面的原则排列天数」）：
+    //   ⚠️ 原来拿**分组标题字符串**比大小（`a.title < b.title`）—— 中文 "10月7日" vs "10月12日"，
+    //      逐字比是先比 `10月`、再比 `7` 与 `1` → **"7" > "1" → 10月7日被排到了 10月12日前面**
+    //      （同理 12月 与 1月 跨年也会错）。
+    //   ✅ 现在按**该组最新一条的时间戳**降序排 —— 才是真正的"最近的在最上面"。
+    Object.keys(map).forEach(k => {
+      const items = map[k];
+      let mx = 0;
+      items.forEach(y => { const t = Number(y.at) || 0; if (t > mx) mx = t; });
+      groups.push({ title: k, items: items, maxAt: mx });
+    });
+    if (mode === 'date') groups.sort((a, b) => b.maxAt - a.maxAt);             // 日期：最近的在最上面
     else groups.sort((a, b) => b.items.length - a.items.length);               // 商圈：家数多的在前
     this.setData({ groups, list });
   },
