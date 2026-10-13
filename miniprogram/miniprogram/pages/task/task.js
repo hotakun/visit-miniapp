@@ -104,10 +104,34 @@ Page({
       const baseDate = res.task.startDate || (res.task.createdAt ? new Date(res.task.createdAt + 8 * 3600 * 1000).toISOString().slice(0, 10) : '');
       const rawPlan = res.task.dayPlan && res.task.dayPlan.length ? res.task.dayPlan : [{ day: 1, customerIds: customers.map(c => c._id) }];
       const dayPlan = rawPlan.map(p => ({ ...p, dateLabel: baseDate ? fmtMD(addDays(baseDate, p.day - 1)) : '' }));
-      // 进入任务自动定位天页签（2026-09-05 老板定）：当天在排期内→当天；未开始→第 1 天；已过排期→最后一天（最近的一天）
+      // ⭐⭐ 2026-10-13 老板定（原话：「任务详情虽然写的是第1页、第2页这样，但你还是按日期在默认显示；
+      //   其实现在不用按日期默认了，应该按**已经拜访到的最大页数**显示 —— 譬如已经拜访到第三页，就默认显示第三页」）：
+      //   默认页签 = **已拜访到的最大那一天**。
+      //   算法：每个客户最近一次拜访的日期（`lastVisit.visitedAt`，云端 lastVisitMap 取的就是"不限时间的最近一条"）
+      //        → 反推它是任务第几天 → 取最大值；一天都没拜访过才回退原来的逻辑（今天 / 第1天 / 最后一天）。
+      //   ⚠️ `baseDate` 是任务开始日（上面刚算过），与云端 `dayIndexOf` 同一套算法（按天取整，不用时区）。
+      const _dayNo = (dateStr) => {
+        if (!baseDate || !dateStr) return 0;
+        const a = new Date(String(baseDate).slice(0, 10) + 'T00:00:00Z').getTime();
+        const b = new Date(String(dateStr).slice(0, 10) + 'T00:00:00Z').getTime();
+        if (!isFinite(a) || !isFinite(b)) return 0;
+        return Math.round((b - a) / 86400000) + 1;
+      };
+      let maxVisitedDay = 0;
+      customers.forEach(c => {
+        const at = c.lastVisit && c.lastVisit.visitedAt;
+        if (!at) return;
+        const d = _dayNo(at);
+        if (d > maxVisitedDay) maxVisitedDay = d;
+      });
+      // 进入任务自动定位天页签（2026-09-05 老板定、2026-10-13 调整）：已跑到的天 → 那天；没跑过 → 当天/第 1 天/最后一天
       const td = Number(res.task.todayDay);
       let activeDay;
-      if (td >= 1 && td <= dayPlan.length) {
+      if (maxVisitedDay > 0) {
+        // ⚠️ 夹在计划范围内：万一记录落在计划之外（延期/加天）也不会选中一个不存在的页签
+        const cands = dayPlan.filter(p => p.day <= maxVisitedDay).map(p => p.day);
+        activeDay = cands.length ? Math.max.apply(null, cands) : dayPlan[0].day;
+      } else if (td >= 1 && td <= dayPlan.length) {
         activeDay = td;
       } else if (td < 1) {
         activeDay = dayPlan.length ? dayPlan[0].day : 1;
