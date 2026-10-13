@@ -1579,6 +1579,28 @@ tr.row-off td:not(.keep){opacity:.4}
         .ns-line { font-size:12px; color:#5B6472; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .ns-line.mut { color:#94A0B2; font-size:11.5px; }
         .ns-btns { flex:none; display:flex; gap:8px; }
+        /* ⭐ 2026-10-13：「🛒 商城待配对」页样式（照演示稿） */
+        .mp-stats { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:10px; display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
+        .mp-stats b { font-size:19px; line-height:1.1; }
+        .mp-stats span { color:var(--sub); font-size:12px; display:block; }
+        .mp-bar { height:6px; border-radius:99px; background:#EEF1F6; overflow:hidden; display:flex; flex:1; min-width:160px; }
+        .mp-bar i { display:block; height:100%; }
+        .mp-card { background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; overflow:hidden; }
+        .mp-card.done { opacity:.62; }
+        .mp-hd { display:flex; align-items:flex-start; gap:9px; padding:9px 13px; background:#FFF7F1; border-bottom:1px solid #FBE0CF; }
+        .mp-hd .nm { font-weight:800; font-size:13.5px; }
+        .mp-hd .mt { font-size:11.5px; color:#98A2AE; margin-top:2px; }
+        .mp-hd .st { margin-left:auto; flex:none; font-size:11.5px; font-weight:800; padding:2px 8px; border-radius:99px; }
+        .mp-body { padding:8px 13px 11px; }
+        .mp-cand { display:flex; align-items:flex-start; gap:9px; padding:8px 10px; border:1px solid #EDF1F7; border-radius:9px; margin-bottom:6px; background:#fff; }
+        .mp-cand.first { background:#FFF9F6; border-color:#FBE0CF; }
+        .mp-cand .mid { flex:1; min-width:0; }
+        .mp-cand .n { font-weight:700; font-size:13px; }
+        .mp-cand .n em { color:#A8B0BB; font-style:normal; font-size:11.5px; font-weight:400; margin-left:5px; }
+        .mp-cand .ln { font-size:11.5px; color:var(--sub); margin-top:2px; }
+        .mp-cand .why { font-size:11px; color:#98A2AE; margin-top:2px; }
+        .mp-acts { display:flex; align-items:center; gap:7px; padding:7px 10px; border:1px dashed #E3E8EF; border-radius:9px; background:#FAFBFC; flex-wrap:wrap; }
+        .mp-acts .t { flex:1; min-width:100px; font-size:12px; color:var(--sub); }
       </style>
       <div class="title-bar"><span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span></div>
       <!-- ⭐⭐ 2026-10-12 老板定：这一页加「新店」标签页 —— 业务员手机端「加新店」录的店，
@@ -1587,6 +1609,11 @@ tr.row-off td:not(.keep){opacity:.4}
         <span class="btn ghost btn-sm on-tab" id="ftb-field" onclick="fieldTab('field')"
           style="cursor:pointer;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
         <span class="btn ghost btn-sm" id="ftb-ns" onclick="fieldTab('ns')" style="cursor:pointer">🆕 新店（业务员录的）</span>
+        <!-- ⭐⭐⭐ 2026-10-13 老板定：「按照刚才做的演示稿，将这个功能在系统内做出来，放在待商城建档里面单独的页面。
+             正好放入我刚才叫你找的这10多家信息，以后刚刚导入的信息，就放在服务器上面建立一个单独的池子，
+             这样我和文员的电脑都能看到，都能操作进行配对或新建。配对或新建完毕之后，这个信息才会写入云端数据库，
+             进入到客户管理里面。」→ 数据源 = **自己的服务器**（PG 的 `mall_pending`）；**处理完才写云端**。 -->
+        <span class="btn ghost btn-sm" id="ftb-mp" onclick="fieldTab('mp')" style="cursor:pointer">🛒 商城待配对</span>
       </div>
       <div id="nsWrap" style="display:none;flex:1;min-height:0;display:none;flex-direction:column">
         <div class="fl-bar">
@@ -1599,6 +1626,22 @@ tr.row-off td:not(.keep){opacity:.4}
         <!-- ⭐ 2026-10-12 老板：「下面一张白色大卡片盖住了客户卡片」—— 根因：列表区被白卡包着、自己又是白的，
              撑满之后下半屏就是一整片白，看起来像"一张空的大白卡"。这里给列表区铺一层**浅灰底**，和白卡区分开。 -->
         <div id="nsList" class="ns-list" style="flex:1;min-height:0;overflow-y:auto;background:#F5F7FA;border-radius:10px;padding:10px"></div>
+      </div>
+      <!-- ⭐⭐⭐ 2026-10-13 老板定：**「🛒 商城待配对」独立页面**（照演示稿做）——
+           数据全在**你自己的服务器**（PG 的 `mall_pending`）上，老板和文员两台电脑共用；
+           **只有确认"配对/新建"之后，那条信息才写进云端客户档案**（进「客户管理」）。 -->
+      <div id="mpWrap" style="display:none;flex:1;min-height:0;flex-direction:column">
+        <div id="mpStats" class="mp-stats"></div>
+        <div class="fl-bar">
+          <span class="btn ghost btn-sm" id="mpTb-pending" onclick="mpTab('pending')" style="cursor:pointer">⏳ 待处理</span>
+          <span class="btn ghost btn-sm" id="mpTb-done" onclick="mpTab('done')" style="cursor:pointer">✅ 已处理</span>
+          <span class="btn ghost btn-sm" id="mpTb-all" onclick="mpTab('all')" style="cursor:pointer">全部</span>
+          <input id="mpQ" class="ginp" style="width:200px" placeholder="搜店名 / 电话 / 地址 / 编号"
+            onkeydown="if(event.key==='Enter')mpRender()">
+          <button class="btn ghost btn-sm" onclick="mpLoad(true)">刷新</button>
+          <span class="fl-cnt" id="mpCount">—</span>
+        </div>
+        <div id="mpList" class="ns-list" style="flex:1;min-height:0;overflow-y:auto;background:#F5F7FA;border-radius:10px;padding:10px"></div>
       </div>
       <div class="fl-bar">
         <input id="fieldQ" class="ginp" style="width:220px" placeholder="店名 / 电话 / 地址"
@@ -8138,23 +8181,146 @@ async function dupScan() {
 //   拉不到就直说（按设定：**不回退云端**）。口径与手机端一致：业务员录的（source=field）+ 最近 3 天 + 没进回收站。
 let _nsAll = [], _nsLoaded = false;
 function fieldTab(t) {
-  const isNs = (t === 'ns');
+  const isNs = (t === 'ns'), isMp = (t === 'mp');   // ⭐ 2026-10-13：第三个页签「🛒 商城待配对」
   const wrap = $('nsWrap'), fl = $('fieldList'), q = $('fieldQ');
   const tlb = q ? q.closest('.fl-bar') : null;
+  const mp = $('mpWrap');
   if (wrap) wrap.style.display = isNs ? 'flex' : 'none';
-  if (fl) fl.style.display = isNs ? 'none' : '';
+  if (mp) mp.style.display = isMp ? 'flex' : 'none';
+  if (fl) fl.style.display = (isNs || isMp) ? 'none' : '';
   // ⚠️⚠️ 2026-10-12 老板第三次质问「下面那个大白卡挡住是怎么回事？」—— 真凶：`#fieldList` 外面那层 `.card`
   //   没被藏（只藏了列表和工具条）→ 白卡 flex:1 撑满下半屏、盖住后面的客户。这里连它一起显隐。
   const fc = $('fieldCard');
-  if (fc) fc.style.display = isNs ? 'none' : '';
-  if (tlb) tlb.style.display = isNs ? 'none' : '';
-  [['ftb-field', !isNs], ['ftb-ns', isNs]].forEach(p => {
+  if (fc) fc.style.display = (isNs || isMp) ? 'none' : '';
+  if (tlb) tlb.style.display = (isNs || isMp) ? 'none' : '';
+  [['ftb-field', !isNs && !isMp], ['ftb-ns', isNs], ['ftb-mp', isMp]].forEach(p => {
     const e = $(p[0]); if (!e) return;
     e.style.background = p[1] ? '#F5531C' : '';
     e.style.color = p[1] ? '#fff' : '';
     e.style.borderColor = p[1] ? '#F5531C' : '';
   });
   if (isNs && !_nsLoaded) loadNewShops();
+  if (isMp) mpLoad();                                // ⭐ 进这一页就拉一次（数据在你自己服务器上，很轻）
+}
+// ===== 🛒 商城待配对（2026-10-13 老板定：独立页面 · 数据在服务器 · 处理完才写云端）=====
+//   老板原话：「以后刚刚导入的信息，就放在服务器上面建立一个单独的池子，这样我和文员的电脑都能看到，
+//   都能操作进行配对或新建。配对或新建完毕之后，这个信息才会写入云端数据库，进入到客户管理里面。」
+//   ⚠️ 数据源 = 自己服务器的 `/mallPending`（PG 的 mall_pending）；**候选在本地全库现算**（零请求）。
+let _mpRows = [], _mpTab = 'pending', _mpStat = {};
+const MP_NORM = s => String(s || '').replace(/[（(【\[].*?[)）】\]]/g, '').replace(/[\s，。、·—\-_/\\"'“”‘’':：]+/g, '');
+const MP_PK = s => String(s || '').replace(/\D/g, '').replace(/^0(?:10|2\d|[3-9]\d{2})/, '');
+// 候选：电话相同 100 分 / 店名一字不差 95 分（其余不列）—— 与「商城配对确认」同一套口径
+function mpCands(name, phone) {
+  const pts = (custLocal && custLocal.points) || [];
+  const nk = MP_NORM(name), pk = MP_PK(phone);
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    let sc = 0, why = '';
+    if (pk && pk.length >= 7 && MP_PK(p.ph) === pk) { sc = 100; why = '📞 电话相同 · 铁证'; }
+    else if (nk && MP_NORM(p.nr || p.n) === nk) { sc = 95; why = '店名一字不差'; }
+    if (sc) out.push({ id: p.i, name: p.nr || p.n, code: p.mc || '', region: p.rg || p.d || '', address: p.ad || '', phone: p.ph || '', lat: p.la || 0, score: sc, why: why });
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, 5);
+}
+async function mpLoad(force) {
+  const box = $('mpList'), cnt = $('mpCount');
+  if (cnt) cnt.textContent = '正在从你的服务器拉…';
+  if (box) box.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    await ensureCustLocal();                        // 候选要在本地全库上算，先确保缓存就绪
+    const r = await fetch('/mallPending' + (force ? '?t=' + Date.now() : ''), { cache: 'no-store' }).then(x => x.json());
+    if (!r || !r.ok) { if (box) box.innerHTML = '<div class="empty">服务器拉不到：' + esc((r && r.msg) || '未知原因') + '</div>'; return; }
+    _mpRows = r.rows || []; _mpStat = r.stat || {};
+    mpRender();
+  } catch (e) {
+    if (box) box.innerHTML = '<div class="empty">服务器拉不到（按设定：不回退云端）</div>';
+    console.warn('[mallPending]', e);
+  }
+}
+function mpTab(t) { _mpTab = t; mpRender(); }
+function mpStat() { return { p: _mpStat.pending || 0, a: _mpStat.paired || 0, c: _mpStat.created || 0, s: _mpStat.skipped || 0 }; }
+function mpMark(key, status, tid, tname) {
+  return fetch('/mallPending/mark?mallKey=' + encodeURIComponent(key) + '&status=' + status +
+    '&targetId=' + encodeURIComponent(tid || '') + '&targetName=' + encodeURIComponent(tname || ''),
+    { method: 'POST' }).then(r => r.json()).catch(() => null);
+}
+function mpRender() {
+  const box = $('mpList'), cnt = $('mpCount'), st = $('mpStats');
+  if (!box) return;
+  const DONE = ['paired', 'created', 'skipped'];
+  const s = mpStat(), tot = s.p + s.a + s.c + s.s;
+  if (st) st.innerHTML =
+    '<div><b>' + tot + '</b><span>这次导入</span></div>' +
+    '<div><b style="color:#12A150">' + s.a + '</b><span>已配对</span></div>' +
+    '<div><b style="color:#2F80ED">' + s.c + '</b><span>已新建</span></div>' +
+    '<div><b style="color:#7A828E">' + s.s + '</b><span>已跳过</span></div>' +
+    '<div><b style="color:#F5531C">' + s.p + '</b><span>⏳ 待处理</span></div>' +
+    '<div class="mp-bar"><i style="background:#12A150;width:' + (tot ? s.a / tot * 100 : 0) + '%"></i>' +
+    '<i style="background:#2F80ED;width:' + (tot ? s.c / tot * 100 : 0) + '%"></i>' +
+    '<i style="background:#C3CAD4;width:' + (tot ? s.s / tot * 100 : 0) + '%"></i></div>';
+  ['pending', 'done', 'all'].forEach(t => {
+    const e = $('mpTb-' + t); if (!e) return; const on = (_mpTab === t);
+    e.style.background = on ? '#F5531C' : ''; e.style.color = on ? '#fff' : ''; e.style.borderColor = on ? '#F5531C' : '';
+  });
+  const kw = String(($('mpQ') || {}).value || '').trim().toLowerCase();
+  let list = _mpRows.filter(x => _mpTab === 'pending' ? (!x.status || x.status === 'pending') : (_mpTab === 'done' ? DONE.indexOf(x.status) >= 0 : true));
+  if (kw) list = list.filter(x => ((x.name || '') + (x.phone || '') + (x.address || '') + (x.mall_code || '')).toLowerCase().indexOf(kw) >= 0);
+  if (cnt) cnt.textContent = '共 ' + list.length + ' 家 · 数据来自你自己的服务器';
+  if (!list.length) { box.innerHTML = '<div class="empty" style="padding:26px 0;text-align:center;color:var(--sub)">' + (_mpTab === 'pending' ? '🎉 没有待处理的，全部处理完了' : '（没有记录）') + '</div>'; return; }
+  box.innerHTML = list.map(x => {
+    const isDone = DONE.indexOf(x.status) >= 0;
+    const tag = x.status === 'paired' ? '<span class="st" style="background:#EAF7EF;color:#12A150">✅ 已配对</span>'
+      : x.status === 'created' ? '<span class="st" style="background:#EAF2FE;color:#2F80ED">➕ 已新建</span>'
+        : x.status === 'skipped' ? '<span class="st" style="background:#F2F4F7;color:#7A828E">⏭ 已跳过</span>'
+          : '<span class="st" style="background:#FFF1E8;color:#D2691E">⏳ 待处理</span>';
+    const k = x.mall_key;
+    const head = '<div class="mp-hd"><div style="flex:1;min-width:0"><div class="nm">' + esc(x.name || '(未填店名)') + '</div>' +
+      '<div class="mt">' + esc(x.region || '') + ' · ' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') + '</div></div>' + tag + '</div>';
+    if (isDone) return '<div class="mp-card done">' + head +
+      '<div style="display:flex;align-items:center;gap:9px;padding:9px 13px;font-size:12.5px;color:var(--sub)">' +
+      '<span style="flex:1">' + (x.status === 'paired' ? '已合并到 <b style="color:#22262E">' + esc(x.target_name || '') + '</b>（商城字段覆盖，坐标没动）'
+        : x.status === 'created' ? '已按这条新建客户 <b style="color:#22262E">' + esc(x.target_name || '') + '</b>'
+          : '已跳过（先不处理）') + '</span>' +
+      '<button class="btn ghost" style="height:26px;font-size:12px" onclick="mpUndo(\'' + k + '\')">↩ 撤销</button></div></div>';
+    const cands = mpCands(x.name, x.phone);
+    return '<div class="mp-card">' + head + '<div class="mp-body">' +
+      (cands.length
+        ? '<div style="font-size:12px;color:var(--sub);font-weight:700;margin:2px 0 7px">系统里的候选（按像的程度排）：</div>' +
+        cands.map((c, ci) => '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
+          '<div class="n">' + esc(c.name) + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
+          '<div class="ln">' + esc(c.region || '') + ' · ' + esc(c.address || '') + ' · ' + esc(c.phone || '') + '</div>' +
+          '<div class="why">' + esc(c.why) + ' · ' + c.score + ' 分 · ' + (c.lat ? '<span style="color:#12A150">✓ 有坐标</span>' : '<span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
+          '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button></div>').join('')
+        : '<div style="font-size:12px;color:#B77400;padding:6px 2px 8px">系统里没有<b>电话 / 店名对得上</b>的客户 —— 见下面：</div>') +
+      '<div class="mp-acts"><div class="t">都不对？</div>' +
+      '<button class="btn p" style="height:26px;font-size:12px" onclick="mpCreateHint()">➕ 新建这条客户</button>' +
+      '<button class="btn" style="height:26px;font-size:12px" onclick="mpSkip(\'' + k + '\')">⏭ 暂时跳过</button></div>' +
+      '</div></div>';
+  }).join('');
+}
+async function mpConfirm(mallKey, customerId) {
+  const row = _mpRows.filter(x => x.mall_key === mallKey)[0] || {};
+  const c = mpCands(row.name, row.phone).filter(v => v.id === customerId)[0] || {};
+  if (!confirm('确认这家？\n\n商城那条（' + (row.name || '') + '）合并到：\n' + (c.name || customerId) +
+    '\n\n· 店名 / 电话 / 地址取商城的\n· 经纬度、商圈保留系统内的（绝不动）')) return;
+  const r = await api('applyMallPair', { customerId: customerId, mallKey: mallKey }).catch(() => null);
+  if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '请稍后再试')); return; }
+  await mpMark(mallKey, 'paired', customerId, c.name || '');
+  await mpLoad(true);                                   // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
+}
+async function mpSkip(mallKey) {
+  await mpMark(mallKey, 'skipped');
+  await mpLoad(true);
+}
+async function mpUndo(mallKey) {
+  if (!confirm('撤销这条的处理状态？（回到「待处理」）\n⚠️ 已经合并进客户档案的信息不会自动还原。')) return;
+  await mpMark(mallKey, 'pending');
+  await mpLoad(true);
+}
+function mpCreateHint() {
+  alert('这家要「新建客户」。\n\n请在手机端「加新店」里录（新建时经纬度必填，否则业务员导航不到这家店）。\n录完回来，这条一般会自动认出来。');
 }
 function loadNewShops() {
   const cnt = $('nsCount');
