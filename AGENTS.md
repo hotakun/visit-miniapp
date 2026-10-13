@@ -15,6 +15,7 @@
 | 去哪找 | 里面有什么 |
 |---|---|
 | **`docs/坑清单.md`** | ⭐ **实测踩过的坑 / 只能肉眼发现的坑 / 某功能的详细方案 / 三起事故背景** —— 查细节一律来这里 |
+| **`docs/AGENTS旧版细则-20261014.md`** | ⭐ **要查具体技术线索**（函数名 / 常量名 / 字段名 / 排障步骤 / 细节口径）**来这里** —— 本文精简前的原文细则（一字未改） |
 | `项目交接-当前进度.md` | 未决事项 + 最近快照（更早的按月归档在 `docs/历史/`） |
 | `docs/历史/开发计划-2026-08原始需求.md` | 最初的需求详述与开发计划（2026-08，**当时口径**，部分已被演进取代） |
 | `服务器运维手册.md` | 服务器 / 计划任务 / 应急恢复 |
@@ -48,7 +49,7 @@
 
 ## Architecture
 
-- **小程序**（`miniprogram/miniprogram/`）**15 页**：home / login / task / customer / visit / tasks-all / mine / map / bossWar / notes / notes-editor / newshop / myshops / newshops / freevisit(+map)；公共层 `utils/api.js`（**云函数调用单入口 `api.call(name, data)`，别绕开**）、`utils/media.js`、`utils/notes.js`、`utils/gps/`。`app.js` 配 envId `cloud1-d0gwlmbwp31181eb5` + `APP_VERSION`。
+- **小程序**（`miniprogram/miniprogram/`）**18 页**（照 `app.json` 的 `pages`，别再照旧文档的"15 页"）：home / login / task / customer / visit / map / mine / tasks-all / bossWar / notes / notes-editor / newshop / myshops / newshops / freevisit / freevisit-map / **coordfix**（📍报错整屏取点页）/ **custedit**（更正信息）；公共层 `utils/api.js`（**云函数调用单入口 `api.call(name, data)`，别绕开**）、`utils/media.js`、`utils/notes.js`、`utils/gps/`。`app.js` 配 envId `cloud1-d0gwlmbwp31181eb5` + `APP_VERSION`。
 - **云函数 12 个**（`miniprogram/cloudfunctions/`）：`adminapi`（**后台唯一入口**，130+ action）/ `tasks` / `visits` / `login` / `transcribe`（腾讯云 ASR 转写，带 `transcribePoll` 定时器每 5 分钟）/ `coordfix` / `importdata` / `init`（建集合自愈）/ `subscribe` / `bindadmin` / `ping` / `seed`。
 - **后台**（`admin/`）：`admin.html` 单文件前端（**CRLF**，1.3 万行）+ `server.js` 本地代理（HTTP API 直连 + `/mpTokenRefresh`）+ **`store.js` 本地缓存层** + `nt-map.js` + `tts_gen.py`。
   - **`store.js`**：客户点缓存到 `admin/cache/map-points.json`，供地图与**客户管理页/批次总表**秒读；接口 `GET /mapPoints`、`POST /mapPoints/refresh`、`GET /mapPoints/status`、**`POST /mapPoints/patch`**（写后回写）。`VERSION` 控制字段版本（**当前 = 6**，改字段就要 +1，否则老缓存不作废）。**拉取要带后台账号密码**（`STORE_AUTH`）。

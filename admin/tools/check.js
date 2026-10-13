@@ -58,15 +58,16 @@ const VERBOSE = process.argv.includes('-v') || process.argv.includes('--verbose'
 const CRLF_FILES = new Set([
   'admin/admin.html',
   'admin/nt-map.js',
-  '开发计划.md',
+  'docs/历史/开发计划-2026-08原始需求.md',   // 2026-10-14 从根目录 git mv 进 docs/历史/（实测纯 CRLF=770 / 裸 LF=0）
   'miniprogram/miniprogram/pages/login/login.js',
   'miniprogram/miniprogram/pages/login/login.wxml',
   'miniprogram/miniprogram/pages/visit/visit.wxml',
   'miniprogram/miniprogram/pages/customer/customer.js',
   'miniprogram/miniprogram/pages/map/map.js'
 ]);
-// ⚠️ 开发计划.md 是「CRLF + 29 个裸 LF」的混合文件，不按纯 CRLF 判
-const MIXED_FILES = new Set(['开发计划.md']);
+// ⚠️ 2026-10-14 实测：开发计划.md（现 docs/历史/开发计划-2026-08原始需求.md）**已是纯 CRLF（770 行 / 裸 LF 0）**
+//   → 不再是「CRLF + 29 个裸 LF」的混合文件，不必再特殊处理；空集合保留备用（将来真出现混合文件往里加）。
+const MIXED_FILES = new Set([]);
 
 // 跳过这些目录（不体检）
 const SKIP_DIRS = new Set(['MapDownloader-2.0', 'design-demo','node_modules', '.git', 'voices', 'voice', 'cache', 'build', 'output', 'WebView2', 'TMP', '_scratch', 'versions', 'data', '销售数据']);
@@ -200,7 +201,7 @@ function checkWxml(rel, abs) {
 const ACTIONS_EXTRA = new Set(['getAdminDistMeta', 'getAdminDistPart', 'xxx']);   // xxx = 注释里的哨兵
 function checkActionsWhitelist() {
   const abs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
-  if (!fs.existsSync(abs)) { warns.push('adminapi/index.js 不存在，跳过白名单对账'); return; }
+  if (!fs.existsSync(abs)) { fails.push('adminapi/index.js 不存在 → ACTIONS 白名单对账无法执行（按失败处理）'); return; }
   const s = fs.readFileSync(abs, 'utf8');
   const m = s.match(/const ACTIONS = \[([\s\S]*?)\];/);
   if (!m) { fails.push('adminapi：找不到 ACTIONS 数组'); return; }
@@ -237,7 +238,7 @@ function checkResultNames() {
   const visitsFn = rd('miniprogram/cloudfunctions/visits/index.js');
   const taskJs = rd('miniprogram/miniprogram/pages/task/task.js');
   const adminHtml = rd('admin/admin.html');
-  if (!visitJs || !visitsFn || !adminHtml) { warns.push('结果名一致性：缺文件，跳过'); return; }
+  if (!visitJs || !visitsFn || !adminHtml) { fails.push('结果名一致性：缺文件 → 检查无法执行（按失败处理）'); return; }
 
   const mall = arrOf(visitJs, 'const MALL');
   const enumMall = arrOf(visitsFn, 'const RESULT_ENUM_MALL');
@@ -301,7 +302,7 @@ function checkResultNames() {
 function checkAdminActionCalls() {
   const htmlAbs = path.join(ROOT, 'admin/admin.html');
   const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
-  if (!fs.existsSync(htmlAbs) || !fs.existsSync(fnAbs)) { warns.push('action 调用对账：缺文件，跳过'); return; }
+  if (!fs.existsSync(htmlAbs) || !fs.existsSync(fnAbs)) { fails.push('action 调用对账：缺文件 → 检查无法执行（按失败处理）'); return; }
   const html = fs.readFileSync(htmlAbs, 'utf8');
   const s = fs.readFileSync(fnAbs, 'utf8');
   const m = s.match(/const ACTIONS = \[([\s\S]*?)\];/);
@@ -337,7 +338,7 @@ function checkAdminActionCalls() {
 const NAV_FUNCS = ['navigateTo', 'redirectTo', 'switchTab', 'reLaunch'];
 function checkPagePaths() {
   const appJsonAbs = path.join(ROOT, 'miniprogram/miniprogram/app.json');
-  if (!fs.existsSync(appJsonAbs)) { warns.push('页面路径对账：找不到 app.json，跳过'); return; }
+  if (!fs.existsSync(appJsonAbs)) { fails.push('页面路径对账：找不到 app.json → 检查无法执行（按失败处理）'); return; }
   let pages = [];
   try { pages = JSON.parse(fs.readFileSync(appJsonAbs, 'utf8')).pages || []; }
   catch (e) { fails.push('页面路径对账：app.json 解析失败：' + e.message); return; }
@@ -442,11 +443,11 @@ function checkCacheFields() {
   const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
   const htmlAbs = path.join(ROOT, 'admin/admin.html');
   const storeAbs = path.join(ROOT, 'admin/store.js');
-  if (!fs.existsSync(fnAbs) || !fs.existsSync(htmlAbs)) { warns.push('缓存字段对账：缺文件，跳过'); return; }
+  if (!fs.existsSync(fnAbs) || !fs.existsSync(htmlAbs)) { fails.push('缓存字段对账：缺文件 → 检查无法执行（按失败处理）'); return; }
 
   // ① 抓 custMapPoints 的返回对象里的短键
   const m = fs.readFileSync(fnAbs, 'utf8').match(/const points = rows\.map\(c => \(\{([\s\S]*?)\}\)\)/);
-  if (!m) { warns.push('缓存字段对账：没抓到 custMapPoints 的返回对象（实现改了？），跳过'); return; }
+  if (!m) { fails.push('缓存字段对账：没抓到 custMapPoints 的返回对象（实现改了？） → 检查无法执行（按失败处理）'); return; }
   const keys = [...new Set([...m[1].matchAll(/(?:^|[\s,{])([a-z][a-zA-Z0-9_]*)\s*:/g)].map(x => x[1]))];
 
   // ② 前台有没有读过（扫整个 admin.html 的 `.xx`，不只 custLocalRow —— 别处也会用）
@@ -476,14 +477,14 @@ const MALL_HEADER_EXPECT = 14;   // server.js 表头别名的条数基线（2026
 function checkMallFields() {
   const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
   const srvAbs = path.join(ROOT, 'admin/server.js');
-  if (!fs.existsSync(fnAbs) || !fs.existsSync(srvAbs)) { warns.push('商城字段对账：缺文件，跳过'); return; }
+  if (!fs.existsSync(fnAbs) || !fs.existsSync(srvAbs)) { fails.push('商城字段对账：缺文件 → 检查无法执行（按失败处理）'); return; }
   const fn = fs.readFileSync(fnAbs, 'utf8');
   const srv = fs.readFileSync(srvAbs, 'utf8');
 
   // ① MALL_FIELD_PAIRS 的**左值**（= 商城侧字段名）
   //   ⚠️ 先去掉行注释：那段注释里也写着 ['lastOrderAt','lastOrderAt'] 的来历，不去掉会误抓。
   const pm = fn.match(/const MALL_FIELD_PAIRS = \[([\s\S]*?)\n\];/);
-  if (!pm) { warns.push('商城字段对账：没抓到 MALL_FIELD_PAIRS（实现改了？），跳过'); return; }
+  if (!pm) { fails.push('商城字段对账：没抓到 MALL_FIELD_PAIRS（实现改了？） → 检查无法执行（按失败处理）'); return; }
   const pairsSrc = pm[1].replace(/^\s*\/\/.*$/gm, '');
   const mallSide = [...pairsSrc.matchAll(/\['([A-Za-z0-9_]+)'\s*,\s*'([A-Za-z0-9_]+)'\]/g)].map(x => x[1]);
 
