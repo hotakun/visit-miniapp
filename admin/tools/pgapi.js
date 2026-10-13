@@ -261,6 +261,29 @@ const srv = http.createServer(async (req, res) => {
     //   ⚠️ 所有统计一律从 batch_members 算（customers.batch_ids 已废弃）。
     // ⭐⭐ 2026-10-12 老板定：后台「待商城建档」页新增「新店」标签页 —— **数据走服务器**（不花云开发）。
     //   口径与手机端一致：**业务员在手机端「加新店」录的**（source='field'）+ 最近 N 天（默认 3）+ 没进回收站。
+    // ⭐⭐ 2026-10-13 老板定：**待配对池** —— 老板和文员两台电脑共用的"商城导入待处理"清单。
+    //   ⚠️ 数据全在服务器（PG 的 `mall_pending`），**不花云端一分钱**；这里只给"列表 + 标记状态"，
+    //      真正的"写进云端客户档案"由前端调云函数（applyMallPair / createMallCustomer）完成。
+    if (u.pathname === '/mallPending') {
+      const st = String(u.searchParams.get('status') || '');
+      const cols = 'mall_key,name,phone,address,region,mall_code,added_at,status,target_id,target_name,handled_by,handled_at';
+      const r = st
+        ? await q('SELECT ' + cols + ' FROM mall_pending WHERE status = $1 ORDER BY mall_key LIMIT 1000', [st])
+        : await q('SELECT ' + cols + " FROM mall_pending ORDER BY (status = 'pending') DESC, mall_key LIMIT 2000");
+      const c = await q('SELECT status, count(*)::int AS n FROM mall_pending GROUP BY status');
+      const stat = {}; (c.rows || []).forEach(x => { stat[x.status] = x.n; });
+      return out(res, 200, { ok: true, rows: r.rows || [], stat: stat, at: Date.now() });
+    }
+    // 标记一条（配对 / 新建 / 跳过）—— ⚠️ **只动这一张表的五列**，绝不碰 customers
+    if (u.pathname === '/mallPending/mark' && req.method === 'POST') {
+      const k = String(u.searchParams.get('mallKey') || '');
+      const s = String(u.searchParams.get('status') || '');
+      if (!k || ['pending', 'paired', 'created', 'skipped'].indexOf(s) < 0) return out(res, 400, { ok: false, msg: '参数不对' });
+      await q('UPDATE mall_pending SET status=$1, target_id=$2, target_name=$3, handled_by=$4, handled_at=$5 WHERE mall_key=$6',
+        [s, String(u.searchParams.get('targetId') || ''), String(u.searchParams.get('targetName') || ''),
+         String(u.searchParams.get('by') || ''), Date.now(), k]);
+      return out(res, 200, { ok: true });
+    }
     if (u.pathname === '/newshops') {
       const days = Math.min(365, Math.max(1, Number(u.searchParams.get('days') || 3)));
       const since = Date.now() - days * 86400000;

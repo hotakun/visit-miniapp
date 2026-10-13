@@ -121,6 +121,35 @@ async function syncPollDirty() {
   } catch (e) { console.error('[sync] pollDirty 同步失败（下轮再试）:', e.message); }
 }
 
+// ⭐⭐ 2026-10-13 老板定：**待配对池** —— 把"最近一次导入的那批商城客户"灌进 PG 的 `mall_pending`，
+//   供**老板和文员两台电脑**共同处理（配对 / 新建 / 跳过）；**处理完才写云端**。
+//   ⚠️ 数据源 = 云端 `exportMallPending`（读 settings.lastMallKeys，只给"那一次导入的那批"）。
+//   ⚠️ 幂等：ON CONFLICT 只更新商城侧字段，**不动 status/target/handled_***（已处理过的不被覆盖）。
+async function syncMallPending() {
+  try {
+    const d = await conn();
+    let after = '', all = [], total = 0;
+    for (let i = 0; i < 40; i++) {
+      const r = await callCloud('exportMallPending', { after: after, limit: 200 });
+      if (!r || !r.ok) throw new Error('exportMallPending 返回异常');
+      total = Number(r.total) || 0;
+      (r.list || []).forEach(x => all.push(x));
+      if (!r.hasMore || !r.last) break;
+      after = r.last;
+    }
+    for (const x of all) {
+      await d.query(
+        'INSERT INTO mall_pending (mall_key,name,phone,address,region,mall_code,added_at,imported_at) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (mall_key) DO UPDATE SET ' +
+        'name=EXCLUDED.name, phone=EXCLUDED.phone, address=EXCLUDED.address, region=EXCLUDED.region, ' +
+        'mall_code=EXCLUDED.mall_code, added_at=EXCLUDED.added_at',
+        [String(x.k || ''), String(x.n || ''), String(x.p || ''), String(x.a || ''),
+         String(x.r || ''), String(x.c || ''), String(x.t || ''), Date.now()]);
+    }
+    if (all.length) console.log('[sync] mall_pending 灌/更新', all.length, '家（这批共', total, '家）');
+  } catch (e) { console.error('[sync] mall_pending 同步失败（下轮再试）:', e.message); }
+}
+
 async function round() {
   let since = await watermark(), got = 0, maxU = since;
   for (let i = 0; i < 40; i++) {                               // 一次最多 4 万条，防跑太久
@@ -153,6 +182,7 @@ async function round() {
   try { await syncVisitedCustomers(); } catch (e) { console.error('[sync] visited_customers 同步失败（下轮再试）:', e.message); }
   // ⭐ 2026-10-11 老板定：「📝 拜访记录」两页改走轻量服务器 → 拜访**明细**也进 PG
   try { await syncVisits(); } catch (e) { console.error('[sync] visits 同步失败（下轮再试）:', e.message); }
+  try { await syncMallPending(); } catch (e) { console.error('[sync] mall_pending 同步失败（下轮再试）:', e.message); }
 }
 
 // ⭐⭐ 2026-10-10 老板定（批次「指针表」模式）第 2 步：**同步 batch_members 进 PG**。
