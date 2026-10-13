@@ -8320,12 +8320,13 @@ function mpRender() {
           '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button></div>').join('')
         : '<div style="font-size:12px;color:#B77400;padding:6px 2px 8px">系统里没有<b>电话 / 店名对得上</b>的客户 —— 见下面：</div>') +
       '<div class="mp-acts"><div class="t">都不对？四种办法任选：</div>' +
-      '<button class="btn p" style="height:26px;font-size:12px" onclick="mpCreateHint()">➕ 新建这条客户</button>' +
+      '<button class="btn p" style="height:26px;font-size:12px" onclick="mpNewOpen(\'' + k + '\')">➕ 新建这条客户</button>' +
       '<button class="btn" style="height:26px;font-size:12px" onclick="mpGeoOpen(\'' + k + '\')">📍 输入经纬度</button>' +
       '<button class="btn" style="height:26px;font-size:12px" onclick="mpSearchOpen(\'' + k + '\')">🔍 自己搜</button>' +
       '<button class="btn" style="height:26px;font-size:12px" onclick="mpSkip(\'' + k + '\')">⏭ 暂时跳过</button></div>' +
       (_mpGeoKey === k ? mpGeoPanel(k) : '') +
       (_mpSearchKey === k ? mpSearchPanel(k) : '') +
+      (_mpNewKey === k ? mpNewPanel(k) : '') +
       '</div></div>';
   }).join('');
 }
@@ -8440,6 +8441,52 @@ async function mpPush() {
 }
 function mpCreateHint() {
   alert('这家要「新建客户」。\n\n请在手机端「加新店」里录（新建时经纬度必填，否则业务员导航不到这家店）。\n录完回来，这条一般会自动认出来。');
+}
+
+// ⭐⭐⭐ 2026-10-13 老板定：「新建当然是在后台这里新建，而且这个新建代表是已经加入商城了的」
+//   → 就地展开表单：店名 / 电话 / 地址 / **经纬度必填**（没坐标 → 业务员永远到不了）/ 
+//   → 点「✅ 确认新建」**只记账**（status=created + 坐标存服务器），**云端一个字不动**；
+//     等顶部「✅ 确认并发送到云端」时才真正 createMallCustomer（建完即标「已加入商城」）。
+let _mpNewKey = '', _mpNewForm = null, _mpNewMsg = '';
+function mpNewOpen(key) {
+  if (!key) { _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = ''; mpRender(); return; }
+  const row = _mpRows.filter(x => x.mall_key === key)[0] || {};
+  _mpNewKey = key; _mpNewMsg = '';
+  _mpNewForm = { name: row.name || '', phone: row.phone || '', address: row.address || '', ll: '' };
+  _mpGeoKey = ''; _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null;
+  mpRender();
+}
+function mpNewPanel(key) {
+  const f = _mpNewForm || {};
+  return '<div style="margin-top:8px;padding:10px 12px;border:1px solid #DDE7F5;border-radius:9px;background:#FBFDFF">' +
+    '<div style="font-size:12.5px;font-weight:800;margin-bottom:7px">➕ 新建这条客户（系统里没有 → 直接建，**建成即「已加入商城」**）</div>' +
+    '<div style="font-size:12.5px;line-height:2.3">' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">店名</span><input id="mpnName" value="' + esc(f.name || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:250px"></div>' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">电话</span><input id="mpnPhone" value="' + esc(f.phone || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:190px"></div>' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">地址</span><input id="mpnAddr" value="' + esc(f.address || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:330px"></div>' +
+    '<div><span style="color:#F5531C;font-weight:800;display:inline-block;width:56px">经纬度*</span>' +
+    '<input id="mpnLL" placeholder="粘贴 纬度,经度（如 28.961303,120.181189）" value="' + esc(f.ll || '') + '" style="border:1px solid #F5531C;border-radius:7px;padding:3px 8px;width:250px"></div>' +
+    '<div style="font-size:11.5px;color:#B77400;padding-left:56px">🔴 <b>必填</b> —— 没坐标 → 地图上没有点 → 业务员永远到不了这家</div>' +
+    '</div>' +
+    '<div style="margin-top:9px"><button class="btn p" style="height:28px;font-size:12.5px" onclick="mpNewSave()">✅ 确认新建（先记账，不发云端）</button>' +
+    '<button class="btn" style="height:28px;font-size:12.5px;margin-left:8px" onclick="mpNewOpen(\'\')">取消</button>' +
+    '<span style="color:#B77400;margin-left:8px;font-size:12px">' + esc(_mpNewMsg || '') + '</span></div></div>';
+}
+async function mpNewSave() {
+  const f = _mpNewForm || {};
+  f.name = String(($('mpnName') || {}).value || '').trim();
+  f.phone = String(($('mpnPhone') || {}).value || '').trim();
+  f.address = String(($('mpnAddr') || {}).value || '').trim();
+  f.ll = String(($('mpnLL') || {}).value || '').trim();
+  if (!f.name) { _mpNewMsg = '⚠️ 店名不能空'; mpRender(); return; }
+  const m = f.ll.split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
+  if (m.length < 2) { _mpNewMsg = '⚠️ 经纬度必填（格式：纬度,经度）'; mpRender(); return; }
+  let la = m[0], ln = m[1];
+  if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }
+  // ⚠️ 只记账：状态 = created + 店名 + 坐标存到服务器那一行（云端一个字不动）
+  await mpMark(_mpNewKey, 'created', '', f.name, la, ln);
+  _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = '';
+  await mpLoad(true);
 }
 
 // ⭐⭐ 2026-10-13 老板（指出漏做）：「又没有按照演示稿的来，输入经纬度和自己查找的功能呢？
