@@ -10,8 +10,9 @@
     <view class="modes">
       <view class="m {{mode === 'date' ? 'on' : ''}}" bindtap="setMode" data-m="date">按日期</view>
       <view class="m {{mode === 'circle' ? 'on' : ''}}" bindtap="setMode" data-m="circle">按商圈</view>
-      <!-- ⭐ 2026-10-13 老板定：**只有按它才从云端整份刷新**（平时打开只拉"新增的"，新店信息存在本机） -->
-      <view class="m rf {{refreshing ? 'ing' : ''}}" bindtap="onRefresh">🔄 {{refreshing ? '刷新中…' : '刷新'}}</view>
+      <!-- ⭐ 2026-10-13 老板定：**只有按它才从云端整份刷新**（平时打开只拉"新增的"，新店信息存在本机）
+           ⭐ 同日老板又定：**朴素一点、不要显眼** —— 与另两颗未选中时同一个灰底灰字，也不放图标 -->
+      <view class="m rf {{refreshing ? 'ing' : ''}}" bindtap="onRefresh">{{refreshing ? '刷新中…' : '刷新'}}</view>
     </view>
     <view class="cnt">共 {{total}} 家新店<text wx:if="{{kw}}"> · 筛出 {{list.length}} 家</text><text wx:if="{{syncedText}}" class="st"> · 数据截至 {{syncedText}}</text></view>
   </view>

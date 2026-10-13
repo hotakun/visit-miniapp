@@ -8,9 +8,10 @@ page { background: #F5F6F8; }
 .modes { display: flex; gap: 8px; margin-top: 9px; }
 .m { flex: 1; text-align: center; font-size: 12.5px; font-weight: 700; color: #68727E; background: #F3F5F8; border-radius: 8px; padding: 6px 0; }
 .m.on { background: #F5531C; color: #fff; }
-/* ⭐ 2026-10-13：第三颗是**动作**（刷新）不是"排列方式"，用浅橙底区分；刷新中变灰 */
-.m.rf { background: #FFF1EA; color: #F5531C; }
-.m.rf.ing { background: #F3F5F8; color: #98A2AE; }
+/* ⭐ 2026-10-13 老板定：第三颗是**动作**（刷新），但**要朴素、不要显眼** ——
+   与另两颗未选中时同一个灰底灰字（不再用浅橙底+橙字）；刷新中只是字色更淡一点。 */
+.m.rf { background: #F3F5F8; color: #68727E; }
+.m.rf.ing { background: #F3F5F8; color: #B9C1CB; }
 .st { color: #B9C1CB; }
 .cnt { font-size: 12px; color: #98A2AE; margin-top: 8px; }
 .gtitle { font-size: 12.5px; font-weight: 800; color: #68727E; padding: 10px 2px 6px; }
