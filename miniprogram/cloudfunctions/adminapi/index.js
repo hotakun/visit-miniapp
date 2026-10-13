@@ -3128,7 +3128,7 @@ async function importMallCustomers(event) {
       mallKey: key, mallCode: String(c.mallCode || '').trim(),
       name: String(c.name || '').trim(), region: String(c.region || '').trim(),
       address: String(c.address || '').trim(), phone: String(c.phone || '').trim(),
-      addedAt: c.addedAt || '', lastOrderAt: c.lastOrderAt || '', lastBrowseAt: c.lastBrowseAt || '',
+      addedAt: normMallDate(c.addedAt), lastOrderAt: normMallDate(c.lastOrderAt), lastBrowseAt: normMallDate(c.lastBrowseAt),
       tags: c.tags || '', category: c.category || '', salesman: c.salesman || '',
       source: c.source || '', level: c.level || '', updatedAt: now,
       // ⭐ 2026-10-12：**打上"这是哪一次导入进来的"** —— runMallMatch 靠它认"本次导入的那几家"
@@ -3201,6 +3201,26 @@ const MALL_FIELD_PAIRS = [
 //   这道拦截是**安全网**：正常走不到（MALL_FIELD_PAIRS 里本来就没有坐标字段），
 //   但它保证"以后有人往表里加了 lat —— 也不会把现场坐标冲掉"。
 const MALL_NO_TOUCH = ['lat', 'lng', 'wgsLat', 'wgsLng', 'coord_status', 'coordSource', 'coordUpdatedAt', 'coordFixReviewedAt'];
+// ⭐⭐ 2026-10-13：**商城日期字段的归一（Excel 序列号 → YYYY-MM-DD）**
+//   老板报障：「注册商城时间显示成一串数字」（如 46306.4659505787）。
+//   病根：商城导出表的日期列**有时是文本型序列号**（'46306.46595'），而转换只做在后台解析 xls 那一步
+//        （`admin/server.js` 的 serialToDate **只认数值型单元格**）→ 文本型漏转 → 一路原样入库
+//        （mall_customers → customers）。
+//   口径：与 `serialToDate` / 老板那份 xls 的 **Excel 显示日期**完全一致（1900 系统，UTC 基准），只留 YYYY-MM-DD。
+//   ⚠️ 这是**入库侧兜底**：凡是走商城链路的日期字段，先过这道（以后不再冒出来）。
+function normMallDate(v) {
+  const t = String(v == null ? '' : v).trim();
+  if (!t) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);      // 已是日期 → 只留日期部分
+  if (!/^\d{4,6}(\.\d+)?$/.test(t)) return t;                    // 不是序列号形状 → 原样
+  const n = Number(t);
+  if (!isFinite(n) || n <= 0) return t;
+  const d = new Date(Math.round((n - 25569) * 86400 * 1000));    // 与 server.js serialToDate 同口径
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+// 走商城链路的**日期类落点**（入库前一律 normMallDate）
+const MALL_DATE_FIELDS = ['mallJoinedAt', 'lastOrderAt', 'lastBrowseAt', 'addedAt'];
+
 // 从商城档案抽出"该写进客户档案的字段"。
 // ⚠️ **商城值为空 → 不覆盖**（否则会把客户已有的地址/电话抹成空）。
 function mallFieldsFrom(m) {
@@ -3209,7 +3229,7 @@ function mallFieldsFrom(m) {
     const v = m[pair[0]];
     if (v === undefined || v === null || String(v) === '') return;
     if (MALL_NO_TOUCH.indexOf(pair[1]) >= 0) return;   // ⚠️ 坐标类字段一律不碰（见上）
-    out[pair[1]] = v;
+    out[pair[1]] = MALL_DATE_FIELDS.indexOf(pair[1]) >= 0 ? normMallDate(v) : v;
   });
   // ⭐ 2026-10-03 老板定：业务员**「随时可改，导入时被盖」** ——
   //   商城表带来的是「业务负责人」，除了照抄进 mallSalesman（原值，商城信息卡显示"签约业务员"），
@@ -4101,9 +4121,9 @@ async function resolveMallClaim(event) {
     data: {
       mallKey: claim.mallKey,
       updatedAt: Date.now(),        // 2026-09-27 补：增量同步（custSync）用
-      mallJoinedAt: m.addedAt || '',
-      lastOrderAt: m.lastOrderAt || '',
-      lastBrowseAt: m.lastBrowseAt || '',
+      mallJoinedAt: normMallDate(m.addedAt),
+      lastOrderAt: normMallDate(m.lastOrderAt),
+      lastBrowseAt: normMallDate(m.lastBrowseAt),
       mallSource: m.source || '',
       mallLevel: m.level || '',
       mallSalesman: m.salesman || '',
