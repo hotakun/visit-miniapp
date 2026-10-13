@@ -140,7 +140,8 @@ exports.main = async (event) => {
   if (action === 'correctCustomer') return await correctCustomer(salesmanId, event);  // ⭐ 2026-10-10「更正信息」保存（直接生效 + 留痕）
   // ⭐ 2026-10-03 自由拜访：按坐标+半径取附近客户点
   if (action === 'nearbyCustomers') return await nearbyCustomers(salesmanId, event);
-  if (action === 'listNewShops') return await listNewShops();   // ⭐ 2026-10-12：手机端老板「新店」卡片/列表页（只算业务员录的 + 最近 3 天）
+  if (action === 'listNewShops') return await listNewShops(event);   // ⭐ 2026-10-12：手机端老板「新店」卡片/列表页
+  //   ⭐ 2026-10-13 老板定：**传 `since` 就只回"比它新的"**（手机端把新店存本地、平时只拉增量；点「🔄 刷新」才全量）
   // ⭐ 2026-10-03 自由拜访卡（独立集合 free_trips，不绑任务）
   if (action === 'freeTripCreate') return await freeTripCreate(salesmanId, meDoc, event);
   if (action === 'freeTripList') return await freeTripList(salesmanId, meDoc, event);
@@ -1704,19 +1705,24 @@ function fallbackPts(start, ordered, ids) {
 //      （verifyAdmin 要 username+password，手机端只有微信身份 → 一律 NO_AUTH）→ 放那儿手机端永远拿不到数据（首页显示 0）。
 //   口径（老板 2026-10-12）：**只算业务员在手机端「加新店」录的**（source='field'）+ **最近 3 天**（滚动 3 天）+ 没进回收站。
 //   （更名 / 改信息 / 合并都照常显示 —— 它们都不写 deleted，只有回收站删除才写。）
-async function listNewShops() {
+async function listNewShops(event) {
+  // ⭐⭐ 2026-10-13 老板定（手机端「新店」改**本地优先**）：
+  //   · 传 `since`（毫秒时间戳）→ **只返回比它更新的**（增量）→ 手机端平时打开页面只拉这几条，省流量也不费额度；
+  //   · 不传 `since` → 全量（手机端**点「🔄 刷新」**时走这条，把本地整份对齐）。
+  //   · 返回值多带 `maxAt`（本批最新的一条的时间）+ `syncedAt`（本次拉取时刻）→ 手机端拿它当**下次增量的水位**存在本地。
+  const since = Math.max(0, Number((event && event.since) || 0));
   const out = [];
   for (let i = 0; i < 30; i++) {
+    const conds = [{ source: 'field' }, { deleted: _.neq(true) }];
+    if (since > 0) conds.push({ createdAt: _.gt(since) });     // 增量：只要比水位新的
     const r = await db.collection('customers')
-      .where(_.and([{ source: 'field' },
-        // ⭐⭐ 2026-10-13 老板要（原话：「手机端老板首页的『新店』内显示为什么还没有调整过来？
-        //   我希望从 10 月 7 日的贵州原汤羊肉粉孔开始显示，**不要隐藏任何一天的**」）——
-        //   原来这里写死 **"最近 3 天"**（`createdAt > now - 3 天`）：第 4 天起新店就凭空消失，
-        //   与后台那个 `days=3` 是**同一个毛病**（后台已于 2026-10-13 改成 365；手机端这条当时漏了）。
-        //   ✅ 现在**不设时间下限**：只要是业务员现场录的（source='field'）且没进回收站，
-        //      就一直留在「新店」列表里（首页第 4 格的数量与列表页**同一口径**，不会打架）。
-        //   ⚠️ 排序在下面内存里做（新的在前），所以这里不需要 orderBy；分页上限 30×100=3000 条，够用。
-        { deleted: _.neq(true) }]))
+      .where(_.and(conds))
+      // ⭐⭐ 2026-10-13 老板要（原话：「手机端老板首页的『新店』内显示为什么还没有调整过来？
+      //   我希望从 10 月 7 日的贵州原汤羊肉粉孔开始显示，**不要隐藏任何一天的**」）——
+      //   原来这里写死 **"最近 3 天"**（`createdAt > now - 3 天`），第 4 天起新店就凭空消失 ——
+      //   与后台那个 `days=3` 是**同一个毛病**（后台已于 2026-10-13 改成 365，手机端这条当时漏了）。
+      //   ✅ 现在**不设时间下限**：只要是业务员现场录的（source='field'）且没进回收站，就一直留在列表里。
+      //   ⚠️ 排序在下面内存里做（新的在前），不需要 orderBy；分页上限 30×100=3000 条，够用。
       .field({ _id: true, name: true, nameRaw: true, phone: true, address: true, district: true,
         bizCircle: true, lng: true, lat: true, photos: true, createdByName: true, createdAt: true,
         customerType: true })
@@ -1738,7 +1744,10 @@ async function listNewShops() {
     if (rows.length < 100) break;
   }
   out.sort((a, b) => (b.at || 0) - (a.at || 0));   // 新的在前
-  return { ok: true, total: out.length, shops: out };
+  // ⭐ 2026-10-13：多带"水位"给手机端存本地 —— 下次只拉比 `maxAt` 更新的；`syncedAt` 供页面显示「数据截至」。
+  let maxAt = since;
+  out.forEach(x => { const t = Number(x.at) || 0; if (t > maxAt) maxAt = t; });
+  return { ok: true, total: out.length, shops: out, since: since, maxAt: maxAt, syncedAt: Date.now() };
 }
 
 async function nearbyCustomers(salesmanId, event) {

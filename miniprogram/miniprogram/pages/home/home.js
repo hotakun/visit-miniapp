@@ -539,9 +539,23 @@ Page({
           // ⭐ 2026-10-12 老板定：首页第 4 格「新店」的数量 —— 与「新店」列表页**同一口径**。
           //   ⚠️⚠️ 必须调 **tasks**（不是 adminapi！）：adminapi 是「后台账号密码」专属入口，
           //   手机端只有微信身份、没有密码 → 调它一律 NO_AUTH → 首页会显示 0（2026-10-12 实测踩到）。
-          api.call('tasks', { action: 'listNewShops' }).then(ns => {
-            if (ns && ns.ok && typeof ns.total === 'number') this.setData({ bossNewShops: ns.total });
-          }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
+          //   ⭐ 2026-10-13 老板定（新店改**本地优先**）：这里**优先读本机缓存**（0 请求）；
+          //      本机还没有（首次装）才去云端拉一次，并把结果顺手存进同一份缓存
+          //      （缓存键与「新店」列表页共用 `newshopsCache`，两边永远一致）。
+          try {
+            const _nc = wx.getStorageSync('newshopsCache');
+            if (_nc && _nc.shops && _nc.shops.length) {
+              this.setData({ bossNewShops: _nc.shops.length });
+            } else {
+              api.call('tasks', { action: 'listNewShops' }).then(ns => {
+                if (ns && ns.ok) {
+                  const shops = ns.shops || [];
+                  this.setData({ bossNewShops: shops.length });
+                  try { wx.setStorageSync('newshopsCache', { shops: shops, maxAt: ns.maxAt || 0, syncedAt: Date.now() }); } catch (e) { }
+                }
+              }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
+            }
+          } catch (e) { /* 读缓存失败就当没有 */ }
           prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）
         } else {
           api.toast(res.msg || '加载失败');
