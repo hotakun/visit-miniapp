@@ -1609,6 +1609,10 @@ tr.row-off td:not(.keep){opacity:.4}
         .mp-bar { height:6px; border-radius:99px; background:#EEF1F6; overflow:hidden; display:flex; flex:1; min-width:160px; }
         .mp-bar i { display:block; height:100%; }
         .mp-card { background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; overflow:hidden; }
+        /* ⭐⭐ 2026-10-13 老板定：「这里面的卡片最好有个**较深色的边框**，这样区分的更明显」——
+           只给**待处理**的卡片加深外框（还没收尾的，要一眼看到"这几家还等着处理"）；
+           已处理的本来就有 `.faded` 淡灰往后站，外框保持原来的浅色，两边一深一浅对比才拉得开。 */
+        .mp-card:not(.done) { border-color: #C3CEDC; }
         /* ⭐⭐ 2026-10-13 老板定：**「商城待配对」的卡片要能用鼠标选中、Ctrl+C 复制**（店名 / 地址 / 电话 / 编号）——
            全站其它位置保持原来的"禁止选中"（桌面软件手感，免得拖拽时误选一片文字）。
            ⚠️ **右键菜单仍然禁用**（壳程序里本来就是禁的，老板确认保持），所以复制走 **Ctrl+C**。
