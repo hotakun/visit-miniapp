@@ -1,396 +1,117 @@
 # AGENTS.md — 聚火拜访（微信小程序 + Web 管理后台 + 微信云开发）
 
-项目：客户回访/新客开发管理系统。业务员用微信小程序执行拜访任务，老板用 Web 后台（qingyan）派单与看板。当前：一期验收闭环 + 服务号通知 + 坐标报错审核 + 现场证据（拍照/录音）+ 任务历史/自动归档 + 手机地图页 + 客户批次管理 + 老板手机端四页 + **语音转写（腾讯云 ASR：录音→文字，M2 已全量完成）** + **客户数据落地（463 家 / 2135 单 / 4574 行明细已导入）+ 后台客户详情页（含腾讯地图）** + **「加新店」现场录店闭环 + 客户回收站（软删）+ 消息中心** 均已开发完成，大多已真机验证，**只剩部署上线**（重传云函数 + 上传小程序体验版）。
-**切换会话/换人接手前，必读 `D:\WFR\visit-miniapp\项目交接-当前进度.md`（未决事项+坑清单+口径字典），详细设计见 `开发计划.md`。**
-**⭐⭐ 2026-10-11（最新）：① 「📝 拜访记录」后台栏目【已上线】（两个页签：每日拜访 / 每日新店 —— 日期卡片 → 按业务员分组），而且**已改走轻量服务器 PG**（点「🔄 刷新」读服务器、**不走云开发**：`visits` 表 + pgsync 全量重拉 + `pgapi /visitrec`，云端只留 `exportVisitsForSync` 做同步源）；② 「更正信息 / 加新店」的必填项**只剩店名**（联系人/电话/地址选填）；③ ⭐ **「商城配对确认」新口径已定**（老板 10-11：**现在导入的商城客户，系统内一定有对应客户** = 已有客户加入商城 → 改成**全部人工确认**，高分只做默认预勾）—— 权威文档 `_scratch/商城配对确认-口径与实测.md`，演示稿 `_scratch/商城配对确认-演示.html`，⚠️ **真后台尚未改造**；④ 批次「指针表」模型仍是主线（③云端停写 `customers.batchIds` + ④后台读走 PG）。**
-**⭐ 2026-10-10：老板已把【批次与任务全部清空】→ 当前重点 = 「重新设计 建立批次 / 管理任务 的方法」，批次按老板定的「指针表」模型（`batch_members` 单边记账）。这 6 项待办 + 当天的 10 个修复，全部记在交接文档 `§0.0z14`。**
-**改「客户详情页」（`pages/customer/`，手机端 —— **2026-09-25 真数据化 + 2026-09-27 收尾完成**：7 卡 / 小地图 / 提报审核链路 / 真录音播放 / 淡灰空态 / 辉光胶囊 全部落地，仅「平台图打底」因数据无图 URL 搁置；逐条见 `客户详情页-界面设计文档.md`「〇、实现状态」与「✨ 收尾记录」）之前必读四份文档**（都在 `_scratch/`）：`客户详情页-界面设计文档.md`（**界面说明书**，照着它就能画这一页）+ `客户详情页-设计定稿.md`（老板拍板口径速查）+ `客户详情页-演示.html`（纯静态演示稿，A/B/C/D 四样本）+ `客户数据导入规范.md`（数据入库口径）；**后台那一版已于 2026-09-25 落地**（含地图），进度台账见 `_scratch/数据落地-实施顺序与规则.md` §〇，结论见 `项目交接-当前进度.md` **§0.0z4（09-29 最新）**、§0.0z（09-25）、§0.0a（09-23）与 §0.0（09-13）。
-**本轮大改（数据结构 + 页面统一）开工前必读 `_scratch/开发前修正-口径对齐.md`** —— 逐条记录**与旧口径冲突 / 已作废的表达**的修正（**修正 001 已收窄为"只管手机端"；最新为修正 013 = 后台保留双工作台「方案 D」**），含**全部议题队列**（2026-09-23 已清空）与**旧文档同步清单**（已全部处理）；⚠️ **它与其他任何旧文档冲突时，以它为准**。
+项目：客户回访 / 新客开发管理系统。业务员用微信小程序执行拜访任务，老板用 Web 后台（账号 `qingyan`）派单与看板。
+
+**当前状态：已上线在跑**（老板日常在用，不再是"待部署"）。已落地：一期闭环 / 服务号通知 / 坐标报错审核 / 现场证据（拍照·录音）/ 任务历史与自动归档 / 手机地图 / 客户批次管理 / 老板手机端四页 / 语音转写 / **客户数据落地（读走自己的服务器 PG）** / 加新店闭环 / 客户回收站 / 消息中心 / 拜访记录（走服务器 PG）/ 商城待配对（全部人工确认）。
+**规模**：客户 **约 17.8 万家**、云函数 **12 个**、小程序 **15 页**、后台 `admin.html` 单文件（CRLF）。
+
+**⚠️ 当前待办（2026-10-14）**：
+1. **重传 `adminapi` 云函数** —— 批次变动信号（`batchDirtyAt` 的 5 个写点）与两处 `stable_token` 都在它里面；**不重传也不会坏**（信号不写、只剩 6 小时兜底一次全量）。
+2. 若文员端还在跑旧 `server.js`（2026-10-14 改过 `mpGetServiceToken` 的 stable_token）→ 走一次「上传后台到云端」，文员端点「立即更新」后**重启后台**。
+3. 观察项：云开发控制台的「**数据库请求**」降了多少、「**QPS**」那条 500 红线是否还被顶到（这批改动的成绩单）。
+
+## 📚 详细内容都在 docs/（本文只留「命令 + 硬规矩 + 索引」）
+
+| 去哪找 | 里面有什么 |
+|---|---|
+| **`docs/坑清单.md`** | ⭐ **实测踩过的坑 / 只能肉眼发现的坑 / 某功能的详细方案 / 三起事故背景** —— 查细节一律来这里 |
+| `项目交接-当前进度.md` | 未决事项 + 最近快照（更早的按月归档在 `docs/历史/`） |
+| `开发计划.md` | 详细设计 |
+| `服务器运维手册.md` | 服务器 / 计划任务 / 应急恢复 |
+| `docs/历史/AGENTS-全文-20261014.md` | 本文切分前的**全文留底**（保底，一般不用翻） |
+
+---
 
 ## Commands
 
-> ⚠️ **本节的命令示例一律是 Git Bash 语法**（`cd /d/WFR/...`、用 `&&` 串联）。**在 PowerShell 里跑必须改**：
-> 路径写盘符形式、分隔符用 `;` —— 例如 `cd D:\WFR\visit-miniapp; git add AGENTS.md; git commit -m "..."`。
-> （**PowerShell 5.x 不认 `&&`**，会报「标记"&&"不是此版本中的有效语句分隔符」；PowerShell 7+ 才支持。）
-> 给老板的命令**先想清楚他在哪个终端**；拿不准就**优先给 Git Bash 版**（项目原本就用它）。
+> ⚠️ 本节命令一律 **Git Bash** 语法（`cd /d/WFR/...`、用 `&&` 串联）。**在 PowerShell 里跑必须改**：路径写盘符形式、分隔符用 `;`（PS 5.x 不认 `&&`）。给老板的命令**先想清楚他在哪个终端**，拿不准就给 Git Bash 版。
 
-- 后台启动：双击 `admin/启动管理后台.bat`（**端口 18080**；2026-10-01 从 8581 换过来 —— 8581 落进了 Windows **保留端口段 8523~8622**，监听被系统拒绝（`EACCES`），服务根本起不来；`netsh int ipv4 show excludedportrange protocol=tcp` 可查当前保留段）；或 `cd admin && PORT=18080 node server.js`；依赖 xlsx（`npm install`）；语音另需 `pip install edge-tts`
-- 后台地址：**http://localhost:18080**
-- 语法检查：`node --check <file>`（云函数/页面 JS 全量）；admin.html 内嵌 JS 必须用 python 提取 `<script>…</script>` 后 `node --check`（sed 在 CRLF 下不可靠）
-- 壳程序编译（Git Bash 用 `-` 前缀防 MSYS 转义）：`csc -target:winexe -platform:x64 -win32icon:icon.ico -r:lib/Microsoft.Web.WebView2.Core.dll -r:lib/Microsoft.Web.WebView2.WinForms.dll`；exe 被占用时先关后台再复制
-- 打包：`python make_packages.py`（packager/，重要节点才打，见 Conventions）
-- 部署：开发者工具逐个右键云函数「上传并部署：云端安装依赖」；小程序改动必须重新上传（体验版/正式版）
-- ⚠️⚠️ **调云端的脚本一律走 `stable_token`，绝不要用老接口 `/cgi-bin/token`（2026-10-13 真实事故）**：
-  老接口会**把 pgsync / 后台正在用的 token 顶掉** → 服务器日志刷 `[sync] 这轮失败: 调用云函数失败: access_token expired` →
-  **后台数据停止更新**（当天停摆 46 分钟；表面现象是"后台明明改了、看不到"）。
-  · 取法：`POST https://api.weixin.qq.com/cgi-bin/stable_token`，body `{grant_type:'client_credential',appid,secret,force_refresh:false}`（样板见 `admin/tools/pgsync.js` 的 `token()`、`admin/server.js:120`）
-  · `admin/tools/` 下 6 个脚本已统一（`run_adminapi` / `add_index` / `backfill_address_loop` / `import_biz_index` / `import_biz_api2` / `import_biz_api3`）；
-    ⚠️ **`_scratch/*.js` 里那批临时探针仍有用老接口的** —— 跑之前先确认，或跑完顺手重启一次同步器。
-  · pgsync 已加**自愈**：token 类错误（40001 / 40014 / 42001 / 42007 / 42008，或报错含 expired / invalid credential / not latest）
-    → **清缓存 + `force_refresh` 强制刷新重试一次**（一轮内自愈，最多损失一分钟）。
-  · **应急恢复**（服务器上，运维手册同款）：`schtasks /end /tn JuhuoPgSync` 再 `schtasks /run /tn JuhuoPgSync`；
-    监控页 `http://124.222.29.73:18081/status?pw=juhuo` 看「数据截至 / 距今多久」。
-- 语音缓存接口：`curl -X POST http://localhost:18080/tts -H "Content-Type: application/json" -d '{"name":"范宇琨","type":"review"}'`（type=coordfix 为坐标报错文案）
-- 调后台接口（含中文一律 UTF-8 文件 + `curl --data-binary @file`，命令行中文必乱码）
-- ⭐⭐ **一键体检（2026-10-05 新增，2026-10-14 扩到 12 项；改完代码跑一次）**：`node admin/tools/check.js`（只读，不改任何文件）
-  · 一次过 6 项：① 全量 JS 语法 ② `admin.html` 内嵌 `script` 提取后 `node --check` ③ **行尾字节级**（只对 `CRLF_FILES` 明文清单 + `.bat` 硬判，其余只提醒 —— 因为本项目 `core.autocrlf=true`，工作区出现 CRLF 是正常现象）④ JSON 语法 ⑤ WXML 标签配对 + 禁 HTML 标签（**已剥离注释**，所以注释里写"`<br>` 会白屏"不会误报）⑥ **`adminapi` 的 `ACTIONS` 白名单 vs dispatch 对账**（治「坑 32」）—— 不一致就报错并给修法；有意放行的两条（`getAdminDistMeta` / `getAdminDistPart`，后台热更新拉分片用）登记在脚本的 `ACTIONS_EXTRA` 里
-  · ⭐⭐ **外加 6 组「跨文件对账」（2026-10-14 新增）** —— 治的都是同一类病：**同一件事散在多处、漏改一处不报错、只能肉眼发现**：
-    · **⑦ 拜访结果名一致性**：`visit.js` 的 MALL ↔ 云函数 `RESULT_ENUM_MALL`（逐字含顺序）；每项都要有话术（PRAISE）和后台胶囊色（RESULT_PILL）；`task.js` 的配色判定、`admin.html` 的绿系正则里出现的名字必须都在 MALL 里；旧名（已下单 / 关门·休息中）不许残留
-    · **⑧ 前端 action 调用对账**：`admin.html` 里 `api('xxx')` 必须在 adminapi 的 ACTIONS 白名单里（150 个全核）⚠️ 带 `_cfn` 的是调别的云函数（如 importdata），不算
-    · **⑨ 页面跳转路径对账**：`navigateTo/redirectTo/switchTab/reLaunch` 的 url 必须在 `app.json` 的 pages 里（18 个全核）⚠️ 路径**可含连字符**（`tasks-all`），抓取正则别漏
-    · **⑩ 合规 / 事故护栏**：`requiredPrivateInfos` **只准四个定位类**（2026-10-02「加日历项 → 模拟器起不来」的护栏）；**不许新增老接口 `/cgi-bin/token`**（新写的直接拦，历史遗留 5 处登记在 `KNOWN_LEGACY_TOKEN`、只提示）
-    · **⑪ 本地缓存字段对账**：`custMapPoints` 的 21 个短键 ↔ 基线 ↔ 前台有没有读过；并报出 `store.js` 的 VERSION（**改了字段清单就要 +1**，否则老缓存不作废）
-    · **⑫ 商城字段链路对账**：`MALL_FIELD_PAIRS` ↔ `server.js` 的 `MALL_HEADER_ALIAS` ↔ 导入侧 `STATIC_FIELDS`；护栏：**`lastOrderAt` 不许再加回来**
-  · ⭐⭐⭐ **规矩（2026-10-14 立）：以后凡新增一处「同步点」（同一个清单 / 同一套名字要在两个地方各写一份），就必须顺手在 `admin/tools/check.js` 里加一条对账。**
-    理由：**加检查的成本是一次性的，漏改的代价是「不报错、只能肉眼发现」** —— 本项目 100 多条坑，多半就是这么攒出来的。
-    ⚠️ 加完检查必须**双向验证**：先正常跑一遍（应绿），再**故意改坏一处**（必须报错），最后恢复并**逐字节核对** —— 永远绿的检查等于没加。
-  · `-v` 列出每个文件明细；**退出码 0 = 全过 / 1 = 有问题**（可当提交前把关）
-  · 它替代了原来"改完再数一遍行尾"的人工纪律；老的 `_fix_eol.py` / `notes_selfcheck.py` / `_verify_20260930.js` 仍可单独用
-- ⭐ **代码备份（2026-10-05 起，三层）**：① 本地工作区 ② GitHub `hotakun/visit-miniapp` ③ **腾讯云服务器 `124.222.29.73` → `D:\WFR\visit-miniapp-备份\`**
-  · 打包含全部历史：`git bundle create /tmp/visit-miniapp-<日期>.bundle --all`（约 23MB）→ `scp` 过去
-  · 服务器 SSH：密钥 `C:\Users\Hotakun\AppData\Roaming\reasonix\global-workspace\.ssh\wfr_server`（`Administrator@124.222.29.73`）—— **运维细节见 `服务器运维手册.md`**（2026-10-09 新建；原 `服务器交接文档-20261001.md` 从没进过 git、内容无从考证，已弃用）
-  · ⚠️ **2026-10-09（老板告知 + 实查）：服务器的【桌面】实际在 `D:\Users\Administrator\Desktop`** —— 老板自己从 C 盘搬过去的；`%USERPROFILE%` 仍报 `C:\Users\Administrator`，但 `[Environment]::GetFolderPath('Desktop')` 返回 D 盘那份。**从 C 盘那个路径传文件进去，也照样出现在 D 盘桌面**（已实测，两处通）。给服务器放桌面文件时，**优先用 `[Environment]::GetFolderPath('Desktop')` 取实际路径**。
-  · ⚠️ 服务器桌面上**原有** `Restart-Maps.bat` 与 `MAPQHD - 快捷方式.lnk`（老板自备的地图服务入口）—— **别删别改**。
-  · ⭐ **服务器上的自有服务（2026-10-09 建）**：`JuhuoPgApi`（只读 API，18081）/ `JuhuoPgSync`（同步器）/ `JuhuoNginx`（拉起地图服务 nginx）/ `JuhuoReboot3` + `JuhuoReboot18`（每天 3:00 / 18:00 自动重启）—— 均为**计划任务 + BootTrigger + SYSTEM**（与原有 `\Gitea` 同款）。监控页 `http://124.222.29.73:18081/status?pw=juhuo`（口令 `juhuo`，带「🔄 重启地图服务」按钮，POST `/restart-nginx?pw=`）；服务器桌面另有 `服务器监控.html`（双击即看）。
-  · ✅ **每次都要做"恢复演练"**：在服务器上 `git clone <bundle> _v2` → 看 `git log` 与关键文件在不在 → `rmdir` 清掉。**没演练过的备份不算备份**
+- 后台启动：双击 `admin/启动管理后台.bat`（**端口 18080**；8581 曾落进 Windows 保留端口段 8523~8622 被系统拒绝，故换端口）；或 `cd admin && PORT=18080 node server.js`。地址 **http://localhost:18080**
+- 语法检查：`node --check <file>`；`admin.html` 内嵌 JS 要用 python 提取 `<script>` 段后再 `node --check`
+- 壳程序编译：`csc -target:winexe -platform:x64 -win32icon:icon.ico -r:lib/Microsoft.Web.WebView2.Core.dll -r:lib/Microsoft.Web.WebView2.WinForms.dll`（Git Bash 用 `-` 前缀防 MSYS 转义）；改壳后关壳再复制 exe 到 `admin/`
+- 打包：`python make_packages.py`（只在重要节点）
+- 部署：开发者工具逐个右键云函数「上传并部署：云端安装依赖」；小程序改动必须重新上传
+- ⚠️⚠️ **调云端一律走 `stable_token`，绝不用老接口 `/cgi-bin/token`（2026-10-13 真实事故）**：老接口会把 pgsync / 后台正在用的 token 顶掉 → **后台数据停止更新**。
+  · 取法：`POST https://api.weixin.qq.com/cgi-bin/stable_token`，body `{grant_type:'client_credential',appid,secret,force_refresh:false}`（样板 `admin/tools/pgsync.js` 的 `token()`）
+  · 应急恢复：服务器上 `schtasks /end /tn JuhuoPgSync` 再 `/run`；监控页看「距今多久」
+- 语音缓存：`curl -X POST http://localhost:18080/tts -H "Content-Type: application/json" -d '{"name":"范宇琨","type":"review"}'`
+- 调后台接口：含中文一律用 UTF-8 文件 + `curl --data-binary @file`（命令行中文必乱码）
+- ⭐⭐ **一键体检（改完代码必跑）**：`node admin/tools/check.js`（只读；**退出码 0 = 全过 / 1 = 有问题**；`-v` 列明细）
+  · 它一次查 **12 项**：6 项基础（JS 语法 / `admin.html` 内嵌 JS / **行尾字节级** / JSON / WXML 配对 / adminapi 的 ACTIONS 白名单对账）+ **6 组跨文件对账**（拜访结果名一致性 / 前端 action 调用 / 页面跳转路径 / 隐私接口与老接口 token 护栏 / 本地缓存字段 / 商城字段链路）。
+  · ⭐⭐⭐ **规矩：以后凡新增一处「同步点」（同一个清单要在两处各写一份），就必须顺手在 `check.js` 里加一条对账。** 加检查是一次性成本，漏改的代价是「不报错、只能肉眼发现」。
+  · ⚠️ 加完检查必须**双向验证**：正常跑（应绿）→ **故意改坏**（必须报错）→ 恢复并**逐字节核对**。永远绿的检查等于没加。
+- ⭐ **代码备份（三层）**：① 本地工作区 + git ② GitHub `hotakun/visit-miniapp` ③ 腾讯云服务器 `124.222.29.73` → `D:\WFR\visit-miniapp-备份\`
+  · `git bundle create /tmp/visit-miniapp-<日期>.bundle --all` → `scp` 过去；**每次都要做"恢复演练"**（clone 出来看一眼关键文件在不在 → 再删）。**没演练过的备份不算备份**
+  · 服务器 SSH 密钥 `C:\Users\Hotakun\AppData\Roaming\reasonix\global-workspace\.ssh\wfr_server`（账号 `Administrator`）；⚠️ 服务器**桌面**实际在 `D:\Users\Administrator\Desktop`；桌面上原有的 `Restart-Maps.bat`、`MAPQHD 快捷方式` **别删别改**
+
+---
 
 ## Architecture
 
-- `miniprogram/miniprogram/` 小程序 **15 页**（home/login/task/customer/visit/tasks-all/mine/map/**bossWar 战况地图**/**notes 我的记事**/**notes/editor 记事详情**（⭐ 2026-09-28 新增：**只存本机**的记事本）/**newshop 加新店**/**myshops 我新加的店**/**freevisit 自由拜访卡**/**freevisit/map 自由拜访地图**；⭐ **2026-10-05 已删除 `customerDemo` 演示页**（老板确认不需要）→ **15 页全部含 `onShareAppMessage`**；页序见 app.json，底部自定义 tabBar 三项=首页/任务地图/战况）+ `utils/media.js`（照片缩略图 drawOnce/coverJpg、录音 createRecorder 平台分化）+ **`utils/notes.js`（记事本机数据层：文字进 storage、照片/录音进 `wx.env.USER_DATA_PATH`）** + `utils/api.js`（**云函数调用单入口 `api.call(name, data)`**，别绕开）+ ⚠️ **`utils/gps/`（自研定位模块，见下面「储备模块」条）**；app.js 配 envId `cloud1-d0gwlmbwp31181eb5` + 全局审核观察员（reviewWatcher）+ `APP_VERSION`（「我的」页左下角显示，用于自检是否加载到新代码）；title 统一「聚火拜访 · 业务员拜访管理」/ path=`/pages/home/home` / imageUrl=`/images/share.png`；`onShareTimeline` 未做
-- `miniprogram/cloudfunctions/` 云函数 **11 个**：init（COLLECTIONS 自愈，含 `transcripts`/`customer_batches`/`batch_members`/`registrations`）、login、tasks（list 过滤 archivedAt；detail 返回 locCheck/coordFixPending/taskNo/recordingDurationLimit/logs）、visits（start 任务内单开拦截、submit 收 photos{fileID,thumbID}+`audios`≤6{fileID,duration,transcribe}、cancel 直接删除零痕迹、history 带转写）、**transcribe（语音转写：start/poll/retry/list/usage；腾讯云 ASR 异步 CreateRecTask→DescribeTaskStatus；`config.json` 带 `transcribePoll` cron 每 5 分钟，**需控制台确认已创建**）**、subscribe、coordfix（note+photos 兼容旧 string）、bindadmin、ping、seed、adminapi（后台唯一入口：任务 CRUD/导入分片/商城比对/**本地比对配套 listMallLibrary+applyMallMatch（比对在浏览器跑，云端只拉库写决定）**/审批/坐标审核/服务号通知/autoArchiveExpired 自动归档/客户备注/purgeUnbatchedCustomers 清空未分批/resetTestData 连删云存储文件/transcribeVisit+transcribeUsage+saveVisitTrText 转写/**custMapPoints 分片轻量客户点 + custSync 增量同步（2026-09-27，配合本地缓存 M1）**/`exportBatchMembers` + **`exportCustomerBatches` / `exportTasksForSync` / `exportVisitedCustomers`（2026-10-10 指针表：给服务器同步器 pgsync 的三个只读导出）**）
-- `admin/`：admin.html 单文件前端（CRLF）+ server.js 本地代理（HTTP API 直连 + /mpTokenRefresh 服务号 token 每 108 分钟同步）+ **store.js 本地缓存层（2026-09-27 新增）** + tts_gen.py（云希男声）+ voice/ 缓存 + notify.wav（任务审核响铃）+ bengbao.wav（坐标报错响铃）。已无 Web Push。
-  - **store.js（2026-09-27，客户点本地缓存；M1 地图 + M2b 客户列表）**：把客户点拉到本地文件 `admin/cache/map-points.json`，供战况监控地图与**客户管理页/批次总表**秒读（拖动/缩放/翻页/筛选都不请求云端）。接口：`GET /mapPoints`（读缓存；没有/过期则自动后台预热）、`POST /mapPoints/refresh`、`GET /mapPoints/status`、**`POST /mapPoints/patch`（写后回写，M3：改备注/坐标/字段/删除/建批次把改动同步进缓存）**。`VERSION` 控制字段版本（**当前 = 5**：M2a 字段扩到 12 项 → **M2b 扩到 20 项**〔加 店名原值/建档时间/客户类型/电话/备注/批次归属/注册商城时间〕；改了字段就 +1，旧缓存自动作废重拉）；**拉取时必须带后台账号密码（`STORE_AUTH`，默认 qingyan/123456，可在 config.json 用 adminUser/adminPass 覆盖）** —— 不带会返回“登录失效”导致预热静默失败。客户列表的**订单/拜访/任务状态**这类"要查别的表"的列，按当前页调 `adminapi.custPageAgg` 现算（≤200 家，很快）。详见 `_scratch/架构-本地缓存与同步方案.md`。
-  - ⭐⭐ **方案 C：建店后自动刷缓存（2026-09-29 老板定）** —— 背景：手机端「加新店」建的客户**不在本地缓存快照里** → **后台看不到**（老板实测「菲菲杂粮煎饼」找不到）。
-    链路：**手机端建店 → `tasks.newShopSubmit` 写 `settings.custDirtyAt`（变动信号）→ 后台 `GET /mapPoints` 时顺手 `store.checkDirty()`（极轻，只读一个 settings 文档）→ 有变动就 `custSync` 拉增量补进缓存 → 前端每 15 秒问一次 `/mapPoints/status`（几 KB，**绝不重拉 22MB 客户点**），发现条数变了就作废快照 + **就地重绘当前页**（`loadGeoPage` / `loadCustomers`）**。老板**不用再手动点**「🔄 更新地图数据」。
-    ⚠️ 涉及 **5 处**：`tasks`（建店后写信号）/ `adminapi`（新增 `custDirty` 接口 + `ACTIONS` 白名单，**坑 32**）/ `store.js`（`checkDirty` + `syncIncremental` + `maxU`）/ `server.js`（`/mapPoints` 里**异步、不阻塞**地触发）/ `admin.html`（`custKeepAlive()` 15 秒保鲜轮询）。
-    ⚠️ 缓存的 **`maxU` 是「同步水位」**（上次已同步到的 `updatedAt`）—— 增量同步的 `since` 用它，**比用本地时钟打点可靠**（本地与云端时钟不严丝合缝会漏几秒）。
-    ⚠️ 与回收站的配合：**删除不会通过增量同步传给后台**（`custSync` 已排除已删）→ 前端删完自己调 `/mapPoints/patch` 摘缓存；**恢复**则靠 `custSync` 自然带回来。
-- ⭐⭐ **L4「数据自主」（2026-10-09 落地）—— 客户数据改读自己服务器，账单见底** —— **写仍走云开发（唯一真相源），只把"读大头"搬走**；**手机端一行没改**；**服务器挂了后台自动回退云开发**（不会瘫痪）。
-  · 链路：`业务员手机 ──写──> 云开发 ──同步器(每5分钟)──> 服务器 PG ──只读API(18081)──> 文员后台读`
-  · 动因：后台每天全量拉客户，**实测 178,752 家**（不是早先文档写的 6~7 万，量级差 2.4 倍）。
-  · 服务器（`124.222.29.73`，脚本在 `D:\WFR\visit-miniapp\` 根目录）：**PostgreSQL 18.6**（库 `juhuo`，**公网不开**）+ 两个用户（`juhuo_ro` 只读→给 API / `juhuo_rw` 读写→只给同步器）+ 4 张表（`customers` 30 列 / `orders` / `sync_state` 同步水位 / `deleted_ids` 删除名单）+ **`pgapi.js`**（只读 API + 监控页 + 地图服务重启）+ **`pgsync.js`**（每 5 分钟调 `adminapi.custSync` 拉增量）。
-  · ⭐⭐ **2026-10-14（老板看到 QPS 冲到 460/500、数据库请求占 80% 逼出来的）批次成员同步改造** ——
-    原来 `batch_members`（5585 条）是**每 5 分钟 `DELETE` 全表 + 全量重拉**：一天约 160 万次读写，也是 QPS 尖峰的成因。现在四件：
-    ① **平时走 `_id` 游标增量**（只拉新增，通常 0 条）。⚠️ 水位存 PG 的 **`sync_cursor`** 表（不是 `sync_state`）——
-       因为 `sync_state.watermark` 是 **`bigint`**，**存不了字符串 `_id`**（差点带着这个错发上去，**部署前用探针查列类型拦下的**）。
-    ② **有变动才全量对账**：后台建/删批次、加/移成员时写 `settings.batchDirtyAt`（云端 `adminapi` 的 `touchBatchDirty()`，
-       **5 个写点**：`importCustomers` / `addCustomerToBatch` / `addBatchMembersBulk` / `removeCustomerFromBatch` / `deleteCustomerBatch`；
-       带 **3 秒防抖**，因为批量加成员是在循环里调的）→ 靠 `pollDirty` **顺带带回**（**零额外云端调用**）。
-       —— 为什么必须留全量：**增量感知不到"删除"**（文档一删，游标再怎么往后扫也扫不到它）。
-    ③ **6 小时兜底**全量一次（防某处漏写信号）。
-    ④ 写库改**批量 upsert**（每页 500 条一次）—— 原来是**逐条 INSERT**，一轮 5585 次写；`upsert()` 加了 `conflictOn` 参数以支持复合主键 `(batch_id,customer_id)`。
-    ⚠️ **改了云函数写点就必须重传 `adminapi`**，否则信号不写、只剩 6 小时兜底（不会坏，但没到最优）。
-  · **`admin/store.js`**：`refresh()` **优先从自己的服务器拿**（配置 `admin/config.json` 的 `pgApiUrl` + `pgApiToken`）→ 成功打 `[store] 从自己的服务器拿到…（不走云开发）`；**失败/没配自动回退云开发分片拉取**。⚠️ **改完必须重启后台**（壳程序也一样，光刷新网页不行）。
-  · **监控页** `http://124.222.29.73:18081/status?pw=juhuo`（口令 `juhuo`；含「🔄 重启地图服务」按钮，POST `/restart-nginx?pw=`）；服务器桌面另有 `服务器监控.html`（双击即看）。
-  · **5 个计划任务**（`JuhuoPgApi` / `JuhuoPgSync` / `JuhuoNginx` / `JuhuoReboot3` / `JuhuoReboot18` —— 均 BootTrigger + SYSTEM，**开机自启已真重启验证过**）；**每天 3:00 / 18:00 自动重启**服务器。
-  · ⚠️ **四个静默坑**：① 建表 SQL **必须 `SET client_encoding='UTF8'`**（服务器 psql 客户端是 GBK，不加则中文注释一碰就整段挂）；② **`custSync` 返回字段名是 `points`**（写错不报错、只空转）；③ **手动重启 pgapi 要 `schtasks /end` 再 `/run`**（只 `taskkill` 会让任务实例卡住）；④ ⚠️ **`sync_state.watermark` 是 `bigint`，只装时间戳** —— 要存**字符串游标**（如 CloudBase 的 `_id`）必须用另立的 **`sync_cursor`**（cursor 列是 `text`）；往 bigint 列写字符串会**每轮报错**、那张表就再也不更新（2026-10-14 差点发上去，**部署前用探针查列类型拦下了**）。
-  · 详见 `项目交接-当前进度.md` **§0.0z12**（含未做的两件：删除名单 / 服务号 `appsecret`）。
-- `packager/shell/`：无边框壳 Program.cs（WebView2）：普惠体 55 Regular 内嵌 TTF、CS_DROPSHADOW、自定义最大化不盖任务栏、退出确认弹窗；标题条图标=通知(铃铛显隐)/**刷新(铃铛左侧自绘 Panel 旋转动画，点击=当前页刷新+autoArchiveExpired+响铃检测)**/设置/全屏/最小化/关闭；标题条 Control 遍历必须 `foreach (Control b in right)`（Panel 强转 Button 会启动崩溃）。**2026-09-08 DPI 大修**：Main 第一行声明 PMv2（否则 WebView2 中途提升 DPI→最大化盖任务栏）；初始窗口=工作区 96%×92% 手动居中（CenterScreen 会偏右下角）；标题栏按 DpiX/96 放大；禁右键+禁 F5/Ctrl+R；改壳必须 csc 重编译 + 关壳复制 exe 到 `admin/`（**只这一处**）+ 需要给文员时才重打文员包。⚠️ **2026-09-25 更正**：`D:\JuHuoVisit\` **不再是常驻目录** —— 那是 `packager/` 的**安装目标**（`install.bat` / `make_packages.py` 里写死的 `D:\JuHuoVisit\admin` + `env`），老板**平时不用它启动后台**（后台一律用 `admin/启动管理后台.bat`），**该目录已被删除**；以后要给文员用时 `install.bat` 会自动重建，改完代码**不必再同步过去**（此前"复制 exe 到 `D:\JuHuoVisit\admin\`"的做法已作废）
+- **小程序**（`miniprogram/miniprogram/`）**15 页**：home / login / task / customer / visit / tasks-all / mine / map / bossWar / notes / notes-editor / newshop / myshops / newshops / freevisit(+map)；公共层 `utils/api.js`（**云函数调用单入口 `api.call(name, data)`，别绕开**）、`utils/media.js`、`utils/notes.js`、`utils/gps/`。`app.js` 配 envId `cloud1-d0gwlmbwp31181eb5` + `APP_VERSION`。
+- **云函数 12 个**（`miniprogram/cloudfunctions/`）：`adminapi`（**后台唯一入口**，130+ action）/ `tasks` / `visits` / `login` / `transcribe`（腾讯云 ASR 转写，带 `transcribePoll` 定时器每 5 分钟）/ `coordfix` / `importdata` / `init`（建集合自愈）/ `subscribe` / `bindadmin` / `ping` / `seed`。
+- **后台**（`admin/`）：`admin.html` 单文件前端（**CRLF**，1.3 万行）+ `server.js` 本地代理（HTTP API 直连 + `/mpTokenRefresh`）+ **`store.js` 本地缓存层** + `nt-map.js` + `tts_gen.py`。
+  - **`store.js`**：客户点缓存到 `admin/cache/map-points.json`，供地图与**客户管理页/批次总表**秒读；接口 `GET /mapPoints`、`POST /mapPoints/refresh`、`GET /mapPoints/status`、**`POST /mapPoints/patch`**（写后回写）。`VERSION` 控制字段版本（**当前 = 6**，改字段就要 +1，否则老缓存不作废）。**拉取要带后台账号密码**（`STORE_AUTH`）。
+  - **方案 C：建店后自动刷缓存**：手机端建店 → 写 `settings.custDirtyAt` → 后台读缓存时 `store.checkDirty()` → 有变动就 `custSync` 拉增量 → 前端每 15 秒问 `/mapPoints/status`（几 KB，**绝不重拉 22MB**）→ 条数变了就地重绘。缓存的 `maxU` 是**同步水位**（别用本地时钟打点）。
+- ⭐⭐ **L4「数据自主」**：**写仍走云开发（唯一真相源），只把"读大头"搬走**；手机端一行没改；**服务器挂了后台自动回退云开发**。
+  · 链路：`业务员手机 ──写──> 云开发 ──同步器(每5分钟)──> 服务器 PG ──只读API(18081)──> 后台读`
+  · 服务器 `124.222.29.73`：**PostgreSQL 18.6**（库 `juhuo`，**公网不开**）+ 两个用户（`juhuo_ro` 只读给 API / `juhuo_rw` 读写给同步器）+ 表 `customers`/`orders`/`sync_state`/`sync_cursor`/`deleted_ids`/批次相关 + **`pgapi.js`**（只读 API + 监控页）/ **`pgsync.js`**（同步器）。配置在 `admin/config.json` 的 `pgApiUrl`+`pgApiToken`。
+  · **监控页** `http://124.222.29.73:18081/status?pw=juhuo`；服务器桌面另有 `服务器监控.html`。
+  · **5 个计划任务**（`JuhuoPgApi` / `JuhuoPgSync` / `JuhuoNginx` / `JuhuoReboot3` / `JuhuoReboot18`，均 BootTrigger+SYSTEM）；**每天 3:00 / 18:00 自动重启**服务器。
+  · ⭐ **批次成员同步（2026-10-14 改造，省掉一天约 160 万次读写）**：平时走 `_id` 游标**增量**（水位存 `sync_cursor` 表）→ 后台建/删批次、加/移成员时写 `settings.batchDirtyAt`（云端 `touchBatchDirty()`，**5 个写点**，3 秒防抖）→ 靠 `pollDirty` **顺带带回**（零额外调用）→ 同步器**只在信号变过时**全量对账（增量感知不到"删除"）+ 6 小时兜底。写库走**批量 upsert**。⚠️ **改了云函数写点必须重传 `adminapi`**。
+  · ⚠️ **四个静默坑**：① 建表 SQL 必须 `SET client_encoding='UTF8'`；② `custSync` 返回字段名是 **`points`**；③ 手动重启 pgapi 要 `schtasks /end` 再 `/run`；④ **`sync_state.watermark` 是 `bigint`，存不了字符串 `_id`** —— 字符串游标要用 `sync_cursor`（详见 `docs/坑清单.md`）。
+- **壳程序**（`packager/shell/`）：无边框 WebView2 壳（普惠体 / DPI 声明 PMv2 / 禁右键禁 F5 / 自定义最大化）；标题条按钮遍历必须 `foreach (Control b in right)`。⚠️ `D:\JuHuoVisit\` **不是常驻目录**（那是 `install.bat` 的安装目标，平时不用它启动后台）。
 
-## Conventions
+---
+
+## Conventions（硬规矩 —— 每次干活都要遵守）
 
 - 🔴🔴🔴 **「店铺信息」绝不允许自行 添加 / 更改 / 合并（2026-10-12 老板两次严令，最高红线）**
-  · **老板原话**：
-    ① 「**客户判断以后你不能想当然的去动，这个责任不能交给你**」
-    ② 「**从现在开始，你绝对绝对不能自主添加和更改合并任何店铺信息，必须要操作员同意之后才能更改，而且必须留下备案，以便回退！！**」
-  · **背景（真实事故，同一天犯两次）**：
-    - 第一次：看到某条客户"坐标只差 5 米"就先入为主判定它是真身、放着不动 —— 其实它是被整条覆盖的受害者；
-    - 第二次：拿某条「沙县小吃 余」的坐标去点评表里找，找到 **4 米外**的「功夫炒饭」就把它改成了"功夫炒饭" ——
-      而**它身上的门店照片（沙县小吃）、拜访记录（加入商城 / 换老板了）、商城编号才是它的真身份**，
-      结果**凭空多出一条同名档**（真正的功夫炒饭本来就有档）。
-  · **规矩（最高优先级，「顺手改一下」也不行）**：
-    ① **绝对不许自主 添加 / 更改 / 合并 任何店铺信息** —— **一个字段都不行**；
-    ② **必须操作员（老板）明确同意后才可改** —— 且要**说清「改哪条 id / 改成什么 / 依据是什么」**，他点头才动；
-    ③ ⭐ **每次改动必须留备案（可回退）** —— 改前存旧值、改后记「谁 / 何时 / 把什么改成了什么」，**能一键回到改之前**；
-    ④ **判断类的事一律不拍板**：拿不准就只出「待确认清单」给老板过目；
-    ⑤ **不确定就说不确定** —— 绝不把"我猜的"说成"已确认的"。
-  · ⚠️ **现状缺口（要补）**：系统目前**没有"客户档案改动留痕"** —— 这也是本次事故难复盘的原因。
-    要做「改前存原值 + 改后记差异 + 一键回退」的机制（做之前先给老板看设计）。
-- 🔴🔴 **「页面身份只准从 URL 来」—— 手机端串档事故的根治铁律（2026-10-12 老板严令「绝对绝对要避免这种问题的再出现」）**
-  · **事故**：老板一家家跑业务，**当前一家的拜访记录全跑到上一家头上**（当晚连串几家：原汤牛肉馆的第 3 条其实是安顺本味馆的、安顺本味馆的第 2 条其实是安顺凉粉的、安顺凉粉的第 3 条其实是移动水果摊位的）。
-  · **真凶**：`newshop.js` 建店成功后跳客户详情页**少带 `freeVisit=1`** → 详情页 onLoad 不会把「当前客户」刷成本家 → storage 里还留着**上一家** → 点「开始拜访」就把记录写到了上一家。
-  · **病根（要根治的）**：**"当前是哪家店"靠 `curCustomer`（storage）传来传去** —— 任何一个入口忘了刷新它，就会串。
-  · **铁律（写死，别再犯）**：
-    ① **页面认"哪一家"，只准从 URL（`?id=`）来** —— `pages/customer/customer.js` 的客户 id **只读 URL**、**没带就报错**，**绝不从 storage 兜底**（宁可报错也不猜）；
-    ② **凡"跳客户详情页"的入口，必须带 `?id=`** —— 现有 5 处：`task.js` / `map.js` / `myshops.js` / `newshops.js` / `freevisit/freevisit.js`；**新加任何入口时先问自己：带 id 了吗？不带 = 埋雷**；
-    ③ **storage 的 `curCustomer` 只准放"任务设置"这类辅助信息，绝不当身份用**；
-    ④ **换了客户，旧的 `taskId` 一律不带**（`goVisit()` 里用 `sameCust` 判断：不是同一家 → `taskId` 清空）。
-  · **相关三处修复（2026-10-12）**：`newshop.js` 两处跳转补 `&freeVisit=1`（真凶）；`goVisit()` 改「当前客户优先」（兜底）；`customer.js` 的 id 只认 URL + 5 个入口补 `?id=`（根除）。
-- ⭐⭐ **「拜访页强行离开 = 有内容自动提交 / 全空自动取消」（2026-10-12 老板立规矩）**
-  · **老板原话**：「拜访页面只要强行离开，譬如滑动后弹出的窗口选择确认，**如果有内容**（拍照了、录音了、输入文字了）**那就等于自动提交了**；**如果什么都是空的，那就等于自动取消了**。」
-  · **场景**：滑动返回 → `wx.enableAlertBeforeUnload` 弹窗（**拦不住卸载，只能补救**）→ 点「确认」→ 页面卸载。
-  · **实现（`pages/visit/visit.js` 的 `onUnload`）**：只在**没走过正常提交或取消**时接管 ——
-    判据是 **`this._startKey` 还在**（`clearStart()` 一被调用它就没了，提交/取消成功都会调它）。
-    「有内容」= 结果 / 文字 / 样品 / **照片 `pics`** / **录音 `recs`** 任一非空 →
-    **自动 `visits.submit`（⚠️ 不要求先选结果 —— 结果空着也交，内容先保住）**；否则 → **自动 `visits.cancel`**。
-    ⚠️ 编辑模式（`_editId`）与游客（trial）**不碰**。
-  · ⚠️ **必知的连带坑**：**「切换到那家」按钮是 `redirectTo`、也会触发 `onUnload`** ——
-    它里面必须先 `this.clearStart()`，否则会被误判成"强行离开"、**把当前这家误提交/取消**（本次已补）。
-- **后台保留双工作台，手机端共用一套（2026-09-23 老板拍板「方案 D」）**：后台**保留** 🔥 回访工作台 / 🌱 新客开发工作台**两个入口与数据分区**（登录后仍先选工作台；客户按 `customerType`、任务按 `purpose` 分线**不变**）；**但台内共用一套实现** —— 组件 / 列 / 弹窗共用一套，列的值按"该客户有没有这项数据"显示。⚠️ **手机端**（`pages/`）**不按客户类型分叉**：详情页共用一套 7 卡、拜访结果共用一套 10 项枚举，差异只来自数据有无（有值显示 / 没值空态）。⚠️ **数据模型永远只有一套 `customers` 集合**（＋ `customerType` 字段），**不搞两套集合**。⚠️ 修正 013 全文、方案 D 落地清单（后台要做 A3/A4/A5/A6 四处；A1/A2/A7/A8 **不动**）与历史沿革见 `_scratch/开发前修正-口径对齐.md`（修正 001 已**收窄为只管手机端**）
-- 口径：回访客户（不叫商城客户）；「激活增单/走访维护/活动推广」=回访工作台三目的（值 activate/maintain/promote）；新客=develop；「注册商城时间」；「签约业务员」；坐标状态 ok=正常 / pending=补标 / pending_confirm=待定；坐标显示**纬度在前**（数据存储不动）
-- 任务编号：`区域码-8位混码` 如 `JH05-42379761`（settings.taskRegionCode 可配，混码不可逆查库）
-- 截止日：开始日=任务第 1 天；**截止日当天 0 点起任务即截止**（全完成=已完成，否则=已过期）；延期按新日期恢复
-- 拜访中单开：同一任务同一时刻只允许 1 家拜访中（start 拦截，含已拜访客户）；**取消拜访=直接删除记录不留痕**；不做自动作废
-- 坐标报错审核：手机端「📍 报错」→ coord_fix_requests(pending) → 后台审核；**同意不写回坐标，coord_status=pending_confirm 待定**（后台暗红胶囊只读查看）
-- 任务结束：autoApproveFinish 勾选=全完自动通过；不勾选=人工审核；**提前交始终人工审核**
-- 定位校验：阈值 1~500 整数；0/不勾选=关闭；默认 100 米；定位失败=拦截提交；前端文案按设置阈值展示（locCheck）
-- **照片显示铁律（30 元教训定稿，勿再用被否方案）**：缩略图单次 canvas 绘制**零分支零循环**（320×240 中心裁切+quality70 固定）；显示格宽高**固定像素写死**（拜访页 **192×144rpx**〔= 96×72px，一行三个〕 / 坐标弹窗 88×66px / 历史卡 84×63px；**照片上限默认 9 张**，后台可配 3/6/9/15）；mode scaleToFill；三格绝对一样大；裁切丢内容没关系、原图保留点开看。被否方案：min-width+absolute、aspectFill 裁切、widthFix、letterbox 白底、1:1 方形、padding-top 撑高
-- 录音（2026-09-11 更新口径）：**最多 6 段**；单条上限**跟后台「拜访录音上限」档位走**（180/300/600 秒，**禁止写死**，后台一改前端与云函数同步跟随）；**合计 30 分钟硬封顶**；安卓/鸿蒙 mp3(16k/32kbps)，**iOS 用 aac(.m4a)**（另有封顶）；mp3 失败自动降级 aac；试听/上传前 saveFile 转存（saveFile 是移动，转存后必须回写路径）；obeyMuteSwitch=false；路径存闭包变量
-- **录音必须传 `duration`（2026-09-11 真机坑，现象"录音 1 分钟就停"）**：`wx.getRecorderManager().start()` 的 `duration` **单位是毫秒、默认 60000** → 不传就被系统 1 分钟截停；必须传 `秒数 * 1000`（详见交接文档 §4 坑 27）
-- **上传改动到云端**：双击 `admin/上传后台到云端.bat`（= `admin/upload_dist.js`，自动读 `APP_VERSION` → 分片调 `adminapi.uploadAdminDist` 写 `settings/admin_dist` → 回查核对）。文员端在后台设置页点「检查更新 → 立即更新」拉取
-- ⭐⭐ **文员端的「立即更新」现在能连【后端】一起更（2026-10-07 老板定，一劳永逸）** —— 以前只更 `admin.html` / `nt-map.js`，于是文员端出现「**新前端 + 一个月前的旧 `server.js`**」→ 新前端调不到 `/mapPoints` 等新接口 → **拉取数据全失败**（2026-10-07 实际踩到）。
-  · **做法**：`upload_dist.js` 把 `server.js` / `store.js` **也分片传云端** → 文员端点「立即更新」时，由 **`server.js` 的 `/admin-dist/apply` 自己把这两个文件写盘**（写前 **`vm.Script` 语法校验 + 备份 `.bak-<时间戳>` + 原子 `rename`**；校验不过**直接拒绝、后台保持原样**）→ 返回 `needRestart:true` → 前端提示 **「请关掉后台窗口再重新打开」**。
-    ⚠️ **刻意不做进程自重启**（老板 2026-10-07 选「提示手动重启，最稳」）—— 避免孤儿进程 / 端口残留。
-    ⚠️ **`/admin-dist/apply` 自身改了也必须重启后台才生效**（本次自食其果一次：改了它却还在跑旧内存代码 → apply 拿 base64 当 JS，报"语法不通过"）。
-  · **存法**：四个 kind 各存**独立文档**（`settings.admin_dist_adminHtml` / `_ntMapJs` / `_serverJs` / `_storeJs`）。⚠️ 原来四个挤在一个 `settings.admin_dist` 里共 **875KB**，**逼近云开发单文档 1MB 上限** → 实测 `server.js` 存成半截（`Unexpected end of input`）。
-  · ⚠️⚠️ **后端文件必须 base64 再传** —— 实测 `server.js` 的**原始文本**走 HTTP API 会被微信侧拒（`INVALID_ENV / -501000`）。**二分证据**：前 1000 字符能传、5000 字符起全挂；而 `admin.html` 每片 **88KB** 却没事 → **是内容不是大小**。下载侧在 `server.js` 里 `Buffer.from(s,'base64').toString('utf8')` 解回。
-  · ⚠️ **首次仍需手工拷一次**（`admin/server.js` + `admin/store.js` → 文员端 `admin\`）—— 他那个旧 `server.js` 压根不认识"写后端"这段逻辑，**先有钥匙才能配钥匙**；之后全靠本机制。
-  · ⚠️ `upload_dist.js` 早期还会因「云端暂无分发文件」直接 `exit(1)` → **首次永远传不上去**（鸡生蛋）；已改成**只提示、继续传**。同处还加了"**假失败**"识别（云端其实写成功、只是响应报错）→ 回查 `getAdminDistMeta` 片数确认后再决定是否真报错。
-- **版本号提升必须先经老板确认（2026-09-24 老板定，最容易好心办错事的一条）**：**不是每个小改动都要改版本号** —— 改完代码**先别动 `APP_VERSION`**；**但可以（也应该）主动提醒/建议提升，改动较大时强烈建议** —— **只是必须等老板点头才能改**，等他说"要发/要上线"再 bump。⚠️ **但必须知道这条机制**：**后台 `admin.html` 的 `APP_VERSION` 是文员端「检查更新」的判据**（2026-09-11 老板定，**不是"纯展示"**）—— **改了后台、又想发给文员，就【必须】bump**，否则文员永远显示"已是最新"、拿不到新版本（坑 28）；小程序 `app.js` 的版本号只是「我的」页显示 + 自检用，**不 bump 不影响功能**（"两处保持一致"只是为了人工对齐）。**当前统一 0.9.16**（2026-09-24，`admin.html:2202` 与 `app.js:8` 均已改）。⚠️ 本地版本高于云端时文员会看到"发现新版本 v<旧>"，**别点「立即更新」（会降级）**，直接重新上传
-- 导入：**免费环境云函数 30s 超时，大导入必须前端分片 + 断点续跑**；⚠️ **2026-09-23 口径变更（修正 010）：分片改为"按字节" 60~70 KB/片，不再按条数** —— 实测单行体积 customers 平均 2371 B / 最大 6200 B、orders 1026 B、order_items 441 B，按 100 条/片会到 **142~205 KB，超出入参 100 KB 上限**；自动建批只第一片锁定 batchId 防每片各建一批；decisions 必须传数组
-- ⚠️ **商城比对（2026-10-11 起口径变更 —— 以 `_scratch/商城配对确认-口径与实测.md` 为准）**：因为**现在导入的商城客户，系统内一定有对应客户**（= 已有客户"加入了商城"），所以改成**全部都要人工确认**（高分只做**默认预勾**）；旧的三档「≥75 自动认领 / 45~74 进 `mall_claims` 待确认 / 忽略」**已作废**。配对判定顺序：**① 店名相同**（第一）→ **② 电话相同**（第二，**一旦相同就是铁证**，界面须单独标出）→ **③ 地址**（第三，分「区域」+「填写地址」）。合并：店名/电话/地址/地区**商城优先**；**经纬度/商圈一律用系统内的**（商城表不附带经纬度）；电话两边不同按 **1（商城）2（系统）** 排、**三个不同只留「商城的+系统的第一个」**；系统内没找到的单独一组、**那组里可直接新建**。⚠️ **真后台尚未改造**（等老板看完演示稿点头）。
-- ⭐ **点评导入（2026-09-26 老板定，推翻旧规则）**：点评表**自己就能建客户** —— 按 `shopuuid` 匹配：**匹配上 → 只补空位**（冲突以商城为准）、**匹配不上 → 新建客户**（旧规则"点评只能更新已有客户的 plat"已作废）；⚠️ **点评表里 `shopuuid` 为空的行直接跳过**（只对点评表，商城表不适用）；同一 uuid 多条 → **合并成一条**（有效字段多→评分高→稳定随机定主记录、逐字段补缺、收录时间取更早、**小类不同则两个都留 `cat3Tags`**），留 `platMergeCount`/`platMergeFrom` 记录合并来源。落地：`admin/tools/import_excel.py` 的 `build_customers_from_plat` ＋ `importdata` 云函数的 `mode:'fill'`（`admin/server.js` 按 task=plat 传）
-- **批次卡铁律**：一个批次全部信息只在一张卡内，绝不分开；批内状态生命周期=新入批待回访→发布拜访中→完成已回访→撤回退回；统计实时算；业务员端不显批次名
-- ⭐⭐⭐ **批次 = 指针表（2026-10-10 晚落地，老板定）** —— **`batch_members` 是唯一记账**，`customers.batchIds` **已彻底停写/废弃**（云端 5 处写入点全停：`addCustomerToBatch` / `addBatchMembersBulk` / `removeCustomerFromBatch` / `deleteCustomerBatch` / `importCustomers`）；**删批 = 删成员条目 + 删卡，客户档案一个字不碰**。
-  · **批次页每个数字改从 PG 算**：`pgapi /batches`（输出与云端 `listCustomerBatches` **同构**）；后台 `server.js /batches` **默认读 PG**，**写后刷新打 `?src=cloud` 强制读云端**（刚建/刚删的批次要即时可见，PG 最多滞后 5 分钟）。
-  · 读「谁在哪些批次」一律查 `batch_members`（云端）或 PG 的 JOIN（`/points`·`/sync` 的 `batch_ids` 是**现算**的，输出字段名不变）—— **再往 `customers.batchIds` 里写就是走回头路**。
-  · ⚠️ **新表建成后必须 `GRANT SELECT ... TO juhuo_ro`**（pgapi 用它）—— 漏了 pgapi 直接 500「对表 xx 权限不够」，见 `_scratch/pg_batch_tables.sql` 的留档段。
-- ⭐ **建任务仍然走批次（2026-09-26 老板定，**作废**“建任务不依赖批次 + 预选篮”那套设想）**：**多一个建批次入口，批次卡老链路一行不改** ——
-  ```
-  「🏪 客户管理」（**2026-09-26 由「📍 地域管理」改名**）按 城市/区域/商圈 筛 → 勾选客户 → 「📦 建立批次」（复用 createManualBatch，本来就支持直接传 customerIds）
-        ↓
-  「📦 批次管理」（原「🏪 客户管理」）批次卡 → 选客户 + 选业务员 → 建任务 → 手机端收到    ← 这条链路**一行没改**
-  ```
-  ⚠️ 所以 `_scratch/建任务新流程-操作演示.html`（“任务不再依赖导入批次：选地域→筛选→勾选→预选篮→建任务”）**已作废**，不要再照着做；**批次卡铁律仍然适用**（见上一条）。
-  实现：`admin.html` 的 `geoMakeBatch()`（客户管理页的「📦 建立批次」按钮）。
-- ⚠️ **后台侧边栏两个页签 2026-09-26 改名（老板定，名字互换）**：原「📍 地域管理」→ **「🏪 客户管理」**（图标 🏪）；原「🏪 客户管理」→ **「📦 批次管理」**（图标 📦）。
-  **内部标识一律不变**：`#page-geo` / `#page-customers`、`data-p="geo"` / `"customers"`、`nav('geo')` / `nav('customers')` —— 改的只是**给人看的名字**。
-  对应关系：**「🏪 客户管理」= 按城市/区域/商圈看客户 + 勾选建批次**；**「📦 批次管理」= 批次卡 + 派业务员建任务**（= 原「客户管理」页）。
-- ⭐ **「自由拜访」（2026-10-03 老板定；已开发完成待部署）** —— 给业务员一个「自己找店去跑」的工具：打开地图看附近的客户点、挑一家去拜访，这一趟跑过的店收进一张**「自由拜访卡」**；老板在后台能看。
-  · **口径速查**（全文见 `_scratch/自由拜访-方案与口径.md`）：入口=首页快捷卡「👥 团队」**改成**「🚶 自由拜访」（那张卡本来就是空占位）；卡片显示 **区域·商圈（取建卡时的中心点）/ 建卡时间 / 已拜访 N 家 / 业务员**；**能结束也能唤醒**（可重复用）；点卡片进去看「去过的店」（去重），该页底部也有「🗺 继续跑店」一步回地图。
-  · ⭐ **「已拜访 N 家」按家数去重**（同一家跑 2 次还是 1 家）—— 2026-10-03 老板先定"按次数"、**当天改为按家数**。实现 = `free_trips.customerIds` 数组长度，**一字段三用**：① 家数 ② 点进去的客户卡片 ③ 地图上灰针（去过）的判断。由 `visits` 的 `_resyncFreeTrip` 以**真实拜访记录**为准重算（提交自动加、取消自动摘）。
-  · **独立集合 `free_trips`** —— **不绑任务、不算进度、没有截止日**（硬塞进 `tasks` 要在进度/归档/看板/统计等**十处**加"排除自由拜访"判断，漏一处就是老板看到数字不对）。`visits` 加 `freeTripId` 字段；**自由拜访完全不参与"单开"拦截**（正式任务内"只 1 家"的限制不变）。
-  · **地图页**（`pages/freevisit/map`）：中心=我的定位；档位 **200m/500m/1km/2km（默认 500m）**；**原生 `circles`** 画圈；**只有手动「🔄 刷新」才拉点**（不自动跟走动，省电省流量）；切档位 = 拉点 + 视野对准整圈；**右上角三控件** `⌖ 我的位置 / ⛶ 全部显示 / 🏷 店名`（⚠️ **⛶ 只管视野、不拉数据**）；底部 `🔄 刷新 / 📌 固定范围·📍 解除固定 / ➕ 建立自由任务`；**固定后**圈心+客户点+档位全锁死、刷新禁用（可解除）；**档位选中的那个明显更宽**（`flex-grow` 差异，**不等宽**）；**蓝点始终实时更新**，出圈**震动 2~3 下**（⚠️ 只在「圈内→出圈」跳变时震 + 60 秒冷却，否则蓝点在边界晃会**一直震**）。
-  · **三种针**：橙=没去过 / 蓝=拜访中（`#2F80ED`，与项目"拜访中"pill 同色）/ 灰=去过；⚠️ **本卡去过但出了圈的点也要画**（视野不跟着它们跑，否则跑一天跨几个商圈会把地图拉得很小）。新增 `images/pin-gray.png`、`pin-blue.png`（由 `pin.png` **只换橙色**生成，形状不变）。
-  · **后台**：「任务管理」**第四个 Tab「🚶 自由拜访」**（现有 当前/历史/任务地图 三个之后；文档里若写"第三个"以此为准，2026-10-04 已更正）—— 业务员筛选（含"全部"）+ 表格（区域商圈/建卡时间/已拜访家数/状态）+ 点行看去过的店 + 删除（**只删归类**：把该批 `visits` 的 `freeTripId` 置空、**拜访记录保留**）。
-  · **云函数**：`tasks`（`nearbyCustomers` 按坐标+半径取点，**上限 500 条、按距离升序**、排除已删客户；+ `freeTripCreate/List/Pause/Resume/Detail/Delete`；+ `_logTrip` 操作留痕）/ `visits`（`freeTripId` + `_resyncFreeTrip`）/ `adminapi`（`listFreeTrips` / `deleteFreeTrip` / `freeTripDetailAdmin` + `resyncFreeTrip` + **滚动消息并入**）/ `init`（`COLLECTIONS` 登记 `free_trips`、`free_trip_logs`）。
-  · ⭐ **卡上三个操作**（2026-10-04 补全）：`⏹ 结束这张卡`（在用）/ `▶ 继续用这张卡`（已结束）/ `🗑 删除`（红色次要按钮，**两端都有**：业务员自己能删 + 后台能删）。⚠️ **删除只删「归类」** —— 把该批 `visits` 的 `freeTripId` 置空（退化成「无任务拜访」），**拜访记录一条不删**。
-  · ⭐ **大操作进后台「📜 滚动消息」**（2026-10-04 老板定）：建卡 / 结束 / 唤醒 / 删除 四类写进**独立集合 `free_trip_logs`**（`{tripId, action, salesmanId, salesmanName, district, bizCircle, visitedCount, at}`）→ `adminapi.msgCenter` 读它并入滚动消息，正文「谁 + 做了什么 + 在哪片 +（已拜访 N 家）」。
-    ⚠️ **日志独立于卡片** —— `free_trip_logs` 是独立集合，**卡删了日志还在**（要能回溯谁干了什么）→ 所以删除是**先写日志、再删卡**。
-    ⚠️ **只在第 0 页并入** —— 滚动消息是时间倒序 + 分页的，自由拜访日志若也参与 `skip/limit` 会让分页计数跟其它来源（visits / coord_fix_requests / registrations）打架。
-    ✅ **前端零改动** —— 后台 `msgRollRow()` 只读 `text/at/reviewedBy`、**不看 `kind`**，云端拼好正文就直接显示。
-  · ✅ **2026-10-05 老板改主意：修了**（原话"这个按你的建议"）—— **自由拜访的拜访页现在会跟随后台档位**。
-    做法（就是当时备选的"顺手带"方案）：
-    ⚠️ **`tasks.nearbyCustomers` 返回里多带一个 `cfg`**（`photoLimit` / `recEnabled` / `evidenceRequired` /
-    `recordingDurationLimit` / `visitDurationLimit` / `locKeyRefresh` / `locCheck`，由已有的 **`loadSettings()`** 读出）
-    → **`pages/freevisit/map.js` 的 `_loadPoints` 拿到后 `Object.assign` 进 `app.globalData.sysCfg`**（**merge，不是覆盖**，避免冲掉 `detail/mapData` 写的其它字段）。
-    ⚠️ 背景（为什么之前不生效）：拜访页的档位读 `app.globalData.sysCfg`，而它**只在 `pages/task` / `pages/map` 里被写入**（**都要 taskId**）→ 自由拜访没有 taskId，进不去那条路 → 退回默认值（照片 9 / 录音 300 秒 / 拜访 1 小时 / 定位 15 秒）。
-    ⚠️ **改动只有 2 处**（1 云函数 + 1 前端），且**搭了 `nearbyCustomers` 的顺风车**、没加新 action。
-  · ⚠️ **部署**：重传 **`tasks` / `visits` / `adminapi` / `init`** 4 个（⚠️ **`init` 别漏** —— 不跑一次 `free_trips` / `free_trip_logs` 集合不会创建，建卡直接失败；`tasks` 里另有"集合不存在就自愈创建"的兜底，但自愈代码本身也要先重传才生效）→ 重启后台 + `Ctrl+F5` → 上传体验版。
-- ⚠️⚠️ **2026-10-04 对抗性检查揪出的 3 个「不报错、只能肉眼发现」的坑（都是这次真实踩到的）**：
-  ① ⚠️ **小程序 `<map>` 的 `circles`：描边色的字段名是 `color`，不是 `strokeColor`** —— 写错**不报错**、只是这个字段被忽略 → 圈用默认色 = **黑色**。正确：`{ latitude, longitude, radius, strokeWidth: 2, color: '#F5531C', fillColor: '#F5531C14' }`。（老板真机发现"圈怎么是黑的"）
-  ② ⚠️ **云函数返回「简写字段」时，前端必须读简写** —— `nearbyCustomers` 返回 `{ i, n, nr, la, ln, ad, ds }`（为省流量），前端若读 `p.nameRaw / p.name / p.lat` 会**全部 undefined** → 现象是**小窗店名全显示占位文案"客户" + 导航/详情/去拜访三个按钮点了都没反应**（反查客户 id 失败 → `sel.id` 为空 → 各按钮开头的 `if (!s.id) return` 直接返回）。⚠️ 最阴的是**同一个页面里两套字段名并存、代码看着完全正常**。
-  ③ ⚠️ **bash 单引号里的 `\n` 会变成真换行** —— 在 `node -e '...'` 里写 `'\n'` 会被 shell 解析成**字面换行**、把字符串截断 → JS 语法错（`confirm(...)` 那次把一行截成了 4 行）。修法：改用 `edit_file`，或把内容写到临时文件再读。
-  ⚠️ 同类还有：**用 `node -e` + `writeFileSync` 改 json 之后一定要回头字节级核行尾** —— 2026-10-04 `app.json`（本应**纯 LF**）被写成了 CRLF；改完要么显式 `replace(/\r\n/g,'\n')`，要么数一遍。
-- ⚠️⚠️ **2026-10-05 老板实测又踩到的一批坑（自由拜访地图页，全是"不报错、只能肉眼发现"型）**：
-  ① ⚠️ **`marker.label` 与 `marker.callout` 不一样** —— `callout` 的**白底去不掉**（密集时白块把地图遮住）；要"无底色/半透明底"必须用 **`label`**（`label.bgColor` 默认就是全透明 `#00000000`，且**默认常显**，不用 `display:'ALWAYS'`）。
-  ② ⚠️ **`label.color` 不认 8 位 hex**（`bgColor` 认！）—— 写 `#FFFFFFB3` 想表达"70% 的白"，真机解析成**很淡的颜色**（老板："怎么这么淡，你搞反了吧"）。**结论：两边都用 6 位 hex，不要透明度**（老板最终定稿：`color:'#FFFFFF'` + `bgColor:'#333333'`）。
-  ③ ⚠️ **`markers` 的层级由「数组顺序」决定，不是 `zIndex`** —— 项目 2026-09-09 就有这条实测经验（见 `pages/map/map.js` 注释）：**数组越靠后 = 渲染越在上层**。要让某个点置顶，**必须把它挪到数组最后**（`out.push(out.splice(i,1)[0])`），只设 `zIndex:999` 不生效。
-  ④ ⚠️ **`setData` 是异步的** —— 紧跟其后读 `this.data.xxx` 会**读到旧值**。本次症状："选中变红/显店名**时灵时不灵**"。**修法：把后续逻辑放进 `setData` 的第二个参数（回调）里**。
-  ⑤ ⚠️ **`wx.showToast` 里拼原始异常 = 业务员看到一堆英文** —— 见下面"前端永远不要把原始异常弹给用户"那条。
-  ⑥ ⚠️ **自动定时器不要去抢"地图视野"** —— 老板问"过一会儿就切回以自己为中心，是系统自动还是你规定的？"：跟随态每 6 秒 `setData({centerLat,centerLng})` 会把**用户拖动的地图弹回去**。**正确口径：只让「圈」跟着我（circles 中心），绝不动视野**；视野只在 ①首次定位 ②点 `⌖ 我的位置` ③点 `⛶ 全部显示`/切档位/刷新 时才动。
-  ⑦ ⚠️ **"看着像每隔几分钟刷新一次"的真因** —— 每 6 秒无条件 `setData({circles})` 挪圈（哪怕站着不动）→ **费电 + 视觉上像在闪**。**修法：加位移门槛**（`位移 > 20 米` 才更新圈）。
-  ⑧ ⚠️ **"最近 500 家"不能靠"随机捞 3000 条再排序"** —— 探针实测（`_scratch/探针-各档位密集度.js`）：义乌商贸区 **2 公里内 3279 家**、全城 **70% 的位置 2km 内超 500 家**。旧做法（矩形粗筛 3000 条**无排序**）→ 取出来的"最近 500"其实**覆盖到 800 米外**（模拟实测：理论最优 316 米 vs 旧做法 824 米）。**正确做法：由近到远分圈查**（200m→500m→1km→2km→…→用户选的半径），**凑够 MAX×1.5 就停**。
-  ⑨ ⚠️ **路线规划要走云函数**（`tasks.walkRoute` 调腾讯 `walking` 接口）—— **云函数不受小程序域名白名单限制**，所以**不需要去微信后台配 `request` 合法域名**（任务地图/后台的路线本来就是这么调的）。⚠️ 用 `walking`（步行）不是任务地图那个 `driving`（驾车）。
-- ⚠️ **云函数写「新集合」时，`.add()` 必须接住"集合不存在"并自愈创建（2026-10-04 真机踩到）**：
-  · 现象：老板在小程序点「➕ 建立自由任务」→ **弹出一大堆英文报错**。根因是 `free_trips` 集合还没被创建（`init` 没跑过一次）→ `db.collection(...).add()` 抛 `-502005 collection not exists`。
-  · **正确做法**：`try { add() } catch (e) { 若 message 含 'not exists' 或 errCode 含 '-502005' → await db.createCollection(name) → 重试一次 }`；其它异常返回**人话**错误码。
-  · ⚠️ **不要指望"用户会先跑 `init`"** —— 云端自愈才可靠。（`init` 的 `COLLECTIONS` 仍要登记，那是正路。）
-- 🔴 **前端永远不要把原始异常弹给用户（2026-10-04 老板点名）**：
-  · ❌ 错误写法：`wx.showToast({ title: '建立失败：' + ((e && e.message) || e) })` —— 业务员看到的是**一整段英文堆栈**，既看不懂也不知道怎么办。
-  · ✅ 正确写法：**给用户看人话**（「建立失败，请稍后再试」/「取附近店铺失败，请下拉刷新重试」），**原始错误只进 `console.error('[模块] 说明', e)`**（排查时看调试器）。
-  · ⚠️ 云函数侧同理：异常不要直接把 `e.message` 拼进 `msg` 返回，用 `code` + 人话 `msg`，细节留日志。
-- ⭐ **「记事」（2026-09-28 老板定：只存本机；已开发完成，待真机验证）**：手机端**本机记事本** —— 文字进 `wx.setStorageSync`、照片/录音进 `wx.env.USER_DATA_PATH`（微信给小程序约 200MB），**唯一上云的是「点了「🎙 转文字」的那一段录音」**（走现有 `transcribe` 云函数的 `fileIDs` 分支，**不依赖 visitId、云函数一个字没改**；转完立即删云端文件，文字留本机）。
-  · **入口只有一处**：客户详情页店名卡里电话行右侧那块 44×44「快速记事」（→ `pages/notes/editor/editor?customerId=&customerName=`）；列表 `pages/notes/notes` 由客户页「📝 我的记事 · N 条」/ 我的页「📝 我的记事」/ 首页「记事」快捷卡进入。
-  · **老板拍板只做「关联客户 + 客户页互通」**：待办勾选清单 / 标签 / 搜索 / 置顶 / 时间轴分组 / 单项导出 **一律没做**（别自作主张补）。
-  · 上限跟拜访页同源（**不写死**）：录音 ≤6 段、单条跟后台 `recordingDurationLimit`、合计 30 分钟；照片跟 `photoLimit`（3/6/9/15）。
-  · 提醒走 `wx.addPhoneCalendar` 写**手机系统日历** —— ⚠️ **2026-10-02 实测更正（下面这条原记录是错的，勿再照做）**：**不要**在 `app.json` 的 `requiredPrivateInfos` 里声明 `addPhoneCalendar` —— 那个字段**只收地理位置类接口**，加进去会让**模拟器直接起不来**（已 git 级回退，`git diff` 无输出）。**正确做法**：去微信公众平台**更新「用户隐私保护指引」并勾选「日历」**，再重新上传 + 提审（合规动作，**等老板点头**）。⚠️ 代码 `pages/notes/editor/editor.js` 里的 `wx.addPhoneCalendar` 本身是**对的、不用改**；失败时只把提醒时间记进记事并提示。
-  · 详见 `_scratch/记事功能-说明.md`；交付前自查：`python -X utf8 _scratch\notes_selfcheck.py`（只读：语法 / JSON / 行尾 / WXML 配对）。
-- ⭐⭐⭐ **「改完之后必须真的刷新」（2026-10-10 老板三次点名，别再犯）**
-  · **老板原话**：「**我删除完批次，可是批次卡仍然显示在上面，你就不能主动刷新一次吗？这个问题我前面都说过**」
-  · **规矩**：**任何"改 / 删"操作成功后，必须【先作废缓存、再刷新列表】** ——
-    本项目里就是 **`invalidateBatches()` → `loadBatches()`**（**顺序不能反；只调后者 = 拿到 60 秒旧缓存**）。
-  · ⚠️ **后台有两层批次缓存**：**内存 `batchCache`（60 秒 TTL）** + **服务器落盘 `admin/cache/batches.json`（5 分钟 TTL，
-    由 `POST /batches/refresh` 作废）** —— **`invalidateBatches()` 已同时清这两层**，别自己拼。
-  · ⚠️ **同类要一起查**：**新建批次 / 建任务 / 批次改名 / 加客户进批次** 之后，同样要走这条路。
-  · **判断口径**：**"这个操作改了数据 —— 界面靠什么显示它？那份数据有缓存吗？"** 有缓存 → **刷新前必须先作废**。
-- ⭐⭐⭐ **后台调云函数走的是【HTTP API】那条路，超时只有 ~4~5 秒（2026-10-10 实测定案）** —— **不是云函数文档里的 30 秒**
-  · 实测（同一个 `deleteCustomerBatch`，只改每轮家数）：
-    **300 家 → 3.6 秒 ✅ 成功**；**800 家 → 5.9 秒 ❌ `-601008` 超时** → **阈值就在 4~5 秒之间**
-    （`server.js` 的 `callApi` 走 `invokecloudfunction` HTTP API，它的等待上限比云函数执行上限短得多）。
-  · ⚠️ **所有"批量操作"的单轮耗时必须压在 3 秒以内**（留一倍余量）：
-    · `deleteCustomerBatch` → **每轮 200 家**（≈2.4 秒）
-    · `addBatchMembersBulk` → 后台每片 **200 个 id**
-    · 经验值：**"一次 update 一家客户" ≈ 8~12 毫秒/家**（含 `_.pull` / `_.addToSet` 的读改写）
-  · ⚠️ **怎么判断是不是这个坑**：**报 `-601008`，但你直调那个接口却很快** → 就是"单轮太重、被 HTTP 路掐了"，
-    **不是云函数崩了**。**别再去对着 30 秒那个数调参**。
-  · ⚠️ **教训**：**批量参数要"从小往大试"，别"贴着实测值往上顶"** —— 3.6 秒看着安全，5.9 秒就死了。
-- ⭐⭐⭐ **腾讯地图两把 key 别搞混（2026-10-10 实测定案）：服务端算路只能用 `mpWSKey`**
-  · **`mpKey`（`SQWBZ-…`）= Web 端 JS API 类型** —— 只适合"浏览器里显示地图"；
-    **云函数拿它调 `driving`/`walking` 一律被拒**：`{"status":111,"message":"签名验证失败"}`。
-  · **`mpWSKey`（`QAFBZ-…`）= WebServiceAPI 类型** —— 服务端算路用它，**而且【不需要 SN 签名】**：
-    `{"status":0,"result":{"routes":[{"distance":1525,"polyline":[…]}]}}` ✅（2026-10-10 curl 实测）
-  · **落地**：`adminapi.getMpKey()` 与 `tasks.getMpKey()` 都**优先读 `mpWSKey`**、回退 `mpKey`；
-    `tasks.txUrl()` **一律不签名**（`txSign` / `getMpSK` 保留为死代码，留给"以后换成开了签名校验的 key"）。
-  · ⚠️ **症状对照**：**任务地图的路线变成"虚线直连 + （直线估算）"= 算路失败** →
-    **八成就是这个 key 用错了**（先看这两处是不是读的 `mpWSKey`）。
-- ⭐⭐⭐ **「看数据先读本地，云端只做同步」（2026-10-10 老板定，架构级铁律）**
-  · **老板原话**：「**我本地还有轻量服务器都有数据，为什么要拉这么多？你到底怎么设计的？？？**」
-  · **规矩**：后台凡是「**看 / 挑 / 筛**」客户与批次的界面（**新建任务选客户、批内列表、客户管理、批次卡……**）
-    **一律先读本地缓存** —— 硬盘上的 `admin/cache/map-points.json`（**全库 178,752 家 + `bi` 批次归属**），
-    用 `custLocalList({ batchId })` 这类**本地筛选**（内部就是数组过滤）；
-    **云端只负责一件事：把数据同步下来**（`store.js` / `pgsync.js` 已在做）；**轻量服务器 PG 作备份兜底**。
-  · **为什么（2026-10-10 血的教训）**：「新建任务 → 选择客户」原来走云端 `listCustomers({batchId})`，
-    一批 9448 家要拉 **≈22MB** → **必然 30 秒超时（-601008）** → 前端拿到空数组 →
-    界面显示「**客户库为空，请先导入客户**」（老板排查一上午的根因）。**改成读本地后：零请求、毫秒级。**
-  · ⚠️ **危险信号（看到就要改）**：**给云端传 `batchId` 却要"整批客户的完整档案"的调用** ——
-    批次一旦上千家，**它必然超时**。⚠️ 代码注释里那句「**批内量小、所以走云端**」是 **2026-09-27 的判断，早已失效**，
-    别再拿它当理由。
-  · **判断口径一句话**：**"这个界面是给人看/挑的，还是给机器同步的？"** —— **看/挑 → 本地；同步 → 云端。**
-- **客户筛选与分辨是老板长期重点，涉及改动主动提醒优化**
-- ⭐ **「老板兼业务员」= `users.alsoSalesman`（2026-09-30 老板朱小利定；已开发完成待部署）** —— 老板要「三身份入口」（🏃 业务员 / 👑 老板 / 🖐 游客），并且**要能被派单、亲自带队跑样板**；老板追加口径「**业务员他按照真实的**」（= 他跑出来的拜访/任务**进统计、进战况**，**与实习 trial 相反**）。
-  · **机制**：给管理员账号开 `alsoSalesman: true` → ① 后台「选业务员」下拉**出现他**（`listSalesmen` / `createTask` / `reassignTask` 已放行）② 手机端登录显示 **「🧑💼 身份选择」页** ③ 选业务员 → 前端置 `globalData.asSalesman`（storage 持久）→ **每个云函数请求带 `asSalesman: true`** → 云端 `isBoss` **降为 false**（看自己的任务、拜访**真落库**、进统计）。
-  · ⚠️ **`asSalesman` 声明只降权、绝不提权**，且云端**必须 `users.alsoSalesman === true` 才认**（只信库里的数据，与实习 trial 同一路数）；⚠️ 与 `bossMode` **互斥**（进老板/游客身份、`clearUser()` 都会清掉）。
-  · **改动 10 个文件**：`login` / `tasks`（含 bossBoard·bossWar 的"真实业务员集合"**纳入他**）/ `visits` / `transcribe` / `adminapi`（+ 新 action `setUserAlsoSalesman`，**坑 32**：ACTIONS 白名单要同步补）/ `app.js` / `utils/api.js` / `pages/login/*`（三身份页，`devKind` 区分"开发者三身份"/"身份选择"两套文案）/ `home.js`·`mine.js`·`tasks-all.js`（放行条件）/ `admin.html`（人员管理 · 管理员列表加「🧑💼 兼业务员」开关）。
-  · ⚠️ **部署**：重传 `login`/`tasks`/`visits`/`transcribe`/`adminapi` 5 个云函数 → 重启后台 + `Ctrl+F5` → 上传体验版 → **后台开他的开关**（人员管理 → 管理员 → 「🧑💼 兼业务员」）。详见 `项目交接-当前进度.md` **§0.0z5**。
-- ⭐ **客户删除 = 回收站（软删，2026-09-29 老板定）** —— 老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」「可以进回收站，但是**不能彻底删除**」「进了回收站的客户，**不再纳入客户总数**（订单数据等**还是要纳入总额**的），**不再地图上显示**」。
-  · **做法**：`adminapi.deleteCustomers` **不再真删**，只写 `deleted:true` + `deletedAt` + `deletedBy`（**数据一条不丢**；恢复 = 去掉标记，**批次归属 / 拜访 / 照片原地不动**）。
-  · **入口**：顶栏「🗑 回收站」按钮（**「切换工作台」左边**，**只在「🏪 客户管理」页显示**；**进 / 出是同一个按钮**，进去后文字变「← 返回客户列表」）。
-  · **能力**：**只有「看 + 搜索 + 恢复」**（本轮**不做**彻底删除；以后做时要加「有订单 / 拜访 → 不许彻底删」的保护）。
-  · ⚠️ **「任务中的客户一条都不能删」**（老板原话：「删除任务中的客户就提示"XX客户正在任务中，不能删除"就行了」）—— 一条拦截同时解决两个问题：① 任务进度分母含它 → 删了**进度永远到不了 100%**；② 若它正在「拜访中」→ 还会卡住"同一任务只允许 1 家拜访中"的拦截，**业务员开不了新拜访**。判定口径与 `listCustomers` 一致（published / reviewing **且未过期**）。
-  · **全链路排除（共 11 处）**：`listCustomers` / `custMapPoints` / `custSync` / `custGeoOptions` / `custGeoAggregate` / `listCustomerBatches` 的客户总数与入批集合 / `fieldList` / `msgCount`·`msgCenter` 的 `shopNew` / `importCustomers` 匹配池 / `runMallMatch` / `refreshFromMall`。统一常量 **`NOT_DELETED = { deleted: _.neq(true) }`**。
-  · ⚠️⚠️ **两个坑**：① **MongoDB 语义**：`$ne:true` **能匹配"字段不存在"的文档** → 老客户（没这字段）不受影响（这个语义是**故意**用的，安全；反面教训见 `backfillMallCode`：`$ne:''` 会匹配不存在的字段，曾把 6 万家圈进来导致超时）；② **聚合 `.match()` 不认 `db.command` 的 `_.neq()`**，必须用**原生 `$ne`** → 另立 **`NOT_DELETED_AGG`**（写错**不报错、只是静默不生效**，最坑）。
-  · ⚠️ **删除不会通过增量同步传给后台**（`custSync` 同样排除已删）→ 前端删完必须**自己调 `/mapPoints/patch` 的 removeIds** 把本地缓存摘掉（`geoDeletePicked` 已做）；**恢复**时客户重新符合 `NOT_DELETED`，会被 `custSync` 带回来（等下一轮 15 秒保鲜轮询即可）。
-  · ⚠️ **彻底删除时的牵连清理**（**本轮没做**，留给以后"统一清理"）：云存储照片 / 录音、`coord_fix_requests` / `customer_remarks` / `transcripts`、以及 `tasks.customerIds` / `dayPlan` 的引用 —— **但最后这条已被"任务中的不能删"挡住**。
-- ⭐ **商城侧字段：一张表说了算（2026-09-29 老板定）** —— 老板原话：「就是库里这 13 个，**只要有信息就倒过来**」「**商城优先** —— 商城有值就写上（覆盖现场填的）」「**但是经纬度要以现场为准**」。
-  · 🔴🔴 **「合并的店名一律以商城的为准」= 铁律（2026-10-13 老板定，原话：「只要是合并信息，店名一律以商城的店名为准，这也是铁律」）** ——
-    **合并（人工配对 / 认领 / 从商城更新）拿商城名写 `name` 时，必须同时把 `nameRaw` 改成同一个名**
-    （落地就一行：`adminapi` 的 `mallFieldsFrom()` 末尾 `if (out.name) out.nameRaw = out.name;`，一处治四条链路）。
-    ⚠️ **为什么必须一起改**：`nameRaw` 是"展示名"的**第二个来源** —— 后台客户列表 / 回收站列表 / 手机端任务列表与邻近店
-    读的都是 `nameRaw || name`；只改 `name` 就会「详情页是新名、列表还是旧名」，老板 2026-10-13 连着两家截图投诉
-    （水城羊肉粉周、安顺米粉周）。
-    ⚠️ **同口径的三处**：`updateCustomerFields`（改店名）/ `fixDupCustomers`（修正店名）/ `mallFieldsFrom`（合并）——
-    **以后新增任何"会改店名"的链路，都必须同步 `nameRaw`**。
-    ⚠️ **副作用（老板认可）**：被合并过的店，`nameRaw` 里原有的**编号前缀 / 分店后缀**
-    （如 `c1615 福仔🍴烧煲仔饭(东塔路店)`）会按商城名收敛（商城名里没有分店信息就显示不出来）。
-  · **唯一真相 = `adminapi` 的 `MALL_FIELD_PAIRS`（14 项）**：`mallKey` / `mallCode` / `addedAt→mallJoinedAt` / `name` / `region` / `address` / `phone` / `salesman→mallSalesman` / `level→mallLevel` / `source→mallSource` / `tags→mallTags` / `category→mallCategory` / `lastOrderAt` / `lastBrowseAt`。
-  · **三条链路共用它**：`runMallMatch`（导入商城表后自动比对）/ `applyMallMatch`（浏览器本地比对认领）/ `refreshFromMall` 的 `REFRESH_MAP`（「从商城更新」按钮）—— **以前是三份手写清单，口径必然漂移**（比对只倒 7 个、刷新按钮 10 个、解析端 13 个）。
-  · ⚠️ **`mallCode`（客户编号）曾被整条链路丢掉**（表头映射里有、`item` 初始化里漏了）→ 而**订单是按 `customerCode` 匹配的** → 没编号的店**订单永远挂不上**。链路各端都要有它：`admin/server.js` 的 `MALL_HEADER_ALIAS` + `item`、`importMallCustomers` 的 `doc` + `STATIC_FIELDS`、`runMallMatch` / `applyMallMatch` / `refreshFromMall` 的 field、前端 `toMall`。
-  · ⚠️⚠️ **坐标绝不覆盖（硬拦）**：`MALL_NO_TOUCH = ['lat','lng','wgsLat','wgsLng','coord_status','coordSource','coordUpdatedAt','coordFixReviewedAt']` —— 在 `mallFieldsFrom()` 里**代码级拦截**，以后谁往表里加了坐标字段也冲不掉现场坐标。理由：商城坐标是"注册时填的地址"，**业务员现场采的才是真到过那个点**。
-  · ⚠️ **商城值为空 → 不覆盖**（否则会把客户已有的地址 / 电话抹成空）。
-  · ⚠️ **建档口径（老板定）**：**「已加入商城」是事实，只能由导入商城表比对决定** —— 「待商城建档」页那个手动「已建档」按钮**已删除**（它会抹掉 `mallPending`、却让注册商城时间/签约业务员/编号全空）；改为把 `source:'field'` 的现场录入店**也纳入商城比对**（**以前只比 `customerType:'mall'` → 现场录的店压根不在范围里，永远对不上**），对上时才写 `mallPending:false` + `customerType:'mall'` + 商城字段。⚠️ **"加新店"建的店会进「📬 重点消息」+ 边栏角标**（`msgCount.shopNew`），**对上商城后自动消失**。
-- ⭐ **防重检测（`tasks.newShopCheck` / `dupCheck`，2026-09-29 大修）**：三档判定 —— `block`（**铁证·拦**：电话同号）/ `sameName`（**同名·提示**）/ `suspect`（店名高度相似或电话近似 · 只预警不拦）。
-  · ⚠️ **`.limit(50)` 是"站在店旁边却说没有"的根源**：商圈核心 200 米内实测 **81 家店**，只取 50 条又**没有 `orderBy`** → 命中哪 50 条不确定 → 目标店可能压根不在结果里。**现为分批拉到 300 条**（`PAGE=100` / `MAX=300`），超限回传 `truncated` 让前端补一句提醒。
-  · ⚠️ **电话比较用 `phoneKey()`（去区号）**：业务员照门头抄电话**不会加区号**，`82177093` 与 `0579-82177093` 必须算同号。⚠️ 剥区号正则**不能写 `^0\d{2,3}`**（贪婪剥 4 位会把 `021-62888888` 变成 `2888888`）—— 正确是 **`/^0(?:10|2\d|[3-9]\d{2})/`**（**`010` / `02x` 是 3 位，其余 4 位**）。
-  · **调试面板（⭐ 2026-10-02 已从界面彻底移除）**：原 `.dupdbg`「🔧 防重调试」深色面板（显示 doDup 次数 / 事件序列）与其 wxss 样式**已删**；同批还去掉了「防重检测」按钮旁那枚 **「防重 vN」版本标识小字**（`.dbtip .dv`）—— **都属开发痕迹，正式版不该出现**（老板 2026-10-02 定）。⚠️ `newshop.js` 里 `showDupDebug: false` + `_dbg()` 作为**零开销死代码**保留（默认 early-return）；**改 `true` 不会再让面板回来**，要恢复得从 git 历史取回那段 wxml。
-  · 自检工具：`node _scratch/ask_tasks.js <lat> <lng> [店名] [电话] [半径]`（调 `tasks.selfCheck`，**免鉴权只读**）。⚠️ 它返回的 **`ver` = 云端 `CODE_VER`** —— **和本地对不上就是"没重传"**，这是排查"改了没生效"最快的一招。
-- **推荐人（2026-09-24 老板定，已开发完成待部署）**：**谁分享的链接把人拉进来就记谁为推荐人** —— 9 个页面的 `onShareAppMessage` 统一走 `utils/share.js`（`path=/pages/login/login?ref=<分享者 _id>`），`app.js` 的 `captureRef()`（onLaunch + onShow）接住并**持久化**，注册时随申请提交（云端**校验 ref 必须真实存在**、查不到静默忽略），审核通过写 `users.referrerId/referrerName/referrerSource`。⚠️ **存量的人当年没有分享链路 → 只能后台手工补录**（来源标 `✏️ 手工`）；**推荐人只能是系统内的人**。后台三处：业务员列表加「推荐人」列（含「设置」补录）、待审核/已处理各加「推荐人」列、新增「📊 推荐排行」Tab（拉人数 / 待审核 / 下级拜访数 / 任务完成率 / **带来入商城客户**）。⚠️ 统计**刻意不用**"客户档案的签约业务员"（那是「业务负责人」**原值**如 `快餐盒c聚火配送🔥`，与 users 姓名对不上）。⚠️ 新增 action `setUserReferrer` / `referrerStats` **必须同步补 `ACTIONS` 数组**（坑 32）。详见 `_scratch/推荐人功能-说明.md`
-- **业务员星级（2026-09-24 老板定，已开发完成待部署）**：`users.star` —— **0.5 ~ 5，步长 0.5，共 10 档**（**新人进来默认半星，没有"未评"档**；存量账号没有该字段的**一律按 0.5 兜底**）。**显示规则：每颗星三态 —— 没有 / 空心 ☆ / 实心 ★**，所以能表达半星：**实心=1 星、空心=半星**（例：`★★☆` = 2 星半、`★★★` = 3 星，**不足的位不补空心**）。设定入口：**后台人员管理 · 业务员列表的「星级」列**（姓名与手机号之间）—— 交互：**平时只显示星串；鼠标移上去浮出一排 5 颗可点的星**（★金=满/☆半透明=半/☆灰=无），**点第 N 颗 = 该位三态循环「无 → 半 → 全 → 无」**，落到整条就是 N-1 / N-0.5 / N 三档循环（第 1 颗因最低是半星，实际只有 半 ↔ 全 两态）；点完只就地重渲染那一格（不整表刷新）；`adminapi.setUserStar` 校验 0.5~5 半星档位；手机端显示在**业务员首页姓名右边**（`home.wxml` 的 `.star`，老板模式不显示）。⚠️ 手机端靠 `login` 下发的 `publicUser.star` + `home.js` 的 `_verifyIdentity()` 刷新（改完星级，业务员**重进小程序首页**即生效）。⚠️ 新增 action `setUserStar` **必须同步补 `ACTIONS` 数组**（坑 32）
-- 任务历史：过期 N 天（2/3/5 默认 3）自动归档终态只读；logs 统一流水；sendTask 不重置 createdAt
-- 通知：后台全局轮询（指纹增量渲染）+ 响铃→1.6s→云希语音→浮窗；任务审核=notify.wav、坐标报错=bengbao.wav；手机端审核观察员（有 reviewing 才轮询）
-- 诊断数据用 adminapi（账号密码），别用云端测试测 tasks/visits（无 OPENID 必报 where undefined）
-- ⭐⭐ **行尾权威清单在代码里（2026-10-08 更正）**：判断某文件该 CRLF 还是 LF，**一律以 `admin/tools/check.js` 的 `CRLF_FILES` 为准**；下面（2026-09-29）那条"CRLF 系文件共 6 个"**已过时** —— 实测至少还有 **`pages/visit/visit.wxml`、`pages/login/login.wxml`** 也在清单里（2026-10-08 我照旧清单把 `visit.wxml` 转成 LF，被 `check.js` 当场报错、又转回）。**改任何文件的换行之前，先看一眼 `check.js`，别照记忆或旧文档。**
-- **行尾规矩（2026-09-23 字节级复测更正，覆盖 09-12 那次错误结论）**：`admin.html` **实测是 CRLF** —— 字节级实测 **CRLF=6305 行 ＋ 裸 LF=16 行**（裸 LF 全在那段 `mpAlertTemplateId` 回显附近 `5525~5540`），无 BOM；**编辑它必须保留 CRLF，并原样保留那 16 个裸 LF**（改前数一遍、改完再数一遍）。⚠️ **2026-09-28 晚复核更正：现在已是【纯 CRLF】**；**2026-09-29 再测：CRLF=10644、裸 LF=0、无 BOM**（09-23 测到的那 16 个裸 LF 已由提交 `36ea029` 修掉 → **"必须原样保留 16 个裸 LF"这条作废，别再照着数**）。**编辑它只需保证仍是纯 CRLF**。⚠️⚠️ **2026-09-29 实测教训：`edit_file` 写入 `admin.html` 会带进裸 LF** —— 那天改完一轮**凭空多出 26 个裸 LF**（落在 L2440-2447 与 L10590-10607 两段新加的代码里），靠"**改完字节级再数一遍**"才发现。**所以这一步不能省**（修法：`s.replace(/(?<!\r)\n/g, '\r\n')` —— 只把裸 LF 补成 CRLF、不动已有的；**改完再跑一遍内嵌 JS 语法检查**）。⚠️ **判定必须用字节级方法**（python/node 以 `rb` 读，数 `\r\n` 与 `\n`）—— **`grep -c $'\r'` 在 Git Bash/MSYS 下会剥离 CR、恒返回 0**，09-12 那次"实测是 LF"就是被这个假象骗的（同一命令下 `admin.html` 和真的 LF 文件 `app.js` 都显示"没有 CR"，根本区分不出来）。`.bat` 必须 CRLF（cmd 要求）。同理：**`开发计划.md` 是 CRLF ＋ 29 个裸 LF 的混合文件**，编辑时同样要数。
-  ⚠️ **2026-09-24 实测补充（别再想当然）**：**`pages/customer/customer.js` 和 `pages/map/map.js` 本身就是 CRLF 文件** —— **`.js` 不等于 LF**。
-  ⚠️ **2026-09-29 全面复测（以这次为准）**：CRLF 系文件共 **6 个** —— `admin/admin.html`（纯 CRLF）、`开发计划.md`（CRLF＋29 个裸 LF 混合）、`admin/nt-map.js`（纯 CRLF）、**`pages/login/login.js`（纯 CRLF —— 本次新补进清单）**、`pages/customer/customer.js`（纯 CRLF，**891 行**）、`pages/map/map.js`（纯 CRLF，**468 行**）；其余 `.js`/`.md` 实测是**纯 LF**（`项目交接-当前进度.md`、`AGENTS.md`、`pages/newshop/*` 等）。**本次已把 `login.js`（9 处）、`map.js`（1 处）混进来的裸 LF 修干净**（备份在 `_scratch/backup-eol/`）。
-  自查工具：**`python -X utf8 _scratch/_fix_eol.py`**（DRY-RUN，列出行尾不干净 / 整体 CRLF 的文件；带 `--apply` 才改，且**会自动跳过整体 CRLF 的文件** → 所以像 `map.js` 那种"主体 CRLF、混进几行 LF"的**它不会帮你修**，要手写 `s.replace(/(?<!\r)\n/g, '\r\n')`）。⚠️ 命令**必须写 `_scratch/`（带下划线）**，且 `-X utf8` 的 `utf8` **不能省**（写成 `python -X _scratch/xxx.py` 会被当成 `-X` 的参数 → **直接掉进交互模式**）。
-- **不要用 `git diff --check` 判断行尾**：`core.autocrlf` 下 CRLF 文件（`admin.html` 等）的每一行都会报“trailing whitespace”，**且每个问题占两行输出**（描述行 ＋ 内容行）—— 曾据此误判“LF 文件被写入 CR”，实际是数错了一半
-- **WXML 只用 view/text，禁止任何 HTML 标签（div/br 曾致白屏）**；临时文件放 `_scratch/`（**不要主动清理，等老板通知清零**——2026-09-11 老板口径，覆盖原「用完即删」）
-- ⭐ **「大列表一律弹窗 + 滚动」（2026-10-12 老板定，长期规矩）**：
-  凡是「一点就出一大堆」的结果（**重复客户检测 / 商城配对确认 / 导入预览 / 任何长清单**）——
-  **一律弹独立窗口**（`width:980px; max-height:88vh; overflow-y:auto`，与项目现成的 `.ovl + .modal` 同一套）
-  + **右上角常驻「✕ 关闭」**；**绝不把长列表直接铺在页面上**（页面会被撑爆、还没滚动条）。
-  · **老板原话**：「刚才我按下了重复监测，然后出来了很多很多，又没有滚动条，让人看的发狂…
-    **以后这种情况你能不能弹出单独窗口并且又滚动条。**」
-  · 页面里只留**一行摘要**（如「共 N 组，已在弹窗里列出」）；
-  · 没结果时**不进弹窗**（页面上给一行绿色 ✅ 就够）。
-- **🔴 老板的设计偏好：界面要简洁，不要冗余的"说明性装饰"（2026-09-24 老板点名批评过一次）**：原话「**我发现你很喜欢搞些不够简洁的东西**」。当时我把后台「推荐人」列堆成了「人名 + 🔗链接/✏️手工 来源标记 + 拉了 N 人胶囊 + 「设置」文字按钮」，被要求改成 **只有「人名 + 一个灰色铅笔图标」**（点铅笔设置）。⚠️ **判据**：① 一个格子里**只留"必要信息 + 必要操作入口"**；② **统计类数字**（如拉了几人）放**专门的地方**（如「📊 推荐排行」Tab），不要塞进每行；③ **说明性文字**（来源、口径提示）**不进表格**；④ 操作按钮**优先用图标**（可加 `title` 悬停说明），少用"设置/更换"这类文字按钮；⑤ 动手加 UI 元素前先问：**"删掉它，会不会影响老板做决定？不会就别加"**
-- ⚠️ **icon 用字符不要用 emoji**：要"灰色/跟随主题色"的小图标时，用 `✎`(U+270E) 这类**文字符号**（`color` 生效），**别用 `✏️`(U+270F+VS16)** —— emoji 是彩色的、`color` 对它无效
-- 🔴 **「游客」= `users.trial` 实习账号，不是前端演示页（2026-09-27 补记；2026-09-28 晚大改，口径以下面为准）**
-  **绝对不要自己造「游客页」**。系统里 2026-09-08 就有完整的 **trial（实习/游客）** 体系：
-  后台「人员管理」新增业务员时勾 `umTrial` → 列表显示「🖐 游客」→ 任意微信在登录页底部点
-  **「实习体验入口（免注册）」**（`login.wxml` 的 `.trial-link`）→ 调 `login` 云函数 **`{asTrialVisit:true, trialId}`**
-  → **以 trial 身份进真实首页**（2026-09-28 老板定的文案，原「🖐 游客体验入口」已改）。
-  ⭐ **2026-09-28 老板定：入口只读、绝不绑定** —— 云端**一个字不写库**（旧 `bindUserId` 只回 `BIND_DEPRECATED`）。
-  能看真实任务/客户；**不能提交** —— `visits`/`tasks`/`transcribe`/`coordfix` **四处云端硬拦 `TRIAL_FORBIDDEN`**；
-  **不进老板统计与战况地图**（`tasks` 里 `trial: _.neq(true)` 排除），**但实习自己能看到派给他的任务**。
-  底部 tabBar 有 **「⏏ 退出」**（**仅实习显示**；`isTrial` 取自 `login` 下发的 `trial:!!u.trial`，不能只看前端标记）——
-  点了回登录页，**微信始终干净**。
-  ⚠️ **实习相关的三个坑（都是"不绑 openid"引发的，2026-09-28 全踩过）**：
-  ① `utils/api.js` 实习态**必须同时补三个字段**：`asTrial`（→ tasks/visits/transcribe/coordfix 的"兜底认人"）、
-     `asTrialVisit`（→ login 的只读分支）、`trialId`（→ 云端拿它去库里核对身份）。**少一个就坏**：
-     少 `asTrialVisit` → login 不认 → 回 `NEED_REGISTER` → **首页复核把实习踢回登录页**；
-     少 `trialId` → 云端 `NO_AUTH` → **实习进来任务列表是空的**。
-  ② `home.js` 的 `_verifyIdentity()`（09-10 加的身份复核）**对实习必须直接 return** —— 它拿 openid 去问云端，实习没绑必然查不到。
-  ③ **wxml 里的"真换行"会被小程序编译压成空格**（跟 HTML 一样），`white-space:pre-line` 拿不到 `\n` → 真机上不换行。
-     要换行**必须写成两个 `<view>`**（`login.wxml` 的 `.tip` 就是这么做的）。⚠️ **演示稿 HTML 用 `<br>` 是好的，别被它骗了**。
-  ⚠️ **沿革（别再来回改）**：09-08 定 → **09-10 移除**（提交 `f70755f`，口径「实习角色永远不能绑定」）→ **09-27 恢复** → **09-28 改只读不绑定**。
-  详见 `项目交接-当前进度.md` **§0.0x（09-28 晚最新快照）**。
-  详见 `项目交接-当前进度.md` 同名条目（含完整机制说明与使用方式）。
-  - **身份与通知收件人（2026-09-12 明确，别再搞混）**：手机号 `13067737286` = **开发者本人**（这套系统的开发 + 管理员/运维），他在系统里为了测试注册成业务员「**范宇琨**」（`users.role=salesman`），dev 白名单就是他（`app.js` 的 `isDev`、`visits`/`tasks` 里 `phone === '13067737286' && event.boss === true` 按老板处理）；手机号 `15055492888` = 「**朱小利**」= **真正的老板（业务方/客户）**（`users.boss=true`、adminapi 里 `BOSS_PHONE` 指他）。**开发/运维类系统通知（云调用用量告警、模板测试消息等）只发给后台设置项 `adminNotifyPhones`（「管理员信息收件人」）里配置的手机号**，不自动发给"绑了服务号的管理员"、**不打扰朱小利**；用量告警模板用独立的 `mpAlertTemplateId`（**界面不回明文**，留空＝不修改，清除传 `__CLEAR__`）
-- **首页分享按钮（2026-09-12 老板定，6 轮返工换来的口径）**：老板端与业务员端首页右上角**各有一个、用的是同一段 WXML**（都在页面容器第一层、`.head` 之外）；必须是 `<button open-type="share">`（**小程序没有"用代码拉起好友列表"的 API**，普通 view 点击不触发）；图标用 `images/share-icon.png`（90×90 透明底、由 SVG **矢量精确渲染**，**别再用 CSS 手拼**）；**定位与尺寸全部内联 `style` 且写死 px**：`right:8px` / `top:10px` / 图标 20px / `transform:scaleY(.75)` 垂直压到 15px。**四个坑**：① 定位别写在 `<button>` 上（组件内置样式会顶掉，实测差 85px）；② 别用 `100%` 互相定尺寸（会算成 0，图标直接消失）；③ 内联 style 里别用 `rpx`（会被当 px 放大）；④ 小图标别手拼。详见交接文档 §4 坑 30~35
-- **分享卡片封面**：`images/share.png`（**500×400 = 微信 5:4 规格**；当前是老板指定图 `TMP/FENX-1.jpg` 的 **JPEG q85 压缩版，52KB**）。**9 个页面的 `onShareAppMessage` 都写死引用这个文件** → **换封面只换文件、不改任何 JS**；照片类图务必用 JPEG（同内容 PNG 336KB vs JPEG 52KB）。原图与历次备份都在 `TMP/`
-- **地图标识口径（⚠️ 2026-09-27 老板改，**覆盖 09-25 的“全部去掉腾讯”**）**：**后台仍只显「聚火地图」；手机端改成「两个共存」**。
-  - **① key** —— **复用后台早就有的 `mapKey`**（= 设置项 `mpKey`，默认 `SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D`），**不用另外申请**。
-  - **② 后台 4 张**（`trackMap` 实时路况 / `tmMap` 任务地图 / `visitTrackMap` 拜访轨迹 / `cdMap` 客户详情小地图）**共用一套**：`JH_BADGE_HTML` + `jhMapBadge(id)` + `jhHideMapLogo(box)`；标识固定**右下角**（橙字白描边 + 罗盘图标）。**（后台不变）**
-  - **③ 手机端 4 张**（`pages/map` / `pages/bossWar` / `pages/customer` / `pages/customerDemo`）—— ⚠️ **2026-09-27 老板定：腾讯 logo 与审图号「不能去掉」（合规）→ 恢复显示；「聚火地图」badge 保留，挪到【左上角】避让**。
-    - 做法：**撤销“裁剪法”**（原是给 map 高度写 `calc(100% + 40px)` 再用 `overflow:hidden` 把 logo 所在的底部裁掉）→ **高度改回 `100%`**（`.m` / `.cmap`），`.wmap` 改成纯 `55vh`。
-    - badge 位置统一 `left:8px; top:8px`（**左上角**）、尺寸略缩（指南针 11px / 字 11px）。
-    - ⚠️ **别再“去 logo”** —— 那是合规问题；两个标识各占一角（腾讯在右下、聚火在左上）。
-  - ⚠️ **6 个必知的坑**：① TMap 实例 `destroy()` 后**必须异步 + 换新容器**才能重建（同步创建必白屏），延迟给 **250ms**；② `canvas + div:last-child` 会**选中自己挂的 badge** → 必须**先藏 logo 再挂 badge** + 跳过 `.jh-badge` + badge `z-index:99999`；③ 腾讯 logo 是**异步插入 DOM** 的，要多补藏几次（立即/400/1500/3000ms）；④ 小地图**必须等容器有真实尺寸**再建图（弹窗刚 `display:flex` 那一瞬是 0 尺寸）；⑤ **腾讯 logo 在【右下角】**（别记成左下）；⑥ ⚠️ **`baseMap` 的 `building3d` 绝对不能去掉/换成 `building2d`** —— 改了会让底图**完全渲染不出来（整张地图全白）**，后台 4 张地图全白（详见下一条铁律）。另：手机端 `cover-view` 覆盖 map 不可靠 → **改用普通 `view`**（map 自基础库 2.7.0 起支持同层渲染，官方已推荐）。详见 `项目交接-当前进度.md` §0.0z
-- **🔴 铁律（2026-09-27，拿真实事故换的）：后台 TMap GL 的 `baseMap.features` 里 `building3d` 绝对不能动** —— 去掉它/换成 `building2d` 会让**底图完全渲染不出来（整张地图全白，连底图都没有）**，后台 4 张地图全白。
-  - **正确写法**：`baseMap: [{ type: 'vector', features: ['base', 'building3d', 'label'] }]`（客户详情小地图多一个 `point`）。
-  - **经过**：2026-09-24 已实测并在注释里写了警告；**2026-09-27 按腾讯官方文档“building2d 更省、可减小瓦片加载压力”的说法改了 → 后台地图全白**，老板一度误以为是“下载腾讯地图导致 IP 被限流”，排查半天（实测 IP 正常、腾讯域名全通、无代理）；**回退即好**。
-  - **结论**：**代码里标着「实测」「别动」的注释，优先级高于官方文档的通用建议** —— **实测 > 文档**。改这类配置前先信注释，要改先问老板。
-  - 相关：**战况监控的开场动画已于 2026-09-27 完全去掉**（原 `setZoom(20)` + `setRotation(270)` + 从 20 级缩到全览 `easeTo 2000ms`，会**一次性把 20 级到全览所有级别的瓦片全拉一遍**，是“打开战况监控地图加载慢”的最大单一来源），改为 `fitBounds` 一次到位。
-- **工作协作习惯（长期）**：文员包只在重要节点或老板要求时打包；文档只记重要步骤，小修小改不记；但每次改动后仍需**语法检查 + 行尾核对**（按文件类型：`admin.html` 与 `开发计划.md` 是 **CRLF 系**〔后者还带 29 个裸 LF〕、`.bat` 必须 CRLF、多数 `.md`/`.js` 是 LF —— **一律用字节级方法数**，别用 `grep`）
+  · 老板原话：① 「**客户判断以后你不能想当然的去动，这个责任不能交给你**」② 「**你绝对绝对不能自主添加和更改合并任何店铺信息，必须要操作员同意之后才能更改，而且必须留下备案，以便回退！！**」
+  · **规矩**：① 一个字段都不许自主改；② 必须老板明确同意（**说清「改哪条 id / 改成什么 / 依据」**）；③ ⭐ 每次改动**留备案、可回退**；④ 判断类的事**一律不拍板**，只出「待确认清单」；⑤ **不确定就说不确定**。
+  · 事故背景见 `docs/坑清单.md` 第十二节。
+- 🔴🔴 **「页面身份只准从 URL 来」（2026-10-12 串档事故的根治铁律）**
+  · ① 「当前是哪家店」**只读 URL 的 `?id=`**，没带就报错，**绝不从 storage 兜底**；② **凡跳客户详情页的入口必须带 `?id=`**（现有 5 处：`task.js`/`map.js`/`myshops.js`/`newshops.js`/`freevisit/freevisit.js`）—— **新加入口先问自己：带 id 了吗？不带 = 埋雷**；③ `storage.curCustomer` 只放辅助信息，**绝不当身份用**；④ 换了客户，旧的 `taskId` 一律不带。
+- ⭐⭐ **「拜访页强行离开 = 有内容自动提交 / 全空自动取消」（2026-10-12）**：`visit.js` 的 `onUnload` 只在**没走过正常提交/取消**时接管（判据 `this._startKey` 还在）；有内容（结果/文字/样品/照片/录音任一非空）→ **自动 submit（结果空着也交，内容先保住）**；全空 → **自动 cancel**。⚠️ 编辑模式与游客**不碰**。⚠️ 连带坑：**「切换到那家」是 `redirectTo`、也会触发 `onUnload`**，它必须先 `clearStart()`。
+- **双工作台（方案 D，2026-09-23）**：后台**保留** 🔥 回访 / 🌱 新客**两个入口与数据分区**，但**台内共用一套实现**；手机端**不按类型分叉**；**数据模型永远只有一套 `customers`**（+ `customerType`）。
+- **口径字典**：回访客户（不叫商城客户）；「激活增单/走访维护/活动推广」=回访三目的（`activate`/`maintain`/`promote`）；新客=`develop`；「注册商城时间」；「签约业务员」；坐标状态 `ok`=正常 / `pending`=补标 / `pending_confirm`=待定；坐标显示**纬度在前**。
+- **任务编号**：`区域码-8位混码` 如 `JH05-42379761`（混码不可逆查库）。**截止日**：开始日=第 1 天；**截止日当天 0 点起即截止**（全完=已完成，否则=已过期）。**单开**：同任务同时只允许 1 家拜访中（start 拦截）；**取消拜访=直接删除不留痕**。**坐标报错**：手机端报错 → 后台审核；**同意不写回坐标，改 `pending_confirm` 待定**。**定位校验**：阈值 1~500 整数，0/不勾=关闭，默认 100 米，失败拦截提交。
+- **照片显示铁律（30 元教训定稿）**：缩略图 canvas 一次绘制、**零分支零循环**（320×240 中心裁切 + quality70）；显示格宽高**固定像素写死**（拜访页 **192×144rpx**、坐标弹窗 88×66px、历史卡 84×63px）；**上限默认 9，后台可配 3/6/9/15**（别写死）；mode `scaleToFill`；三格绝对一样大。**被否过的方案别再试**（min-width+absolute / aspectFill / widthFix / letterbox / 1:1 / padding 撑高）。
+- **录音口径**：**最多 6 段**；单条上限**跟后台档位**（180/300/600 秒，**禁止写死**）；合计 **30 分钟**硬封顶；安卓 mp3(16k/32kbps)、**iOS 用 aac(.m4a)**；mp3 失败自动降级；试听/上传前 `saveFile` 转存（**转存后必须回写路径**）；`obeyMuteSwitch=false`。⚠️ **`rm.start()` 必须传 `duration`（毫秒）** —— 不传默认 60000，会被系统 1 分钟截停。
+- **版本号提升必须经老板确认**：改完**先别动 `APP_VERSION`**，可以建议、**但必须等他点头**。⚠️ 机制：**后台 `admin.html` 的 `APP_VERSION` 是文员端「检查更新」的判据** —— 改了后台又想发给文员就**必须** bump；小程序 `app.js` 的版本号只用于显示。**当前 `0.9.20`**。
+- **导入**：免费环境云函数入参 **100 KB 上限**，大导入必须**前端分片（按字节 60~70 KB/片）+ 断点续跑**；自动建批只第一片锁定 batchId；`decisions` 必须传数组。
+- **商城侧字段：一张表说了算**：**唯一真相 = `adminapi` 的 `MALL_FIELD_PAIRS`**（`runMallMatch` / `applyMallMatch` / `refreshFromMall` 三条链路共用）。
+  · 🔴🔴 **铁律：合并时店名一律以商城为准（2026-10-13）** —— 合并写 `name` 时**必须同时写 `nameRaw`**（落地：`mallFieldsFrom()` 末尾 `if (out.name) out.nameRaw = out.name;`）。因为列表/任务页读的是 `nameRaw || name`，只改一个就会「详情页新名、列表旧名」。**以后任何"会改店名"的链路都必须同步 `nameRaw`**。
+  · ⚠️ **坐标绝不覆盖（`MALL_NO_TOUCH` 代码级硬拦）**：商城坐标是注册时填的，**业务员现场采的才是真到过那个点**。⚠️ **商城值为空 → 不覆盖**。
+  · ⚠️ **建档口径**：「已加入商城」**只能由导入商城表比对决定**（那个手动「已建档」按钮已删）；`source:'field'` 的现场录入店**也要纳入比对池**。
+  · ⚠️ **`mallCode`（客户编号）是订单匹配钥匙**（`orders.customerCode`）—— 链路各端都要有它。⚠️ **`lastOrderAt` 不许再加进 `MALL_FIELD_PAIRS`**（商城快照会盖掉 orders 的真实日期；体检有护栏）。详见 `docs/坑清单.md`。
+- **批次 = 指针表（2026-10-10）**：**`batch_members` 是唯一记账**，`customers.batchIds` **已废弃、不许再写**；**删批 = 删成员条目 + 删卡，客户档案一个字不碰**。读「谁在哪些批次」一律查 `batch_members`（云端）或 PG 的 JOIN。⚠️ **新表建成后必须 `GRANT SELECT ... TO juhuo_ro`**（漏了 pgapi 直接 500）。**批次卡铁律**：一批次全部信息只在一张卡内，绝不分开。
+- **建任务仍走批次**：`🏪 客户管理` 按 城市/区域/商圈 筛 → 勾选 → 「📦 建立批次」→ `📦 批次管理` 批次卡 → 选客户 + 选业务员 → 建任务。⚠️（**两个页签名 2026-09-26 互换过**：`🏪 客户管理` = 筛客户建批次；`📦 批次管理` = 批次卡派单。**内部标识 `#page-geo` / `#page-customers` 从未改**。）
+- ⭐⭐ **客户删除 = 回收站（软删）**：只写 `deleted:true`+`deletedAt`+`deletedBy`，**数据一条不丢**（恢复=去掉标记，批次/拜访/照片原地不动）；**不进客户总数、不上地图**。⚠️ **「任务中的客户一条都不能删」**（否则进度永远到不了 100%，还可能卡住"单开"）。⚠️ **删除不会通过增量同步传给后台** → 前端删完要自己调 `/mapPoints/patch` 摘缓存。⚠️ MongoDB 的 `$ne:true` 能匹配"字段不存在"；⚠️ **聚合 `.match()` 不认 `_.neq()`，必须用原生 `$ne`**。
+- ⭐ **防重检测**（`tasks.newShopCheck` / `dupCheck`）：三档 —— `block`（**电话同号=铁证·拦**）/ `sameName`（同名·提示）/ `suspect`（相似·只预警）。⚠️ 电话比较用 **`phoneKey()` 去区号**（剥区号正则不能写 `^0\d{2,3}`，会把 `021-62888888` 剥成 `2888888`；正确 `/^0(?:10|2\d|[3-9]\d{2})/`）。⚠️ 查附近**必须分批拉到 300 条**（`.limit(50)` 且无 `orderBy` = 命中哪 50 条不确定，曾是"站在店旁边却说没有"的根源）。
+- **「游客」= `users.trial` 实习账号，不要自己造游客页**：免注册入口进真实首页，**只读不绑定**（云端一个字不写库）；`visits`/`tasks`/`transcribe`/`coordfix` **四处硬拦 `TRIAL_FORBIDDEN`**；不进统计与战况。⚠️ 实习态在 `utils/api.js` 必须同时补 `asTrial`/`asTrialVisit`/`trialId` **三个字段**（少一个就坏）；⚠️ `home.js` 的身份复核**对实习要直接 return**。
+- **身份与通知收件人**：`13067737286` = **开发者本人**（系统里的业务员「范宇琨」，dev 白名单）；`15055492888` = 「**朱小利**」= **真老板**（`users.boss=true`）。**开发/运维类通知只发给后台设置项 `adminNotifyPhones`，不打扰朱小利**。
+- **首页分享按钮**：必须是 `<button open-type="share">`（小程序没有"用代码拉起好友列表"的 API）；图标 `images/share-icon.png`；**定位与尺寸全部内联 style 写死 px**（别用 `rpx`、别用 `100%` 互定尺寸）。**分享封面**：`images/share.png`（500×400 JPEG）—— **换封面只换文件、不改 JS**。
+- **地图标识口径**：**后台只显「聚火地图」**（右下角）；**手机端「两个共存」**（腾讯 logo+审图号**不能去掉**，合规；聚火 badge 挪**左上角**）。⚠️ 详细做法与 6 个坑见 `docs/坑清单.md` 第十节。
+- **🔴 铁律：后台 TMap GL 的 `baseMap.features` 里 `building3d` 绝对不能动** —— 去掉/换成 `building2d` 会让**底图完全渲染不出来（整张地图全白）**。**正确**：`baseMap: [{ type:'vector', features:['base','building3d','label'] }]`。**结论：代码里标着「实测」「别动」的注释优先于官方文档 —— 实测 > 文档。**
+- ⭐⭐⭐ **「改完之后必须真的刷新」（2026-10-10 老板三次点名）**：任何"改/删"成功后**必须先作废缓存、再刷新列表** —— 本项目就是 **`invalidateBatches()` → `loadBatches()`**（**顺序不能反**，只调后者=拿到 60 秒旧缓存）。判断口径：**"这个操作改了数据，界面靠什么显示它？那份数据有缓存吗？"**
+- ⭐⭐⭐ **后台调云函数走【HTTP API】，超时只有 ~4~5 秒**（**不是文档里的 30 秒**）：实测 `deleteCustomerBatch` **300 家=3.6 秒 ✅ / 800 家=5.9 秒 ❌ `-601008`**。⚠️ **所有批量操作单轮耗时压在 3 秒内**（`deleteCustomerBatch` 每轮 200 家、`addBatchMembersBulk` 每片 200 个 id；经验值"一次 update 一家 ≈ 8~12 毫秒"）。⚠️ 报 `-601008` 但你直调很快 → 就是被这条路掐了，**别去对着 30 秒调参**。**批量参数要从小往大试**。
+- ⭐⭐⭐ **腾讯地图两把 key 别搞混**：`mpKey`（`SQWBZ-…`）= Web 端 JS API，**服务端算路会被拒**（`status:111 签名验证失败`）；**服务端算路只能用 `mpWSKey`（`QAFBZ-…`，不需要 SN 签名）**。⚠️ 症状对照：**任务地图路线变成"虚线直连+直线估算" = 算路失败**，八成是 key 用错。
+- ⭐⭐⭐ **「看数据先读本地，云端只做同步」（架构级铁律）**：后台凡「**看 / 挑 / 筛**」客户与批次的界面**一律先读本地缓存**（`admin/cache/map-points.json` + `custLocalList()` 本地过滤）；**云端只负责把数据同步下来**。⚠️ **危险信号**：给云端传 `batchId` 却要"整批客户完整档案" —— 批次上千家**必然超时**（曾表现为「客户库为空，请先导入客户」，老板排查一上午）。**判断口径一句话：看/挑 → 本地；同步 → 云端。**
+- **客户筛选与分辨是老板长期重点**，涉及改动主动提醒优化。
+- **推荐人 / 业务员星级**：推荐人 = 谁分享的链接把人拉进来就记谁（`utils/share.js` + `app.js` 的 `captureRef()`；**存量只能后台手工补录**）；星级 = `users.star` **0.5~5 步长 0.5**（新人默认半星），后台人员管理可点。⚠️ 新增 action **必须同步补 `ACTIONS` 白名单**（坑 32）。详见 `docs/坑清单.md` 第八节。
+- **任务历史**：过期 N 天（2/3/5，默认 3）自动归档、终态只读。**通知**：后台全局轮询（指纹增量）+ 响铃→云希语音→浮窗。**诊断数据用 adminapi（账号密码）**，别用云端测试测 `tasks`/`visits`（无 OPENID 必报 where undefined）。
+- **行尾规矩**：⭐ **权威清单在代码里** —— 判断某文件该 CRLF 还是 LF **一律以 `admin/tools/check.js` 的 `CRLF_FILES` 为准**（**改换行前先看它，别照记忆**）。要点：`admin.html` 是**纯 CRLF**；⚠️ **`edit_file` 写入 `admin.html` 会带进裸 LF** → 改完要**字节级再数一遍**（`s.replace(/(?<!\r)\n/g,'\r\n')`）并重跑内嵌 JS 检查；⚠️ **判定必须字节级**（`grep -c $'\r'` 在 Git Bash 下恒返回 0，会骗人）；`.bat` 必须 CRLF。⚠️ **不要用 `git diff --check` 判断行尾**（`core.autocrlf` 下每行都报 trailing whitespace）。详细历史见 `docs/坑清单.md` 第九节。
+- **WXML 只用 `view`/`text`，禁止任何 HTML 标签**（`div`/`br` 曾致白屏）；临时文件放 `_scratch/`（**不要主动清理**，等老板通知清零）。
+- ⭐ **「大列表一律弹窗 + 滚动」（2026-10-12 老板定，长期规矩）**：凡是「一点就出一大堆」的结果（重复客户检测 / 商城配对 / 导入预览 / 任何长清单）—— **一律弹独立窗口 + 滚动**（`width:980px; max-height:88vh; overflow-y:auto`）+ 右上角常驻「✕ 关闭」；**绝不直接铺在页面上**。页面只留**一行摘要**；没结果就一行绿字。
+- **🔴 界面要简洁，不要冗余的"说明性装饰"（2026-09-24 老板点名）**：原话「**我发现你很喜欢搞些不够简洁的东西**」。判据：① 一格只留"必要信息 + 必要操作入口"；② 统计数字放专门的地方，别塞进每行；③ 说明性文字**不进表格**；④ 操作**优先用图标**；⑤ 加 UI 前先问「**删掉它，会不会影响老板做决定？不会就别加**」。
+- ⚠️ **icon 用字符不要用 emoji**：要灰色/跟随主题色就用 `✎`(U+270E) 这类**文字符号**（`color` 生效），别用 `✏️`（emoji 是彩色的，`color` 无效）。
 
-## Notes
+---
 
-- 2026-09-04~06：一期验收闭环；服务号通知全链路（模板 kdgr7e7C…、token 108 分钟同步）；任务编号 JH05-混码；拜访中单开+取消删除；坐标报错审核+语音通知；地图选店三步向导+绿色蚂蚁线路线（方案 C=SVG 自绘层，nt-map.js）；定位体系大改（双档位刷新+高精度收敛加权质心）；坐标审核改「待定」口径；端口换 8581
-- 2026-09-07：登录页记住我（只填充不自动登录）+全细体+按钮字重 400；拜访目的三选（服务号文案映射需重传）；天页签 ✓ 角标按规划方式变色；壳程序大改（普惠体/阴影/自定义最大化/退出确认）；客户批次管理方案定稿 §7.12
-- 2026-09-08（明细见交接文档 §3.8/§3.9/§4 坑 25~27）：现场证据上线（拍照≤3 张+录音三档可设+提交才上传+取消零残留）；任务历史板块（当前/历史 Tab、自动归档、只读）；坐标修正拍照；**照片显示铁律定稿**（见 Conventions）；试听修复（闭包+obeyMuteSwitch+saveFile 转存）；历史卡录音播放控件；resetTestData 升级（连删云存储文件）；文员包已重打（12.98MB）
-- 2026-09-08 后最新：**手机地图页**（独立自取任务、天页签、绿色路线 dayPlan[].route、下一家引导条+导航+去拜访，home 底部「🗺 地图」进入）；**导入分片 100/片+断点续跑**（-601008 超时教训）；**批次管理开发完成待部署**（批次卡/未分批清空/比对认领下沉批次卡）；客户备注卡；登录预填+记住我默认勾选；壳程序刷新图标；手动刷新=当前页刷新+autoArchiveExpired+响铃检测；后台照片点击=页内 photoOvl 弹窗（勿用 window.open，浏览器会当下载）
-- 2026-09-08 晚间（明细见交接文档 §3.11/坑 28/29）：**导入 -601008 修复**（fetchAll 1000、importCustomers 两遍处理+15 并发写库、占位批内去重）；**弹窗死循环修复**（decisions 带 index+全局转片内+累积不清空）；删除批次/加客户并行化；**比对认领本地化**（listMallLibrary+applyMallMatch，前端本地比对+预览总览+应用认领，任何电脑可用）；**壳程序 DPI 大修**（PMv2 声明/工作区 96%×92% 手动居中/标题栏 uiScale/禁右键禁 F5/登录 sessionStorage 会话恢复）；任务行加高；文员包已重打
-- 2026-09-10（明细见交接文档 §7.13/§7.14）：**老板手机端四页**（首页/任务地图/bossWar 战况/我的，入口「👑 进入老板模式」，`users.boss===true` 白名单）；**欢迎仪式**（`welcomeConfig`：daily/every/once × 2/3/5 秒 × gold/color，canvas 礼花）；登录改版落地（注册→后台审核→免登进入，新集合 `registrations`）；人员管理第三 Tab「⏳待审核」+ 解绑 + 老板开关 `setUserBoss`；壳标题条刷新按钮（当前页刷新 + autoArchiveExpired + 响铃检测）
-- 2026-09-11（明细见交接文档 §3.12 / §7.15）：**录音「1 分钟就停」致命 bug 修复**（`rm.start()` 必须传 `duration` 毫秒，默认 60000，坑 27）；**拜访页 UI 大迭代**（5 区块可折叠、默认只展开拍照+录音、深绿渐变录音段卡、照片上限（**默认 9，后台可配 3/6/9/15**）、确认按钮改浅粉）；全域检查 6 项修复（`visits.submit` 真读后台档位、多段转写按真实 `segIndex` 编号）；老板模式首页「今日战况」文案按天轮换；**前后端版本号统一 0.9.11**；分享 `onShareAppMessage` 铺 9 页 + 品牌封面 `images/share.png`；**语音转写 M2 全量完成**（多段录音≤6/按段勾选转写/文字前后台可编辑 `trEdited`）；`adminapi.expiredTaskTick` 归位（技术债）
-- ⚠️ **部署待办（2026-09-29 全面更新，按序）**：
-  **① 重传云函数 `adminapi`** —— 本轮改得最多：**客户回收站（软删）+ 任务中不可删 + 商城 14 字段全倒 + 建档口径 + 消息中心 shopNew + `custDirty` + 防重相关**
-  **② 重传云函数 `tasks`** —— **电话去区号 `phoneKey` + 防重 `.limit` 分批 + 建店写 `custDirtyAt` + 加新店 / 我新加的店**
-  **③ 重启后台**（`server.js` 解析补 `mallCode` + `store.js` 方案 C）→ **浏览器 `Ctrl + F5`**（`admin.html` 回收站 / 删除 / 🏪加新店卡片 / 14 字段）
-  **④ 上传小程序体验版**（防重 v7 + 加新店四步 + 调试面板已隐藏）
-  **⑤ 控制台核对定时器**（`transcribePoll` 每 5 分钟、`adminapi` 10 分钟轮询）
-  **⑥ 真机验证**（防重：站店旁能查出同名 / 同号；加新店四步；**建店后后台 15 秒内自动出现**；回收站删除→恢复；**任务中客户拒删**）
-  ⚠️ **本轮语法检查已全部跑通**（`adminapi` / `tasks` / `server.js` / `store.js` + `admin.html` 内嵌 JS 共 1 段 0 错误），`admin.html` 已复核为**纯 CRLF=10644 / 裸 LF=0 / 无 BOM**。
-  （历史待办，大多已完成：重传 `adminapi` / `transcribe` / `visits` / `tasks` / `coordfix` / `init` → 体验版（录音 duration 修复 / 拜访页 UI / 分享封面 / 转写可编辑）→ 控制台核对定时器 → 真机验证。）
-- 待办：上线前清单（改名「聚火拜访」/头像/qingyan 密码）；服务号两个新模板老板已选未添加；iPhone 录音 aac 与地图页真机验证未完成；定位系列优化待真机反馈；正式版提审
-- 2026-09-13（**客户详情页设计定稿**；全程只在 `_scratch/` 文档与演示稿里，**小程序/后台代码一行未动**）：**7 张卡**（店名卡不折叠 + 商城信息/购买记录/平台口碑/服务与设施/管理员备注/拜访历史 —— 后 6 张**永远出现**，没数据给空态）；**两类空态**（能录入=橙色 ＋ / 客观数据缺失=淡灰 `.empty4`）；**商圈 / 平台地址 / 平台图片 / 点评页 都不显示**（商圈没值连行都不出）；**服务与设施**：标题栏小胶囊只显「有」、设施录入 ＋ 在「团购/外卖」那一行**行尾**、设施没值不显示行；**门头照**＝平台图打底 + 现场拍覆盖（平台图取 `poipicadd` 主图、转存云存储）；**小地图**（📍商圈与位置内）= 不可拖 + 可缩 10~20 级 + **以客户坐标为中心**（不定位/不要权限）+ 初始 16 级 + 高 150px / 圆角 12px，**演示稿里是 CSS 示意块、真机才是 `<map>`**；视觉：页面底色 `--bg` 降三档到 `#E7EAF1`、标题栏箭头 13px / 分割线 2px `#EDF1F7`。文档见 §Notes 上方指针；**下一步（2026-09-25/26 已执行）**：`pages/customer/` 已升级为真数据页（未完成项见 `客户详情页-界面设计文档.md`「〇、实现状态」）；`customers`/`orders`/`order_items` 已导入
-- **2026-09-23（口径路线调整 + 文档纠错；代码一行未动）**：老板拍板 **「方案 D」** —— **后台保留双工作台**（🔥 回访 / 🌱 新客，**入口与数据分区不动**）**＋ 台内共用一套实现**；**手机端继续共用一套**（详情页 7 卡 / 10 项枚举）。**数据模型仍是一套 `customers` 集合**。连带：修正 001 **收窄为"只管手机端"**；议题 ① 结论**从"方案 A 合并"改为"方案 D"**（§七 已就地标注）；修正 002（批次对所有客户开放）与 013 合流；「🛒 商城库导入 / 🔎 待确认认领」**两个工作台都放开**。本轮同步 6 份文档 ＋ 纠正 4 处既有错误（admin.html 行尾 CRLF〔非 LF〕/ 照片上限 9〔非 15〕/ 小程序 10 页〔非 9〕/ 版本 0.9.14〔非 0.9.12〕）→ 明细见 `_scratch/开发前修正-口径对齐.md` **修正 013** 与 §六
-- backlog：AI 日报评分（§7.10，智谱 key 已有）→ 导出+报表 → 操作档案（§7.8）→ 重复客户体检
-- **2026-09-25（客户数据落地 + 后台客户详情页落地 + 前后台地图统一标识）**：① **463 家客户 / 2135 单 / 4574 行明细已真导入云端**（本地 `_scratch/build_import.py` 出 80 个分片 JSON → 后台分三批导入；只读核对与本地分片**逐一相等**，幂等已实测；原有 49 家测试档案已清空）；② **后台客户详情页完成**（`adminapi` 三接口 `getCustomerDetail`/`updateCustomerCoords`/`updateCustomerFields`；两栏卡片；商家信息卡改用**真 `<table>` + `table-layout:fixed` + `colgroup`** 钉死标签列 64px、字号显式写死 12.5/13px；经纬度「✓ 确定 → 二次确认 → 立即生效」）；③ **7 张地图统一「聚火地图」标识、去掉腾讯 logo/版权/审图号**（⚠️ **2026-09-27 更正：手机端已改为「腾讯 logo 恢复 + 聚火地图挪左上角」两个共存**，详见 Conventions 的「地图标识口径」条）。本轮进度台账见 `_scratch/数据落地-实施顺序与规则.md` §〇；快照见交接文档 **§0.0z**；**下一步**：重传 `adminapi` + 重启后台 + 上传小程序体验版；阶段 7 手机端 `pages/customer/` ⚠️ **已于 2026-09-25 升级为真数据页（09-26 提交 `8ec0ad0`）**，展示层已全部落地、写回交互未做，逐条见 `_scratch/客户详情页-界面设计文档.md`「〇、实现状态」
-- 详见 `项目交接-当前进度.md` §3.3 部署队列、§4 坑清单、§5 口径字典、§7.12 批次方案
-- **2026-09-27（客户点本地缓存 M1 + 地图大排查）**：① **M1 落地** —— 新建 `admin/store.js` 本地缓存层 + 3 个后台接口 + 前端读缓存 + 战况监控工具栏「🔄 更新地图数据（截至 MM-DD HH:mm · N 家）」；云函数 `adminapi` 新增 `custMapPoints`（分片轻量点，`_id` 游标）/`custSync`（按 `updatedAt` 增量）；`customers` 的 `updatedAt` **补齐 21 处写入点**（原来只有导入/编辑写，坐标/备注/批次归属/认领全没写 → 增量同步会漏数据）。② **聚合停用**（老板：“这个问题太多，先去掉”）—— `custAggLevel()` 恒返回 `''`，**所有客户点直接显示**；聚合代码全部保留（有醒目“已停用”注释块，改一行可恢复）。③ **地图修复** —— **腾讯地图 logo/审图号恢复显示**（撤销手机端 4 页的“裁剪法”）、「聚火地图」badge 挪到**左上角**避让；**`baseMap` 的 `building3d` 铁律**（改成 `building2d` 会让后台地图全白，已回退）；**开场动画完全去掉**（原 20 级 + 旋转 + 2000ms 会拉爆各档瓦片）。④ 客户点上限从“按 `_id` 截断”改为 **“按地图中心取最近 3000 家”**。⑤ 新增工具：`_scratch/架构-本地缓存与同步方案.md`（架构基线）、`admin/tools/add_index.js`（建索引）、`admin/tools/run_adminapi.js`（绕过开发者工具调云函数）
-- **2026-09-27（下午 · 详情页 9 项收尾，8 项落地）**：① **写回链路（修正 008）** —— `coordfix` 加 `action:'field'`（招牌菜/设施/团购外卖提报：去重、游客禁录、老板模式模拟）+ 手机端真提报与「（待审核）」标识 + **后台客户详情页「⏳ 现场提报」卡采纳/忽略**（采纳写 `customers.platManual`）；② 📍报错接 `coord_fix_requests` 真提交；③ 拍照落库（`tasks.saveCustPhoto` 写 `customers.photos`）；④ 拜访历史真录音播放（`wx.createInnerAudioContext`、obeyMuteSwitch=false）+ 转写 + 样品（云函数补 `audios`/`samples`）；⑤ 淡灰空态 `.empty4` ×5；⑥ 入商城辉光 +「新店」蓝胶囊；⑦ **两处硬编码**修掉（人均 ¥46/人 → `rateSub`；商城信息卡头「最近购买 8月24日」→ `mallSub`）；⑧ 默认展开 `defaultOpen()` 按内容判断。⏸ **唯一搁置**：「平台图打底」—— 金华表无图片 URL 列（只有图片数量/上传时间），待带图批次。⚠️ **要重传 3 个云函数**（`adminapi`/`tasks`/`coordfix`）+ 上传体验版
-- **2026-09-27（下午 · M2b：客户管理页切本地缓存，缓存线主线落地）**：① 云函数 `adminapi`：`custMapPoints`/`custSync` 轻量字段 **12 → 20 项**（nr/ca/ct/ph/rm/bi/mj）+ **新增 `custPageAgg`**（按页现算 订单数/订单额/最近下单 + 拜访次数/最近拜访/任务三态/坐标报错待审，口径逐条对齐 `listCustomers`）⚠️ **必须重传云函数**；② `store.js` `VERSION=3` + **`POST /mapPoints/patch`**（写后回写）；③ `admin.html` 新增本地缓存层（`ensureCustLocal`/`custGeoFromPoints`/`custLocalPage`/`custFillPageAgg`/`custPatchLocal`）—— **🏪 客户管理页（16 列）+ 📦 批次管理页「客户总表/未分批」改读本地缓存**（真批次仍走云端），三层下拉改本地生成，列表显示「数据截至 MM-DD HH:mm」；④ 建索引 `visits.customerId`（`orders.customerCode` 早已存在）；⑤ 验证：语法检查 + **逻辑自测 22 项全过**（`_scratch/_test_m2b.js`）+ 后台重启预热 2063 家/1.7 秒 + `/mapPoints/patch` 实测通过。⚠️ **未重传云函数前**：缓存里 7 个新字段为空（「店名带编号/类型/电话/备注/未分批」显示不全），重传后点一次「🔄 更新地图数据」即可
-- **2026-09-27（下午 · 文档按代码核对）**：① **手机端 `pages/customer/` 详情页早已落地**（09-25 从演示页升级为真数据页 → 09-26 提交 `8ec0ad0` → 09-27 随地图标识改 `b556785`）；**展示层全部实现、9 项未做**（写回云端的交互：招牌菜/设施录入、团购外卖点改、拍照落库、📍报错提交；拜访历史录音/转写/样品；淡灰空态 `.empty4`；「新店」胶囊 + 辉光；默认展开规则；卡头「人均 ¥46/人」硬编码）—— 逐条见 `_scratch/客户详情页-界面设计文档.md`「〇、实现状态」。② **缓存进度更正**：**M2a 已完成**（`store.js` 字段 7→12 项、`VERSION=2`，客户管理页表格要用的字段已备好）；**M2b 未开始**（客户管理页的"读"仍是云端 `listCustomers`）。③ 实测：`adminapi`/`importdata` 云函数**已是最新**（§0.0w 待办①实际已完成）；库内 orders 实为 **9966 单 / 19563 行明细**（含 `data/` 那批金华销售订单，此前文档漏记）；老板定**不清空、不重导**
-- **2026-09-28（深夜 · 消息中心 + 坐标系状态 bug + 铃铛删除 + 战况「全部」开关）**：① **新功能「📬 消息中心」**（边栏「🌐 战况监控」下面，**两个工作台共用**；⚠️ 09-28 晚先定"任务管理下面"、当晚改到"战况监控下面"）：左「📜 滚动消息」+ 右「🔴 重点消息」两卡并排；重点消息 = 坐标修正/现场提报/注册审核/任务审核（**点整张卡片**就地审核），角标 = **实时查 `msgCount`**（点开不清零、**处理完才减**）；滚动消息 = 拜访/坐标提报/注册三类流水（右侧只显「时间 · 审核人 XX」，**不重复显示产生人**）。云函数 `adminapi` 新增 **`msgCount` / `msgCenter`**。② **修 4 个真 bug** —— 最要命的是**坐标系状态值**：坐标审核写 `confirmed`、提报写 `approved`（**两套值不一样**），原判断只认 `approved` → 审核通过的显示成**「已作废」**；另有 `Promise.all` 一损俱损（重点消息空白）、审核完不刷新（卡片不消失）、注册流水缺失。③ **彻底删铃铛**（网页 `#nfFab`/`#nfMask`/`#nfPanel`/`toggle-bell` + 壳 `btnBell` 声明与两处引用）。④ **地图样式 `ADM_MAP_STYLE_ID = 'Style 1'`**（6 张地图一处控制）。⑤ **战况监控加「全部」勾选框**（不过滤任务、不截断，一次画 **60748 家**）。⑥ **新增 `重新编译壳.bat`**（自动找 `csc` + 编译 + 替换 exe）。**代码已推送 GitHub `66d07c6`**；`adminapi` 老板已重传并实测通过。详见交接文档 **§0.0y**
-- **2026-09-29（防重修复 + 加新店闭环 + 客户回收站 + 商城字段全倒）** —— ⚠️ **本轮改动最大的一批，交接文档对应 §0.0z4**。6 件事：
-  ① **防重检测真凶 = `.limit(50)` 截断**：`dupCheck` 在商圈核心（实测金东区万达广场 200 米内 **81 家店**）只取 50 条且**无排序** → 目标店根本没进结果 → 表现成"我就站在店旁边却说没有"。改为**分批拉到 300 条**（`PAGE=100`/`MAX=300`，`skip` 循环，拉不满即 break）+ 超限时回传 `truncated` 由前端补一句提醒。**教训**：`limit` 不带 `orderBy` 时命中哪 50 条是不确定的。
-  ② **电话比较改 `phoneKey()`（去区号）**：业务员照门头抄的电话**不会加区号**，`82177093` 与库里的 `0579-82177093` 必须算同一个号 → `dupCheck` 的 `block` 判定从 `phoneNorm` 改为 `phoneKey`（手机 11 位原样；座机剥区号：**`010`/`02x` 是 3 位、其余 4 位** —— 写成 `^0\d{2,3}` 会贪婪剥 4 位把 `021-62888888` 变成 `2888888`，本次踩过已修）。
-  ③ **「加新店」闭环**：四步流程（定位 / 门店信息 / 品类与设施 / 现场证据）+「我的 → 我新加的店」（`myNewShops`/`newShopDetail`/`updateNewShop`，状态就用现成的 `mallPending`）+ 录音 ≤3 段（**去掉转文字**）+ 营业时间两个整点 picker + 「蓝牙」文案统一改「北斗卫星」。
-  ④ **建档口径纠正（老板定）**：**「已加入商城」是事实，只能由导入商城表比对决定** —— 删掉「待商城建档」页那个手动「已建档」按钮（它会抹掉 `mallPending` 却让注册时间/签约业务员/编号全空）；改为把 `source:'field'` 的现场录入店**也纳入商城比对**，对上时才写 `mallPending:false` + `customerType:'mall'` + 商城字段。
-  ⑤ **「加新店」进【重点消息】+ 角标**（`msgCount` 加 `shopNew`、`msgCenter` 重点消息加一类；对上商城后自动消失）。
-  ⑥ ⭐ **客户回收站（软删）** —— 见 Conventions「客户删除与回收站」条。
-  ⚠️ **商城字段统一为一张表 `MALL_FIELD_PAIRS`（14 项）+ 坐标硬拦 `MALL_NO_TOUCH`** —— 见 Conventions「商城侧字段」条。
-  ⚠️ **方案 C：建店后后台自动刷缓存** —— 见 Architecture 的 `store.js` 条。
-  ⚠️ **本轮踩的两个"看不见的坑"**：**`edit_file` 写入 `admin.html` 会带进裸 LF**（本次带进 26 个，靠"改完字节级数一遍"才发现 → 已修回纯 CRLF=10644）；**聚合 `.match()` 不认 `db.command` 的 `_.neq()`**，必须用原生 `$ne`（写错不报错、只是静默不生效）。
+## 协作节奏（长期约定）
+
+- **文员包**只在重要节点或老板要求时打；**文档只记重要步骤**，小修小改不记。
+- **每次改动后仍必须**：`node admin/tools/check.js`（体检）+ 按文件类型核行尾（字节级）。
+- **⚠️ 汇报要短、不重复**：同一结论只说一次（改完 → 验证 → 报告一次就结束）；只有出现**新信息**才说话。
+- **⚠️ 不确定就说不确定**，绝不把"我猜的"说成"已确认的"（这是最高红线的一条）。
