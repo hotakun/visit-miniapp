@@ -7,7 +7,11 @@ const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf
 
 (async () => {
   console.log('===== 环境探测：测试 env 参数的不同写法 =====');
-  const t = await fetch(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${cfg.appid}&secret=${cfg.appsecret}`);
+  // ⚠️ 2026-10-14：改用 **stable_token**（老接口会顶掉 pgsync / 后台的 token）
+  const t = await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: false })
+  });
   const tj = await t.json();
   if (!tj.access_token) { console.log('❌ token 获取失败：', tj.errmsg || tj.errcode); process.exit(1); }
   console.log('✅ access_token OK\n');

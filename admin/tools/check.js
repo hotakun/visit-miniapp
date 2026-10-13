@@ -28,9 +28,10 @@
  *   ⑩ ⭐ 两项「合规 / 事故」护栏（2026-10-14 新增）
  *        ① app.json 的 requiredPrivateInfos **只准地理位置类** —— 2026-10-02 踩过：加 `addPhoneCalendar`
  *           （那个字段只收地理位置类接口）会让**模拟器直接起不来**。
- *        ② 代码里**不许新增老接口 `/cgi-bin/token`** —— 它会顶掉 pgsync / 后台正用的 token
- *           （2026-10-13「后台数据停更 46 分钟」就是这么来的）。历史遗留的 5 处登记在
- *           `KNOWN_LEGACY_TOKEN`（只提示），**新写的直接报错拦住**。
+ *        ② 代码里**不许再用老接口 `/cgi-bin/token`** —— 它会顶掉 pgsync / 后台正用的 token
+ *           （2026-10-13「后台数据停更 46 分钟」就是这么来的）。**2026-10-14 已把 5 处历史遗留
+ *           全部改成 stable_token**（adminapi / login / server.js / admin/check.js / probe-env.js）
+ *           → 从此 `KNOWN_LEGACY_TOKEN` 名单为**空**，任何新出现的老接口调用**直接报错拦住**。
  *   ⑪ ⭐ 本地缓存字段对账（2026-10-14 新增）—— 云函数 custMapPoints 下发**短键**客户点 → store.js 落盘
  *        （VERSION 控失效）→ admin.html 读短键。三处漂移都是**静默**的：多下发没人用（白拉）、
  *        前台读个不存在的短键（永远空白）、**字段清单变了却没把 VERSION +1**（老缓存不作废、读到缺字段的旧快照）。
@@ -375,13 +376,14 @@ function checkPagePaths() {
 //       日历要走公众平台更新「用户隐私保护指引」，不写在这里。
 // ② 代码里**不许再用老接口 `/cgi-bin/token`**（2026-10-13 后台数据停更 46 分钟的真凶）：
 //    ⚠️ 老接口与 stable_token **是同一套凭证、会互相踢** —— 脚本一调，pgsync / 后台正用的 token 立刻失效。
-//    ⚠️ 现状：还有 **5 处历史遗留**在用（云函数 2 + 后台服务 1 + 后台自检脚本 2）——
-//       不是本次引入的，登记在 KNOWN_LEGACY_TOKEN（**只提示、不拦**）；
-//       **新写的老接口调用**（不在名单里）→ **直接报错拦住**。
+//    ⭐ 2026-10-14：**5 处历史遗留已全部改完**（云函数 adminapi/login + 后台 server.js + 后台自检脚本 2 个
+//       → 一律改用 stable_token），`KNOWN_LEGACY_TOKEN` 名单清空。
+//       → 此后**任何**新出现的老接口调用都**直接报错拦住**（不再有放行名单）。
 const PRIVATE_INFO_ALLOW = new Set(['getLocation', 'onLocationChange', 'startLocationUpdate', 'startLocationUpdateBackground']);
 const KNOWN_LEGACY_TOKEN = new Set([
-  'admin/check.js', 'admin/probe-env.js', 'admin/server.js',
-  'miniprogram/cloudfunctions/adminapi/index.js', 'miniprogram/cloudfunctions/login/index.js'
+  // ⭐ 2026-10-14：已清空 —— 原来登记的 5 处（admin/check.js / admin/probe-env.js / admin/server.js /
+  //   cloudfunctions/adminapi / cloudfunctions/login）都改成 stable_token 了。
+  //   以后再出现老接口调用，就是**真错**，不该再往这里加。
 ]);
 function checkCompliance() {
   // ① 隐私接口白名单

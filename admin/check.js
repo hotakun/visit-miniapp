@@ -10,7 +10,12 @@ const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf
 
   // 1. 获取 access_token
   console.log('① 获取 access_token …');
-  const tRes = await fetch(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${cfg.appid}&secret=${cfg.appsecret}`);
+  // ⚠️ 2026-10-14：改用 **stable_token** —— 老接口 /cgi-bin/token 与 pgsync / 后台**共用一套凭证、会互相踢**，
+  //   跑一次这个自检就会把同步器的 token 顶掉（2026-10-13 后台停更 46 分钟的真凶）。
+  const tRes = await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: false })
+  });
   const tj = await tRes.json();
   if (!tj.access_token) { console.log('❌ 失败：', tj.errmsg || tj.errcode, '（40164=IP 白名单拦截）'); process.exit(1); }
   console.log('✅ access_token 获取成功（有效期', tj.expires_in, '秒）');

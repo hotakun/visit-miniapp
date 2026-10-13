@@ -160,7 +160,11 @@ async function notifyAdminsNewReg(name, phone) {
     const tc = tRes.data[0] && tRes.data[0].value;
     if (tc && tc.token && Number(tc.expiresAt) > Date.now() + 300000) token = tc.token;
     if (!token) {
-      const r = await mpRequest(`/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(cfg.appid)}&secret=${encodeURIComponent(cfg.appsecret)}`, null, 'GET');
+      // ⚠️⚠️ 2026-10-14：改用 **stable_token**（老接口 /cgi-bin/token 与 pgsync/后台共用一套凭证、会互相踢 ——
+      //   2026-10-13 后台停更 46 分钟的真凶就是它）。返回字段与老接口一致，下面的逻辑不用动。
+      const r = await mpRequest('/stable_token', {
+        grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: false
+      }, 'POST');
       if (!r || !r.access_token) return;
       token = r.access_token;
       const data = { key: 'mpAccessToken', value: { token, expiresAt: Date.now() + ((r.expires_in || 7200) - 300) * 1000 }, updatedAt: Date.now() };

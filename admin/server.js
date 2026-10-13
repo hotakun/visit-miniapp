@@ -366,8 +366,15 @@ let mpAdminCred = null; // 内存缓存管理员凭据（server 重启后，老�
 
 function mpGetServiceToken() {
   return new Promise((resolve, reject) => {
-    const url = 'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=' + encodeURIComponent(cfg.mpAppId) + '&secret=' + encodeURIComponent(cfg.mpAppSecret);
-    const req = https.request(url, { method: 'GET' }, res => {
+    // ⚠️⚠️ 2026-10-14：改用 **stable_token**（原来是老接口 /cgi-bin/token）。
+    //   这处是「服务号 token 定时同步」，**每 ~1.8 小时跑一次** —— 用老接口等于**周期性顶掉 pgsync 的 token**
+    //   （2026-10-13 后台数据停更 46 分钟就是这么来的）。stable_token 多实例/多次调用共享同一个有效 token，不会互踢。
+    //   ⚠️ 返回字段（access_token / expires_in）与老接口一致，下面 syncMpToken() 的逻辑不用动。
+    const body = JSON.stringify({ grant_type: 'client_credential', appid: cfg.mpAppId, secret: cfg.mpAppSecret, force_refresh: false });
+    const req = https.request('https://api.weixin.qq.com/cgi-bin/stable_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    }, res => {
       let buf = '';
       res.setEncoding('utf8');
       res.on('data', c => { buf += c; });
@@ -381,6 +388,7 @@ function mpGetServiceToken() {
     });
     req.setTimeout(8000, () => req.destroy(new Error('服务号接口超时')));
     req.on('error', reject);
+    req.write(body);
     req.end();
   });
 }

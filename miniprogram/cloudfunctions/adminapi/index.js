@@ -2034,7 +2034,13 @@ async function getMpAccessToken(cfg) {
   if (cur && cur.value && cur.value.token && Number(cur.value.expiresAt) > Date.now() + 300000) {
     return cur.value.token;
   }
-  const r = await mpRequest(`/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(cfg.appid)}&secret=${encodeURIComponent(cfg.appsecret)}`, null, 'GET');
+  // ⚠️⚠️ 2026-10-14：改用 **stable_token**（原来是老接口 `/cgi-bin/token`）。
+  //   老接口与 pgsync / 后台**共用同一套凭证、会互相踢** —— 2026-10-13 后台数据停更 46 分钟就是这么来的；
+  //   云函数每次发通知都去拿一次 token，等于**反复顶掉同步器的 token**。
+  //   stable_token 多实例 / 多次调用共享同一个有效 token，不会互相踢；返回字段（access_token / expires_in）与老接口一致。
+  const r = await mpRequest('/stable_token', {
+    grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: false
+  }, 'POST');
   if (!r || !r.access_token) {
     const e = new Error(`服务号 access_token 获取失败：errcode=${r && r.errcode} ${(r && r.errmsg) || '接口无响应'}（若为 40164：请在后台重新登录触发 token 同步，或清空服务号 IP 白名单）`);
     e.errcode = r && r.errcode;
