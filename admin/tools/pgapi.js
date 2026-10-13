@@ -279,7 +279,11 @@ const srv = http.createServer(async (req, res) => {
     if (u.pathname === '/mallPending/mark' && req.method === 'POST') {
       const k = String(u.searchParams.get('mallKey') || '');
       const s = String(u.searchParams.get('status') || '');
-      if (!k || ['pending', 'paired', 'created', 'skipped'].indexOf(s) < 0) return out(res, 400, { ok: false, msg: '参数不对' });
+      // ⭐⭐ 2026-10-13 修（老板报障「明明发送了 7 家，页面还显示「待发送」」）：
+      //   白名单原先只有 pending/paired/created/skipped —— **漏了"发送之后"的两个状态**，
+      //   于是前端发完写 `pushed` 被这里 400 拒掉 → **发送成功却记不上状态** →
+      //   页面一直显示"已梳理·待发送"，再按一次就会**重复发送**（其中"新建类"会**重复建一条客户**）。
+      if (!k || ['pending', 'paired', 'created', 'skipped', 'pushed', 'failed'].indexOf(s) < 0) return out(res, 400, { ok: false, msg: '参数不对' });
       // ⭐ 2026-10-13 老板：「输入的经纬度，是对导入的客户补充经纬度信息」→ 顺手把坐标也存进这一行
       const la = Number(u.searchParams.get('lat') || 0) || null;
       const ln = Number(u.searchParams.get('lng') || 0) || null;
