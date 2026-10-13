@@ -6,12 +6,22 @@
  *   node _scratch/check.js           只体检（默认）
  *   node _scratch/check.js -v        同时列出每个被检查的文件
  *
- * 检查 5 项（全部只读，不改任何文件）：
+ * 检查 6 项 + 2 组"跨文件对账"（全部只读，不改任何文件）：
  *   ① 全量 JS 语法        —— 所有 .js（云函数 12 个 + 小程序页面/utils + 后台的独立 js）
  *   ② admin.html 内嵌 JS  —— 提取 <script> 段后单独 node --check（它无法直接 check）
  *   ③ 行尾字节级          —— 按项目规矩分文件判定（CRLF 系 / .bat 必须 CRLF / 其余纯 LF）
  *   ④ JSON 语法           —— 所有 .json（app.json / 页面 .json / 云函数 config.json）
  *   ⑤ WXML 标签配对       —— view/text 开闭标签配平（WXML 禁 HTML 标签也一并查）
+ *   ⑥ adminapi 的 ACTIONS 白名单 ↔ dispatch 对账（治「坑 32」）
+ *   ⑦ ⭐ 拜访结果名一致性（2026-10-14 新增）—— 同一个结果名散在**物理隔离的四处**
+ *        （小程序页面 / 云函数 / 话术 / 后台单文件），漏一处不报错、只能肉眼发现：
+ *        · visit.js 的 MALL ↔ 云函数 RESULT_ENUM_MALL **逐字含顺序**一致
+ *        · 每一项都要有**话术**（PRAISE）和**后台胶囊色**（RESULT_PILL）
+ *        · task.js 的配色判定、admin.html 的绿系正则里出现的词，必须都在 MALL 里
+ *        · 已废弃的旧名（已下单 / 关门·休息中）一律不许残留
+ *   ⑧ ⭐ 前端 action 调用对账（2026-10-14 新增）—— admin.html 里 `api('xxx')` 调的每个 action
+ *        都必须在 adminapi 的 ACTIONS 白名单里（admin.html 的 api() 一律 POST /api → 转发到 adminapi）。
+ *        调了个不存在的 action = 按钮一点就报「未知 action」，只有点下去才知道。
  *
  * 退出码：0 = 全过；1 = 有失败项（供 CI / 提交前把关用）
  *
@@ -192,6 +202,116 @@ function checkActionsWhitelist() {
   }
 }
 
+// ---------- ⑦ 拜访结果名一致性（2026-10-14 新增；治「改名漏一处就坏」）----------
+// 背景：同一个"拜访结果名"散在**物理隔离的四处** —— 小程序页面 / 云函数 / 话术 / 后台单文件，
+//   微信架构上没法共享同一个源文件（不能跨端 require），只能靠这份体检兜住。
+//   ⚠️ 2026-10-13 真实教训：「已下单」改名「促进下单」、新增「不方便」时，
+//   漏掉的正是最隐蔽的两处（task.js 的配色判定 / admin.html 的绿系配色正则）——
+//   漏了**不报错**，只是"颜色不对 / 判定失效"，只能靠肉眼发现。
+const RESULT_OLD_NAMES = ['已下单', '关门·休息中'];   // 已废弃的旧名（残留 = 上次改名没改干净）
+function arrOf(src, name) {
+  const m = src.match(new RegExp(name + '\\s*=\\s*\\[([^\\]]*)\\]'));
+  if (!m) return null;
+  return m[1].split(',').map(x => x.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+}
+function checkResultNames() {
+  const rd = p => { const a = path.join(ROOT, p); return fs.existsSync(a) ? fs.readFileSync(a, 'utf8') : null; };
+  const visitJs = rd('miniprogram/miniprogram/pages/visit/visit.js');
+  const visitsFn = rd('miniprogram/cloudfunctions/visits/index.js');
+  const taskJs = rd('miniprogram/miniprogram/pages/task/task.js');
+  const adminHtml = rd('admin/admin.html');
+  if (!visitJs || !visitsFn || !adminHtml) { warns.push('结果名一致性：缺文件，跳过'); return; }
+
+  const mall = arrOf(visitJs, 'const MALL');
+  const enumMall = arrOf(visitsFn, 'const RESULT_ENUM_MALL');
+  if (!mall || !mall.length) { fails.push('结果名：visit.js 里找不到 const MALL 数组'); return; }
+  if (!enumMall) { fails.push('结果名：visits/index.js 里找不到 const RESULT_ENUM_MALL 数组'); return; }
+  let bad = 0;
+
+  // ① 小程序 ↔ 云函数：逐字一致（含顺序）
+  const same = mall.length === enumMall.length && mall.every((x, i) => x === enumMall[i]);
+  if (!same) {
+    bad++;
+    fails.push(`结果名：visit.js 的 MALL 与云函数 RESULT_ENUM_MALL 不一致\n   小程序(${mall.length})：${mall.join(' / ')}\n   云函数(${enumMall.length})：${enumMall.join(' / ')}`);
+  }
+
+  // ② 每一项都要有话术（visit.js 的 PRAISE 键）—— 缺了提交后取不到话术
+  const praiseBlk = (visitJs.match(/const PRAISE = \{([\s\S]*?)\n\};/) || [])[1] || '';
+  const praiseKeys = [...praiseBlk.matchAll(/'([^']+)':\s*\[/g)].map(x => x[1]);
+  const noPraise = mall.filter(x => !praiseKeys.includes(x));
+  if (noPraise.length) { bad++; fails.push(`结果名：这几项在 visit.js 的 PRAISE 里没有话术 → ${noPraise.join('、')}`); }
+
+  // ③ 每一项都要有后台胶囊色（admin.html 的 RESULT_PILL 键）
+  const pillBlk = (adminHtml.match(/const RESULT_PILL = \{([^}]*)\}/) || [])[1] || '';
+  const pillKeys = [...pillBlk.matchAll(/'([^']+)':\s*'/g)].map(x => x[1]);
+  const noPill = mall.filter(x => !pillKeys.includes(x));
+  if (noPill.length) { bad++; fails.push(`结果名：这几项在 admin.html 的 RESULT_PILL 里没有颜色 → ${noPill.join('、')}`); }
+
+  // ④ task.js 的配色判定里出现的词，必须都在 MALL 里（改名的残留会在这里露出来）
+  if (taskJs) {
+    const m = taskJs.match(/const resCls =([\s\S]{0,300})/);
+    if (m) {
+      const words = [...m[1].matchAll(/\/([^/]+)\//g)]
+        .flatMap(x => x[1].split('|')).map(x => x.trim())
+        .filter(x => x && /[\u4e00-\u9fa5]/.test(x));
+      const stray = [...new Set(words)].filter(x => !mall.includes(x));
+      if (stray.length) { bad++; fails.push(`结果名：task.js 的配色判定里出现 MALL 之外的词 → ${stray.join('、')}（多半是改名没改干净）`); }
+    }
+  }
+
+  // ⑤ admin.html 的绿系配色正则里出现的词，必须都在 MALL 里
+  const gm = adminHtml.match(/if \(\/([^/]*)\/\.test\(s\)\) return 'green'/);
+  if (gm) {
+    const stray = gm[1].split('|').map(x => x.trim()).filter(x => x && !mall.includes(x));
+    if (stray.length) { bad++; fails.push(`结果名：admin.html 的绿系配色正则里出现 MALL 之外的词 → ${stray.join('、')}（改名没改干净）`); }
+  }
+
+  // ⑥ 废弃旧名不许残留（⚠️ 只查**清单类**的位置，不查注释 —— 注释里提旧名是正常的沿革记录）
+  const lists = [mall, enumMall, praiseKeys, pillKeys].map(a => a.join('\u0001'));
+  const left = RESULT_OLD_NAMES.filter(x => lists.some(s => s.includes(x)));
+  if (left.length) { bad++; fails.push(`结果名：清单里还残留已废弃的旧名 → ${left.join('、')}`); }
+
+  if (!bad) {
+    okFiles.push(`  [res]  结果名一致性通过（${mall.length} 项：两边一致 / 有话术 / 有胶囊色 / 配色判定对齐）`);
+    console.log(`  ✔ 拜访结果名：${mall.length} 项 —— 小程序 ↔ 云函数 ↔ 话术 ↔ 胶囊色 ↔ 任务卡配色 全部对齐`);
+  }
+}
+
+// ---------- ⑧ 前端 action 调用对账（2026-10-14 新增；治「调了个不存在的 action」）----------
+// 背景：后台 admin.html 的 api(action, extra) 一律 POST /api → server.js 转发到 **adminapi**。
+//   所以 admin.html 里 `api('xxx')` 的每个 xxx 都必须是 adminapi 的 action（ACTIONS 白名单里）。
+//   写错一个 = 那个按钮一点就报「未知 action」，而且**只有点下去才知道**（静态看不出来）。
+function checkAdminActionCalls() {
+  const htmlAbs = path.join(ROOT, 'admin/admin.html');
+  const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
+  if (!fs.existsSync(htmlAbs) || !fs.existsSync(fnAbs)) { warns.push('action 调用对账：缺文件，跳过'); return; }
+  const html = fs.readFileSync(htmlAbs, 'utf8');
+  const s = fs.readFileSync(fnAbs, 'utf8');
+  const m = s.match(/const ACTIONS = \[([\s\S]*?)\];/);
+  if (!m) { fails.push('action 调用对账：adminapi 里找不到 ACTIONS 数组'); return; }
+  const arr = m[1].split(',').map(x => x.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+
+  // ⚠️⚠️ 2026-10-14 实测修正：**带 `_cfn` 的调用不是 adminapi 的 action** ——
+  //   例：`api('import', { _cfn:'importdata', type, rows })`、`api('stats', { _cfn:'importdata' })`
+  //   那是"调另一个云函数（importdata）"，action 名属于那个函数，不能拿 adminapi 白名单去判。
+  //   （第一次写完这条检查时，把 import / stats 误报成"未知 action"，就是这个原因。）
+  //   ⚠️ 否定后行断言：避免把 `callapi('…` / `xxxApi('…` 也算进来。
+  const calls = [];
+  for (const m of html.matchAll(/(?<![A-Za-z0-9_$.])api\('([A-Za-z0-9_]+)'/g)) {
+    const tail = html.slice(m.index, m.index + 300);   // 看这次调用后面一小段
+    if (/_cfn\s*:/.test(tail)) continue;               // 走别的云函数 → 不归 adminapi 白名单管
+    calls.push(m[1]);
+  }
+  const uniq = [...new Set(calls)];
+  const unknown = uniq.filter(a => !arr.includes(a) && !ACTIONS_EXTRA.has(a));
+  if (unknown.length) {
+    fails.push(`action 调用对账：admin.html 里调了 ACTIONS 白名单**没有**的 action → ${unknown.join(', ')}\n   ⚠️ 这些按钮一点就会报「未知 action」。修法：补进 adminapi 的 ACTIONS，或改掉调用`);
+  } else {
+    okFiles.push(`  [call] admin.html 调用的 ${calls.length} 个 action 都在白名单里`);
+    console.log(`  ✔ 前端 action 调用：${calls.length} 个 —— 全部在 adminapi 的 ACTIONS 白名单里`);
+  }
+}
+
 // ============ 主流程 ============
 console.log('聚火拜访 · 一键体检（只读，不改任何文件）');
 console.log('根目录：' + ROOT);
@@ -213,6 +333,8 @@ for (const abs of files) {
 
 console.log(`检查了：JS ${checked.js} 个 · JSON ${checked.json} 个 · WXML ${checked.wxml} 个 · 行尾 ${checked.eol} 个 · admin.html 内嵌 JS ${checked.htmlJs} 段`);
 checkActionsWhitelist();
+checkResultNames();
+checkAdminActionCalls();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
@@ -224,5 +346,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账）');
 process.exit(0);
