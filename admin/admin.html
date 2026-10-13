@@ -8530,6 +8530,11 @@ async function mpPush() {
   const btn = $('mpPushBtn'), msg = $('mpPushMsg');
   if (btn) { btn.disabled = true; btn.textContent = '发送中…'; }
   let ok = 0, bad = 0;
+  // ⭐⭐ 2026-10-13 老板定（原话：「待处理的客户发送到云端的同时，本地缓存中也应该放一份，
+  //   这样才能在客户管理中马上看到」）—— 每条发成功后**顺手收集**要回写的改动，循环结束**一次性**写回：
+  //   · 配对（applyMallPair）→ 云函数回传 `fields`（刚写进客户档案的字段）→ **patch** 缓存里那条
+  //   · 新建（createMallCustomer）→ 云函数回传 `doc`（整条新客户）→ **插**进缓存
+  const _cachePatches = [], _cacheAdds = [];
   for (let i = 0; i < todo.length; i++) {
     const x = todo[i];
     if (msg) msg.textContent = '正在发 ' + (i + 1) + '/' + todo.length + '：' + (x.name || '');
@@ -8543,17 +8548,36 @@ async function mpPush() {
             lat: lat, lng: lng, region: x.region || '', bizCircle: x.biz_circle || ''
           }).catch(() => null);
           good = !!(r && r.ok);
-          if (good) await mpMark(x.mall_key, 'pushed', r.customerId || '', x.name);
+          if (good) {
+            await mpMark(x.mall_key, 'pushed', r.customerId || '', x.name);
+            const p = r.doc ? cloudDocToPoint(r.doc, r.customerId) : null;
+            if (p) _cacheAdds.push(p);                     // 新建的 → 待会儿插进缓存
+          }
         }
       } else {
         const r = await api('applyMallPair', { customerId: x.target_id, mallKey: x.mall_key }).catch(() => null);
         good = !!(r && r.ok);
-        if (good) await mpMark(x.mall_key, 'pushed', x.target_id || '', x.target_name || '');
+        if (good) {
+          await mpMark(x.mall_key, 'pushed', x.target_id || '', x.target_name || '');
+          const set = {};
+          Object.keys(r.fields || {}).forEach(k => { if (CLOUD2KEY[k]) set[CLOUD2KEY[k]] = r.fields[k]; });
+          if (Object.keys(set).length && x.target_id) _cachePatches.push({ id: x.target_id, set: set });
+        }
       }
     } catch (e) { good = false; }
     if (good) ok++;
     else { bad++; await mpMark(x.mall_key, 'failed', x.target_id || '', x.target_name || ''); }
     await new Promise(r2 => setTimeout(r2, 150));        // 一条条来，别把云端那条 HTTP 通道挤爆
+  }
+  // ⭐ 一次性回写本地缓存（**0 云端调用**）→ 客户管理 / 批次表**马上**就能看到这几家
+  if (_cachePatches.length || _cacheAdds.length) {
+    try { await custPatchLocal(_cachePatches, [], _cacheAdds); } catch (e) { console.warn('[mpPush] 回写缓存失败', e); }
+    try {
+      const _pg = $('page-geo');
+      if (_pg && _pg.style.display !== 'none' && typeof loadGeoPage === 'function') loadGeoPage();
+      const _pbc = $('page-customers');
+      if (_pbc && _pbc.style.display !== 'none' && typeof loadCustomers === 'function') loadCustomers(curBatchId, curBatchName);
+    } catch (e) { /* 重画失败不影响发送结果 */ }
   }
   if (btn) { btn.disabled = false; btn.textContent = '✅ 确认并发送到云端'; }
   if (msg) msg.textContent = '发送完成：✅ 成功 ' + ok + ' 条' + (bad ? ('，⚠️ 失败 ' + bad + ' 条（红色的，重新梳理后再发）') : '');
@@ -9032,15 +9056,41 @@ function geoRefreshLocal() {
   try { if (typeof loadGeoPage === 'function') loadGeoPage(); } catch (e) { /* 画失败不影响用 */ }
 }
 
+// ⭐⭐ 2026-10-13 老板定（「发送到云端的同时，本地缓存中也应该放一份，这样才能在客户管理中马上看到」）：
+//   **云端字段名 → 本地缓存短键**的映射（短键含义见 `custLocalRow`：i=_id / n=name / la=lat …）。
+//   用途：把「商城待配对」发送成功后云函数回传的内容（`fields` 或 `doc`），就地写进本地缓存。
+const CLOUD2KEY = {
+  name: 'n', nameRaw: 'nr', lat: 'la', lng: 'ln', city: 'c', district: 'd', bizCircle: 'b',
+  address: 'ad', coord_source: 'cs', coord_status: 'cst', mallCode: 'mc', mallKey: 'mk',
+  mallJoinedAt: 'mj', customerType: 'ct', phone: 'ph', remark: 'rm', updatedAt: 'u',
+  createdAt: 'ca', source: 'so', lastOrderAt: 'lo'
+};
+// 云端的一条客户（英文全称字段）→ 本地缓存的"点"（短键）；没有 id 就返回 null
+function cloudDocToPoint(doc, id) {
+  const p = { i: String(id || (doc && doc._id) || '') };
+  if (!p.i) return null;
+  Object.keys(CLOUD2KEY).forEach(k => {
+    const v = doc && doc[k];
+    if (v === undefined || v === null) return;
+    p[CLOUD2KEY[k]] = v;
+  });
+  if (p.oc === undefined) p.oc = 0;      // 列表要按这几列排序/显示，给个兜底
+  if (p.oa === undefined) p.oa = 0;
+  if (p.vc === undefined) p.vc = 0;
+  return p;
+}
+
 // 写后回写（M3）：把改动同步进后台本地缓存文件（**必须先写云端、成功后才调这里**）
-function custPatchLocal(patches, removeIds) {
+// ⭐ 2026-10-13 扩展：第三个参数 `adds` = **要新增**的客户（缓存短键形态）——
+//   商城待配对里「新建」发送成功后，把云函数回传的新客户直接插进缓存（客户管理马上能看到）。
+function custPatchLocal(patches, removeIds, adds) {
   // ⭐ 2026-10-13：**返回 Promise** —— 客户详情「保存」之后要等本地缓存真的更新了**再**重画表格，
   //   否则会画到旧值（本函数内部是 fetch → then 里才改 `custLocal.points`）。
   //   其余 8 处调用都不 await，行为不变（照旧 fire-and-forget）。
   try {
     return fetch('/mapPoints/patch', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patches: patches || [], removeIds: removeIds || [] })
+      body: JSON.stringify({ patches: patches || [], removeIds: removeIds || [], adds: adds || [] })
     }).then(r => r.json()).then(r => {
       if (!custLocal || !r || !r.ok) return;
       const byId = {}, rm = {};
@@ -9051,6 +9101,14 @@ function custPatchLocal(patches, removeIds) {
         if (set) Object.keys(set).forEach(k => { p[k] = set[k]; });
         return p;
       });
+      // ⭐ 2026-10-13：**新增**（商城待配对的「新建」发送成功后，把新客户插进内存缓存）——
+      //   ⚠️ 同 `i` 已存在就不重复插（防手滑重复发送插出两条）。
+      (adds || []).forEach(a => {
+        if (!a || !a.i) return;
+        if (custLocal.points.some(p => p.i === a.i)) return;
+        custLocal.points.push(a);
+      });
+      if (typeof custLocal.count === 'number') custLocal.count = custLocal.points.length;
     }).catch(() => null);
   } catch (e) { /* 静默：回写失败不影响主流程（下次全量刷新会对齐） */ }
 }

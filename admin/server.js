@@ -856,7 +856,7 @@ function writeChangeLog(rec) {
       let reqBody = {};
       try { reqBody = JSON.parse(body || '{}'); } catch (e) { /* 空体当空对象 */ }
       let r;
-      try { r = store.patch(reqBody.patches, reqBody.removeIds); }
+      try { r = store.patch(reqBody.patches, reqBody.removeIds, reqBody.adds); }   // ⭐ 2026-10-13：adds = 商城待配对「新建」发成功后要插进缓存的新客户
       catch (e) { r = { ok: false, msg: e.message }; }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(r));

@@ -230,24 +230,34 @@ async function refresh(callApi, cred) {
 // ⭐ 2026-09-27 M3：**写后回写**（架构文档 §四）—— 前端改完（备注/坐标/字段/删除/建批次）把**那几条**
 //   同步进本地缓存，不用等下次全量刷新。写路径不变：**永远先写云端，成功后才调这里**。
 //   patches: [{ id, set: { 短键: 值 } }] ｜ removeIds: ['_id', ...]
-function patch(patches, removeIds) {
+function patch(patches, removeIds, adds) {
   const c = read();
   if (!c || !Array.isArray(c.points)) return { ok: false, msg: '本地缓存还不存在（没预热过）', patched: 0, removed: 0 };
   const byId = {};
   (patches || []).forEach(p => { if (p && p.id) byId[p.id] = p.set || {}; });
   const rm = {};
   (removeIds || []).forEach(id => { if (id) rm[id] = 1; });
-  let patched = 0, removed = 0;
+  let patched = 0, removed = 0, added = 0;
   const points = [];
+  const seen = {};
   c.points.forEach(p => {
     if (rm[p.i]) { removed++; return; }
     const set = byId[p.i];
     if (set) { Object.keys(set).forEach(k => { p[k] = set[k]; }); patched++; }
+    seen[p.i] = 1;
     points.push(p);
+  });
+  // ⭐⭐ 2026-10-13 老板定（「发送到云端的同时，本地缓存中也应该放一份，这样才能在客户管理中马上看到」）：
+  //   **支持"新增"** —— 商城待配对里的「新建」发送成功后，前端把新客户（缓存短键形态）传进来，
+  //   直接插进缓存 → 客户管理里马上就有这条（否则只能等 pgsync 5 分钟）。
+  //   ⚠️ 已存在（同 `i`）的不重复插，避免手滑重复发送插出两条。
+  (adds || []).forEach(a => {
+    if (!a || !a.i || seen[a.i]) return;
+    points.push(a); seen[a.i] = 1; added++;
   });
   // syncedAt 保持不动（它表示“上次全量同步时间”，界面的「数据截至」用它）
   write({ v: VERSION, syncedAt: c.syncedAt, count: points.length, points: points });
-  return { ok: true, patched: patched, removed: removed, count: points.length };
+  return { ok: true, patched: patched, removed: removed, added: added, count: points.length };
 }
 
 // ⭐⭐ 2026-10-10 指针表模式：**把某个批次从本地缓存的 bi 里整体摘掉**（删批完成后由 server.js 调用）——

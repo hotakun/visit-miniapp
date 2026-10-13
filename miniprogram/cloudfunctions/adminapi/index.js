@@ -3856,7 +3856,10 @@ async function createMallCustomer(event) {
       }
     }
   } catch (e) { console.error('[createMallCustomer] 收尾 claims 失败（不影响建店）', e); }
-  return { ok: true, customerId: add._id };
+  // ⭐⭐ 2026-10-13 老板定（同 applyMallPair）：**把新建的整条客户回传给后台前端** ——
+  //   前端拿它直接**插进本地缓存**，客户管理里马上就能看到（不用等 pgsync 那 5 分钟）。
+  //   ⚠️ `doc` 是云端字段名，`_id` 在 add 之后才有 → 前端把 `customerId` 当缓存主键用。
+  return { ok: true, customerId: add._id, doc: doc };
 }
 
 // ⭐⭐ 2026-10-13 老板定：**待配对池**（服务器侧）的同步源 ——
@@ -4101,7 +4104,10 @@ async function applyMallPair(event) {
     }
   } catch (e) { console.error('[applyMallPair] 收尾 claims 失败（不影响合并）', e); }
 
-  return { ok: true, customerId: customerId, mallKey: mallKey };
+  // ⭐⭐ 2026-10-13 老板定（「发送到云端的同时，本地缓存中也应该放一份，这样才能在客户管理中马上看到」）：
+  //   **把刚写进客户档案的字段回传给后台前端** → 前端拿它就地更新本地缓存那一行（别让后台等 pgsync 的 5 分钟）。
+  //   ⚠️ 回传的是**云端字段名**（name / phone / mallKey …），前端用一张映射表转成缓存的短键。
+  return { ok: true, customerId: customerId, mallKey: mallKey, fields: data };
 }
 
 async function resolveMallClaim(event) {
