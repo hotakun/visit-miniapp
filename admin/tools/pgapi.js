@@ -279,9 +279,13 @@ const srv = http.createServer(async (req, res) => {
       const k = String(u.searchParams.get('mallKey') || '');
       const s = String(u.searchParams.get('status') || '');
       if (!k || ['pending', 'paired', 'created', 'skipped'].indexOf(s) < 0) return out(res, 400, { ok: false, msg: '参数不对' });
-      await q('UPDATE mall_pending SET status=$1, target_id=$2, target_name=$3, handled_by=$4, handled_at=$5 WHERE mall_key=$6',
+      // ⭐ 2026-10-13 老板：「输入的经纬度，是对导入的客户补充经纬度信息」→ 顺手把坐标也存进这一行
+      const la = Number(u.searchParams.get('lat') || 0) || null;
+      const ln = Number(u.searchParams.get('lng') || 0) || null;
+      await q('UPDATE mall_pending SET status=$1, target_id=$2, target_name=$3, handled_by=$4, handled_at=$5, ' +
+        'lat=COALESCE($7, lat), lng=COALESCE($8, lng) WHERE mall_key=$6',
         [s, String(u.searchParams.get('targetId') || ''), String(u.searchParams.get('targetName') || ''),
-         String(u.searchParams.get('by') || ''), Date.now(), k]);
+         String(u.searchParams.get('by') || ''), Date.now(), k, la, ln]);
       return out(res, 200, { ok: true });
     }
     if (u.pathname === '/newshops') {

@@ -8241,9 +8241,10 @@ async function mpLoad(force) {
 }
 function mpTab(t) { _mpTab = t; mpRender(); }
 function mpStat() { return { p: _mpStat.pending || 0, a: _mpStat.paired || 0, c: _mpStat.created || 0, s: _mpStat.skipped || 0 }; }
-function mpMark(key, status, tid, tname) {
+function mpMark(key, status, tid, tname, lat, lng) {
   return fetch('/mallPending/mark?mallKey=' + encodeURIComponent(key) + '&status=' + status +
-    '&targetId=' + encodeURIComponent(tid || '') + '&targetName=' + encodeURIComponent(tname || ''),
+    '&targetId=' + encodeURIComponent(tid || '') + '&targetName=' + encodeURIComponent(tname || '') +
+    (lat ? ('&lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng || '')) : ''),
     { method: 'POST' }).then(r => r.json()).catch(() => null);
 }
 function mpRender() {
@@ -8294,9 +8295,13 @@ function mpRender() {
           '<div class="why">' + esc(c.why) + ' · ' + c.score + ' 分 · ' + (c.lat ? '<span style="color:#12A150">✓ 有坐标</span>' : '<span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
           '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button></div>').join('')
         : '<div style="font-size:12px;color:#B77400;padding:6px 2px 8px">系统里没有<b>电话 / 店名对得上</b>的客户 —— 见下面：</div>') +
-      '<div class="mp-acts"><div class="t">都不对？</div>' +
+      '<div class="mp-acts"><div class="t">都不对？四种办法任选：</div>' +
       '<button class="btn p" style="height:26px;font-size:12px" onclick="mpCreateHint()">➕ 新建这条客户</button>' +
+      '<button class="btn" style="height:26px;font-size:12px" onclick="mpGeoOpen(\'' + k + '\')">📍 输入经纬度</button>' +
+      '<button class="btn" style="height:26px;font-size:12px" onclick="mpSearchOpen(\'' + k + '\')">🔍 自己搜</button>' +
       '<button class="btn" style="height:26px;font-size:12px" onclick="mpSkip(\'' + k + '\')">⏭ 暂时跳过</button></div>' +
+      (_mpGeoKey === k ? mpGeoPanel(k) : '') +
+      (_mpSearchKey === k ? mpSearchPanel(k) : '') +
       '</div></div>';
   }).join('');
 }
@@ -8307,7 +8312,9 @@ async function mpConfirm(mallKey, customerId) {
     '\n\n· 店名 / 电话 / 地址取商城的\n· 经纬度、商圈保留系统内的（绝不动）')) return;
   const r = await api('applyMallPair', { customerId: customerId, mallKey: mallKey }).catch(() => null);
   if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '请稍后再试')); return; }
-  await mpMark(mallKey, 'paired', customerId, c.name || '');
+  // ⭐ 老板：「输入的经纬度，是对导入的客户补充经纬度信息」→ 把补的坐标一起存回服务器那一行
+  const g = String(_mpGeoVal || '').split(',');
+  await mpMark(mallKey, 'paired', customerId, c.name || '', g[0], g[1]);
   await mpLoad(true);                                   // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
 }
 async function mpSkip(mallKey) {
@@ -8321,6 +8328,94 @@ async function mpUndo(mallKey) {
 }
 function mpCreateHint() {
   alert('这家要「新建客户」。\n\n请在手机端「加新店」里录（新建时经纬度必填，否则业务员导航不到这家店）。\n录完回来，这条一般会自动认出来。');
+}
+
+// ⭐⭐ 2026-10-13 老板（指出漏做）：「又没有按照演示稿的来，输入经纬度和自己查找的功能呢？
+//   输入的经纬度，是对导入的客户补充经纬度信息，通过这个经纬度，再去搜寻其周边有没有能匹配的客户。」
+//   ① 📍 输入经纬度：给这条导入记录**补坐标** → 顺手找"**周边 200/500 米内的系统客户**" → 列出来挑
+//   ② 🔍 自己搜：按 **店名 / 电话 / 编号** 在**本地全库**搜 → 列出来挑
+//   ⚠️ 都**只在本地算**（零请求）；挑中的那个坐标会**存回服务器那一行**（当"补充的经纬度信息"留档）。
+let _mpGeoKey = '', _mpGeoVal = '', _mpGeoRes = null, _mpSearchKey = '', _mpSearchVal = '', _mpSearchRes = null;
+function mpGeoOpen(key) { _mpGeoKey = key; _mpGeoVal = ''; _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null; mpRender(); }
+function mpSearchOpen(key) { _mpSearchKey = key; _mpSearchVal = ''; _mpSearchRes = null; _mpGeoKey = ''; _mpGeoRes = null; mpRender(); }
+function mpGeoApply() {
+  const v = String(($('mpGeoIn') || {}).value || '').trim();
+  const m = v.split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
+  if (m.length < 2) { alert('请粘贴两个数字：纬度,经度\n例：28.961303,120.181189'); return; }
+  let la = m[0], ln = m[1];
+  if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }   // 兼容"经度,纬度"的顺序
+  _mpGeoVal = la.toFixed(6) + ',' + ln.toFixed(6);
+  _mpGeoRes = mpNearby(la, ln);
+  mpRender();
+}
+function mpNearby(lat, lng) {
+  const pts = (custLocal && custLocal.points) || [];
+  const R = 6371000, rad = d => d * Math.PI / 180;
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const pla = Number(p.la) || 0, pln = Number(p.ln) || 0;
+    if (!pla || !pln) continue;
+    const dl = rad(pla - lat), dn = rad(pln - lng);
+    const a = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(rad(lat)) * Math.cos(rad(pla)) * Math.sin(dn / 2) * Math.sin(dn / 2);
+    const d = 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+    if (d <= 500) out.push({ id: p.i, name: p.nr || p.n, code: p.mc || '', region: p.rg || '', address: p.ad || '', phone: p.ph || '', lat: pla, dist: Math.round(d) });
+  }
+  out.sort((a, b) => a.dist - b.dist);
+  return out.slice(0, 20);
+}
+function mpSearchRun() {
+  const q = String(($('mpSearchIn') || {}).value || '').trim().toLowerCase();
+  if (!q) { alert('输入 店名 / 电话 / 编号 的任意一段'); return; }
+  const pts = (custLocal && custLocal.points) || [];
+  const qn = q.replace(/\D/g, '');
+  const out = [];
+  for (let i = 0; i < pts.length && out.length < 20; i++) {
+    const p = pts[i];
+    const hay = String((p.nr || p.n || '') + ' ' + (p.ad || '') + ' ' + (p.mc || '') + ' ' + (p.ph || '')).toLowerCase();
+    const ph = String(p.ph || '').replace(/\D/g, '');
+    if (hay.indexOf(q) >= 0 || (qn && qn.length >= 4 && ph.indexOf(qn) >= 0)) {
+      out.push({ id: p.i, name: p.nr || p.n, code: p.mc || '', region: p.rg || '', address: p.ad || '', phone: p.ph || '', lat: p.la || 0, dist: 0 });
+    }
+  }
+  _mpSearchVal = q;
+  _mpSearchRes = out;
+  mpRender();
+}
+// 「📍 输入经纬度」面板（就地展开）
+function mpGeoPanel(key) {
+  const res = _mpGeoRes;
+  return '<div style="margin-top:8px;padding:9px 11px;border:1px solid #FBE0CF;border-radius:9px;background:#FFFDFB">' +
+    '<div style="font-size:12.5px;font-weight:800;margin-bottom:6px">📍 输入经纬度（给这条补坐标，再找它周边的店）</div>' +
+    '<input id="mpGeoIn" value="' + esc(_mpGeoVal) + '" placeholder="粘贴 纬度,经度（如 28.961303,120.181189）" style="border:1px solid #E3E8EF;border-radius:7px;padding:4px 9px;width:280px;font-size:12.5px">' +
+    '<button class="btn p" style="height:26px;font-size:12px;margin-left:6px" onclick="mpGeoApply()">✓ 用这个坐标找附近</button>' +
+    '<button class="btn" style="height:26px;font-size:12px;margin-left:6px" onclick="mpGeoOpen(\'\')">收起</button>' +
+    (res ? ('<div style="margin-top:8px;font-size:12px;color:var(--sub)">附近 500 米内找到 <b>' + res.length + '</b> 家：</div>' +
+      (res.length ? res.map(c => mpCandRow(key, c, '距离约 ' + c.dist + ' 米')).join('')
+        : '<div class="empty" style="padding:10px 0">附近没有系统里的客户 —— 那这条多半要「新建」</div>'))
+      : '') +
+    '</div>';
+}
+// 「🔍 自己搜」面板（就地展开）
+function mpSearchPanel(key) {
+  const res = _mpSearchRes;
+  return '<div style="margin-top:8px;padding:9px 11px;border:1px solid #DDE7F5;border-radius:9px;background:#FBFDFF">' +
+    '<div style="font-size:12.5px;font-weight:800;margin-bottom:6px">🔍 自己搜（店名 / 电话 / 编号）</div>' +
+    '<input id="mpSearchIn" value="' + esc(_mpSearchVal) + '" placeholder="输入任意一段" style="border:1px solid #E3E8EF;border-radius:7px;padding:4px 9px;width:240px;font-size:12.5px">' +
+    '<button class="btn p" style="height:26px;font-size:12px;margin-left:6px" onclick="mpSearchRun()">搜</button>' +
+    '<button class="btn" style="height:26px;font-size:12px;margin-left:6px" onclick="mpSearchOpen(\'\')">收起</button>' +
+    (res ? ('<div style="margin-top:8px;font-size:12px;color:var(--sub)">搜到 <b>' + res.length + '</b> 家' + (res.length >= 20 ? '（只显示前 20）' : '') + '：</div>' +
+      (res.length ? res.map(c => mpCandRow(key, c, '')).join('') : '<div class="empty" style="padding:10px 0">没搜到</div>'))
+      : '') +
+    '</div>';
+}
+// 这两块"补来的候选"长得跟常规候选一样，统一渲染
+function mpCandRow(key, c, extra) {
+  return '<div class="mp-cand"><div class="mid">' +
+    '<div class="n">' + esc(c.name || '') + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
+    '<div class="ln">' + esc(c.region || '') + ' · ' + esc(c.address || '') + ' · ' + esc(c.phone || '') + '</div>' +
+    '<div class="why">' + (extra || '') + (c.lat ? ' · <span style="color:#12A150">✓ 有坐标</span>' : ' · <span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
+    '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + key + '\',\'' + c.id + '\')">✓ 就是这家</button></div>';
 }
 function loadNewShops() {
   const cnt = $('nsCount');
