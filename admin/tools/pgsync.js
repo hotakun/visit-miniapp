@@ -32,38 +32,57 @@ let db = null;
 const cfgPath = path.join(__dirname, 'config.json');   // 微信凭据（appid/appsecret/envId）——与脚本同级
 let tk = null, tkAt = 0;
 
-async function token() {
-  if (tk && Date.now() - tkAt < 90 * 60 * 1000) return tk;   // 微信 token 有效期 2 小时，留余量
+async function token(force) {
+  if (!force && tk && Date.now() - tkAt < 90 * 60 * 1000) return tk;   // 微信 token 有效期 2 小时，留余量
   const c = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
   // ⚠️⚠️ 2026-10-10 修复（pgsync 曾因此持续停摆）：**必须用 stable_token 接口**。
   //   老接口 /cgi-bin/token 与 stable_token 拿的是同一套凭证、**会互相踢**：
   //   开发机后台（server.js）一直用 stable_token，而这里曾用老接口 → 每次刷新都把对方的 token 作废，
   //   实测现象 = pgsync 日志刷 "access_token is invalid or not latest"（微信报错原文也点名让改 stable_token），
   //   同步完全停摆。改成同一套接口后两边互不影响。
+  //   ⚠️ 2026-10-13 补充：**这条只保证了"我们自己不踢"，挡不住别人踢** ——
+  //       `admin/tools/` 下曾有一批脚本（run_adminapi / add_index / import_biz_* …）
+  //       以及临时探针还在用老接口 → 谁跑一次，这里就失效（见下面 callCloud 的自愈）。
   const r = await (await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ grant_type: 'client_credential', appid: c.appid, secret: c.appsecret, force_refresh: false })
+    body: JSON.stringify({ grant_type: 'client_credential', appid: c.appid, secret: c.appsecret, force_refresh: !!force })
   })).json();
   if (!r.access_token) throw new Error('取 token 失败: ' + (r.errmsg || r.errcode));
   tk = r.access_token; tkAt = Date.now();
   return tk;
 }
+// ⭐⭐ 2026-10-13：**token 失效必须自愈**（当天真实事故：pgsync 停摆 46 分钟、后台数据不更新）
+//   现象：日志连续刷 `[sync] 这轮失败（下轮再试）: 调用云函数失败: access_token expired`，水位卡死不动。
+//   两个病根：
+//     ① 别处（老接口脚本 / 临时探针）取 token 会把我们这份顶掉 → 微信报 `access_token expired`（errcode 42001），
+//        **而原来的自愈只认 40001 / invalid credential** → 不清缓存 → 每轮都用坏 token → 永远不恢复；
+//     ② 就算清了缓存，`force_refresh:false` 也可能原样拿回同一个已失效的 token。
+//   现在：token 类错误**一律清缓存 + 强制刷新重试一次**（一轮内自愈，最多损失一分钟）。
+const isTokenErr = (code, msg) => [40001, 40014, 42001, 42007, 42008].indexOf(Number(code)) >= 0 ||
+  /invalid credential|access_token|not latest|expired/i.test(String(msg || ''));
 async function callCloud(action, extra) {                     // 调云函数（与 run_adminapi.js 同一套）
   const c = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  const t = await token();
   const body = Object.assign({ action, username: CFG.apiUser || 'qingyan', password: CFG.apiPassword || '123456' }, extra || {});
-  const r = await (await fetch('https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=' + t +
-    '&env=' + c.envId + '&name=adminapi', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body) })).json();
-  if (r.errcode) {
-    // ⚠️ 2026-10-10：token 被别处刷新顶掉（40001 / invalid credential）→ 清缓存让下轮重取，自愈
-    const em = String(r.errmsg || '');
-    if (r.errcode === 40001 || em.indexOf('invalid credential') >= 0) { tk = null; tkAt = 0; }
-    throw new Error('调用云函数失败: ' + (r.errmsg || r.errcode));
+  let lastErr = '';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const t = await token(attempt > 0);      // 第 2 次：强制刷新
+    const r = await (await fetch('https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=' + t +
+      '&env=' + c.envId + '&name=adminapi', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) })).json();
+    if (!r.errcode) {
+      let out = r.resp_data;
+      try { out = JSON.parse(out); } catch (e) { /* 原样 */ }
+      return out;
+    }
+    lastErr = '调用云函数失败: ' + (r.errmsg || r.errcode);
+    if (attempt === 0 && isTokenErr(r.errcode, r.errmsg)) {
+      tk = null; tkAt = 0;
+      console.warn('[sync] token 失效（' + (r.errmsg || r.errcode) + '）→ 强制刷新后重试一次');
+      continue;
+    }
+    throw new Error(lastErr);
   }
-  let out = r.resp_data;
-  try { out = JSON.parse(out); } catch (e) { /* 原样 */ }
-  return out;
+  throw new Error(lastErr || '调用云函数失败');
 }
 async function conn() {
   if (!db) {

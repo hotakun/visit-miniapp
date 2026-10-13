@@ -13,7 +13,12 @@ const CLOUD_PATH = 'imports/biz_index.jsonl';
   if (!cfg.appid || !cfg.appsecret || !cfg.envId) { console.log('❌ config.json 缺 appid/appsecret/envId'); return; }
   if (!fs.existsSync(FILE)) { console.log('❌ 先跑 node tools/export_biz_jsonl.js 生成 JSONL'); return; }
 
-  const t = await (await fetch(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${cfg.appid}&secret=${cfg.appsecret}`)).json();
+  // ⚠️ 2026-10-13：必须用 stable_token —— 老接口 /cgi-bin/token 会把 pgsync / 后台的 token 顶掉，
+  //   造成「同步器停摆、后台数据不更新」（当天真实事故：停摆 46 分钟）。
+  const t = await (await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: false })
+  })).json();
   if (!t.access_token) { console.log('❌ 取 token 失败：', t.errmsg || '', '(' + t.errcode + ')'); return; }
   const tk = t.access_token;
   const buf = fs.readFileSync(FILE);

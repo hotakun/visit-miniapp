@@ -24,7 +24,12 @@ async function getToken() {
     console.log('❌ admin/config.json 缺 appid / appsecret / envId');
     process.exit(1);
   }
-  const r = await (await fetch(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${cfg.appid}&secret=${cfg.appsecret}`)).json();
+  // ⚠️ 2026-10-13：必须用 stable_token —— 老接口 /cgi-bin/token 会把 pgsync / 后台的 token 顶掉，
+  //   造成「同步器停摆、后台数据不更新」（当天真实事故：停摆 46 分钟）。
+  const r = await (await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: false })
+  })).json();
   if (!r.access_token) {
     console.log('❌ 取 access_token 失败：', r.errmsg || '', '(' + r.errcode + ')');
     if (r.errcode === 40164) console.log('   40164 = 本机公网 IP 不在白名单（去 mp 后台加白）');
