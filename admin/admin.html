@@ -1638,6 +1638,10 @@ tr.row-off td:not(.keep){opacity:.4}
       <div id="mpWrap" style="display:none;flex:1;min-height:0;flex-direction:column">
         <div id="mpStats" class="mp-stats"></div>
         <div class="fl-bar">
+          <!-- ⭐ 2026-10-13 老板：「这个上面导入所有客户列表我觉得应该放到商城待配对中待处理的按钮前面。
+               导入后，导入的信息就显示在下面了。」→ 就放在「⏳ 待处理」前面（导入 → 下面立刻看到）。 -->
+          <button class="btn ghost btn-sm" onclick="openMallImport()">📥 导入所有客户列表</button>
+          <span class="mall-last" id="mallLastAt">上次导入：—</span>
           <span class="btn ghost btn-sm" id="mpTb-pending" onclick="mpTab('pending')" style="cursor:pointer">⏳ 待处理</span>
           <span class="btn ghost btn-sm" id="mpTb-done" onclick="mpTab('done')" style="cursor:pointer">✅ 已处理</span>
           <span class="btn ghost btn-sm" id="mpTb-all" onclick="mpTab('all')" style="cursor:pointer">全部</span>
@@ -1659,8 +1663,9 @@ tr.row-off td:not(.keep){opacity:.4}
              ① 「🛒 导入所有客户列表」原来在「📦 批次管理」页顶部，现搬到这里；
              ② 导入只写**商城库**（mall_customers），**不碰客户档案**；
              ③ 比对上才把商城字段倒进客户档案、并转成"已入商城"（**坐标永不动**，"经纬度以现场为准"）。 -->
-        <span class="mall-last" id="mallLastAt">上次导入：—</span>
-        <button class="btn ghost btn-sm" onclick="openMallImport()">🛒 导入所有客户列表</button>
+        <!-- ⭐ 2026-10-13 老板：「这个上面导入所有客户列表我觉得应该放到商城待配对中待处理的按钮前面。
+             导入后，导入的信息就显示在下面了。」
+             → 「📥 导入所有客户列表」+「上次导入」已挪去「🛒 商城待配对」页签（那排筛选项的最前面）。 -->
         <!-- ⭐ 2026-10-12 老板定（**归位**）：这一页本来就是"导入 → 比对 → 合并"整条链的家
              （老板 2026-10-07 原话"一个页面才符合逻辑"）。今天老板又问："为什么一件事情我要分别到两个
              不同的页面去操作？" → 「🛒 商城配对确认」搬回这里（我 10-11 把它放到「📥 导入信息」页，是错的）。 -->
