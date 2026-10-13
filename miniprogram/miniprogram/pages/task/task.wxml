@@ -29,11 +29,10 @@
       <!-- ⭐ 2026-10-13 老板要：最近一次拜访结果是「无需拜访」→ 圆点显示 ⭕（判定优先于 ✕ / ✓） -->
       <view class="mdot {{item.visitedToday ? (item.lastNoNeed ? 'noneed' : (item.lastClosed ? 'closed' : 'ok')) : (item.visitOngoing ? 'cur' : (item.typeName === 'new' ? 'new' : 'todo'))}}">{{item.visitedToday ? (item.lastNoNeed ? '⭕' : (item.lastClosed ? '✕' : '✓')) : item.seq}}</view>
       <view class="info">
-        <view class="cname">{{item.name}}
-          <!-- ⭐ 2026-10-13 老板定：**「回访」这个状态标签不用显示**（任务详情里绝大多数都是回访客户，
-               每张卡都挂一个"回访"等于噪声）—— 只有「新客户」才出标签。 -->
-          <text class="tag" wx:if="{{item.typeName === 'new'}}" style="background:#E8F1FD;color:#2F80ED">新客户</text>
-        </view>
+        <!-- ⭐ 2026-10-13 老板定：客户名后面的**状态小标签（回访 / 新客户）整个去掉** ——
+             任务详情里绝大多数都是回访客户，每张卡挂个小标签只是噪声；新客户本来就能从圆点颜色看出来（蓝点）。
+             （上一版先去掉「回访」、留下「新客户」，老板看过觉得这个小标签没必要，这次全去掉。） -->
+        <view class="cname">{{item.name}}</view>
         <view class="caddr">{{item.address}}</view>
       </view>
       <view class="cright">
