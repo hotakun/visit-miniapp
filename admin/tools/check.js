@@ -25,6 +25,12 @@
  *   ⑨ ⭐ 页面跳转路径对账（2026-10-14 新增）—— 小程序里 wx.navigateTo / redirectTo / switchTab / reLaunch
  *        的 url 必须在 app.json 的 pages 里注册过；跳个没注册的页面 = 点了没反应，静态看不出来。
  *        ⚠️ 路径里**可以带连字符**（pages/tasks-all/tasks-all）—— 抓取正则别漏了 `-`（第一版就漏了、造成误报）。
+ *   ⑩ ⭐ 两项「合规 / 事故」护栏（2026-10-14 新增）
+ *        ① app.json 的 requiredPrivateInfos **只准地理位置类** —— 2026-10-02 踩过：加 `addPhoneCalendar`
+ *           （那个字段只收地理位置类接口）会让**模拟器直接起不来**。
+ *        ② 代码里**不许新增老接口 `/cgi-bin/token`** —— 它会顶掉 pgsync / 后台正用的 token
+ *           （2026-10-13「后台数据停更 46 分钟」就是这么来的）。历史遗留的 5 处登记在
+ *           `KNOWN_LEGACY_TOKEN`（只提示），**新写的直接报错拦住**。
  *
  * 退出码：0 = 全过；1 = 有失败项（供 CI / 提交前把关用）
  *
@@ -356,6 +362,66 @@ function checkPagePaths() {
   }
 }
 
+// ---------- ⑩ 合规 / 事故护栏（2026-10-14 新增）----------
+// ① app.json 的 requiredPrivateInfos 只准**地理位置类**接口：
+//    ⚠️ 2026-10-02 真实事故：往里加 `addPhoneCalendar`（该字段只收地理位置类）→ **模拟器直接起不来**（已回退）。
+//       日历要走公众平台更新「用户隐私保护指引」，不写在这里。
+// ② 代码里**不许再用老接口 `/cgi-bin/token`**（2026-10-13 后台数据停更 46 分钟的真凶）：
+//    ⚠️ 老接口与 stable_token **是同一套凭证、会互相踢** —— 脚本一调，pgsync / 后台正用的 token 立刻失效。
+//    ⚠️ 现状：还有 **5 处历史遗留**在用（云函数 2 + 后台服务 1 + 后台自检脚本 2）——
+//       不是本次引入的，登记在 KNOWN_LEGACY_TOKEN（**只提示、不拦**）；
+//       **新写的老接口调用**（不在名单里）→ **直接报错拦住**。
+const PRIVATE_INFO_ALLOW = new Set(['getLocation', 'onLocationChange', 'startLocationUpdate', 'startLocationUpdateBackground']);
+const KNOWN_LEGACY_TOKEN = new Set([
+  'admin/check.js', 'admin/probe-env.js', 'admin/server.js',
+  'miniprogram/cloudfunctions/adminapi/index.js', 'miniprogram/cloudfunctions/login/index.js'
+]);
+function checkCompliance() {
+  // ① 隐私接口白名单
+  const appJsonAbs = path.join(ROOT, 'miniprogram/miniprogram/app.json');
+  if (fs.existsSync(appJsonAbs)) {
+    try {
+      const j = JSON.parse(fs.readFileSync(appJsonAbs, 'utf8'));
+      const arr = j.requiredPrivateInfos || [];
+      const bad = arr.filter(x => !PRIVATE_INFO_ALLOW.has(x));
+      if (bad.length) {
+        fails.push(`隐私接口：app.json 的 requiredPrivateInfos 里有非地理位置类 → ${bad.join(', ')}\n   ⚠️ 2026-10-02 踩过：加日历类（addPhoneCalendar）会让**模拟器直接起不来**。日历要走公众平台更新「用户隐私保护指引」。`);
+      } else {
+        okFiles.push(`  [priv] requiredPrivateInfos 干净（${arr.length} 项，全是定位类）`);
+        console.log(`  ✔ 隐私接口：requiredPrivateInfos ${arr.length} 项，全是地理位置类`);
+      }
+    } catch (e) { fails.push('隐私接口：app.json 解析失败：' + e.message); }
+  }
+
+  // ② 老接口 token（⚠️ 先剥注释 —— 注释里写"别用老接口"是正常的沿革记录）
+  //   ⚠️⚠️ 跳过本文件自己：检测模式 `cgi-bin/token` 就写在本文件里，不跳过会**自己判自己违规**（实测踩到）。
+  const SELF_REL = 'admin/tools/check.js';
+  const dirs = [path.join(ROOT, 'admin'), path.join(ROOT, 'miniprogram/cloudfunctions')];
+  const hits = [];
+  for (const d of dirs) {
+    if (!fs.existsSync(d)) continue;
+    for (const abs of walk(d).filter(f => /\.js$/i.test(f))) {
+      const r = path.relative(ROOT, abs).replace(/\\/g, '/');
+      if (r === SELF_REL) continue;                            // 跳过检测工具自己
+      if (KNOWN_LEGACY_TOKEN.has(r)) continue;                 // 历史遗留：只登记，不拦
+      const code = fs.readFileSync(abs, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')                      // 去块注释
+        .replace(/(^|[^:])\/\/[^\n]*/g, '$1');                 // 去行注释（`[^:]` 保护 http:// 不误伤）
+      if (/cgi-bin\/token/.test(code)) hits.push(r);
+    }
+  }
+  if (hits.length) {
+    fails.push(`老接口 token：这些文件里**代码**（非注释）又在调 /cgi-bin/token → ${hits.join(', ')}\n   ⚠️ 会把 pgsync / 后台的 token 顶掉（2026-10-13 后台停更 46 分钟就是这么来的）。改用 stable_token（样板见 admin/tools/pgsync.js 的 token()）。`);
+  } else {
+    okFiles.push(`  [token] 没有新增的老接口 token 调用（${KNOWN_LEGACY_TOKEN.size} 处历史遗留已登记）`);
+    console.log(`  ✔ 老接口 token：没有新增调用（历史遗留 ${KNOWN_LEGACY_TOKEN.size} 处已登记在案）`);
+  }
+
+  // ⚠️ 历史遗留单独提示一次（不挡提交，但让人看得见）
+  const still = [...KNOWN_LEGACY_TOKEN].filter(r => fs.existsSync(path.join(ROOT, r)));
+  if (still.length) warns.push(`老接口 token 还有 ${still.length} 处历史遗留未改：${still.join(' / ')}（云函数用老接口拿 token 会顶掉 pgsync/后台的 token，建议以后换成 stable_token）`);
+}
+
 // ============ 主流程 ============
 console.log('聚火拜访 · 一键体检（只读，不改任何文件）');
 console.log('根目录：' + ROOT);
@@ -380,6 +446,7 @@ checkActionsWhitelist();
 checkResultNames();
 checkAdminActionCalls();
 checkPagePaths();
+checkCompliance();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
@@ -391,5 +458,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏）');
 process.exit(0);
