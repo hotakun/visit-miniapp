@@ -30,7 +30,9 @@
       <view class="mdot {{item.visitedToday ? (item.lastNoNeed ? 'noneed' : (item.lastClosed ? 'closed' : 'ok')) : (item.visitOngoing ? 'cur' : (item.typeName === 'new' ? 'new' : 'todo'))}}">{{item.visitedToday ? (item.lastNoNeed ? '⭕' : (item.lastClosed ? '✕' : '✓')) : item.seq}}</view>
       <view class="info">
         <view class="cname">{{item.name}}
-          <text class="tag" style="{{item.typeName === 'new' ? 'background:#E8F1FD;color:#2F80ED' : ''}}">{{item.typeName === 'new' ? '新客户' : '回访'}}</text>
+          <!-- ⭐ 2026-10-13 老板定：**「回访」这个状态标签不用显示**（任务详情里绝大多数都是回访客户，
+               每张卡都挂一个"回访"等于噪声）—— 只有「新客户」才出标签。 -->
+          <text class="tag" wx:if="{{item.typeName === 'new'}}" style="background:#E8F1FD;color:#2F80ED">新客户</text>
         </view>
         <view class="caddr">{{item.address}}</view>
       </view>
