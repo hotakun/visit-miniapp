@@ -8395,14 +8395,21 @@ function mpRender() {
     const k = x.mall_key;
     // ⭐ 老板：「发送成功一个，就在后台这个客户名称后面打勾」→ 绿勾跟着名字走
     const tick = (x.status === 'pushed') ? ' <span style="color:#12A150">✅</span>' : '';
-    const head = '<div class="mp-hd"><div style="flex:1;min-width:0"><div class="nm">' + esc(x.name || '(未填店名)') + tick + '</div>' +
-      '<div class="mt">' + esc(x.region || '') + ' · ' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') + '</div></div>' + tag + '</div>';
-    if (isDone) return '<div class="mp-card done">' + head +
-      '<div style="display:flex;align-items:center;gap:9px;padding:9px 13px;font-size:12.5px;color:var(--sub)">' +
-      '<span style="flex:1">' + (x.status === 'paired' ? '已合并到 <b style="color:#22262E">' + esc(x.target_name || '') + '</b>（商城字段覆盖，坐标没动）'
-        : x.status === 'created' ? '已按这条新建客户 <b style="color:#22262E">' + esc(x.target_name || '') + '</b>'
-          : '已跳过（先不处理）') + '</span>' +
-      '<button class="btn ghost" style="height:26px;font-size:12px" onclick="mpUndo(\'' + k + '\')">↩ 撤销</button></div></div>';
+    // 上半截（店名 + 地区/地址/电话 + 右侧那一块）—— 右侧那块由调用方决定（未处理=胶囊；已处理=胶囊 + 撤销）
+    const mkHead = (rightHtml) => '<div class="mp-hd"><div style="flex:1;min-width:0">' +
+      '<div class="nm">' + esc(x.name || '(未填店名)') + tick + '</div>' +
+      '<div class="mt">' + esc(x.region || '') + ' · ' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') + '</div></div>' + rightHtml + '</div>';
+    const head = mkHead(tag);
+    // ⭐⭐ 2026-10-13 老板定（已处理卡片三处调整，原话：「下面的『已跳过（先不处理）』去掉，撤销按钮放到卡片上半截
+    //   『已发送』文字的下面，按钮和文字相应缩小一些」）：
+    //   ① 下半截那行说明整行**去掉**（含 skipped 的「已跳过（先不处理）」）；
+    //   ② 「↩ 撤销」从下半截**挪到上半截**，贴在右侧状态胶囊（「✅ 已发送」等）**正下方**；
+    //   ③ 按钮缩小（高 26→22、字 12→11）。
+    if (isDone) {
+      const right = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">' + tag +
+        '<button class="btn ghost" style="height:22px;font-size:11px;padding:0 7px" onclick="mpUndo(\'' + k + '\')">↩ 撤销</button></div>';
+      return '<div class="mp-card done">' + mkHead(right) + '</div>';
+    }
     const cands = mpCands(x.name, x.phone);
     return '<div class="mp-card">' + head + '<div class="mp-body">' +
       (cands.length
