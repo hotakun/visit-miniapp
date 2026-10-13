@@ -1603,16 +1603,12 @@ tr.row-off td:not(.keep){opacity:.4}
         .mp-acts .t { flex:1; min-width:100px; font-size:12px; color:var(--sub); }
       </style>
       <div class="title-bar"><span class="t">⏳ 待商城建档</span><span class="sb-d">业务员现场录入 · 商城侧暂无档案</span></div>
-      <!-- ⭐⭐ 2026-10-12 老板定：这一页加「新店」标签页 —— 业务员手机端「加新店」录的店，
-           **数据走你自己的服务器**（server.js 转发 pgapi /newshops），不花云开发；拉不到就直说，不回退云端。 -->
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <span class="btn ghost btn-sm on-tab" id="ftb-field" onclick="fieldTab('field')"
+      <!-- ⭐ 2026-10-13 老板：「上面的待商城建档有个大标题了，下面的小标题重复了…上面三个标签，也可以放到和大标题一行，这样能节约很多空间」
+           → 删掉重复的小标题行；三个页签**挪到标题同一行**（右侧），腾出来的空间全给列表。 -->
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+        <span class="btn ghost btn-sm" id="ftb-field" onclick="fieldTab('field')"
           style="cursor:pointer;background:#F5531C;color:#fff;border-color:#F5531C">⏳ 待商城建档</span>
         <span class="btn ghost btn-sm" id="ftb-ns" onclick="fieldTab('ns')" style="cursor:pointer">🆕 新店（业务员录的）</span>
-        <!-- ⭐⭐⭐ 2026-10-13 老板定：「按照刚才做的演示稿，将这个功能在系统内做出来，放在待商城建档里面单独的页面。
-             正好放入我刚才叫你找的这10多家信息，以后刚刚导入的信息，就放在服务器上面建立一个单独的池子，
-             这样我和文员的电脑都能看到，都能操作进行配对或新建。配对或新建完毕之后，这个信息才会写入云端数据库，
-             进入到客户管理里面。」→ 数据源 = **自己的服务器**（PG 的 `mall_pending`）；**处理完才写云端**。 -->
         <span class="btn ghost btn-sm" id="ftb-mp" onclick="fieldTab('mp')" style="cursor:pointer">🛒 商城待配对</span>
       </div>
       <div id="nsWrap" style="display:none;flex:1;min-height:0;display:none;flex-direction:column">
@@ -8258,10 +8254,19 @@ function mpRender() {
   const failed = _mpRows.filter(x => x.status === 'failed').length;
   if (st) st.innerHTML =
     '<div><b>' + tot + '</b><span>这次导入</span></div>' +
-    '<div><b style="color:#12A150">' + s.paired + '</b><span>已配对</span></div>' +
-    '<div><b style="color:#2F80ED">' + s.created + '</b><span>已新建</span></div>' +
-    '<div><b style="color:#7A828E">' + s.skipped + '</b><span>已跳过</span></div>' +
-    '<div><b style="color:#F5531C">' + s.pending + '</b><span>⏳ 待处理</span></div>' +
+    '<div><b style="color:#12A150">' + s.a + '</b><span>已配对</span></div>' +
+    '<div><b style="color:#2F80ED">' + s.c + '</b><span>已新建</span></div>' +
+    '<div><b style="color:#7A828E">' + s.s + '</b><span>已跳过</span></div>' +
+    '<div><b style="color:#F5531C">' + s.p + '</b><span>⏳ 待处理</span></div>' +
+    '<div class="mp-bar"><i style="background:#12A150;width:' + (tot ? s.a / tot * 100 : 0) + '%"></i>' +
+    '<i style="background:#2F80ED;width:' + (tot ? s.c / tot * 100 : 0) + '%"></i>' +
+    '<i style="background:#C3CAD4;width:' + (tot ? s.s / tot * 100 : 0) + '%"></i></div>' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-left:auto">' +
+    '<button class="btn p" id="mpPushBtn" onclick="mpPush()"' + (ready ? '' : ' disabled') +
+    ' style="height:30px;font-size:13px">✅ 确认并发送到云端' + (ready ? ('（' + ready + ' 条）') : '') + '</button>' +
+    '<span id="mpPushMsg" style="font-size:12.5px;color:var(--sub)">' +
+    (ready ? '梳完再发，云端一个字不动' : (failed ? '⚠️ 有 ' + failed + ' 条发送失败（红色，可重发）' : '先把「就是这家 / 新建」梳理好，再按左边发送')) +
+    '</span></div>';
     '<div class="mp-bar"><i style="background:#12A150;width:' + (tot ? s.paired / tot * 100 : 0) + '%"></i>' +
     '<i style="background:#2F80ED;width:' + (tot ? s.created / tot * 100 : 0) + '%"></i>' +
     '<i style="background:#C3CAD4;width:' + (tot ? s.skipped / tot * 100 : 0) + '%"></i></div>' +
