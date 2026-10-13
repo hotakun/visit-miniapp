@@ -20,6 +20,16 @@
 - 壳程序编译（Git Bash 用 `-` 前缀防 MSYS 转义）：`csc -target:winexe -platform:x64 -win32icon:icon.ico -r:lib/Microsoft.Web.WebView2.Core.dll -r:lib/Microsoft.Web.WebView2.WinForms.dll`；exe 被占用时先关后台再复制
 - 打包：`python make_packages.py`（packager/，重要节点才打，见 Conventions）
 - 部署：开发者工具逐个右键云函数「上传并部署：云端安装依赖」；小程序改动必须重新上传（体验版/正式版）
+- ⚠️⚠️ **调云端的脚本一律走 `stable_token`，绝不要用老接口 `/cgi-bin/token`（2026-10-13 真实事故）**：
+  老接口会**把 pgsync / 后台正在用的 token 顶掉** → 服务器日志刷 `[sync] 这轮失败: 调用云函数失败: access_token expired` →
+  **后台数据停止更新**（当天停摆 46 分钟；表面现象是"后台明明改了、看不到"）。
+  · 取法：`POST https://api.weixin.qq.com/cgi-bin/stable_token`，body `{grant_type:'client_credential',appid,secret,force_refresh:false}`（样板见 `admin/tools/pgsync.js` 的 `token()`、`admin/server.js:120`）
+  · `admin/tools/` 下 6 个脚本已统一（`run_adminapi` / `add_index` / `backfill_address_loop` / `import_biz_index` / `import_biz_api2` / `import_biz_api3`）；
+    ⚠️ **`_scratch/*.js` 里那批临时探针仍有用老接口的** —— 跑之前先确认，或跑完顺手重启一次同步器。
+  · pgsync 已加**自愈**：token 类错误（40001 / 40014 / 42001 / 42007 / 42008，或报错含 expired / invalid credential / not latest）
+    → **清缓存 + `force_refresh` 强制刷新重试一次**（一轮内自愈，最多损失一分钟）。
+  · **应急恢复**（服务器上，运维手册同款）：`schtasks /end /tn JuhuoPgSync` 再 `schtasks /run /tn JuhuoPgSync`；
+    监控页 `http://124.222.29.73:18081/status?pw=juhuo` 看「数据截至 / 距今多久」。
 - 语音缓存接口：`curl -X POST http://localhost:18080/tts -H "Content-Type: application/json" -d '{"name":"范宇琨","type":"review"}'`（type=coordfix 为坐标报错文案）
 - 调后台接口（含中文一律 UTF-8 文件 + `curl --data-binary @file`，命令行中文必乱码）
 - ⭐ **一键体检（2026-10-05 新增，改完代码跑一次）**：`node admin/tools/check.js`（只读，不改任何文件）
