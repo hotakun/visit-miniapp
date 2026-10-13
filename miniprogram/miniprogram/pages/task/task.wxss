@@ -56,5 +56,11 @@
 .st { margin-top: 3px; font-size: 12px; color: var(--sub); font-weight: 700; }
 .st-done { color: #5FB88A; } /* 已拜访：灰绿色（亮档，明显可辨） */
 .st-cur { color: var(--blue); } /* 拜访中：蓝色 */
+/* ⭐ 2026-10-13 老板定：任务详情页那行"最近一次拜访结果"按结果上色 ——
+   「闭店 / 搬迁」红、「关门·休息中」蓝。
+   ⚠️ 必须放在 .st-done / .st-cur **之后**：它们与 .st-red/.st-blue 同权重（都是单类），
+      同时命中时"后定义的赢"，这样"今天拜访过 + 结果是闭店"才会显示红色而不是灰绿。 */
+.st-red { color: #E5484D; }   /* 与"闭店"那个红底 ✕ 圆点同色 */
+.st-blue { color: var(--blue); }
 .empty { text-align: center; color: var(--sub); font-size: 13px; margin-top: 30px; }
 .foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px 24px; background: linear-gradient(180deg, rgba(246,247,249,0), #F6F7F9 30%); }

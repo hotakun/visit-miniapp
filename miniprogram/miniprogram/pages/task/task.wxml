@@ -36,7 +36,8 @@
       </view>
       <view class="cright">
         <view wx:if="{{item.distText}}" class="dist">{{item.distText}}</view>
-        <view class="st {{item.visitedToday ? 'st-done' : (item.visitOngoing ? 'st-cur' : '')}}">{{item.visitedToday ? (item.lastResult || '已拜访') : (item.visitOngoing ? '拜访中' : '未拜访')}}</view>
+        <!-- ⭐ 2026-10-13 老板定：这行"最近一次拜访结果"按结果上色 —— 关门·休息中=蓝、闭店/搬迁=红（resCls 在 task.js 里按"包含"算） -->
+        <view class="st {{item.visitedToday ? 'st-done' : (item.visitOngoing ? 'st-cur' : '')}} {{item.resCls}}">{{item.visitedToday ? (item.lastResult || '已拜访') : (item.visitOngoing ? '拜访中' : '未拜访')}}</view>
         <view wx:if="{{item.lastVisit}}" class="last">上次 {{item.lastVisit.visitedAt}}</view>
       </view>
     </view>

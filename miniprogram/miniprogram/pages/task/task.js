@@ -187,13 +187,22 @@ Page({
     const map = {};
     this.allCustomers.forEach(c => { map[c._id] = c; });
     const list = plan.customerIds.map(id => map[id]).filter(Boolean);
-    const showCustomers = list.map((c, i) => ({
-      ...c,
-      seq: i + 1,
-      distText: this.distMap[c._id] !== undefined && this.distMap[c._id] !== null
-        ? (this.distMap[c._id] < 1000 ? Math.round(this.distMap[c._id]) + 'm' : (this.distMap[c._id] / 1000).toFixed(1) + 'km')
-        : ''
-    }));
+    const showCustomers = list.map((c, i) => {
+      // ⭐ 2026-10-13 老板定：「任务详情页那行『最近一次拜访结果』按结果上色 ——
+      //   **关门·休息中 → 蓝色**，**闭店 / 搬迁 → 红色**」。
+      //   ⚠️ 拜访结果是**可多选**的（存成逗号串，如「闭店,搬迁」）→ 必须用"包含"判断，不能严格相等。
+      //   ⚠️ 只给这三项上色；其余结果保持原来那套（已拜访=灰绿 / 拜访中=蓝 / 未拜访=灰）。
+      const _r = String(c.lastResult || '');
+      const resCls = /闭店|搬迁/.test(_r) ? 'st-red' : (/关门·休息中/.test(_r) ? 'st-blue' : '');
+      return {
+        ...c,
+        seq: i + 1,
+        resCls: resCls,
+        distText: this.distMap[c._id] !== undefined && this.distMap[c._id] !== null
+          ? (this.distMap[c._id] < 1000 ? Math.round(this.distMap[c._id]) + 'm' : (this.distMap[c._id] / 1000).toFixed(1) + 'km')
+          : ''
+      };
+    });
     // 每天完成态：该天客户全部已拜访
     const dayDone = {};
     // ⭐ 2026-10-11 老板定：每页下面还要显示**已拜访家数**（页面显示成「X/15 家」；
