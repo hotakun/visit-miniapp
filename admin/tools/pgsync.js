@@ -117,6 +117,11 @@ async function syncPollDirty() {
     };
     await put('pollDirtyAt', Number(r.pollDirtyAt) || 0);
     await put('custDirtyAt', Number(r.custDirtyAt) || 0);
+    // ⭐⭐ 2026-10-14：批次成员变动信号（后台建/删批次、加/移成员时写）——
+    //   同步器据此决定"这轮要不要全量对账 batch_members"：**有变动才全量，没变动纯增量**。
+    //   ⚠️ 搭 pollDirty 的顺风车带回来，**不增加任何云端调用**。
+    _bmDirtySeen = Number(r.batchDirtyAt) || 0;
+    await put('batchDirtyAt', _bmDirtySeen);        // 顺带在 PG 留一份，方便排查
     // ⭐⭐ 2026-10-12 老板定（零额外调用）：**顺路收下"最近删掉的客户 id"写进 PG** ——
     //   云端 `pollDirty` 在同一次回答里捎带 `deletedIds`（不增加云端调用次数，老板拍板这个方案）；
     //   `pgapi /newshops` 用它排除 —— 后台「新店」列表里**删掉的店就不会再显示**。
@@ -214,8 +219,15 @@ async function round() {
 //   ⚠️ 水位是**字符串**（集合 `_id`），不是时间戳 —— 所以单独用下面两个函数，别复用 customers 的 Number 版。
 //   ⚠️ 顺带把每页 1000 降到 500、页间等 400ms → **把 QPS 尖峰压下来一半**（离 500 红线更远）。
 const BM_PAGE = 500;
-const BM_FULL_MIN = Number(CFG.batchMemberFullSyncMinutes) || 15;   // 全量对账间隔（分钟）；配置可在 pgsync.config.json 调
+// ⭐⭐ 2026-10-14：**改成"信号驱动 + 兜底"**（老板定：有变动才全量，别定时全量）——
+//   · 后台建/删批次、加/移成员时会写 `settings.batchDirtyAt`（云端 adminapi 的 touchBatchDirty）
+//     → `pollDirty` 顺带带回来 → 同步器发现信号变了就**做一轮全量对账**（把"删掉的"清掉）
+//   · 没变化 → **纯增量**（只拉新增，通常 0 条）
+//   · 这个 `BM_FALLBACK_MIN` 只是**保险**：万一某处漏写信号，最迟 6 小时也会自己对一次账。
+const BM_FALLBACK_MIN = Number(CFG.batchMemberFullSyncMinutes) || 360;
 let _lastBmFullSync = 0;
+let _bmDirtySeen = 0;          // 本轮 pollDirty 拿到的批次变动信号（由 syncPollDirty 赋值）
+let _lastBmDirtyHandled = 0;   // 上次"因信号"做过全量的信号值（进程重启归 0 → 触发一次全量，安全）
 // ⚠️⚠️ 2026-10-14 实测（部署前用探针脚本验过，拦下一次事故）：
 //   `sync_state.watermark` 的列类型是 **bigint**（它一直是给时间戳用的），
 //   **存不了字符串游标**（`batch_members._id` 是 CloudBase 生成的字符串）——
@@ -248,7 +260,14 @@ async function setBmWatermark(w) {
 //   「批内列表 / 未分批数 / 每批家数」全部改查 PG（一条 SQL 秒出、零成本），**不用再问云端**。
 //   ⚠️ 用**游标**（`after` = 上一页最后一条 _id），**不用 skip** —— skip 在没索引时会越翻越慢（我踩过）。
 async function syncBatchMembers() {
-  const full = !_lastBmFullSync || (Date.now() - _lastBmFullSync >= BM_FULL_MIN * 60 * 1000);
+  // ⭐⭐ 2026-10-14：**改成信号驱动 + 兜底**（老板定：「不是只动变动的吗？」——对，现在就是）——
+  //   · 后台有"批次变动"（建/删批次、加/移成员）→ `batchDirtyAt` 变了 → **这轮做全量对账**
+  //     （删掉的成员只能靠全量清，增量扫不到"已消失的文档"）
+  //   · 没有变动 → **纯增量**（只拉新增，通常 0 条 → 几乎零读写）
+  //   · 兜底：距上次全量超过 `BM_FALLBACK_MIN`（默认 6 小时）也全量一次（防某处漏写信号）
+  const dirtyChanged = !!_bmDirtySeen && _bmDirtySeen !== _lastBmDirtyHandled;
+  const staleTooLong = !_lastBmFullSync || (Date.now() - _lastBmFullSync >= BM_FALLBACK_MIN * 60 * 1000);
+  const full = dirtyChanged || staleTooLong;
   let after = '', total = 0, lastSeen = '';
   if (full) {
     // ── 全量对账：先清空 PG 再从头拉（与旧行为一致，兜住"删除"）──
@@ -268,24 +287,28 @@ async function syncBatchMembers() {
     if (!r || !r.ok) throw new Error('exportBatchMembers 返回异常: ' + JSON.stringify(r).slice(0, 200));
     const list = r.list || [];
     if (!list.length) break;
-    const c = await conn();
-    for (const m of list) {
-      await c.query(
-        'INSERT INTO batch_members (batch_id,customer_id,created_at,updated_at) VALUES ($1,$2,$3,$4) ' +
-        'ON CONFLICT (batch_id,customer_id) DO UPDATE SET updated_at=EXCLUDED.updated_at',
-        [String(m.b || ''), String(m.c || ''), Number(m.t) || 0, Date.now()]
-      );
-      total++;
-    }
+    // ⭐⭐ 2026-10-14：改用**批量 upsert**（每页 500 条 = 1 次写）。
+    //   ⚠️ 原来是**逐条 INSERT** —— 一轮全量 5585 条 = **5585 次写请求**（明明一次能写 500 条）。
+    //      而 `upsert()` 这个批量函数项目里早就有（`syncVisits` / `syncCustomerBatches` 都在用），
+    //      **只有这个函数漏了**。改完：**5585 次写 → 12 次写**（省 99%）。
+    //   ⚠️ `batch_members` 是**复合主键** `(batch_id, customer_id)` —— 所以上面给 `upsert()` 加了 `conflictOn`。
+    await upsert('batch_members',
+      ['batch_id', 'customer_id', 'created_at', 'updated_at'],
+      list.map(m => [String(m.b || ''), String(m.c || ''), Number(m.t) || 0, Date.now()]),
+      ['batch_id', 'customer_id']);
+    total += list.length;
     lastSeen = r.last || after;                        // 游标：留着更新水位（空值不会覆盖旧水位）
     after = r.last || '';
     if (!r.hasMore) break;
     await sleep(400);                                  // ⭐ 1000→500 页 + 等 400ms：压低 QPS 尖峰
   }
-  if (full) _lastBmFullSync = Date.now();
+  if (full) {
+    _lastBmFullSync = Date.now();
+    if (dirtyChanged) _lastBmDirtyHandled = _bmDirtySeen;   // 记下已处理的信号
+  }
   await setBmWatermark(lastSeen);                      // 记住水位（空值不会覆盖）
-  console.log('[sync] batch_members ' + (full ? '**全量对账**' : '增量') + ' ' + total + ' 条' +
-    (full ? '（下次全量 ' + BM_FULL_MIN + ' 分钟后）' : ''));
+  console.log('[sync] batch_members ' + (full ? ('**全量对账**（' + (dirtyChanged ? '有批次变动' : '兜底到期') + '）') : '增量') +
+    ' ' + total + ' 条');
 }
 
 // ⭐⭐ 2026-10-10 指针表模式第 5 步 · 三张新表的同步（云端导出接口在 adminapi 里）
@@ -297,10 +320,14 @@ async function syncBatchMembers() {
 let _lastVisitSync = 0;
 
 // 批量 UPSERT（多值 INSERT，每批 500 行）—— 逐条 INSERT 在几千条时会很慢
-async function upsert(table, cols, rows) {
+// ⭐ 2026-10-14：加第 4 个参数 `conflictOn`（冲突键，默认第一列）——
+//   因为 `batch_members` 是**复合主键** `(batch_id, customer_id)`，只认第一列会插重（原写法干脆逐条插）。
+async function upsert(table, cols, rows, conflictOn) {
   if (!rows || !rows.length) return 0;
   const c = await conn();
   const CH = 500;
+  const keyCols = (Array.isArray(conflictOn) && conflictOn.length) ? conflictOn : [cols[0]];
+  const setCols = cols.filter(x => keyCols.indexOf(x) < 0);      // 冲突时更新「非主键列」
   for (let i = 0; i < rows.length; i += CH) {
     const part = rows.slice(i, i + CH);
     const ph = [], vals = [];
@@ -309,8 +336,8 @@ async function upsert(table, cols, rows) {
       vals.push.apply(vals, r);
     });
     await c.query('INSERT INTO ' + table + ' (' + cols.join(',') + ') VALUES ' + ph.join(',') +
-      ' ON CONFLICT (' + cols[0] + ') DO UPDATE SET ' +
-      cols.slice(1).map(x => x + '=EXCLUDED.' + x).join(','), vals);
+      ' ON CONFLICT (' + keyCols.join(',') + ') DO UPDATE SET ' +
+      setCols.map(x => x + '=EXCLUDED.' + x).join(','), vals);
   }
   return rows.length;
 }

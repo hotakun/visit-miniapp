@@ -1360,13 +1360,38 @@ async function listNewShops(event) {
 // ⭐ 2026-10-12 省调用量 ③：给服务器同步器读「变化时间戳」用 —— 它每分钟读一次写进 PG，
 //   后台再问服务器（0 云端）→ **只有真变了才叫云端 pollAll**（原来无脑 30 秒一叫）。
 //   ⚠️ 极轻：一次只读 settings 里这两条，失败就当 0（不报错）。
-async function pollDirty(event) {
-  const out = { ok: true, at: Date.now(), pollDirtyAt: 0, custDirtyAt: 0 };
+// ⭐⭐ 2026-10-14 老板定：**批次成员变动信号**（`settings.batchDirtyAt`）
+//   动机：服务器同步器原来「每 5 分钟全量重拉 batch_members（5585 条）」，
+//   是因为**增量感知不到"删除"**（文档一删，游标再怎么往后扫也扫不到它）。
+//   而「建批次 / 删批次 / 加成员 / 移出成员」这些操作**全都发生在后台**（就是下面那几个函数）
+//   → 那就**让它们发生时报一声**：同步器收到信号才做一次全量对账，**其余时间纯增量**（只拉新增）。
+//   ⚠️ 与 `custDirtyAt`（建店信号）同一套路：写进 settings、失败只 log、**绝不影响主流程**。
+//   ⚠️ 同步器靠 `pollDirty` 顺带取它 → **零额外云端调用**（老板关心的费用问题）。
+//   ⚠️ **带防抖**：批量加成员是在循环里逐批调的，3 秒内只写一次，避免自己变成"写放大"。
+let _bmDirtyTouched = 0;
+async function touchBatchDirty() {
+  const now = Date.now();
+  if (now - _bmDirtyTouched < 3000) return;      // 防抖：3 秒内只写一次
+  _bmDirtyTouched = now;
   try {
-    const r = await db.collection('settings').where({ key: _.in(['pollDirtyAt', 'custDirtyAt']) }).get();
+    const dr = await db.collection('settings').where({ key: 'batchDirtyAt' }).limit(1).get();
+    if (dr.data && dr.data.length) {
+      await db.collection('settings').doc(dr.data[0]._id).update({ data: { value: now, updatedAt: now } });
+    } else {
+      await db.collection('settings').add({ data: { key: 'batchDirtyAt', value: now, updatedAt: now } });
+    }
+  } catch (e) { console.error('[batchDirtyAt] 写批次变动信号失败：', e); }
+}
+
+async function pollDirty(event) {
+  const out = { ok: true, at: Date.now(), pollDirtyAt: 0, custDirtyAt: 0, batchDirtyAt: 0 };
+  try {
+    const r = await db.collection('settings').where({ key: _.in(['pollDirtyAt', 'custDirtyAt', 'batchDirtyAt']) }).get();
     (r.data || []).forEach(s => {
       if (s.key === 'pollDirtyAt') out.pollDirtyAt = Number(s.value) || 0;
       if (s.key === 'custDirtyAt') out.custDirtyAt = Number(s.value) || 0;
+      // ⭐ 2026-10-14：批次成员变动信号 —— 服务器同步器据此决定"这轮要不要全量对账 batch_members"
+      if (s.key === 'batchDirtyAt') out.batchDirtyAt = Number(s.value) || 0;
     });
   } catch (e) { /* 静默：没有这两条就当 0 */ }
   // ⭐⭐ 2026-10-12 老板定（**零额外调用版**）：**顺路捎带"最近删掉的客户 id"** ——
@@ -3030,6 +3055,7 @@ async function importCustomers(event) {
       }
     });
     await db.collection('batch_members').add({ data: { batchId: bid, customerId: add._id, status: 'todo', createdAt: now } });
+    await touchBatchDirty();     // ⭐ 2026-10-14：导入建批也会加成员 → 报一声（有防抖，循环内只写一次）
     realId[r.ph] = add._id;
   });
   // 合并入批（占位解析为真实 _id；同一目标去重后并行——addCustomerToBatch 幂等检查并发不安全）
@@ -5816,6 +5842,7 @@ async function addCustomerToBatch(customerId, batchId) {
   const ex = await db.collection('batch_members').where({ batchId, customerId }).limit(1).get();
   if (!ex.data.length) {
     await db.collection('batch_members').add({ data: { batchId, customerId, createdAt: Date.now() } });
+    await touchBatchDirty();     // ⭐ 2026-10-14：批次成员变动 → 报一声（同步器据此做一次全量对账）
   }
   return true;
 }
@@ -6090,6 +6117,7 @@ async function addBatchMembersBulk(event) {
   for (let i = 0; i < news.length; i += 1000) {
     const arr = news.slice(i, i + 1000).map(id => ({ batchId: batchId, customerId: id, createdAt: Date.now() }));
     await db.collection('batch_members').add({ data: arr });
+    await touchBatchDirty();     // ⭐ 2026-10-14：批量加成员 → 报一声（有防抖，多批只写一次）
     added += arr.length;
   }
   // ⭐⭐ 2026-10-10 指针表模式：**不再写 customers.batchIds**（原 ② 段整段删除）——
@@ -6108,7 +6136,10 @@ async function removeCustomerFromBatch(event) {
   if (vis.data.length) return { ok: false, code: 'HAS_VISIT', msg: '该客户有拜访记录，不能从批次中删除' };
   // ⭐⭐ 2026-10-10 指针表模式：**只删 batch_members 这一条**（不再回写客户档案的 batchIds —— 那一步已废）
   const mem = await db.collection('batch_members').where({ batchId, customerId }).limit(1).get();
-  if (mem.data.length) await db.collection('batch_members').doc(mem.data[0]._id).remove();
+  if (mem.data.length) {
+    await db.collection('batch_members').doc(mem.data[0]._id).remove();
+    await touchBatchDirty();     // ⭐ 2026-10-14：移出成员是"删除" → 增量扫不到，必须报信号让同步器全量对账
+  }
   return { ok: true, msg: '已从批次中移除（客户档案保留）' };
 }
 
@@ -6375,6 +6406,9 @@ async function deleteCustomerBatch(event) {
   for (let i = 0; i < members.length; i += BATCH) {
     await Promise.all(members.slice(i, i + BATCH).map(m => db.collection('batch_members').doc(m._id).remove()));
   }
+  // ⭐ 2026-10-14：删批次 = 大批"删除" → 报一次信号（放在循环外，空批次也报）；
+  //   同步器收到后做一次全量对账，把 PG 里这些已消失的成员清掉（增量扫不到删除）
+  await touchBatchDirty();
   // 还剩多少：一次 count（很快，不拉数据 —— 避免"每轮重拉整批成员"那套）
   let left = 0;
   try { left = (await db.collection('batch_members').where({ batchId }).count()).total || 0; } catch (e) { left = 0; }
