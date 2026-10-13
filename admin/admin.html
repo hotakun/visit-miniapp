@@ -8250,17 +8250,27 @@ function mpMark(key, status, tid, tname, lat, lng) {
 function mpRender() {
   const box = $('mpList'), cnt = $('mpCount'), st = $('mpStats');
   if (!box) return;
-  const DONE = ['paired', 'created', 'skipped'];
+  const DONE = ['paired', 'created', 'skipped', 'pushed', 'failed'];
   const s = mpStat(), tot = s.p + s.a + s.c + s.s;
+  // ⭐⭐⭐ 2026-10-13 老板拍板：顶上一个「✅ 确认并发送到云端」——
+  //   梳理阶段（配对 / 新建）**只记账、云端一个字不动**；按了这个按钮才一条条发上去。
+  const ready = _mpRows.filter(x => (x.status === 'paired' || x.status === 'created')).length;
+  const failed = _mpRows.filter(x => x.status === 'failed').length;
   if (st) st.innerHTML =
     '<div><b>' + tot + '</b><span>这次导入</span></div>' +
-    '<div><b style="color:#12A150">' + s.a + '</b><span>已配对</span></div>' +
-    '<div><b style="color:#2F80ED">' + s.c + '</b><span>已新建</span></div>' +
-    '<div><b style="color:#7A828E">' + s.s + '</b><span>已跳过</span></div>' +
-    '<div><b style="color:#F5531C">' + s.p + '</b><span>⏳ 待处理</span></div>' +
-    '<div class="mp-bar"><i style="background:#12A150;width:' + (tot ? s.a / tot * 100 : 0) + '%"></i>' +
-    '<i style="background:#2F80ED;width:' + (tot ? s.c / tot * 100 : 0) + '%"></i>' +
-    '<i style="background:#C3CAD4;width:' + (tot ? s.s / tot * 100 : 0) + '%"></i></div>';
+    '<div><b style="color:#12A150">' + s.paired + '</b><span>已配对</span></div>' +
+    '<div><b style="color:#2F80ED">' + s.created + '</b><span>已新建</span></div>' +
+    '<div><b style="color:#7A828E">' + s.skipped + '</b><span>已跳过</span></div>' +
+    '<div><b style="color:#F5531C">' + s.pending + '</b><span>⏳ 待处理</span></div>' +
+    '<div class="mp-bar"><i style="background:#12A150;width:' + (tot ? s.paired / tot * 100 : 0) + '%"></i>' +
+    '<i style="background:#2F80ED;width:' + (tot ? s.created / tot * 100 : 0) + '%"></i>' +
+    '<i style="background:#C3CAD4;width:' + (tot ? s.skipped / tot * 100 : 0) + '%"></i></div>' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-left:auto">' +
+    '<button class="btn p" id="mpPushBtn" onclick="mpPush()"' + (ready ? '' : ' disabled') +
+    ' style="height:30px;font-size:13px">✅ 确认并发送到云端' + (ready ? ('（' + ready + ' 条）') : '') + '</button>' +
+    '<span id="mpPushMsg" style="font-size:12.5px;color:var(--sub)">' +
+    (ready ? '梳完再发，云端一个字不动' : (failed ? '⚠️ 有 ' + failed + ' 条发送失败（红色，可重发）' : '先把「就是这家 / 新建」梳理好，再按左边发送')) +
+    '</span></div>';
   ['pending', 'done', 'all'].forEach(t => {
     const e = $('mpTb-' + t); if (!e) return; const on = (_mpTab === t);
     e.style.background = on ? '#F5531C' : ''; e.style.color = on ? '#fff' : ''; e.style.borderColor = on ? '#F5531C' : '';
@@ -8268,16 +8278,30 @@ function mpRender() {
   const kw = String(($('mpQ') || {}).value || '').trim().toLowerCase();
   let list = _mpRows.filter(x => _mpTab === 'pending' ? (!x.status || x.status === 'pending') : (_mpTab === 'done' ? DONE.indexOf(x.status) >= 0 : true));
   if (kw) list = list.filter(x => ((x.name || '') + (x.phone || '') + (x.address || '') + (x.mall_code || '')).toLowerCase().indexOf(kw) >= 0);
+  // ⭐⭐⭐ 2026-10-13 老板定：「匹配对上的就自动排列到上面，梳理完毕之后，就成为上面是匹配上的，下面是暂时还没有匹配上的」
+  //   排出顺序：已配对/已新建 → 发送失败（要去重发）→ 已跳过 → 待处理；同档内按原名稳定排。
+  if (_mpTab === 'all') {
+    const ORD = { paired: 0, created: 0, failed: 1, pushed: 0, skipped: 2, pending: 3 };
+    list = list.slice().sort(function (a, b) {
+      const oa = ORD[a.status] === undefined ? 3 : ORD[a.status];
+      const ob = ORD[b.status] === undefined ? 3 : ORD[b.status];
+      return oa - ob;
+    });
+  }
   if (cnt) cnt.textContent = '共 ' + list.length + ' 家 · 数据来自你自己的服务器';
   if (!list.length) { box.innerHTML = '<div class="empty" style="padding:26px 0;text-align:center;color:var(--sub)">' + (_mpTab === 'pending' ? '🎉 没有待处理的，全部处理完了' : '（没有记录）') + '</div>'; return; }
   box.innerHTML = list.map(x => {
     const isDone = DONE.indexOf(x.status) >= 0;
-    const tag = x.status === 'paired' ? '<span class="st" style="background:#EAF7EF;color:#12A150">✅ 已配对</span>'
-      : x.status === 'created' ? '<span class="st" style="background:#EAF2FE;color:#2F80ED">➕ 已新建</span>'
-        : x.status === 'skipped' ? '<span class="st" style="background:#F2F4F7;color:#7A828E">⏭ 已跳过</span>'
-          : '<span class="st" style="background:#FFF1E8;color:#D2691E">⏳ 待处理</span>';
+    const tag = x.status === 'pushed' ? '<span class="st" style="background:#EAF7EF;color:#12A150">✅ 已发送</span>'
+      : x.status === 'failed' ? '<span class="st" style="background:#FDECEC;color:#D64545">⚠️ 发送失败</span>'
+      : x.status === 'paired' ? '<span class="st" style="background:#FFF4E5;color:#B77400">📝 已梳理·待发送</span>'
+      : x.status === 'created' ? '<span class="st" style="background:#FFF4E5;color:#B77400">📝 已新建·待发送</span>'
+      : x.status === 'skipped' ? '<span class="st" style="background:#F2F4F7;color:#7A828E">⏭ 已跳过</span>'
+        : '<span class="st" style="background:#FFF1E8;color:#D2691E">⏳ 待处理</span>';
     const k = x.mall_key;
-    const head = '<div class="mp-hd"><div style="flex:1;min-width:0"><div class="nm">' + esc(x.name || '(未填店名)') + '</div>' +
+    // ⭐ 老板：「发送成功一个，就在后台这个客户名称后面打勾」→ 绿勾跟着名字走
+    const tick = (x.status === 'pushed') ? ' <span style="color:#12A150">✅</span>' : '';
+    const head = '<div class="mp-hd"><div style="flex:1;min-width:0"><div class="nm">' + esc(x.name || '(未填店名)') + tick + '</div>' +
       '<div class="mt">' + esc(x.region || '') + ' · ' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') + '</div></div>' + tag + '</div>';
     if (isDone) return '<div class="mp-card done">' + head +
       '<div style="display:flex;align-items:center;gap:9px;padding:9px 13px;font-size:12.5px;color:var(--sub)">' +
@@ -8350,13 +8374,16 @@ async function mpConfirm(mallKey, customerId) {
     trow('商圈', '（商城没有）', esc(cBiz || '（空）'), bizShow, bizNote, true) +
     trow('标记', '—', '—', '已加入商城', '') +
     '</table>';
-  if (!(await confirmBox('🛒 合并预览', html, '✅ 确认合并'))) return;
-  const r = await api('applyMallPair', { customerId: customerId, mallKey: mallKey }).catch(() => null);
-  if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '请稍后再试')); return; }
-  // ⭐ 老板：「输入的经纬度，是对导入的客户补充经纬度信息」→ 把补的坐标一起存回服务器那一行
+  if (!(await confirmBox('🛒 合并预览', html, '✅ 确认（先记账，不发云端）'))) return;
+  // ⭐⭐⭐ 2026-10-13 老板拍板（重要改造）：**这一下只「记账」，云端一个字不动** ——
+  //   老板原话：「我在确定了匹配的和新建的信息之后，这些信息暂时不发送到云端数据库…
+  //   页面上方有个「确认并发送到云端」，就可以将已经匹配或者新建的信息传递到云端数据库」
+  //   → 所以这里**不调 applyMallPair**，只在服务器上标记 status=paired + target_id/target_name +
+  //     补的坐标；真正的合并由顶部「✅ 确认并发送到云端」一条条发。
   const g = String(_mpGeoVal || '').split(',');
   await mpMark(mallKey, 'paired', customerId, cName || row.name || '', g[0], g[1]);
-  await mpLoad(true);                                   // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
+  _mpGeoKey = ''; _mpGeoRes = null;                       // 记完收起输入面板
+  await mpLoad(true);                                     // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
 }
 async function mpSkip(mallKey) {
   await mpMark(mallKey, 'skipped');
@@ -8365,6 +8392,50 @@ async function mpSkip(mallKey) {
 async function mpUndo(mallKey) {
   if (!confirm('撤销这条的处理状态？（回到「待处理」）\n⚠️ 已经合并进客户档案的信息不会自动还原。')) return;
   await mpMark(mallKey, 'pending');
+  await mpLoad(true);
+}
+// ⭐⭐⭐ 2026-10-13 老板拍板：「页面上方有个「确认并发送到云端」，就可以将已经匹配或者新建的信息
+//   传递到云端数据库」+「按照你安全的方式一个个发送吧」+「发送成功一个，就在后台这个客户名称后面打勾」。
+//   → **逐条发**（云端 HTTP API 只有 4~5 秒超时，十几条一把梭必挂）；
+//     成功 → status=pushed（列表里名字后打 ✅）；失败 → status=failed（红色、留在上面）；
+//     每轮结束 mpLoad 重拉，两台电脑都能看到实时进度。
+async function mpPush() {
+  const todo = _mpRows.filter(x => x.status === 'paired' || x.status === 'created');
+  if (!todo.length) { alert('还没有梳理好的 —— 先在上面点「✓ 就是这家」或「➕ 新建这条客户」'); return; }
+  if (!confirm('把已梳理的 ' + todo.length + ' 条发送到云端？\n\n' +
+    '· 配对的：合并进系统内那条客户（店名/电话/地址取商城的；经纬度、商圈保留系统内的）\n' +
+    '· 新建的：建成新客户，并标「已加入商城」\n\n' +
+    '⚠️ 发出去之后就不能再改了。')) return;
+  const btn = $('mpPushBtn'), msg = $('mpPushMsg');
+  if (btn) { btn.disabled = true; btn.textContent = '发送中…'; }
+  let ok = 0, bad = 0;
+  for (let i = 0; i < todo.length; i++) {
+    const x = todo[i];
+    if (msg) msg.textContent = '正在发 ' + (i + 1) + '/' + todo.length + '：' + (x.name || '');
+    let good = false;
+    try {
+      if (x.status === 'created') {
+        const lat = Number(x.lat || 0), lng = Number(x.lng || 0);
+        if (lat && lng) {
+          const r = await api('createMallCustomer', {
+            mallKey: x.mall_key, name: x.name, phone: x.phone || '', address: x.address || '',
+            lat: lat, lng: lng, region: x.region || '', bizCircle: x.biz_circle || ''
+          }).catch(() => null);
+          good = !!(r && r.ok);
+          if (good) await mpMark(x.mall_key, 'pushed', r.customerId || '', x.name);
+        }
+      } else {
+        const r = await api('applyMallPair', { customerId: x.target_id, mallKey: x.mall_key }).catch(() => null);
+        good = !!(r && r.ok);
+        if (good) await mpMark(x.mall_key, 'pushed', x.target_id || '', x.target_name || '');
+      }
+    } catch (e) { good = false; }
+    if (good) ok++;
+    else { bad++; await mpMark(x.mall_key, 'failed', x.target_id || '', x.target_name || ''); }
+    await new Promise(r2 => setTimeout(r2, 150));        // 一条条来，别把云端那条 HTTP 通道挤爆
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '✅ 确认并发送到云端'; }
+  if (msg) msg.textContent = '发送完成：✅ 成功 ' + ok + ' 条' + (bad ? ('，⚠️ 失败 ' + bad + ' 条（红色的，重新梳理后再发）') : '');
   await mpLoad(true);
 }
 function mpCreateHint() {
