@@ -8395,10 +8395,12 @@ function mpRender() {
     const k = x.mall_key;
     // ⭐ 老板：「发送成功一个，就在后台这个客户名称后面打勾」→ 绿勾跟着名字走
     const tick = (x.status === 'pushed') ? ' <span style="color:#12A150">✅</span>' : '';
-    // 上半截（店名 + 地区/地址/电话 + 右侧那一块）—— 右侧那块由调用方决定（未处理=胶囊；已处理=胶囊 + 撤销）
+    // 上半截（店名 + 地址/电话 + 右侧那一块）—— 右侧那块由调用方决定（未处理=胶囊；已处理=胶囊 + 撤销）
+    // ⭐ 2026-10-13 老板定：「店名下面那行开头的『浙江省>金华市>永康市』区域信息**不用显示**，和后面的地址段重复了」
+    //   → 去掉行首的 `x.region`，直接从**地址**开始（地址本身就是完整省市区+街道）。
     const mkHead = (rightHtml) => '<div class="mp-hd"><div style="flex:1;min-width:0">' +
       '<div class="nm">' + esc(x.name || '(未填店名)') + tick + '</div>' +
-      '<div class="mt">' + esc(x.region || '') + ' · ' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') + '</div></div>' + rightHtml + '</div>';
+      '<div class="mt">' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') + '</div></div>' + rightHtml + '</div>';
     const head = mkHead(tag);
     // ⭐⭐ 2026-10-13 老板定（已处理卡片三处调整，原话：「下面的『已跳过（先不处理）』去掉，撤销按钮放到卡片上半截
     //   『已发送』文字的下面，按钮和文字相应缩小一些」）：
