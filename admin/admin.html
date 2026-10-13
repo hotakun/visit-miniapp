@@ -9154,6 +9154,8 @@ async function loadGeoPage() {
     + '<th style="width:38px"></th>'
     + '<th class="no" style="width:22px;text-align:center"><input type="checkbox" id="geoChkAll" title="全选 / 取消本页" style="cursor:pointer;accent-color:#F5531C;width:15px;height:15px;vertical-align:middle" onchange="geoCheckAll(this.checked)"></th>'
     + '<th class="lft" style="width:150px">店名</th>'
+    // ⭐ 2026-10-13 老板要：**「商城」列挪到「区域」前面**（一眼先看这家加没加商城）
+    + geoSortedTh('mk', '商城', 58)
     // ⭐ 2026-10-06 老板要的：**区域 / 商圈也能排序**（原来这两列是死表头）
     + geoSortedTh('d', '区域', 56)
     + geoSortedTh('b', '商圈', 86)
@@ -9166,7 +9168,6 @@ async function loadGeoPage() {
     + geoSortedTh('lv', '最近拜访', 64)
     + '<th style="width:56px">坐标</th>'
     + '<th class="lft" style="width:170px">地址</th>'
-    + geoSortedTh('mk', '商城', 58)
     + '</tr>';
   const VS = { pending: '待回访', ongoing: '拜访中', visited: '已回访' };
   const rows = list.map((c, i) => {
@@ -9192,6 +9193,8 @@ async function loadGeoPage() {
       + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>`
       + `<td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}"${on} onclick="geoPick('${c._id}', this)"></td>`
       + `<td class="lft" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
+      // ⭐ 2026-10-13 老板要：**「商城」格挪到「区域」前面**（与表头同序，别错位）
+      + `<td>${(c.mallCode || c.mallKey) ? '<span class="pill p-ok">已加</span>' : '<span class="pill p-bad">未加</span>'}</td>`
       + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.district || '—')}</td>`
       + `<td><span class="pill p-pu">${esc(c.bizCircle || '—')}</span></td>`
       + `<td>${c.visitState === 'in_task' ? '<span class="pill p-blue">任务中</span>' : '—'}</td>`
@@ -9202,7 +9205,6 @@ async function loadGeoPage() {
       + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.lastVisitAt || '—')}</td>`
       + `<td>${coord}</td>`
       + `<td class="addr lft" title="${esc(c.address || '')}">${esc(geoAddr(c.address) || '—')}</td>`
-      + `<td>${(c.mallCode || c.mallKey) ? '<span class="pill p-ok">已加</span>' : '<span class="pill p-bad">未加</span>'}</td>`
       + '</tr>';
   }).join('');
   tbody.innerHTML = rows || '<tr><td colspan="16" class="empty">这个范围内还没有客户</td></tr>';
