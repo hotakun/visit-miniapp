@@ -3463,12 +3463,14 @@ function shortAddr(s) {
 //   ⚠️ 与下面 custWithCode 同一口径；幂等：已以编号开头就不再拼。
 function custTitleOf(c) {
   if (!c) return '';
-  const raw = String(c.nameRaw || '').trim();
-  if (raw) return raw;                                   // ① 导入时保留的原值（就是「编号 + 店名」）
-  const code = String(c.mallCode || '').trim();           // ② 退路：用客户编号拼（老档案）
-  const nm = String(c.name || '');
-  if (!code) return nm;
-  return nm.indexOf(code) === 0 ? nm : (code + ' ' + nm);
+  // ⭐⭐ 2026-10-13 老板要求（「同一页不能出现两个店名」，连着两家截图投诉）：
+  //   本函数原先**优先 `nameRaw`**（导入时留底的"原值"），而本页「🏪 商家信息」卡的「店名」行读的是 `c.name`；
+  //   而**商城链路（配对 / 认领 / 从商城更新）只更新 `name`、不更新 `nameRaw`** ——
+  //   于是一合并就"标题是旧名、卡片是新名"（水城羊肉粉周、安顺米粉周两家都是这么来的）。
+  //   ✅ 现在与卡片**同口径**：以 `name` 为准，没有才回退 `nameRaw`（结构上这一页不可能再出现两个名字）。
+  //   ⚠️ 客户**列表**（custWithCode / 回收站列表）仍保留"编号 + 原值"的展示口径 ——
+  //      那是老板 2026-09-25 定的（列表要带编号），本次**不动**。
+  return String(c.name || c.nameRaw || '').trim();
 }
 
 // 2026-09-25 老板定：后台**显示层**统一把客户编号拼回店名（编号取 `mallKey`，如 `c347 早阳肉包(科创路店)`）。
