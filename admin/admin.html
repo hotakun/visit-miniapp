@@ -1339,6 +1339,13 @@ tr.row-off td:not(.keep){opacity:.4}
           <select id="gfDistrict" onchange="geoFilterChange('gfDistrict')" class="gsel"></select>
           <span class="lb">商圈</span>
           <select id="gfBiz" onchange="geoFilterChange('gfBiz')" class="gsel"></select>
+          <!-- ⭐⭐ 2026-10-13 老板要（原话：「修改了信息，退回到表格的时候，却仍然没有更新的信息…有没有办法
+               能在这里刷新一下呢，尽量不要耗费云端调用」）——
+               **本地刷新**：表格数据全部来自本地缓存 `admin/cache/map-points.json`（连"订单总数/订单额/
+               最近下单/全局态/任务状态/最近拜访"那几列也已在缓存里，见 `custFillPageAgg` 开头那句
+               "本地已带 oc 字段就直接 return"）→ **点它一次云端调用都不发**。 -->
+          <button class="btn ghost" onclick="geoRefreshLocal()" title="按本地缓存重算并重画本页（不查云端、0 费用）"
+            style="height:26px;border:1px solid #D8DEE9;background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:#3C4654;font-family:inherit;white-space:nowrap">🔄 刷新本页（本地）</button>
         </div>
         <div class="tw">
           <table class="ct">
@@ -7689,10 +7696,19 @@ function cdSaveEdit() {
                    district: 'd', bizCircle: 'b' };   // ⭐ 2026-10-03：区域/商圈现在也能在详情页改 → 同步回本地缓存（品类/业务员不在缓存字段里，无需映射）
     const _set = {};
     Object.keys(fields).forEach(k => { if (_F2K[k]) _set[_F2K[k]] = fields[k]; });
-    if (Object.keys(_set).length) custPatchLocal([{ id: cdCurId, set: _set }], []);
+    // ⭐ 2026-10-13：`custPatchLocal` 现在**返回 Promise** —— 要等它把新值写进本地缓存**再**重画表格，
+    //   否则会画到旧值（它内部是 fetch → then 里才更新 `custLocal.points`）。
+    if (Object.keys(_set).length) await custPatchLocal([{ id: cdCurId, set: _set }], []);
     if (typeof renderBatchTbody === 'function' && $('page-batchDetail') && $('page-batchDetail').style.display !== 'none') {
       try { renderBatchTbody(); } catch (e) { }
     }
+    // ⭐⭐ 2026-10-13 老板要（「改完退回表格还是旧信息」）：保存成功后**顺带把「客户管理」页重画一次**。
+    //   ⚠️ **0 次云端调用** —— 数据全在本地缓存（`custFillPageAgg` 在本地已带聚合字段时直接 return）。
+    //   ⚠️ 只在「客户管理」页**正显示**时才画（在别的页打开详情的不必白干）。
+    try {
+      const _pg = $('page-geo');
+      if (_pg && _pg.style.display !== 'none' && typeof loadGeoPage === 'function') loadGeoPage();
+    } catch (e) { /* 重画失败不影响保存结果 */ }
     showCustDetail(cdCurId);
   })();
 }
@@ -8971,10 +8987,22 @@ async function custFillPageAgg(rows) {
     if (o.lo) r.lastOrderAt = o.lo;
   });
 }
+// ⭐⭐ 2026-10-13 老板要（原话：「修改了信息，退回到表格的时候，却仍然没有更新的信息…有没有办法在这里
+//   刷新一下呢，尽量不要耗费云端调用」）—— 「客户管理」页那个「🔄 刷新本页（本地）」按钮走这里。
+//   ✅ **0 次云端调用**：`loadGeoPage()` 的数据全部来自本地缓存（`admin/cache/map-points.json`）——
+//      连"订单总数 / 订单额 / 最近下单 / 全局态 / 任务状态 / 最近拜访"那几列也**已在缓存里**
+//      （见 `custFillPageAgg` 开头：本地已带 `oc` 字段就直接 `return`，不发请求）。
+function geoRefreshLocal() {
+  try { if (typeof loadGeoPage === 'function') loadGeoPage(); } catch (e) { /* 画失败不影响用 */ }
+}
+
 // 写后回写（M3）：把改动同步进后台本地缓存文件（**必须先写云端、成功后才调这里**）
 function custPatchLocal(patches, removeIds) {
+  // ⭐ 2026-10-13：**返回 Promise** —— 客户详情「保存」之后要等本地缓存真的更新了**再**重画表格，
+  //   否则会画到旧值（本函数内部是 fetch → then 里才改 `custLocal.points`）。
+  //   其余 8 处调用都不 await，行为不变（照旧 fire-and-forget）。
   try {
-    fetch('/mapPoints/patch', {
+    return fetch('/mapPoints/patch', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ patches: patches || [], removeIds: removeIds || [] })
     }).then(r => r.json()).then(r => {
