@@ -3157,7 +3157,7 @@ async function importMallCustomers(event) {
   customers.forEach(c => {
     const key = String(c.mallKey || '').trim();
     const doc = {
-      mallKey: key, mallCode: String(c.mallCode || '').trim(),
+      mallKey: key, mallCode: String(c.mallCode || '').trim() || mallCodeFromName(c.name),   // ⭐ 2026-10-14：编号列为空时从名称剥（订单按 customerCode 匹配）
       name: String(c.name || '').trim(), region: String(c.region || '').trim(),
       address: String(c.address || '').trim(), phone: String(c.phone || '').trim(),
       addedAt: normMallDate(c.addedAt), lastOrderAt: normMallDate(c.lastOrderAt), lastBrowseAt: normMallDate(c.lastBrowseAt),
@@ -3253,6 +3253,19 @@ function normMallDate(v) {
 // 走商城链路的**日期类落点**（入库前一律 normMallDate）
 const MALL_DATE_FIELDS = ['mallJoinedAt', 'lastOrderAt', 'lastBrowseAt', 'addedAt'];
 
+// ⭐ 2026-10-14：**从店名里剥「客户编号」**（`'AA067 沙县小吃(胡库街店)胡'` → `'aa067'`）。
+//   为什么必须有它：**订单是按 `orders.customerCode` 匹配的**，而 `customerCode` 由订单侧
+//   从「客户单位」里剥出来（`import_excel.py` 的 `split_code`，支持 1~3 个字母 + 数字、统一转小写）。
+//   ⚠️ 但**商城侧的「客户编码」列经常是空的**（编号只写在名称/客户单位里）→ 那时 `mallCode` 留空
+//      → **订单永远挂不上**（老板 2026-10-14 报障：`AA067 沙县小吃(胡库街店)胡` 显示"这家还没下过单"）。
+//   ⚠️ 正则以 `import_excel.py` 的 `split_code` 为**唯一口径**（1~3 个字母 + 1~6 位数字 + 空白分隔）；
+//      **改这里必须同步改那边** —— `admin/tools/check.js` 里有一条对账盯着这两处。
+function mallCodeFromName(nm) {
+  const t = String(nm == null ? '' : nm).trim();
+  const m = t.match(/^([a-zA-Z]{1,3}\d{1,6})[\s　]+(.+)$/);   // ⚠️ 含**全角空格**（与 backfillMallCode / import_excel.py 同口径）
+  return m ? m[1].toLowerCase() : '';
+}
+
 // 从商城档案抽出"该写进客户档案的字段"。
 // ⚠️ **商城值为空 → 不覆盖**（否则会把客户已有的地址/电话抹成空）。
 function mallFieldsFrom(m) {
@@ -3279,6 +3292,10 @@ function mallFieldsFrom(m) {
   //   ⚠️ 副作用（老板已知并认可）：原 `nameRaw` 里带的**编号前缀 / 分店后缀**（如 `c1615 福仔🍴烧煲仔饭(东塔路店)`）
   //      在"被合并过"的店上会按商城名收敛（商城名里没有分店信息，就显示不出来）—— 这是"以商城为准"的必然结果。
   if (out.name) out.nameRaw = out.name;
+  // ⭐ 2026-10-14：**编号兜底** —— 商城「客户编码」列为空时，从商城店名里剥一个。
+  //   本函数是「自动比对 runMallMatch / 认领 applyMallMatch / 人工配对 applyMallPair / 从商城更新 refreshFromMall」
+  //   **四条链路共用**的抽字段口 → 在这里兜底 = **一处治四路**（与 `importMallCustomers` 写商城库那处同一口径）。
+  if (!out.mallCode && out.name) out.mallCode = mallCodeFromName(out.name);
   return out;
 }
 
@@ -3853,6 +3870,10 @@ async function createMallCustomer(event) {
     mallPending: false,
     mallPendingDoneAt: now,
     mallKey: String(e2.mallKey || ''),
+    // ⭐ 2026-10-14：编号兜底 —— 店名里带编号时剥出来（订单按 `orders.customerCode` 匹配）。
+    //   ⚠️ 下面 `Object.assign(doc, mallFieldsFrom(m))` 可能覆盖同名字段，但那边**也加了同样的兜底**，
+    //      所以两种情况都安全（商城库查不到记录、mallFieldsFrom 不产出 mallCode 时，这里加的就是最终值）。
+    mallCode: mallCodeFromName(name),
     source: 'mall-import',           // ⭐ 区别于现场录入的 'field'
     status: 'active',
     coord_source: 'admin',           // 坐标来源：后台手工填/地图点选
@@ -6428,10 +6449,9 @@ async function deleteCustomerBatch(event) {
 //   ④ 不传 apply 只预览不写库。
 async function backfillMallCode(event) {
   const apply = !!(event && event.apply);
-  const CODE_RE = /^([a-zA-Z]{1,3}\d{1,6})[\s　]+/;
-  // ⚠️ 2026-09-27 修（本次实测踩到 -601008）：必须**同时**要求"字段存在"和"非空" ——
-  //   只写 `{ mallKey: _.neq('') }` 时，MongoDB 语义下 `$ne:''` **会匹配"字段不存在"的文档**，
-  //   于是把 6 万家没有 mallKey 字段的点评客户全圈了进来 → fetchAll 61 次串行 → 云函数超时。
+  // ⚠️ 2026-10-14：**改复用统一的 `mallCodeFromName()`** —— 原来这里自己写了一份正则，
+  //   加上 `import_excel.py` 那处、以及新加的 mallCodeFromName，同一个规则有三份口径
+  //   （含不含全角空格都不一样）→ 收敛到一处，以后只改 `mallCodeFromName`。
   const rows = await fetchAll('customers',
     _.and([{ mallKey: _.exists(true) }, { mallKey: _.neq('') }]),
     { _id: true, name: true, nameRaw: true, mallCode: true, mallKey: true });
@@ -6439,9 +6459,9 @@ async function backfillMallCode(event) {
   rows.forEach((c) => {
     if (String(c.mallCode || '').trim()) return;              // 已有编号 → 跳过
     const t = String(c.nameRaw || c.name || '').trim();
-    const m = t.match(CODE_RE);
-    if (!m) return;                                           // 提取不到 → 跳过（留人工核）
-    todo.push({ _id: c._id, code: m[1], name: t.slice(0, 32) });
+    const code = mallCodeFromName(t);
+    if (!code) return;                                        // 提取不到 → 跳过（留人工核）
+    todo.push({ _id: c._id, code: code, name: t.slice(0, 32) });
   });
   if (!apply) return { ok: true, dryRun: true, scanned: rows.length, todo: todo.length, list: todo };
   let done = 0;

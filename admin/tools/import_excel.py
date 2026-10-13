@@ -110,7 +110,7 @@ def split_code(name):
     # ⚠️ 2026-09-27 修正（老板报障「永康 AA 开头的客户全被判成未加商城」）：
     #   原正则只认「1 个字母 + 数字」（a52 / c602），**AA021 这类两个字母的编号提取不到** → mallCode 留空
     #   → 后台「商城」列显示「未加」、订单也匹配不上。改为支持 1~3 个字母（大小写都认）。
-    m = re.match(r'^([a-zA-Z]{1,3}\d{1,6})\s+(.*)$', t)
+    m = re.match(r'^([a-zA-Z]{1,3}\d{1,6})[\s\u3000]+(.*)$', t)   # ⚠️ 含全角空格，与 adminapi 的 mallCodeFromName 同口径
     if m:
         return m.group(1).lower(), m.group(2).strip()
     return '', t

@@ -510,6 +510,49 @@ function checkMallFields() {
   }
 }
 
+// ---------- ⑬ 「剥编号」规则一致性（2026-10-14 新增）----------
+// 为什么必须有它：客户编号（mallCode）是**订单匹配的钥匙**（orders.customerCode ↔ customers.mallCode）。
+//   这条规则曾在**四处**各写一份（adminapi 的 mallFieldsFrom 里手写、backfillMallCode 里一份、
+//   import_excel.py 的 split_code 一份、订单侧 build_orders 又一份），结果口径漂移过三次：
+//   ① 只认「单字母+数字」→ `AA067` 这类两个字母的提取不到（2026-09-27 只补了数据没根治 → 2026-10-14 又冒出来）；
+//   ② 含不含**全角空格**不一致；③ `backfillMallCode` 旧版**没转小写**（填成 `AA067`，而订单侧是小写 → 仍然对不上）。
+//   现在统一：JS 侧只留 `mallCodeFromName()` 一处，Python 侧 `split_code` 与它同口径，且都转小写。
+function checkMallCodeRule() {
+  const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
+  const pyAbs = path.join(ROOT, 'admin/tools/import_excel.py');
+  if (!fs.existsSync(fnAbs) || !fs.existsSync(pyAbs)) { fails.push('剥编号规则对账：缺文件 → 检查无法执行（按失败处理）'); return; }
+  const fn = fs.readFileSync(fnAbs, 'utf8');
+  const py = fs.readFileSync(pyAbs, 'utf8');
+  let bad = 0;
+
+  // ① adminapi 里只允许**一处**「剥编号」正则（都走 mallCodeFromName）
+  //   ⚠️ 用**字面字符串**数（源码里是字面的 `\d`，用正则写 `\d` 会匹配"数字"而数不到）
+  const NEEDLE = '[a-zA-Z]{1,3}\\d{1,6}';
+  let fnHitCount = 0, _pos = 0;
+  while ((_pos = fn.indexOf(NEEDLE, _pos)) >= 0) { fnHitCount++; _pos += NEEDLE.length; }
+  if (fnHitCount !== 1) {
+    bad++;
+    fails.push(`剥编号规则：adminapi 里有 ${fnHitCount} 处「[a-zA-Z]{1,3}\\d{1,6}」正则（应只留 mallCodeFromName 一处，其余改调它）\n   ⚠️ 多份口径 = 编号提取结果可能不同 = **订单静默挂不上**（2026-10-14 老板报障 AA067 就是这么来的）`);
+  }
+  // ② 必须转小写（订单侧 split_code 转小写，客户侧不转就永远对不上）
+  if (!/function mallCodeFromName[\s\S]{0,400}?toLowerCase\(\)/.test(fn)) {
+    bad++;
+    fails.push('剥编号规则：`mallCodeFromName()` 里没有 `toLowerCase()` —— 订单侧 `split_code` 是**转小写**的（`AA067` → `aa067`），客户侧不转会**永远匹配不上**');
+  }
+  // ③ 两侧都要支持**全角空格**
+  const fnFull = fn.indexOf('[\\s　]+') >= 0 || fn.indexOf('[\\s\\u3000]+') >= 0;
+  const pyFull = py.indexOf('[\\s\\u3000]+') >= 0 || py.indexOf('[\\s　]+') >= 0;
+  if (!fnFull || !pyFull) {
+    bad++;
+    fails.push(`剥编号规则：全角空格支持不一致（adminapi=${fnFull ? '有' : '无'} / import_excel.py=${pyFull ? '有' : '无'}）—— 两处都必须是 [\\s　]+（店名里确实出现过全角空格）`);
+  }
+
+  if (!bad) {
+    okFiles.push('  [code] 剥编号规则对账通过（adminapi 只一处 · 转小写 · 与 import_excel.py 同口径含全角空格）');
+    console.log('  ✔ 剥编号规则：adminapi 只一处 · 转小写 · 与 import_excel.py 口径一致（含全角空格）');
+  }
+}
+
 // ============ 主流程 ============
 console.log('聚火拜访 · 一键体检（只读，不改任何文件）');
 console.log('根目录：' + ROOT);
@@ -537,6 +580,7 @@ checkPagePaths();
 checkCompliance();
 checkCacheFields();
 checkMallFields();
+checkMallCodeRule();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
