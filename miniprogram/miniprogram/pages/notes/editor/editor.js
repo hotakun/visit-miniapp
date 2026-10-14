@@ -96,7 +96,11 @@ Page({
         id: a.id || ('r' + Math.random().toString(36).slice(2, 7)),
         path: a.path || '', ext: a.ext || '.mp3', sec: Number(a.sec) || 0,
         durText: media.fmtSec(Number(a.sec) || 0),
-        trText: a.text || '', trStatus: a.text ? 'done' : ''
+        trText: a.text || '',
+        // ⭐ 2026-10-15（依《全项目审查》A02「续查」）：**读回上次存的转写状态与任务 id** ——
+        //   旧数据没有这两个字段 → 按"有文字就算完成"兜底（与原来行为一致，不会出错）。
+        trStatus: a.trStatus || (a.text ? 'done' : ''),
+        trTid: a.trTid || ''
       }));
       this.setData(Object.assign(base, {
         isNew: false, id: n.id, at: n.at || 0,
@@ -131,6 +135,47 @@ Page({
     this.recorder = media.createRecorder();   // 页面级录音器（串行录制，多段）
     this.locateNow();                          // 进页面自动定位一次（演示稿：位置进来时自动带）
   },
+
+  // ⭐⭐ 2026-10-15（依《全项目审查》A02「续查」）：**进页面时把"上次还在处理中"的转写接着查回来** ——
+  //   背景：转写通常要 1~3 分钟，用户常常等不到就退出去了。原来任务 id 与状态都不落本机 →
+  //   下次进来**没有任何线索**，那段的文字就永远丢了（只剩音频）。
+  //   现在本机记了 `trTid`（任务 id）与 `trStatus`，这里对"仍是 processing"的段续查一次：
+  //   · 查到了 done/failed → 就地更新那一段（并提示一下）；
+  //   · 还是 processing → 什么都不做（下次进来再试）。
+  //   ⚠️ 节流：同一段 **3 分钟内不重复问**（本内存表；避免来回切页面反复调云端）。
+  //   ⚠️ 失败完全静默 —— 续查只是"顺手把结果捞回来"，绝不能影响正常记事。
+  async _resumeTranscribe() {
+    try {
+      if (this.data.isNew) return;                        // 新记事还没保存，没有任务 id
+      const audios = this.data.audios || [];
+      const idxs = [];
+      audios.forEach((a, i) => { if (a && a.trTid && a.trStatus === 'processing') idxs.push(i); });
+      if (!idxs.length) return;
+      this._trPollAt = this._trPollAt || {};
+      const now = Date.now();
+      const todo = idxs.filter(i => now - (this._trPollAt[i] || 0) > 3 * 60 * 1000);
+      if (!todo.length) return;
+      todo.forEach(i => { this._trPollAt[i] = now; });
+      const r = await api.call('transcribe', { action: 'poll', transcriptIds: todo.map(i => audios[i].trTid) });
+      if (!r || !r.ok) return;
+      const list = r.list || [];
+      const next = [...this.data.audios];
+      let changed = false;
+      todo.forEach(i => {
+        const one = list.find(x => x._id === audios[i].trTid);
+        if (!one) return;
+        if (one.status === 'done') {
+          next[i] = Object.assign({}, next[i], { trStatus: 'done', trText: one.text || '' });
+          changed = true;
+        } else if (one.status === 'failed') {
+          next[i] = Object.assign({}, next[i], { trStatus: 'failed', trText: one.errorMsg || '识别失败' });
+          changed = true;
+        }
+      });
+      if (changed) { this.setData({ audios: next }); api.toast('转写结果已更新'); }
+    } catch (e) { /* 静默 */ }
+  },
+  onShow() { this._resumeTranscribe(); },
 
   onUnload() {
     this._dead = true;
@@ -270,7 +315,10 @@ Page({
     const audios = [...this.data.audios];
     audios.push({
       id: 'r' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-      path: local, ext, sec: secs, durText: media.fmtSec(secs), trText: '', trStatus: ''
+      path: local, ext, sec: secs, durText: media.fmtSec(secs), trText: '', trStatus: '',
+      // ⭐ 2026-10-15（A02「续查」）：**记下转写任务 id** —— 这样"上次还在处理中"的那一段，
+      //   下次打开这条记事能自动把结果取回来（见 onShow 里的 _resumeTranscribe）。
+      trTid: ''
     });
     this.setData({ audios, recBusy: false });
   },
@@ -321,6 +369,9 @@ Page({
       if (!res || !res.ok) throw new Error((res && res.msg) || '提交失败');
       const tid = ((res.segs || [])[0] || {}).transcriptId || '';
       if (!tid) throw new Error('提交失败');
+      // ⭐ 2026-10-15（A02「续查」）：**马上把任务 id 记到这一段上**（并随记事存进本机）——
+      //   这样万一这次没等到结果（用户退出 / 超时 / 关页面），下次进这条记事还能接着把结果取回来。
+      setSeg({ trTid: tid });
       let text = '';
       // ⭐⭐ 2026-10-15 修（依《全项目审查》A02）：**等更久 + 超时不算失败** ——
       //   原来 12×4 秒 = **48 秒**就判"识别超时"，而实际识别常要 1~3 分钟（云端 30 分钟才兜底）
@@ -415,7 +466,11 @@ Page({
       photos: photos.map(p => ({ path: p.path, at: p.at || 0, lat: p.lat || 0, lng: p.lng || 0 })),
       audios: audios.map(a => ({
         path: a.path, ext: a.ext || '.mp3', sec: Number(a.sec) || 0,
-        text: a.trStatus === 'done' && a.trText ? a.trText : ''      // 转好了才随记事一起留（其余留在本机音频里）
+        text: a.trStatus === 'done' && a.trText ? a.trText : '',     // 转好了才随记事一起留（其余留在本机音频里）
+        // ⭐ 2026-10-15（A02「续查」）：**把转写任务 id 与状态也存下来** ——
+        //   原来只存 `text`，于是"还在处理中"这个状态一关页面就丢了，下次进来**没有任何线索**把结果取回来。
+        trStatus: a.trStatus || '',
+        trTid: a.trTid || ''
       })),
       lat: Number(this.data.lat) || 0, lng: Number(this.data.lng) || 0, addr: this.data.addr || '',
       remind: this.data.remind || null
