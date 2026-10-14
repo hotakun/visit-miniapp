@@ -8846,14 +8846,22 @@ async function dupClean() {
 //        → 这里每 15 秒问一次**极轻的** /mapPoints/status（几 KB，绝不重拉 22MB 客户点），
 //          发现条数变了就作废本地快照 + **就地重绘**当前页 → 老板什么都不必点。
 let _custKeepAlive = null;
+let _custSeenMaxU = null;   // ⭐ D06 前半：内容指纹（同步水位）基线；null = 还没记过
 function custKeepAlive() {
   if (_custKeepAlive) return;
   _custKeepAlive = setInterval(async () => {
     try {
       const s = await fetch('/mapPoints/status', { cache: 'no-store' }).then(x => x.json());
       const n = (s && s.count) || 0;
+      const w = (s && Number(s.maxU)) || 0;
       if (!custLocal || !n || !custLocal.count) return;
-      if (n === custLocal.count) return;                      // 没变，什么都不做
+      // ⭐⭐ 2026-10-15 修（依《全项目审查》D06 前半）：**不能只比条数** ——
+      //   "改名 / 改坐标 / 改备注"这类变化**条数根本不变**，只比 count 就永远发现不了，界面一直显示旧的
+      //   （正是"改完看不到"那一类，老板最反感）。现在连"内容指纹"（同步水位 `maxU`）一起比。
+      //   ⚠️ 首次只记基线（`null` = 还没记过），避免刚进页面就白重绘一次。
+      if (_custSeenMaxU === null) { _custSeenMaxU = w; return; }
+      if (n === custLocal.count && w === _custSeenMaxU) return;   // 条数与内容都没变
+      _custSeenMaxU = w;
       custLocal = null;                                       // 作废快照 → 下次取新的
       const vis = el => el && el.style && el.style.display !== 'none';
       if (vis(document.getElementById('page-geo')) && typeof loadGeoPage === 'function') loadGeoPage();
@@ -9032,8 +9040,17 @@ async function custFillPageAgg(rows) {
   if (!rows || !rows.length) return;
   // ⭐ 2026-09-27 老板定：这 6 列已**随本地缓存预聚合**（云函数 custMapPoints/custSync 一起下发）→ 直接跳过请求。
   //   好处：翻页零请求、可按这几列全库排序。⚠️ 兼容：若本地还是旧版缓存（没有 oc 字段），仍回云端按页拉，不会空白。
-  const _p0 = ((custLocal && custLocal.points && custLocal.points[0]) || {});
-  if (_p0.oc !== undefined) return;
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》D07）：判据从"**只看第 0 行**"改成"**看前 50 行有没有缺的**" ——
+  //   因为"从 PG 全量刷新"来的那份缓存里这几个字段本来就缺（PG 不算聚合，见 store.js 同条注释），
+  //   而"增量补过的行"又会有 —— 混在一起时只看第 0 行会**看运气**：
+  //   第 0 行恰好是补过的那种，就会误以为"全都有"而跳过补取，列表照样显示 0。
+  //   只要这批里还有缺的，就照旧回云端按页补（≤200 家一次，很便宜）。
+  const _pts = (custLocal && custLocal.points) || [];
+  let _anyMissing = false;
+  for (let i = 0; i < _pts.length && i < 50; i++) {
+    if (_pts[i] && _pts[i].oc === undefined) { _anyMissing = true; break; }
+  }
+  if (_pts.length && !_anyMissing) return;
   const ids = rows.map(r => r._id).filter(Boolean);
   const codes = rows.map(r => r.mallCode).filter(Boolean);
   let res = null;

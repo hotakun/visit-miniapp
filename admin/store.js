@@ -65,6 +65,11 @@ function status() {
     progress: progress,
     syncedAt: c ? c.syncedAt : 0,
     count: c ? c.points.length : 0,
+    // ⭐⭐ 2026-10-15 加（依《全项目审查》D06 前半）：**给前端一个"内容指纹"** ——
+    //   前端原来的保鲜轮询**只比 `count`**，于是"条数没变但内容变了"（改名 / 改坐标 / 改备注）永远发现不了，
+    //   界面就一直显示旧的（正是"改完看不到"那一类）。`maxU` 是同步水位（最大的 updatedAt），
+    //   内容一变它就会前进 → 配合 count 一起比，两种变化都能感知到。
+    maxU: c ? (Number(c.maxU) || 0) : 0,
     fresh: isFreshToday(c),
     version: VERSION
   };
@@ -202,7 +207,15 @@ async function refresh(callApi, cred) {
       // ⭐ 2026-09-27 老板定：「列表这几列今后都要做排序」→ 聚合结果也要进缓存，否则本地排不了序。
       //   ⚠️ 这里必须与云函数 custMapPoints/custSync 下发的字段**逐一对齐** —— 少写一个就会被"瘦身"筛掉，
       //   表现为"云函数明明返回了、界面却拿不到"（本次踩过一次）。
-      oc: p.oc || 0, oa: p.oa || 0, lo: p.lo || '', vc: p.vc || 0, lv: p.lv || '', vs: p.vs || 'free', vt: p.vt || '',
+      // ⭐⭐ 2026-10-15 修（依《全项目审查》D07）：**这 7 个"聚合字段"不再补默认值** ——
+      //   订单数/订单额/最近下单/拜访数/最近拜访/拜访状态/状态文案，**只有云端的 custMapPoints / custSync 算得出来**；
+      //   而 `pgapi.js` 的 SELECT 只查 customers + 批次归属，**根本不返回它们**。
+      //   原来一律 `|| 0` / `|| 'free'` 补上，等于把"**不知道**"写成"**就是 0 单 / 没拜访过**" ——
+      //   前端 `custFillPageAgg` 见到 `oc !== undefined` 就**跳过按页补取**（见 admin.html），
+      //   于是"从 PG 刷新出来的那份缓存"里这几列**永远显示 0 / 未入任务**，排序和挑店也跟着错。
+      //   现在**缺就留空**（undefined → `JSON.stringify` 直接不写这个键），前端一看缺字段就会回云端按页补取（旧行为，正确）。
+      //   ⚠️ 只对"这几个只有云端算得出的字段"这么做；其余（名称/坐标/地址/编号…）照旧补空串或 0，不影响渲染。
+      oc: p.oc, oa: p.oa, lo: p.lo, vc: p.vc, lv: p.lv, vs: p.vs, vt: p.vt,
       // ⭐ 2026-10-07 新增：客户来源（'field' = 手机端「加新店」现场录入的店）——
       //   后台「🔎 比对认领」靠它把"现场录入 · 待商城建档"的店也纳入比对池（云端 runMallMatch 早就纳入了，前端此前漏了）
       so: p.so || ''

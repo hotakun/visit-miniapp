@@ -837,6 +837,17 @@ function writeChangeLog(rec) {
     return;
   }
   if (req.method === 'GET' && req.url.indexOf('/mapPoints/status') === 0) {
+    // ⭐⭐ 2026-10-15 修（依《全项目审查》D06 前半）：**status 也要顺手触发一次"查变动"** ——
+    //   原来只有 `/mapPoints` 那条路才会调 `checkDirtyFromPg()`，而前端的**保鲜轮询问的是 `/status`**
+    //   （每 15 秒一次，只拿几个数字）→ 结果就是"**没人打开过 /mapPoints 时，缓存永远不补增量**"。
+    //   现在 status 也顺带查一次（异步、不等待、失败只吞）：
+    //   查到了就补增量 → 下一步 status 返回的 `maxU`/`count` 就会变 → 前端据此重绘。
+    //   ⚠️ 成本可控：`checkDirtyFromPg()` 内部有节流（`_lastDirtyAt`），没变动时只花一次极轻的 `/stat` 请求。
+    //   ⚠️ 正在全量预热时跳过（预热本来就包含变动，别让两件事打架）。
+    try {
+      const c0 = store.read();
+      if (c0 && store.isFreshToday(c0)) store.checkDirtyFromPg().catch(() => null);
+    } catch (e) { /* 静默：查不动也不影响返回数字 */ }
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(store.status()));
     return;
