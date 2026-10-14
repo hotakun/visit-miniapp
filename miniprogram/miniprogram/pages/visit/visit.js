@@ -501,15 +501,20 @@ Page({
   },
   // 录完一段：立即转存为持久路径（saveFile 会移动临时文件 → 试听/上传必须用转存后的路径）
   async onRecDone(path, dur, auto) {
-    if (this._recStopResolve) { const r = this._recStopResolve; this._recStopResolve = null; r(); }
-    if (this._dead || !path) return;
+    // ⭐⭐ 2026-10-14 修（依《全项目审查》V02，报告属实）：
+    //   原来**第一行就把 `_recStopResolve` 放了**，而"转存 + 入列"都在后面 ——
+    //   而 `confirmSubmit` 等的正是这个 Promise → 它会在"这段录音还没进 recs"时就往下走
+    //   → **录音中直接点确认，最后一段录音丢失**（只有这一段时就是整段没了）。
+    //   现在：`_resolveRecStop()` **挪到"转存完成 + 已入列"之后**才算数。
+    //   ⚠️ 异常路径（没拿到文件 / 页面已销毁）**也必须放行** —— 否则提交会永久挂起（页面卡死）。
+    if (this._dead || !path) { this._resolveRecStop(); return; }
     this._stopRecTicker();
     const secs = Math.max(1, Math.round(dur || this._recSecs));
     const ext = this.recorder.uploadExt; // iOS=.m4a / 安卓鸿蒙=.mp3（随段记录，防后续格式变化）
     this.setData({ recState: 'idle', recBusy: true, recWarn: false, curText: '00:00', recLeftText: '' });
     let up = path;
     try { const p = await this.recorder.getUploadPath(); if (p) up = p; } catch (e) { /* 转存失败：退回原路径 */ }
-    if (this._dead) return;
+    if (this._dead) { this._resolveRecStop(); return; }
     const recs = [...(this.data.recs || [])];
     recs.push({
       id: 'r' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
@@ -519,10 +524,15 @@ Page({
     });
     this.setData({ recs, recBusy: false });
     this._refreshRecMeta(recs);
+    this._resolveRecStop();   // ⭐ 到这里才算"这段录音真的存好了、也进列表了"
     if (auto) {
       const hitTotal = this._recUsed() >= this.data.totalMaxSec - 5;
       api.toast(hitTotal ? '录音合计已达 30 分钟，已自动停止' : '已达单条上限，录音已自动停止');
     }
+  },
+  // 放行"等录音收尾"的那个 Promise（提交路径等着它）。重复调用无副作用。
+  _resolveRecStop() {
+    if (this._recStopResolve) { const r = this._recStopResolve; this._recStopResolve = null; r(); }
   },
   // 试听某一段（共用一颗 InnerAudioContext → 同一时刻只播一条）
   playRec(e) {
@@ -840,9 +850,16 @@ Page({
     if (this.evidenceRequired && !this.data.pics.length) { api.toast('请至少拍 1 张现场照片'); return; }
     this.submitting = true;
     try {
-      // 0) 录音若仍在进行：先自动停止，等文件就绪
+      // 0) 录音若仍在进行：先自动停止，等**文件转存完成 + 已入列**（⭐ 依审查报告 V02 修正）
       if (this.data.recState === 'rec') {
-        await new Promise(ok => { this._recStopResolve = ok; this.stopRec(false); });
+        await new Promise(ok => {
+          // ⚠️ **超时兜底（12 秒）**：`media.stop()` 只在它自己 state==='rec' 时才真停、
+          //   `rm.onError` 又只调 onErr 不调 onDone —— 万一这两者不同步，等就会**永久挂起**
+          //   （提交卡死比少一段录音严重得多）。所以到点无论如何放行。
+          const t = setTimeout(() => { this._recStopResolve = null; ok(); }, 12000);
+          this._recStopResolve = () => { clearTimeout(t); ok(); };
+          this.stopRec(false);
+        });
       }
       // 1) 现场证据上传（无证据直接跳过）
       const hasEv = this.data.pics.length > 0 || (this.data.recs || []).length > 0;
