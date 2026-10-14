@@ -562,6 +562,36 @@ Page({
       }
     } catch (e) { /* 读缓存失败就当没有 */ }
   },
+  // ⭐⭐ 2026-10-14 老板定：**首页任务卡也改成「缓存先渲染 → 后台静默更新」**（与客户详情页同一套思路）。
+  //   为什么：原来命中缓存就直接 `return`（2 小时内不再问云端）→ 后果是
+  //   **白天派了新任务，业务员手机首页的「任务卡」最多 2 小时才出现**（派单是老板日常操作，这条链的滞后最刺眼）。
+  //   现在：缓存照样秒开，随后静默拉一次云端；**内容有变化才覆盖**。
+  //   ⚠️ 三条纪律：**不显示 loading / 失败完全静默 / 内容没变一个字段都不 setData**（避免环形进度白转一次动画）。
+  //   ⚠️ 节流 60 秒（`dc.meta('homeTasks', key).at`）—— 连续进出首页不重复问云端，保住"省调用"。
+  async _silentHomeRefresh(boss, key, hit) {
+    const dc = require('../../utils/detailCache');
+    const _at = (dc.meta('homeTasks', key) || {}).at || 0;
+    if (Date.now() - _at < 60 * 1000) return;              // 刚拉过 → 不重复问
+    let res = null;
+    try { res = await api.call('tasks', { action: boss ? 'bossBoard' : 'list' }); }
+    catch (e) { return; }                                  // 离线/超时：不影响已经渲染出来的缓存
+    if (!res || !res.ok) return;
+    // 内容指纹对比（剔除每次都变的 `at`）；**没变就一个字段都不 setData**
+    const strip = o => { if (!o || typeof o !== 'object') return o; const c = Object.assign({}, o); delete c.at; return c; };
+    let same = false;
+    try {
+      same = JSON.stringify(strip(hit.tasks || [])) === JSON.stringify(strip(res.tasks || []))
+        && JSON.stringify(strip(hit.stats || null)) === JSON.stringify(strip(res.stats || null));
+    } catch (e) { same = false; }
+    if (same) return;
+    try {
+      dc.set('homeTasks', key, boss ? { tasks: res.tasks || [], stats: res.stats || null } : { tasks: res.tasks || [] });
+    } catch (e) { /* 静默：缓存写失败不影响这次显示 */ }
+    try {
+      this._applyHomeTasks(res.tasks, boss);
+      if (boss) { this.setData({ bossStats: res.stats || null }); this._applyBossNewShops(); }
+    } catch (e) { /* 静默：渲染失败保留原来那屏 */ }
+  },
   async load(force) {
     const _dc = require('../../utils/detailCache');
     const _boss = !!getApp().globalData.bossMode;
@@ -576,6 +606,11 @@ Page({
         // ⚠️ 老板模式的统计卡不在 `_applyHomeTasks` 里（它只做任务列表），这里补上
         if (_boss) { this.setData({ bossStats: hit.stats || null }); this._applyBossNewShops(); }
         this.setData({ loading: false });
+        // ⭐⭐ 2026-10-14 老板定（与客户详情页同一套）：**缓存先渲染 → 后台静默更新**。
+        //   ⚠️ 原来这里是直接 `return`（2 小时内不再问云端）→ 后果是
+        //      **白天派了新任务，业务员首页「任务卡」最多 2 小时才出现**（派单是老板的日常操作，这条滞后最刺眼）。
+        //   现在：照样先用缓存秒开，随后静默拉一次云端；**内容有变化才覆盖**。
+        this._silentHomeRefresh(_boss, _key, hit);
         return;
       }
     }
