@@ -79,8 +79,14 @@ function save(note) {
 function remove(id) {
   const list = read();
   const n = list.find(x => x.id === id);
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》A01）：**先把索引写成功，才删文件** ——
+  //   原来是"先删文件 → 再写索引 → **忽略写入失败** → 永远 return true"：
+  //   本机存储满时 `write()` 会返回 false，但**文件已经删掉了** → 结果是
+  //   **记录还在列表里、照片/录音却已损坏**，而界面还显示"删除成功"（假成功）。
+  //   现在顺序反过来：写成功才删文件；写失败就**如实返回 false**，由调用方提示"删除失败，请重试"。
+  const ok = write(list.filter(x => x.id !== id));
+  if (!ok) return false;
   if (n) delFiles(n);
-  write(list.filter(x => x.id !== id));
   return true;
 }
 

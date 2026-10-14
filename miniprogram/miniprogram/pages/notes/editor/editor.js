@@ -322,15 +322,26 @@ Page({
       const tid = ((res.segs || [])[0] || {}).transcriptId || '';
       if (!tid) throw new Error('提交失败');
       let text = '';
-      for (let i = 0; i < 12; i++) {
-        await sleep(4000);
+      // ⭐⭐ 2026-10-15 修（依《全项目审查》A02）：**等更久 + 超时不算失败** ——
+      //   原来 12×4 秒 = **48 秒**就判"识别超时"，而实际识别常要 1~3 分钟（云端 30 分钟才兜底）
+      //   → 用户看到"失败"，但服务端其实还在跑；更糟的是下面 `finally` **无条件删掉云端音频**，
+      //     可能把"服务端还没取走的那段音频"一起删了。
+      //   现在：轮询退避到约 3 分半；**超时只表示"仍在处理"**（如实提示、不改状态、不报失败），
+      //   并且**只在明确终态（done / failed）时才清理云端音频**。
+      let settled = false;   // 是否已到终态（决定"能不能删音频"）
+      for (let i = 0; i < 40; i++) {
+        await sleep(i < 12 ? 4000 : 6000);          // 前 48 秒每 4 秒，之后每 6 秒
         if (this._dead) return;
         const r = await api.call('transcribe', { action: 'poll', transcriptIds: [tid] });
         const one = ((r && r.list) || []).find(x => x._id === tid);
-        if (one && one.status === 'done') { text = one.text || ''; break; }
-        if (one && one.status === 'failed') throw new Error(one.errorMsg || '识别失败');
+        if (one && one.status === 'done') { text = one.text || ''; settled = true; break; }
+        if (one && one.status === 'failed') { settled = true; throw new Error(one.errorMsg || '识别失败'); }
       }
-      if (!text) throw new Error('识别超时，稍后再试');
+      if (!text) {
+        // ⚠️ 这不是失败、只是"还没出结果"：如实告知；**不动 trStatus**（留待下次再查），也**不删音频**。
+        api.toast('还在识别中，稍后再点这条记事看结果');
+        return;
+      }
       setSeg({ trStatus: 'done', trText: text });
       api.toast('转写完成', 'success');
     } catch (err) {
@@ -339,7 +350,8 @@ Page({
     } finally {
       this.setData({ trBusy: false });
       // 老板口径：转完就把云端那段录音删掉（文字已经在本机了）
-      if (fileID) { try { wx.cloud.deleteFile({ fileList: [fileID] }); } catch (e) { /* 静默 */ } }
+      // ⚠️ 2026-10-15（A02）：**只在已到终态时才删** —— 还在处理中就删，可能影响服务端取值。
+      if (fileID && settled) { try { wx.cloud.deleteFile({ fileList: [fileID] }); } catch (e) { /* 静默 */ } }
     }
   },
 
@@ -420,7 +432,10 @@ Page({
       confirmText: '删除', confirmColor: '#E5484D',
       success: (r) => {
         if (!r.confirm) return;
-        notes.remove(this.data.id);
+        // ⭐ 2026-10-15（依《全项目审查》A01）：`remove` 现在可能返回 false（写索引失败）——
+        //   必须如实提示，别再说"已删除"却什么都没删掉。
+        const ok = notes.remove(this.data.id);
+        if (!ok) { api.toast('删除失败（本机存储可能已满），请重试'); return; }
         api.toast('已删除');
         setTimeout(() => { if (!this._dead) wx.navigateBack(); }, 400);
       }

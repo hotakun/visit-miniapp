@@ -209,6 +209,12 @@ class GpsCapture {
   _fail(code, message) {
     this.lastError = { code, message };
     this._setPhase('error', message);
+    // ⭐⭐ 2026-10-15 修（依《全项目审查》A03）：**失败必须复位 `_active`，否则"重试"点不动** ——
+    //   而 `start()` 开头正是 `if (this._active) return;` → 扫描超时 / 启动失败之后，
+    //   用户再点"重试"会**什么都不做**（报告已用桩复现：显示失败、但重试无反应）。
+    //   顺手尽力断开连接（失败路径上可能已经建了一半连接）；**不 await**，避免拖住错误回调。
+    this._active = false;
+    try { if (this.ble && this.ble.disconnect) Promise.resolve(this.ble.disconnect()).catch(() => {}); } catch (e) { /* 静默 */ }
     if (this.opts.onError) this.opts.onError({ code, message });
   }
 
