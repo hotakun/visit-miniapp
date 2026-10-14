@@ -254,6 +254,17 @@ async function register(OPENID, e) {
       if (exist.data.length) {
         const doc = exist.data[0];
         bossId = doc._id;
+        // ⭐⭐ 2026-10-15 加固（依《全项目审查》S01「P0」+ 老板定「A 最小」）：
+        //   **已绑定的账号绝不允许被新注册顶掉。**
+        //   原来这里无条件把 openid 覆盖成"当前调用者"，而 `phone` 是**客户端传的、服务端从不验归属**
+        //   → 任何人只要知道老板手机号，拿它注册一次就能**把老板的微信顶掉、自己变成老板**，
+        //     并顺带把老板从小程序里踢出去（`exist.data` 查到的正是老板那条账号）。
+        //   老板账号早就绑好了，所以真实风险就只剩"被顶掉"这一条 —— 这里堵住它。
+        //   ⚠️ `doc.openid` 为空（还没绑过）→ **照旧允许激活**，那是"首次绑定"的正常路径。
+        //   ⚠️ 换微信要人工改库 —— 这本就该人工做，不能靠"谁注册谁就是老板"。
+        if (doc.openid && doc.openid !== OPENID) {
+          return { ok: false, code: 'PHONE_TAKEN', msg: '该手机号已绑定其他微信，如需更换请先联系管理员' };
+        }
         try {
           await users.doc(bossId).update({
             data: { openid: OPENID, name, role: 'admin', boss: true, active: true, lastLoginAt: Date.now() }
