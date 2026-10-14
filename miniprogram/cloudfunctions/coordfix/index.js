@@ -54,6 +54,12 @@ exports.main = async (event) => {
   // 2026-09-09 开发者范宇琨双身份：dev 白名单（13067737286）且请求带 boss 标志 → 按老板处理（模拟提交）
   const isBoss = !asSalesman && (['super_admin', 'admin'].includes(me.data[0].role)
     || (me.data[0].phone === '13067737286' && event && event.boss === true));
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》S03）：**游客（实习）硬拦** ——
+  //   原来 coordfix 的**主路（坐标报错）完全没有游客拦截**（只有 field 提报分支有），
+  //   而"老板模式"走的是"模拟成功、不落库"那条 → 游客既不是老板、也没被拦 →
+  //   **真的会往 coord_fix_requests 落一条**（把前端写按钮藏起来挡不住直接调云函数）。
+  //   口径与 visits / tasks / transcribe 完全一致。
+  if (me.data[0].trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
   if (!customerId || !lat || !lng) return { ok: false, code: 'BAD_ARG', msg: '缺少坐标' };
   if (lat < 18 || lat > 54 || lng < 73 || lng > 135) return { ok: false, code: 'BAD_COORD', msg: '坐标范围异常' };
   const noteText = String(note || '').trim().slice(0, 100);

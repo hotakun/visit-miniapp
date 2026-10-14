@@ -177,6 +177,11 @@ async function _resyncFreeTrip(tripId) {
 
 // 拜访中：业务员进入拜访页（开始计时）即上报，后台可见"拜访中"状态
 async function start(user, e, isBoss) {
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》S03）：**游客（实习）硬拦** ——
+  //   原来 `start` / `saveDraft` 这两个入口**漏了**（`submit` / `deleteVisit` / `editSubmitted` 都有），
+  //   于是"实习生"虽然前端点了没反应，但**直接调云函数**照样能开始拜访、写草稿（会写客户数据）。
+  //   口径与其它写入口完全一致：`user.trial` → TRIAL_FORBIDDEN。
+  if (user && user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
   const { taskId, customerId } = e;
   // ⭐ 2026-10-03 自由拜访：归属哪张「自由拜访卡」（由 tasks/freeTripList 建卡得到；没有就为空）
   const freeTripId = String(e.freeTripId || '');
@@ -262,6 +267,8 @@ async function start(user, e, isBoss) {
 // 草稿上报（2026-09-08 M1 老板定）：点选拜访结果/填备注时立即上报，
 // 超时到点时云端据此双态处理：有草稿→自动提交；无草稿→自动取消
 async function saveDraft(user, e, isBoss) {
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》S03）：游客硬拦（同 `start`，见那里的说明）。
+  if (user && user.trial) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
   const { taskId, customerId, result, text, samples } = e;
   // ⭐ 2026-10-02：自由拜访（无任务）也允许提交 —— 只要求 customerId
   if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };

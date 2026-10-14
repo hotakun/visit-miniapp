@@ -461,6 +461,12 @@ async function newShopCheck(event) {
 
 // 建档（老板定：直接进客户列表 ＋ 后台备一份「现场录入 · 待商城建档」）
 async function newShopSubmit(salesmanId, event) {
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》S03）：**游客（实习）硬拦** ——
+  //   这个函数原来没拦（`tasks` 里 trial 是"各写操作自己判"的，不是 main 统一拦），
+  //   而它**会新建客户档案**（真写业务数据）→ 把前端入口藏起来也挡不住直接调云函数。
+  //   写法与 `correctCustomer` / `saveCustPhoto`(删除分支) 等处完全一致。
+  { const uR = await db.collection('users').doc(salesmanId).get().catch(() => null);
+    if (uR && uR.data && uR.data.trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' }; }
   const e = event || {};
   const lat = Number(e.lat), lng = Number(e.lng);
   const name = String(e.name || '').trim();
@@ -756,6 +762,11 @@ async function addWithCollFix(coll, data) {
 }
 
 async function updateNewShop(salesmanId, event) {
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》S03）：游客硬拦（同 `newShopSubmit`）。
+  //   ⚠️ 这个函数**本来只允许改"自己提交的店"**（下面有 createdBy 校验），但游客照样能改自己建的 →
+  //      还是得在入口拦一次，口径与其它写操作一致。
+  { const uR = await db.collection('users').doc(salesmanId).get().catch(() => null);
+    if (uR && uR.data && uR.data.trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' }; }
   const e = event || {};
   const id = String(e.id || '');
   if (!id) return { ok: false, code: 'BAD_ARG', msg: '缺少 id' };
@@ -818,6 +829,11 @@ async function updateNewShop(salesmanId, event) {
 //   入参：{ customerId, fileID, thumbID?, index? }   出参：{ ok, photos }
 //   ⚠️ 只动对应格子（index 0~2），其它格子原样保留；写 updatedAt（本地缓存的增量同步靠它）
 async function saveCustPhoto(salesmanId, event) {
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》S03）：**游客拦截提到函数开头** ——
+  //   原来只在"删除分支"里判（`event.del === true`），而**下面那个"新增 / 写入"分支完全没拦** →
+  //   游客直调云函数就能往客户档案里写照片。移到开头，一处治全。
+  { const uR = await db.collection('users').doc(salesmanId).get().catch(() => null);
+    if (uR && uR.data && uR.data.trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' }; }
   const customerId = String((event && event.customerId) || '');
   const fileID = String((event && event.fileID) || '');
   const thumbID = String((event && event.thumbID) || '');
@@ -825,8 +841,7 @@ async function saveCustPhoto(salesmanId, event) {
   // ⭐ 2026-10-10 老板定：**删除某一格**（门店照片大图里的「🗑 删除」）—— 删记录 + 尽力删云存储文件
   if (event && event.del === true) {
     if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少参数' };
-    const uR0 = await db.collection('users').doc(salesmanId).get().catch(() => null);
-    if (uR0 && uR0.data && uR0.data.trial === true) return { ok: false, code: 'TRIAL_FORBIDDEN', msg: '游客不能提交数据' };
+    // ⚠️ 游客判断已上移到函数开头（2026-10-15 / S03），这里不再重复查一次库
     const cR0 = await db.collection('customers').doc(customerId).get().catch(() => null);
     if (!cR0 || !cR0.data) return { ok: false, code: 'CUST_NOT_FOUND', msg: '客户不存在' };
     const arr = (Array.isArray(cR0.data.photos) ? cR0.data.photos : []).filter(Boolean).slice(0, 3);
