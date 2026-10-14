@@ -4595,8 +4595,9 @@ async function manualRefresh() {
       await loadSettings();
     }
   } catch (e) { /* 静默 */ }
+  // ⭐ 2026-10-14（同 autoBusy）：**释放放 `finally`**，防以后有人在 try 里加一个 `return` 就把忙碌锁永久卡住。
+  finally { rfBusy = false; }
   setTimeout(() => { if (el) el.classList.remove('rf-spin'); }, 700);
-  rfBusy = false;
 }
 
 // ================= 位置监控（2026-09-08 M2：全业务员实时位置 + 当天轨迹 + 客户点位图层） =================
@@ -6320,7 +6321,12 @@ async function autoTick() {
       await refreshTrackPage(); // 2026-09-08 M2：位置监控 15 秒轮询
     }
   } catch (e) { /* 静默，下一轮再试 */ }
-  autoBusy = false;
+  // ⭐⭐ 2026-10-14 修（依《全项目审查》D06，报告属实）：原来这里是普通语句 ——
+  //   而上面 `try` 里有 `if (poll.archived > 0 …) { loadTasks(); return; }`（归档后刷新任务页），
+  //   **那个 `return` 会跳过后面的 `autoBusy = false`** → `autoBusy` 永久为 true →
+  //   **后台轮询从此静默停摆，界面再也不刷新**（表现就是"看起来正常、就是不动"）。
+  //   放进 `finally`：**无论正常结束还是提前 return，都一定释放**。
+  finally { autoBusy = false; }
 }
 
 // 全局事件检测：拉任务数据 + 坐标报错 → 消息浮窗 diff（新审核/新过期/新报错才推送，铃铛角标+响铃+云希语音）

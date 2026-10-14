@@ -39,6 +39,21 @@ Page({
   onShow() {
     // 2026-09-10：自定义 Tab 栏选中态（任务地图=1）
     try { const tb = this.getTabBar && this.getTabBar(); if (tb) tb.setTab(1, !!getApp().globalData.bossMode); } catch (e) { /* 低版本基础库忽略 */ }
+    // ⭐⭐ 2026-10-14 修（依《全项目审查》C02，我是改了 `mapCache.del` 却没管这页 —— 等于白删）：
+    //   本页 `_loaded` 是**常驻内存**的，`onShow` 见到它就直接跳过 → "提交/取消拜访后进地图看不到刚拜访那家"。
+    //   两个必须让它"自己发现该刷新"的条件：
+    //     ① **外部作废过** —— `mapCache.del()` 会推进版本号（`visit.js` 提交/取消时调的）；
+    //     ② **跨天** —— 页面可能整夜常驻（手机不关小程序），跨过零点必须重来。
+    //   ⚠️ 刻意**不**用"`mapCache.get()` 取不到就重载"：业务员看的多是 `task:<id>`，而 `curMode()` 给的是
+    //      `task:self` —— 那会永远取不到 → 每次都重载（就把缓存的意义抵消了）。
+    try {
+      const _v = mapCache.ver();
+      const _day = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+      if (this._mapVer === undefined) { this._mapVer = _v; this._mapDay = _day; }
+      else if (_v !== this._mapVer || _day !== this._mapDay) {
+        this._mapVer = _v; this._mapDay = _day; this._loaded = false;
+      }
+    } catch (e) { /* 静默：取版本失败不影响原有逻辑 */ }
     if (getApp().globalData.bossMode) {
       this.setData({ bossMode: true });
       if (!this._loaded) this.loadBoss();

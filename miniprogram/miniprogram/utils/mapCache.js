@@ -40,8 +40,20 @@ function set(res, mode) {
 
 // ⭐ 2026-10-15 老板定「写成功就作废缓存」：地图页现在"有缓存就不再拉"，
 //   所以**提交/取消拜访后必须主动作废**，否则再进地图**看不到刚拜访的那家**（"改完必须真的刷新"的延伸）。
+// ⭐⭐ 2026-10-14 修（依《全项目审查》C02）：**只删存储缓存不够** ——
+//   地图页有个**常驻内存**的 `_loaded`，`onShow` 见到它就直接不加载（也不会去读缓存），
+//   于是"提交/取消拜访 → 只删存储缓存"等于白删：**进地图看不到刚拜访的那家**。
+//   做法：作废时**顺手把"缓存版本"推进一格**（存 storage）；地图页 `onShow` 比对版本，
+//   一变就清 `_loaded` 强制重载。**不靠"调用方记得通知地图页"**（与 `CUST_WRITE` 同一思路）。
+const VER_KEY = 'map_cache_ver';
+function ver() {
+  try { return Number(wx.getStorageSync(VER_KEY)) || 0; } catch (e) { return 0; }
+}
 function del(mode) {
-  try { wx.removeStorageSync(key(mode)); } catch (e) { /* 静默 */ }
+  try {
+    wx.removeStorageSync(key(mode));
+    wx.setStorageSync(VER_KEY, ver() + 1);   // 推进版本 → 地图页 onShow 会据此强制重载
+  } catch (e) { /* 静默 */ }
 }
 
-module.exports = { TTL, key, curMode, get, set, del };
+module.exports = { TTL, key, curMode, get, set, del, ver };
