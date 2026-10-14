@@ -119,6 +119,9 @@ async function syncPollDirty() {
     _pollSeen = Number(r.pollDirtyAt) || 0;
     _custSeen = Number(r.custDirtyAt) || 0;
     _taskSeen = Number(r.taskDirtyAt) || 0;
+    // ⭐ 2026-10-14：**拜访同步也借这个信号** —— `pollDirtyAt` 由"拜访提交/取消、坐标报错、注册"共同写，
+    //   拿它判断"这轮要不要全量对账 visits"，**零额外云端调用**（老板定：增量 + 删除名单 + 兜底）。
+    _visitSeen = _pollSeen;
     await put('pollDirtyAt', _pollSeen);
     await put('custDirtyAt', _custSeen);
     await put('taskDirtyAt', _taskSeen);
@@ -258,6 +261,9 @@ let _lastBmDirtyHandled = 0;   // 上次"因信号"做过全量的信号值（�
 let _pollSeen = 0;             // 本轮 pollDirtyAt（拜访/坐标报错/注册的变动戳）
 let _custSeen = 0;             // 本轮 custDirtyAt（客户建档/更正/**删·恢复**的变动戳）
 let _taskSeen = 0;             // 本轮 taskDirtyAt（建/改/删/派/撤任务的变动戳）
+let _visitSeen = 0;            // ⭐ 2026-10-14：本轮 pollDirtyAt —— **拜访**提交/取消的信号（给 visits 增量用）
+let _lastVisitDirtyHandled = 0; // 上次"因信号"对 visits 做过全量的信号值
+let _lastVisitFullSync = 0;    // 上次"全量对账 visits"的时刻（0 = 还没跑过 → 首轮全量，安全）
 let _lastPollHandled = 0;      // 上次"跑过全套"时的 pollDirtyAt
 let _lastCustHandled = 0;      // 上次"跑过全套"时的 custDirtyAt
 let _lastTaskHandled = 0;      // 上次"跑过全套"时的 taskDirtyAt
@@ -291,6 +297,24 @@ async function setBmWatermark(w) {
   await ensureCursorTable();
   await (await conn()).query(
     "INSERT INTO sync_cursor (name,cursor,synced_at) VALUES ('batch_members',$1,$2) " +
+    'ON CONFLICT (name) DO UPDATE SET cursor=$1, synced_at=$2', [String(w), Date.now()]);
+}
+
+// ⭐⭐ 2026-10-14 老板定：**拜访同步的水位 + 兜底**（照 batch_members 那套）
+//   ⚠️ 必须用 `sync_cursor` 表（cursor 列是 text）—— `sync_state.watermark` 是 **bigint**，装不下 `_id` 这种字符串游标（踩过）。
+const VISIT_FALLBACK_MIN = Number(CFG.visitFullSyncMinutes) || 60;   // 老板定：**1 小时**（原「每轮全量」）
+async function visitWatermark() {
+  try {
+    await ensureCursorTable();
+    const r = await (await conn()).query("SELECT cursor FROM sync_cursor WHERE name='visits'");
+    return String((r.rows[0] && r.rows[0].cursor) || '');
+  } catch (e) { return ''; }          // 读不到 → 当作首次（这轮走全量，安全）
+}
+async function setVisitWatermark(w) {
+  if (!w) return;                     // ⚠️ 空值不写 —— 否则会把水位抹掉，下轮退化成全量
+  await ensureCursorTable();
+  await (await conn()).query(
+    "INSERT INTO sync_cursor (name,cursor,synced_at) VALUES ('visits',$1,$2) " +
     'ON CONFLICT (name) DO UPDATE SET cursor=$1, synced_at=$2', [String(w), Date.now()]);
 }
 
@@ -430,10 +454,34 @@ async function syncTasks() {
 //   ⚠️ **每轮先 DELETE 再全量拉**（和 batch_members 同一道理）：老板刚要求「能删拜访」，
 //      而**增量同步感知不到删除**（删掉的那条会永远留在 PG 里当幽灵）→ 全量最稳。
 //   ⚠️ 用游标（after = 上一页最后一条 id），**不用 skip**（没索引时越翻越慢，踩过）。
+// ⭐⭐ 2026-10-14 老板定：**拜访同步改「信号驱动 + 增量 + 1 小时兜底」**（原来每轮 `DELETE` + 全量重拉）
+//   老板原话：「拜访历史因为要删除，所以每次都全量拉取…为了检测拜访历史的删除，每次耗费这么多太不合算了。」
+//   做法照 `syncBatchMembers` 那套（已验证）：
+//     · 有拜访变动（`pollDirtyAt` 变了）或距上次全量超过 `VISIT_FALLBACK_MIN`（默认 60 分钟）→ **全量对账**（先清表再拉，兜住"删除"）
+//     · 都没变 → **纯增量**（从水位接着拉，通常 0 条 → 几乎零读写）
+//   ⚠️ 增量扫不到"已删的拜访"，所以**删除靠兜底全量**（最多滞后 VISIT_FALLBACK_MIN）。
+//      下一步会加「删除名单」（云端 pollDirty 顺带带回、零额外调用）把删除的滞后降到"下一轮"。
 async function syncVisits() {
+  const dirtyChanged = !!_visitSeen && _visitSeen !== _lastVisitDirtyHandled;
+  const staleTooLong = !_lastVisitFullSync || (Date.now() - _lastVisitFullSync >= VISIT_FALLBACK_MIN * 60000);
+  let full = dirtyChanged || staleTooLong;
+
   const c = await conn();
-  await c.query('DELETE FROM visits');
-  let after = '', total = 0;
+  let after = '', total = 0, lastSeen = '';
+  if (full) {
+    // ── 全量对账：先清空 PG 再从头拉（与旧行为一致，兜住"删除"）──
+    await c.query('DELETE FROM visits');
+    after = '';
+  } else {
+    // ── 增量：从上次位置接着拉 ──
+    after = await visitWatermark();
+    if (!after) {                       // 水位认不出来（首次 / 表被清过）→ 这轮当全量
+      full = true;
+      await c.query('DELETE FROM visits');
+      after = '';
+    }
+  }
+
   for (let i = 0; i < 60; i++) {                     // 一次最多 6 万条，防跑太久
     const r = await callCloud('exportVisitsForSync', { after, limit: 1000 });
     if (!r || !r.ok) throw new Error('exportVisitsForSync 返回异常: ' + JSON.stringify(r).slice(0, 160));
@@ -446,12 +494,18 @@ async function syncVisits() {
         x.result, x.status, x.duration, x.remark, x.samples,
         JSON.stringify(x.audios || []), JSON.stringify(x.photos || []), x.createdAt, x.updatedAt]));
       total += list.length;
-      after = r.last || ((list[list.length - 1] || {}).id || '');
+      lastSeen = r.last || after;                      // 游标：留着更新水位（空值不会覆盖旧水位）
+      after = r.last || '';
     }
     if (!r.hasMore || !list.length) break;
     await sleep(200);
   }
-  console.log(`[sync] visits 同步 ${total} 条（全量重拉）`);
+  if (full) {
+    _lastVisitFullSync = Date.now();
+    if (dirtyChanged) _lastVisitDirtyHandled = _visitSeen;   // 记下已处理的信号
+  }
+  await setVisitWatermark(lastSeen);                  // 记住水位（空值不会覆盖）
+  console.log(`[sync] visits 同步 ${total} 条（${full ? '全量对账' : '增量'}）`);
 }
 
 async function syncVisitedCustomers() {
