@@ -384,40 +384,46 @@ async function syncBatchMembers() {
   const dirtyChanged = !!_bmDirtySeen && _bmDirtySeen !== _lastBmDirtyHandled;
   const staleTooLong = !_lastBmFullSync || (Date.now() - _lastBmFullSync >= BM_FALLBACK_MIN * 60 * 1000);
   const full = dirtyChanged || staleTooLong;
-  let after = '', total = 0, lastSeen = '';
+  let after = '', lastSeen = '';
+  // ⭐⭐ 2026-10-14 修（依《全项目审查》D03）：**不再「先清表再拉」** ——
+  //   原来两处（`full` 分支与"水位认不出来"分支）都是先 `DELETE FROM batch_members` 再拉；
+  //   一旦拉取失败/超时、或被云端当成"空页"，**表就已经空了**，而读 API 会把它当"最新完整数据"。
+  //   现在：**先把全部数据拉进内存 → （全量时）确认非空 → 才清表 → 再一次性灌**。
   if (full) {
-    // ── 全量对账：先清空 PG 再从头拉（与旧行为一致，兜住"删除"）──
-    const c0 = await conn();
-    await c0.query('DELETE FROM batch_members');
-    after = '';
+    after = '';                        // 全量：从头拉（清表挪到拉完之后）
   } else {
     // ── 增量：从上次位置接着拉（只拉新增）──
     after = await bmWatermark();
-    if (!after) {                      // 水位认不出来（首次 / 表被清过）→ 这轮当全量
-      const c0 = await conn();
-      await c0.query('DELETE FROM batch_members');
-    }
+    if (!after) { full = true; after = ''; }   // 水位认不出来（首次 / 表被清过）→ 这轮当全量
   }
+  const rows = [];
   for (let i = 0; i < 240; i++) {                      // 全量 5585 条按 500/页约 12 页；240 页兜底防跑飞
     const r = await callCloud('exportBatchMembers', { after, limit: BM_PAGE });
     if (!r || !r.ok) throw new Error('exportBatchMembers 返回异常: ' + JSON.stringify(r).slice(0, 200));
     const list = r.list || [];
     if (!list.length) break;
-    // ⭐⭐ 2026-10-14：改用**批量 upsert**（每页 500 条 = 1 次写）。
-    //   ⚠️ 原来是**逐条 INSERT** —— 一轮全量 5585 条 = **5585 次写请求**（明明一次能写 500 条）。
-    //      而 `upsert()` 这个批量函数项目里早就有（`syncVisits` / `syncCustomerBatches` 都在用），
-    //      **只有这个函数漏了**。改完：**5585 次写 → 12 次写**（省 99%）。
-    //   ⚠️ `batch_members` 是**复合主键** `(batch_id, customer_id)` —— 所以上面给 `upsert()` 加了 `conflictOn`。
-    await upsert('batch_members',
-      ['batch_id', 'customer_id', 'created_at', 'updated_at'],
-      list.map(m => [String(m.b || ''), String(m.c || ''), Number(m.t) || 0, Date.now()]),
-      ['batch_id', 'customer_id']);
-    total += list.length;
+    // ⭐⭐ 2026-10-14：改用**批量 upsert**（每页 500 条 = 1 次写）——
+    //   ⚠️ 原来是**逐条 INSERT**，一轮全量 5585 条 = 5585 次写请求（明明一次能写 500 条）；
+    //      而 `upsert()` 这个批量函数项目里早就有（`syncVisits` / `syncCustomerBatches` 都在用），**只有它漏了**。
+    //   ⚠️ `batch_members` 是**复合主键** `(batch_id, customer_id)` —— 所以给 `upsert()` 加了 `conflictOn`。
+    for (const m of list) rows.push([String(m.b || ''), String(m.c || ''), Number(m.t) || 0, Date.now()]);
     lastSeen = r.last || after;                        // 游标：留着更新水位（空值不会覆盖旧水位）
     after = r.last || '';
     if (!r.hasMore) break;
     await sleep(400);                                  // ⭐ 1000→500 页 + 等 400ms：压低 QPS 尖峰
   }
+  if (full) {
+    // ⚠️ 全量却拉到 0 条 = 可疑（多半云端出问题被当成空页）→ **绝不清表**，下轮再试
+    if (!rows.length) {
+      console.warn('[sync] ⚠️ batch_members 全量拉回 0 条 → 本轮不清表（防把表清空），下轮再试');
+      return;
+    }
+    const c0 = await conn();
+    await c0.query('DELETE FROM batch_members');
+  }
+  await upsert('batch_members',
+    ['batch_id', 'customer_id', 'created_at', 'updated_at'], rows, ['batch_id', 'customer_id']);
+  const total = rows.length;
   if (full) {
     _lastBmFullSync = Date.now();
     if (dirtyChanged) _lastBmDirtyHandled = _bmDirtySeen;   // 记下已处理的信号
@@ -460,7 +466,9 @@ async function upsert(table, cols, rows, conflictOn) {
 
 async function syncCustomerBatches() {
   const c0 = await conn();
-  await c0.query('DELETE FROM customer_batches');
+  // ⭐⭐ 2026-10-14 修（依《全项目审查》D03）：**先拉完、确认非空，再清表** ——
+  //   原来是"先 `DELETE` 再拉"，一旦拉取失败/超时（或被云端当成空页），**表就已经被清空了**，
+  //   而读 API 看到的是"空表"，还很可能是"最新完整数据"。现在顺序反过来 + 空结果不清表。
   const rows = [];
   let after = '';
   for (let i = 0; i < 50; i++) {
@@ -476,13 +484,18 @@ async function syncCustomerBatches() {
     if (!r.hasMore) break;
     await sleep(150);
   }
+  if (!rows.length) {   // ⚠️ 一条都没拉到 = 可疑（多半是云端出问题被当成空页）→ **绝不清表**
+    console.warn('[sync] ⚠️ customer_batches 拉回 0 条 → 本轮不清表（防把表清空），下轮再试');
+    return;
+  }
+  await c0.query('DELETE FROM customer_batches');
   await upsert('customer_batches', ['id', 'name', 'subtitle', 'created_at', 'created_by', 'auto_name_prefix', 'updated_at'], rows);
   console.log('[sync] customer_batches 同步 ' + rows.length + ' 个批次');
 }
 
 async function syncTasks() {
   const c0 = await conn();
-  await c0.query('DELETE FROM tasks');
+  // ⭐⭐ 2026-10-14 修（依《全项目审查》D03）：同 `syncCustomerBatches` —— **先拉完再清表**、空结果不清表。
   const rows = [];
   let after = '';
   for (let i = 0; i < 200; i++) {           // 未结束任务通常几个~十几个；200 兜底
@@ -498,6 +511,9 @@ async function syncTasks() {
     if (!r.hasMore) break;
     await sleep(100);
   }
+  // ⚠️ 这里**允许** 0 条：正常情况就可能是"当前没有任何未结束任务"（与客户/批次那种"必然非空"不同）。
+  //    但仍然**先清后灌放在拉完之后**，且失败会 throw（不会走到这里）→ 不会出现"清了却没灌"。
+  await c0.query('DELETE FROM tasks');
   await upsert('tasks', ['id', 'status', 'deadline', 'customer_ids', 'updated_at'], rows);
   console.log('[sync] tasks 同步 ' + rows.length + ' 个未结束任务');
 }
@@ -520,39 +536,46 @@ async function syncVisits() {
   let full = dirtyChanged || staleTooLong;
 
   const c = await conn();
-  let after = '', total = 0, lastSeen = '';
+  let after = '', lastSeen = '';
+  // ⭐⭐ 2026-10-14 修（依《全项目审查》D03）：同 `syncBatchMembers` —— **不再「先清表再拉」**，
+  //   改成"先全拉进内存 → 全量时确认非空 → 才清表 → 再灌"（拉失败/被当空页时表不会被清空）。
   if (full) {
-    // ── 全量对账：先清空 PG 再从头拉（与旧行为一致，兜住"删除"）──
-    await c.query('DELETE FROM visits');
     after = '';
   } else {
     // ── 增量：从上次位置接着拉 ──
     after = await visitWatermark();
     if (!after) {                       // 水位认不出来（首次 / 表被清过）→ 这轮当全量
       full = true;
-      await c.query('DELETE FROM visits');
       after = '';
     }
   }
 
+  const rows = [];
   for (let i = 0; i < 60; i++) {                     // 一次最多 6 万条，防跑太久
     const r = await callCloud('exportVisitsForSync', { after, limit: 1000 });
     if (!r || !r.ok) throw new Error('exportVisitsForSync 返回异常: ' + JSON.stringify(r).slice(0, 160));
     const list = r.rows || [];
     if (list.length) {
-      await upsert('visits',
-        ['id', 'customer_id', 'salesman_id', 'salesman_name', 'visited_at', 'task_id', 'free_trip_id',
-          'result', 'status', 'duration', 'remark', 'samples', 'audios', 'photos', 'created_at', 'updated_at'],
-        list.map(x => [x.id, x.customerId, x.salesmanId, x.salesmanName, x.visitedAt, x.taskId, x.freeTripId,
-        x.result, x.status, x.duration, x.remark, x.samples,
-        JSON.stringify(x.audios || []), JSON.stringify(x.photos || []), x.createdAt, x.updatedAt]));
-      total += list.length;
+      for (const x of list) {
+        rows.push([x.id, x.customerId, x.salesmanId, x.salesmanName, x.visitedAt, x.taskId, x.freeTripId,
+          x.result, x.status, x.duration, x.remark, x.samples,
+          JSON.stringify(x.audios || []), JSON.stringify(x.photos || []), x.createdAt, x.updatedAt]);
+      }
       lastSeen = r.last || after;                      // 游标：留着更新水位（空值不会覆盖旧水位）
       after = r.last || '';
     }
     if (!r.hasMore || !list.length) break;
     await sleep(200);
   }
+  if (full) {
+    // ⚠️ 全量却 0 条：正常也可能（真的一条拜访都没有）—— 但**先清再灌**更危险（清了就真没了），
+    //    所以这里**照旧清**（0 条=确实是空，清成空也是对的），关键收益是"拉取失败时不会先把表清空"。
+    await c.query('DELETE FROM visits');
+  }
+  await upsert('visits',
+    ['id', 'customer_id', 'salesman_id', 'salesman_name', 'visited_at', 'task_id', 'free_trip_id',
+      'result', 'status', 'duration', 'remark', 'samples', 'audios', 'photos', 'created_at', 'updated_at'], rows);
+  const total = rows.length;
   if (full) {
     _lastVisitFullSync = Date.now();
     if (dirtyChanged) _lastVisitDirtyHandled = _visitSeen;   // 记下已处理的信号
@@ -565,7 +588,7 @@ async function syncVisitedCustomers() {
   const MIN = Number(CFG.visitSyncMinutes) || 15;
   if (_lastVisitSync && Date.now() - _lastVisitSync < MIN * 60 * 1000) return;   // 没到点，跳过（失败时不更新时间戳 → 下轮重试）
   const c0 = await conn();
-  await c0.query('DELETE FROM visited_customers');
+  // ⭐⭐ 2026-10-14 修（依《全项目审查》D03）：**先拉完再清表**、空结果不清表（原来先 DELETE 再拉）。
   const rows = [];
   let skip = 0;
   for (let i = 0; i < 100; i++) {           // 最多 10 万客户，防跑飞
@@ -578,6 +601,11 @@ async function syncVisitedCustomers() {
     if (!r.hasMore) break;
     await sleep(150);
   }
+  if (!rows.length) {   // ⚠️ 正常情况"已拜访客户"不该为空（任务一直在跑）→ 空了就当异常，**不清表**
+    console.warn('[sync] ⚠️ visited_customers 拉回 0 条 → 本轮不清表（防把表清空），下轮再试');
+    return;
+  }
+  await c0.query('DELETE FROM visited_customers');
   await upsert('visited_customers', ['customer_id', 'n', 'updated_at'], rows);
   _lastVisitSync = Date.now();
   console.log('[sync] visited_customers 同步 ' + rows.length + ' 个客户（下次 ' + MIN + ' 分钟后）');
