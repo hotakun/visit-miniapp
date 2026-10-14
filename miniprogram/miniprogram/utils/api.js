@@ -42,7 +42,9 @@ function call(name, data = {}) {
           const r2 = (r && r.result) || null;
           if (r2 && r2.ok) {
             const CUST_WRITE = {
-              visits: ['submit', 'cancel', 'editSubmitted', 'endMyOngoing', 'deleteVisit'],
+              // ⚠️ `start` 也在这里：它会建一条「拜访中」记录 → 客户详情页的 `visitOngoing` 会变，
+              //   不置标记的话从拜访页返回时"拜访中"标识可能还是旧的（2026-10-14 核查时补上）。
+              visits: ['start', 'submit', 'cancel', 'editSubmitted', 'endMyOngoing', 'deleteVisit'],
               tasks: ['saveCustPhoto', 'correctCustomer', 'newShopSubmit', 'updateNewShop'],
               coordfix: ['*']   // 坐标报错 / 现场提报：这个云函数整个就是"写客户"的
             };

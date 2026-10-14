@@ -154,17 +154,24 @@ async function syncPollDirty() {
     //   **按"删除名单"删拜访** —— 原来增量扫不到"已消失的文档"，只能每轮 `DELETE` + 全量重拉。
     //   ① 名单里的 id → 直接从 PG 的 `visits` 删掉；② 顺手往 `deleted_ids` 留档（`tbl='visits'`），与客户那套一致。
     //   ⚠️ 名单由云端 `pollDirty` **顺路带回**（零额外云端调用）；万一漏了，靠 1 小时兜底的全量对账兜住。
+    // ⭐⭐ 2026-10-14 核查补漏：名单是"近 7 天"的，而这段在 **每轮** 都跑（`syncPollDirty`）→
+    //   同一批 id 会被**每 5 分钟重复删一次**（日志里「visits 按删除名单删掉 6 条」刷了一整屏）。
+    //   删除本身幂等、无害，但白做无用的 DELETE + 污染日志（排查时看不到真正的新动作）。
+    //   这里用内存 Set 记住"本进程已处理过的 id"，**只处理新增的**（进程重启会重删一次，无妨）。
     if (Array.isArray(r.deletedVisitIds) && r.deletedVisitIds.length) {
-      try {
-        const d2 = await conn();
-        const vids = r.deletedVisitIds.map(String);
-        await d2.query('DELETE FROM visits WHERE id = ANY($1::text[])', [vids]);
-        await d2.query('CREATE TABLE IF NOT EXISTS deleted_ids (id text PRIMARY KEY, tbl text, deleted_at bigint)');
-        for (const id of vids) {
-          await d2.query('INSERT INTO deleted_ids (id,tbl,deleted_at) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [id, 'visits', Date.now()]);
-        }
-        console.log(`[sync] visits 按删除名单删掉 ${vids.length} 条`);
-      } catch (e) { console.error('[sync] visits 删除名单处理失败（下轮再试）:', e.message); }
+      const fresh = r.deletedVisitIds.map(String).filter(id => !_deletedVisitSeen.has(id));
+      if (fresh.length) {
+        try {
+          const d2 = await conn();
+          await d2.query('DELETE FROM visits WHERE id = ANY($1::text[])', [fresh]);
+          await d2.query('CREATE TABLE IF NOT EXISTS deleted_ids (id text PRIMARY KEY, tbl text, deleted_at bigint)');
+          for (const id of fresh) {
+            await d2.query('INSERT INTO deleted_ids (id,tbl,deleted_at) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [id, 'visits', Date.now()]);
+            _deletedVisitSeen.add(id);
+          }
+          console.log(`[sync] visits 按删除名单删掉 ${fresh.length} 条`);
+        } catch (e) { console.error('[sync] visits 删除名单处理失败（下轮再试）:', e.message); }
+      }
     }
   } catch (e) { console.error('[sync] pollDirty 同步失败（下轮再试）:', e.message); }
 }
@@ -217,6 +224,14 @@ async function round() {
   _lastBusyRun = Date.now();
   _lastPollHandled = _pollSeen;
   _lastCustHandled = _custSeen;
+  // ⭐⭐ 2026-10-14 补漏（老板要求"抱着找茬的态度逐项核查"时揪出来的）：
+  //   `_lastTaskHandled` **只在上面 `_changed` 判断里被用过、从来没人给它赋值** →
+  //   只要云端存在过 `taskDirtyAt`（建/改/派/撤任务都会写），`_taskSeen !== 0` **恒为真** →
+  //   `_changed` 永远成立 → **「有变动才跑」彻底失效、每轮照样跑全套**（方案 D 等于没生效）。
+  //   这里在"跑完全套"之后补上赋值，与 `_lastPollHandled` / `_lastCustHandled` 同级。
+  //   ⚠️ 另外两个（`_lastBmDirtyHandled` / `_lastVisitDirtyHandled`）是在各自"全量对账跑完"后赋值的，
+  //      语义更精确，**不要**挪到这里来。
+  _lastTaskHandled = _taskSeen;
 
   let since = await watermark(), got = 0, maxU = since;
   for (let i = 0; i < 40; i++) {                               // 一次最多 4 万条，防跑太久
@@ -279,6 +294,8 @@ let _custSeen = 0;             // 本轮 custDirtyAt（客户建档/更正/**删
 let _taskSeen = 0;             // 本轮 taskDirtyAt（建/改/删/派/撤任务的变动戳）
 let _visitSeen = 0;            // ⭐ 2026-10-14：本轮 pollDirtyAt —— **拜访**提交/取消的信号（给 visits 增量用）
 let _lastVisitDirtyHandled = 0; // 上次"因信号"对 visits 做过全量的信号值
+const _deletedVisitSeen = new Set();  // ⭐ 2026-10-14：本进程已处理过的「拜访删除名单」id
+//   —— 名单是"近 7 天"的、而处理它的那段在**每轮**都跑；不记一下就每 5 分钟重复删同一批（幂等无害但白做功 + 刷日志）。
 let _lastVisitFullSync = 0;    // 上次"全量对账 visits"的时刻（0 = 还没跑过 → 首轮全量，安全）
 let _lastPollHandled = 0;      // 上次"跑过全套"时的 pollDirtyAt
 let _lastCustHandled = 0;      // 上次"跑过全套"时的 custDirtyAt

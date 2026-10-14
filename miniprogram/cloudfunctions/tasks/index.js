@@ -1324,7 +1324,12 @@ async function detail(salesmanId, taskId, isBoss) {
     multiIn('customers', ids, {
       name: true, address: true, lat: true, lng: true,
       phone: true, phone2: true, customerType: true, remark: true,
-      mallKey: true, mallJoinedAt: true
+      mallKey: true, mallJoinedAt: true,
+      // ⭐ 2026-10-14 核查补漏：下面 `enriched.push` 里**还读了这几个字段**，
+      //   但白名单漏了它们 → 返回给前端时永远是 `undefined`（现在界面不显示它们，属脏数据）。
+      //   补进来，免得以后谁在卡片上加了「最近下单 / 商城等级」却查不出为什么是空的。
+      contactName: true, mallAddedAt: true, lastOrderAt: true,
+      lastBrowseAt: true, mallSalesman: true, mallLevel: true
     }),
     lastVisitMap(taskId, ids),
     ids.length ? db.collection('visits')
