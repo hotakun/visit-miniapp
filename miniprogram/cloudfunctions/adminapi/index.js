@@ -1383,17 +1383,58 @@ async function touchBatchDirty() {
   } catch (e) { console.error('[batchDirtyAt] 写批次变动信号失败：', e); }
 }
 
-async function pollDirty(event) {
-  const out = { ok: true, at: Date.now(), pollDirtyAt: 0, custDirtyAt: 0, batchDirtyAt: 0 };
+// ⭐⭐ 2026-10-14 老板定：**任务变动信号**（`settings.taskDirtyAt`）
+//   谁写：后台 建/改/删/派/撤 任务（createTask / editTask / reassignTask / withdrawTask / deleteTask / sendTask）。
+//   为什么：服务器同步器改成了「**有变动才跑**」（见 `admin/tools/pgsync.js` 的 round()）——
+//     信号没变就整轮跳过；所以"动过任务"必须报一声，否则那轮不跑、PG 里的任务数据不更新。
+//   ⚠️ 与 `batchDirtyAt` / `custDirtyAt` 同一套路：写进 settings、失败只 log、**绝不影响主流程**。
+//   ⚠️ 挂在函数**开头**（宁多报不少报：校验失败白报一次也无害，只是多跑一轮同步）。
+let _taskDirtyTouched = 0;
+async function touchTaskDirty() {
+  const now = Date.now();
+  if (now - _taskDirtyTouched < 3000) return;      // 防抖：3 秒内只写一次（批量操作在循环里调也不怕）
+  _taskDirtyTouched = now;
   try {
-    const r = await db.collection('settings').where({ key: _.in(['pollDirtyAt', 'custDirtyAt', 'batchDirtyAt']) }).get();
+    const dr = await db.collection('settings').where({ key: 'taskDirtyAt' }).limit(1).get();
+    if (dr.data && dr.data.length) {
+      await db.collection('settings').doc(dr.data[0]._id).update({ data: { value: now, updatedAt: now } });
+    } else {
+      await db.collection('settings').add({ data: { key: 'taskDirtyAt', value: now, updatedAt: now } });
+    }
+  } catch (e) { console.error('[taskDirtyAt] 写任务变动信号失败：', e); }
+}
+
+// ⭐ 2026-10-14：**客户变动信号**（`custDirtyAt`）的统一写口 —— 给「删客户 / 恢复客户」用。
+//   为什么需要：同步器改成"有变动才跑"后，这两个动作（原来**不写任何信号**）会让后台看到的数据滞后。
+//   ⚠️ 与 `touchBatchDirty` / `touchTaskDirty` 同一套路：失败只 log、不影响主流程、带 3 秒防抖。
+let _custDirtyTouched = 0;
+async function touchCustDirty() {
+  const now = Date.now();
+  if (now - _custDirtyTouched < 3000) return;
+  _custDirtyTouched = now;
+  try {
+    const dr = await db.collection('settings').where({ key: 'custDirtyAt' }).limit(1).get();
+    if (dr.data && dr.data.length) {
+      await db.collection('settings').doc(dr.data[0]._id).update({ data: { value: now, updatedAt: now } });
+    } else {
+      await db.collection('settings').add({ data: { key: 'custDirtyAt', value: now, updatedAt: now } });
+    }
+  } catch (e) { console.error('[custDirtyAt] 写客户变动信号失败：', e); }
+}
+
+async function pollDirty(event) {
+  const out = { ok: true, at: Date.now(), pollDirtyAt: 0, custDirtyAt: 0, batchDirtyAt: 0, taskDirtyAt: 0 };
+  try {
+    const r = await db.collection('settings').where({ key: _.in(['pollDirtyAt', 'custDirtyAt', 'batchDirtyAt', 'taskDirtyAt']) }).get();
     (r.data || []).forEach(s => {
       if (s.key === 'pollDirtyAt') out.pollDirtyAt = Number(s.value) || 0;
       if (s.key === 'custDirtyAt') out.custDirtyAt = Number(s.value) || 0;
       // ⭐ 2026-10-14：批次成员变动信号 —— 服务器同步器据此决定"这轮要不要全量对账 batch_members"
       if (s.key === 'batchDirtyAt') out.batchDirtyAt = Number(s.value) || 0;
+      // ⭐ 2026-10-14：任务变动信号 —— 服务器同步器据此决定"这轮要不要跑全套"（有变动才跑）
+      if (s.key === 'taskDirtyAt') out.taskDirtyAt = Number(s.value) || 0;
     });
-  } catch (e) { /* 静默：没有这两条就当 0 */ }
+  } catch (e) { /* 静默：没有这几条就当 0 */ }
   // ⭐⭐ 2026-10-12 老板定（**零额外调用版**）：**顺路捎带"最近删掉的客户 id"** ——
   //   背景：云端的增量同步**刻意跳过已删客户** → 服务器的库里永远收不到"这条被删了"
   //   → 后台「新店」列表里**删掉的店还显示着**（老板实测）。
@@ -1748,6 +1789,7 @@ async function genTaskNo() {
 }
 
 async function createTask(event) {
+  await touchTaskDirty();   // ⭐ 2026-10-14：报"任务变动"信号（同步器据此跑全套；失败不影响）
   const { name, salesmanId, customerIds, deadline, plannedDays, purpose, startDate, status, dayGroups, dayRoutes, batchId } = event;
   if (!name || !salesmanId || !Array.isArray(customerIds) || !customerIds.length) {
     return { ok: false, code: 'BAD_ARG', msg: '任务名称/业务员/客户不能为空' };
@@ -1870,6 +1912,7 @@ function buildDayPlan(customerIds, days) {
 }
 
 async function editTask(event) {
+  await touchTaskDirty();   // ⭐ 2026-10-14：报"任务变动"信号
   const { taskId, name, startDate, plannedDays } = event;
   const t = await getTaskDoc(taskId);
   if (!t) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
@@ -1933,6 +1976,7 @@ async function extendTask(event) {
 }
 
 async function reassignTask(event) {
+  await touchTaskDirty();   // ⭐ 2026-10-14：报"任务变动"信号
   const { taskId, newSalesmanId } = event;
   const t = await getTaskDoc(taskId);
   if (!t) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
@@ -1967,6 +2011,7 @@ async function purgeOngoingOfTask(taskId) {
 }
 
 async function withdrawTask(event) {
+  await touchTaskDirty();   // ⭐ 2026-10-14：报"任务变动"信号
   const { taskId } = event;
   const t = await getTaskDoc(taskId);
   if (!t) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
@@ -1983,6 +2028,7 @@ async function withdrawTask(event) {
 //   ⚠️ **只删任务卡**（老板选 A：**拜访记录留着** —— 谁去过哪家、拍了什么，客户详情页「拜访历史」照样能查）。
 //   ⚠️ **进行中（published / reviewing）仍然拦住** —— 否则业务员手机上还挂着任务、进度凭空消失。
 async function deleteTask(event) {
+  await touchTaskDirty();   // ⭐ 2026-10-14：报"任务变动"信号
   const { taskId } = event;
   const t = await getTaskDoc(taskId);
   if (!t) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
@@ -1997,6 +2043,7 @@ async function deleteTask(event) {
 
 // 草稿发送：draft → published，推送给业务员（发送事件留痕含通知渠道；不再重置 createdAt——创建时间保持真实，2026-09-08）
 async function sendTask(event) {
+  await touchTaskDirty();   // ⭐ 2026-10-14：报"任务变动"信号
   const { taskId } = event;
   const t = await getTaskDoc(taskId);
   if (!t) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
@@ -6177,6 +6224,7 @@ async function removeCustomerFromBatch(event) {
 //      「有订单/拜访 → 不能**彻底**删除」的保护**留给以后的"统一清理"**（那时才需要查这两张表）。
 //   ⭐⭐ 但**任务中的客户一条都不能删**（老板 2026-09-29 定，见下）。
 async function deleteCustomers(event) {
+  await touchCustDirty();   // ⭐ 2026-10-14：报"客户变动"信号（删客户要让后台/同步器立刻反映）
   const ids = Array.isArray(event.customerIds) ? event.customerIds.filter(Boolean) : [];
   if (!ids.length) return { ok: false, code: 'BAD_ARG', msg: '没有选择客户' };
   const now = Date.now();
@@ -6336,6 +6384,7 @@ async function purgeCustomers(event) {
 }
 
 async function restoreCustomers(event) {
+  await touchCustDirty();   // ⭐ 2026-10-14：报"客户变动"信号（恢复客户同样要立刻反映）
   const ids = Array.isArray(event.customerIds) ? event.customerIds.filter(Boolean) : [];
   if (!ids.length) return { ok: false, code: 'BAD_ARG', msg: '没有选择客户' };
   const now = Date.now();

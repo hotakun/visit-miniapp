@@ -61,9 +61,9 @@
   · **5 个计划任务**（`JuhuoPgApi` / `JuhuoPgSync` / `JuhuoNginx` / `JuhuoReboot3` / `JuhuoReboot18`，均 BootTrigger+SYSTEM）；**每天 3:00 / 18:00 自动重启**服务器。
   · ⭐⭐ **「有变动才跑」（2026-10-14 方案 D，老板定）** —— 同步器原来**每轮无条件跑 7 件事**（`pollDirty`/`custSync`/`batch_members`/`customer_batches`/`tasks`/`visited_customers`/`visits`/`mall_pending` ≈ 2100 次/天，绝大多数是"没人在用"的空转）。现在：
     `round()` 开头**先读一次 `pollDirty`**（1 次调用带回云端全部变动时间戳）→ **三个信号都没变 → 整轮只花这 1 次调用**，跳过其余全部；
-    **兜底**：信号一直没变也每 **30 分钟**无条件跑一轮（防某处漏写信号 → 静默不更新）。
-    ⚠️ 改动**只在服务器上的 `admin/tools/pgsync.js`**，**不用重传云函数**。
-    ⚠️ **已知缺口**（待补写点，补了要重传 `adminapi`）：**删客户 / 恢复客户 / 建改删任务**这几个动作**没写变动信号** → 它们最多滞后 30 分钟才反映（兜底兜住）。
+    **兜底**：信号一直没变也每 **2 小时**无条件跑一轮（防某处漏写信号 → 静默不更新）；⚠️ 计时**只在"真正跑全套"时才重置** → 只要有人在用就一直重置、兜底根本轮不到。
+    ✅ **写点已补齐**（2026-10-14，**需重传 `adminapi` 生效**）：`taskDirtyAt`（建/改/删/派/撤任务 6 处）+ `custDirtyAt`（删客户 / 恢复客户 2 处）→ 这些动作**即时反映**；兜底只当"漏信号的保险"。
+    ⚠️ 改动**只在服务器上的 `admin/tools/pgsync.js`**（信号写点在云函数里，见下）。
   · ⭐ **批次成员同步（2026-10-14 改造，省掉一天约 160 万次读写）**：平时走 `_id` 游标**增量**（水位存 `sync_cursor` 表）→ 后台建/删批次、加/移成员时写 `settings.batchDirtyAt`（云端 `touchBatchDirty()`，**5 个写点**，3 秒防抖）→ 靠 `pollDirty` **顺带带回**（零额外调用）→ 同步器**只在信号变过时**全量对账（增量感知不到"删除"）+ 6 小时兜底。写库走**批量 upsert**。⚠️ **改了云函数写点必须重传 `adminapi`**。
   · ⚠️ **四个静默坑**：① 建表 SQL 必须 `SET client_encoding='UTF8'`；② `custSync` 返回字段名是 **`points`**；③ 手动重启 pgapi 要 `schtasks /end` 再 `/run`；④ **`sync_state.watermark` 是 `bigint`，存不了字符串 `_id`** —— 字符串游标要用 `sync_cursor`（详见 `docs/坑清单.md`）。
 - **壳程序**（`packager/shell/`）：无边框 WebView2 壳（普惠体 / DPI 声明 PMv2 / 禁右键禁 F5 / 自定义最大化）；标题条按钮遍历必须 `foreach (Control b in right)`。⚠️ `D:\JuHuoVisit\` **不是常驻目录**（那是 `install.bat` 的安装目标，平时不用它启动后台）。
