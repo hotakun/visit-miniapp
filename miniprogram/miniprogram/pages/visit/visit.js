@@ -835,7 +835,7 @@ Page({
 
   // 第 2 步：确认提交 —— 先上传现场证据（成功才落库；已传的自动复用，失败可重试），再提交拜访
   async confirmSubmit() {
-    if (this.submitting) return;
+    if (this.submitting || this._submitted) return;   // ⭐ 2026-10-14：已收尾（提交成功）的这次拜访不再接受重复提交
     // 2026-09-11：后台「强制拍至少 1 张」开启时前端先拦一次（云端 visits.submit 同样校验）
     if (this.evidenceRequired && !this.data.pics.length) { api.toast('请至少拍 1 张现场照片'); return; }
     this.submitting = true;
@@ -880,8 +880,19 @@ Page({
       this.submitting = false;
       this.setData({ confirmShow: false });
       if (res.ok) {
-        this.clearStart(); // 提交成功：计时基准清除，下次进入重新计时
-        loc.beacon(); // 状态信标：拜访中→已回访（2026-09-08 老板定）
+        // ⭐⭐ 2026-10-14 事故修复（老板实测：同一家被提交 4 次、老板说"业务员跑了几家就无法继续"）：
+        //   原来 `clearStart()` / `loc.beacon()` 都**没有各自的保护**，而整个 `if (res.ok)` 又在外层 try 里 ——
+        //   它们只要抛一次错，就会被最外层 catch 接住 → **弹「提交失败，请确认云函数已部署」+ 那句
+        //   `navigateBack` 永远执行不到** → 业务员以为白跑了、重新进店再提交 → 同一家被记好几条。
+        //   ⚠️ 其实云端那一次**已经提交成功**了（数据是干净的），只有手机上看不到成功。
+        //   修法（顺序很关键）：**先把反馈和返回安排上**（哪怕后面全错，业务员也能看到成功、也能退回去），
+        //   再把每一句收尾各自包 try/catch，最后置"已收尾"标记防重复提交。
+        const pool = PRAISE[this.data.result] || ['辛苦啦！拜访已提交 ✓'];
+        api.toast(pool[Math.floor(Math.random() * pool.length)], 'success');
+        setTimeout(() => wx.navigateBack(this.data.c.taskId ? { delta: 2 } : {}), 900);
+        this._submitted = true;   // ⭐ 本次拜访已收尾 → 同一页不再允许重复提交（配合 confirmSubmit 开头的拦截）
+        try { this.clearStart(); } catch (e) { console.error('[visit] clearStart 出错（提交已成功，继续收尾）', e); }
+        try { loc.beacon(); } catch (e) { console.error('[visit] beacon 出错（不影响提交）', e); }
         // ⭐ 2026-10-15 老板定：「有新增的拜访记录就**同时云端和本地都保存**」——
         //   本地记一笔（任务 + 这家 + 结果 + 日期）→ 任务详情页返回时据此**就地更新卡片**，不用再从云端拉一遍。
         //   ⚠️ 云端仍是唯一真相源，这里只是副本（当天有效、跨天自动失效）。
@@ -910,13 +921,8 @@ Page({
           if (idx.length) api.call('transcribe', { action: 'start', visitId: res.visitId, segIndexes: idx }).catch(() => {});
         }
         this._evPhotos = null; this._evAudios = null; this._evAudio = null;
-        const pool = PRAISE[this.data.result] || ['辛苦啦！拜访已提交 ✓'];
-        const line = pool[Math.floor(Math.random() * pool.length)];
-        api.toast(line, 'success');
-        // ⭐ 2026-10-02：回去的层数按场景区分 ——
-        //   任务内拜访：回退两层（拜访记录页 → 客户详情页，原有行为）
-        //   自由拜访（从「我的 → 我新加的店」来）：只回一层，回到那个列表
-        setTimeout(() => wx.navigateBack(this.data.c.taskId ? { delta: 2 } : {}), 900);
+        // （⭐ 2026-10-14：提示语与「返回」已提到本块最前面 —— 理由见上面那段说明。
+        //   「回去的层数」口径不变：任务内拜访退两层（→ 客户详情页 → 任务页）、自由拜访退一层。）
       } else if (res.code === 'TOO_FAR') {
         // 证据已上传完成：重试自动复用（_evPhotos/_evAudios 保留），不重复传
         api.toast(`距客户 ${res.distance} 米，超限`);
