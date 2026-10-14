@@ -115,8 +115,11 @@ async function syncPollDirty() {
         'INSERT INTO sync_state (name,watermark,synced_at) VALUES ($1,$2,$3) ' +
         'ON CONFLICT (name) DO UPDATE SET watermark=$2, synced_at=$3', [name, w, Date.now()]);
     };
-    await put('pollDirtyAt', Number(r.pollDirtyAt) || 0);
-    await put('custDirtyAt', Number(r.custDirtyAt) || 0);
+    // ⭐ 2026-10-14：**本轮信号值留一份给 round() 判断"要不要跑全套"**（见 round 开头的跳过逻辑）
+    _pollSeen = Number(r.pollDirtyAt) || 0;
+    _custSeen = Number(r.custDirtyAt) || 0;
+    await put('pollDirtyAt', _pollSeen);
+    await put('custDirtyAt', _custSeen);
     // ⭐⭐ 2026-10-14：批次成员变动信号（后台建/删批次、加/移成员时写）——
     //   同步器据此决定"这轮要不要全量对账 batch_members"：**有变动才全量，没变动纯增量**。
     //   ⚠️ 搭 pollDirty 的顺风车带回来，**不增加任何云端调用**。
@@ -175,6 +178,24 @@ async function syncMallPending() {
 }
 
 async function round() {
+  // ⭐⭐ 2026-10-14 老板定（方案 D：**有变动才跑**）——
+  //   `pollDirty` 一次调用带回云端全部「变动时间戳」；**三个都没变 → 整轮只花这 1 次调用**，
+  //   跳过后面 6 个同步（原来每轮无条件全跑 ≈ 7 次/轮 ≈ 2100 次/天，其中绝大多数是"没人在用"的空转）。
+  //   ⚠️ **兜底**：信号一直没变也每 IDLE_FALLBACK_MIN 分钟无条件跑一轮（防漏写信号 → 静默不更新）。
+  try { await syncPollDirty(); } catch (e) { console.error('[sync] pollDirty 失败（下轮再试）:', e.message); }
+  const _changed = (_pollSeen && _pollSeen !== _lastPollHandled)
+    || (_custSeen && _custSeen !== _lastCustHandled)
+    || (_bmDirtySeen && _bmDirtySeen !== _lastBmDirtyHandled);
+  const _idleTooLong = !_lastBusyRun || (Date.now() - _lastBusyRun >= IDLE_FALLBACK_MIN * 60000);
+  if (!_changed && !_idleTooLong) {
+    const _left = Math.max(0, Math.round((IDLE_FALLBACK_MIN * 60000 - (Date.now() - _lastBusyRun)) / 60000));
+    console.log('[sync] 无变动 → 只查了信号（省调用；约 ' + _left + ' 分钟后兜底跑一轮）');
+    return;
+  }
+  _lastBusyRun = Date.now();
+  _lastPollHandled = _pollSeen;
+  _lastCustHandled = _custSeen;
+
   let since = await watermark(), got = 0, maxU = since;
   for (let i = 0; i < 40; i++) {                               // 一次最多 4 万条，防跑太久
     const r = await callCloud('custSync', { since, limit: 1000 });
@@ -195,8 +216,7 @@ async function round() {
   }
   if (got) { await setWatermark(maxU); console.log(`[sync] 补了 ${got} 条，水位 → ${new Date(maxU).toLocaleString()}`); }
   // ⭐ 顺带同步批次成员（失败不影响上面 customers 的结果，下轮再试）
-  // ⭐ 2026-10-12 省调用量 ③：先把云端「变化时间戳」同步进 PG（后台据此决定"要不要叫云端"，0 成本）
-  try { await syncPollDirty(); } catch (e) { console.error('[sync] pollDirty 失败（下轮再试）:', e.message); }
+  // ⚠️ 2026-10-14：`syncPollDirty()` 已提到 round() 开头（信号判断要用它），这里**不再重复调**。
   try { await syncBatchMembers(); } catch (e) { console.error('[sync] batch_members 同步失败（下轮再试）:', e.message); }
   // ⭐⭐ 2026-10-10 指针表模式第 5 步：批次卡 / 任务 / 已拜访客户也进 PG ——
   //    后台「📦 批次管理」从此**彻底不再问云开发**（批次页每个数字 = 一条 SQL）。
@@ -228,6 +248,20 @@ const BM_FALLBACK_MIN = Number(CFG.batchMemberFullSyncMinutes) || 360;
 let _lastBmFullSync = 0;
 let _bmDirtySeen = 0;          // 本轮 pollDirty 拿到的批次变动信号（由 syncPollDirty 赋值）
 let _lastBmDirtyHandled = 0;   // 上次"因信号"做过全量的信号值（进程重启归 0 → 触发一次全量，安全）
+
+// ⭐⭐ 2026-10-14 老板定（方案 D：**有变动才跑**）：round() 用它判断"这轮要不要跑全套"
+//   `pollDirty` 一次调用带回云端全部变动时间戳（pollDirtyAt / custDirtyAt / batchDirtyAt）。
+//   三个都没变 → 整轮只花这 1 次调用，跳过后面 6 个同步（原来**每轮无条件全跑**，约 7 次/轮 → 约 2100 次/天）。
+let _pollSeen = 0;             // 本轮 pollDirtyAt（拜访/坐标报错/注册的变动戳）
+let _custSeen = 0;             // 本轮 custDirtyAt（客户建档/更正的变动戳）
+let _lastPollHandled = 0;      // 上次"跑过全套"时的 pollDirtyAt
+let _lastCustHandled = 0;      // 上次"跑过全套"时的 custDirtyAt
+let _lastBusyRun = 0;          // 上次真正跑全套的时刻（0 = 还没跑过 → 首轮必跑）
+// ⚠️ 兜底：即使信号一直没变，也每 IDLE_FALLBACK_MIN 分钟无条件跑一轮 —— 防某处漏写信号造成"静默不更新"。
+//   ⭐ 定 30 分钟：除了"信号覆盖不到的动作"（删客户 / 恢复客户 / 建任务 —— 它们随后会补上写点），
+//      其余情况下一律靠信号即时触发。30 分钟 = 一天最多 48 轮全量，其余轮次只 1 次调用
+//      （估算 2100 次/天 → 约 580 次/天，省 72%；补上写点后还能更省）。
+const IDLE_FALLBACK_MIN = Number(CFG.idleFallbackMinutes) || 30;
 // ⚠️⚠️ 2026-10-14 实测（部署前用探针脚本验过，拦下一次事故）：
 //   `sync_state.watermark` 的列类型是 **bigint**（它一直是给时间戳用的），
 //   **存不了字符串游标**（`batch_members._id` 是 CloudBase 生成的字符串）——
