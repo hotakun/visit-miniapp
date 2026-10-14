@@ -26,6 +26,20 @@ App({
       return;
     }
     wx.cloud.init({ env: CLOUD_ENV, traceUser: true });
+    // ⭐⭐ 2026-10-14：**详情缓存的「版本自愈」** —— 缓存结构一旦改过，旧缓存会让页面显示过期内容
+    //   （本次真实事故：业务员提交拜访后，客户详情页仍拿"提交前"的旧缓存 → 看起来像"拜访记录没写进去"）。
+    //   做法：缓存版本号变了 → 把 `dc:` 开头的键**全部清掉**（只清缓存；不动 user / boss_mode / as_salesman 等身份信息）。
+    //   ⚠️ 以后**改了 detailCache 的存法/字段，就把 DC_VER 改一下**，全体用户的旧缓存自动作废。
+    const DC_VER = '20261014a';
+    try {
+      if (wx.getStorageSync('dc_ver') !== DC_VER) {
+        const info = wx.getStorageInfoSync();
+        (info.keys || []).forEach(k => {
+          if (String(k).indexOf('dc:') === 0) { try { wx.removeStorageSync(k); } catch (e) { /* 静默 */ } }
+        });
+        wx.setStorageSync('dc_ver', DC_VER);
+      }
+    } catch (e) { /* 静默：清缓存失败不影响启动 */ }
     const u = wx.getStorageSync('user');
     if (u) this.globalData.user = u;
     // 老板模式持久恢复（2026-09-09 §7.13：管理员微信点「进入老板模式」后保持）
