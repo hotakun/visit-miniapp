@@ -17,7 +17,16 @@ const CUSTOMERS = [
   { name: '小李面馆', customerType: 'new', address: '永康市古山镇飞腾路与金都路交叉口', lat: 28.9255, lng: 120.1555, phone: '', contactName: '', mallJoinedAt: null, joinedVia: null, remark: '业务员扫街发现 · 待确认', coord_status: 'ok' }
 ];
 
-exports.main = async () => {
+// ⭐⭐ 2026-10-15 加固（依《全项目审查》S02）：**`seed` 是"演示数据"一次性脚本，原来也不鉴权** ——
+//   口径与 `init` 完全一致（见 init 里的说明）：**带 OPENID 一律不认**（那是小程序/客户端来的），
+//   想用开发者工具跑就给 `SEED_GUARD`（环境变量）配上并传 `guard`。
+exports.main = async (event) => {
+  const { OPENID } = cloud.getWXContext();
+  const guard = process.env.SEED_GUARD || '';
+  const okGuard = !!guard && !!event && event.guard === guard;
+  if (OPENID && !okGuard) {
+    return { ok: false, code: 'NO_AUTH', msg: '无权执行 seed（请在控制台/HTTP API 侧运行，或提供运维口令）' };
+  }
   const log = [];
   const custIds = [];
 

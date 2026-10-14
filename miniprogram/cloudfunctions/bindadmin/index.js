@@ -3,7 +3,11 @@
 //      运行一次 → 当前微信 OPENID 即绑定到超级管理员「卿燕」账号（幂等，可重复执行）
 // 说明：能以管理者身份操作云开发控制台即是身份验证，开通码仅存于本地资料文件。
 const cloud = require('wx-server-sdk');
-const BIND_CODE = 'JuhuoAdmin2026'; // ⚠️ 上线前建议更换并同步更新本文件
+// ⭐ 2026-10-15 加固（依《全项目审查》S02）：**开通码优先从环境变量读** ——
+//   这样"换码不必改代码"、代码里也不再唯一持有它（配了 `BINDADMIN_CODE` 就用它，没配退回下面这个兜底）。
+//   ⚠️ 这个函数**必须允许带 OPENID**（它要绑的就是"当前这个微信"），所以只能靠开通码 + "绑过就不让换"来保护。
+const BIND_CODE_DEFAULT = 'JuhuoAdmin2026'; // ⚠️ 建议换成环境变量 BINDADMIN_CODE 并改掉这里的兜底
+const BIND_CODE = process.env.BINDADMIN_CODE || BIND_CODE_DEFAULT;
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();

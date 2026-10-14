@@ -37,7 +37,21 @@ async function ensureCollection(name) {
   }
 }
 
-exports.main = async () => {
+// ⭐⭐ 2026-10-15 加固（依《全项目审查》S02）：**`init` 原来不做任何鉴权** —— 任何能调云函数的微信用户
+//   都能让它"建集合 + 预置超管/业务员"（虽然幂等、不会重置已有账号，但"能写业务库的入口"不该敞开）。
+//   门禁（满足任一条即放行，两条都属于"运维侧"）：
+//     ① **传对运维口令** —— 环境变量 `INIT_GUARD`（可选，想更严就配一个）；
+//     ② **没有 OPENID** —— 平台定时器与 HTTP API（如 `node admin/tools/run_adminapi.js`）都没有，
+//        而**小程序/客户端调用一定有 OPENID**（微信侧决定，伪造不了）。
+//   ⚠️ 没配 `INIT_GUARD` 也照样能用：用 HTTP API 跑即可（`run_adminapi.js` 那套）。
+//      ⚠️ 但**开发者工具里"云端测试"会带 OPENID** → 那种跑法在没配口令时会被拒（这是有意的）。
+exports.main = async (event) => {
+  const { OPENID } = cloud.getWXContext();
+  const guard = process.env.INIT_GUARD || '';
+  const okGuard = !!guard && !!event && event.guard === guard;
+  if (OPENID && !okGuard) {
+    return { ok: false, code: 'NO_AUTH', msg: '无权执行 init（请在控制台/HTTP API 侧运行，或提供运维口令）' };
+  }
   const log = [];
 
   // 1. 建集合

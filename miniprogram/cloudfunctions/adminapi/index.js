@@ -616,7 +616,26 @@ exports.main = async (event) => {
   //    与 config.json 声明的触发器名一致」。
   // 🔴 部署配套：**必须去云开发控制台核对触发器名就叫 TICK_TRIGGER_NAME**，否则定时任务会静默停摆
   //    （它负责拜访超时自动提交/取消、过期任务补记，坏了没有任何人会察觉）。
+  // ⭐⭐ 2026-10-15 加固（依《全项目审查》S02）：**定时入口不能只靠"请求外形"** ——
+  //   `event.Type` / `event.TriggerName` 都是**调用方能自己传的**（`wx.cloud.callFunction` 的 data 就是 event），
+  //   而 `TICK_TRIGGER_NAME` 这个触发名就明写在本文件里 → 小程序用户完全可以伪装成"定时器"触发这个写操作。
+  //   真正的区分：**平台定时器与 HTTP API 调用都没有 OPENID，而小程序/客户端调用一定有**（由微信侧决定，客户端伪造不了）。
+  //   → 加一条硬判据：**带 OPENID 一律不认**（保留原有 Type/TriggerName 判定，双保险）。
+  //   ⚠️ `visitTimeoutTick` 本身幂等、且只处理"真超时"的（`autoCancelAt <= now`），所以即便被触发后果也有限 —— 但口子要堵。
   if (event && event.Type === 'Timer' && event.TriggerName === TICK_TRIGGER_NAME) {
+    const { OPENID: _cronOid } = cloud.getWXContext();
+    if (_cronOid) {
+      // ⚠️⚠️ 这里**刻意只记录、不拒绝** —— 原因如下（2026-10-15 决策）：
+      //   加固设想是"带 OPENID = 客户端伪造 → 拒绝"，但它**依赖一个我未实测的假设**：
+      //   "**平台定时器调用不带 OPENID**"。万一它其实带，拒绝就会让本触发器**静默停摆**
+      //   （它负责拜访超时自动提交/取消与过期任务补记，停了没有任何别的提示）。
+      //   而眼下"被伪造触发"的后果几乎为零（`visitTimeoutTick` 幂等、只处理 `autoCancelAt <= now` 的）。
+      //   **两相权衡：先观测一轮，确认判据成立再放开拒绝。**
+      //   → 部署后看云开发控制台 **adminapi 的调用日志**：
+      //     · 若**出现下面这行 warn** → 说明"真定时器带 OPENID"，判据不成立，**保持现状（放行）**；
+      //     · 若**始终没有这行**（只有伪造时才会有）→ 判据成立，下一轮可把这里改成 `return { ok:false, code:'NO_AUTH' }`。
+      console.warn('[cron] 定时触发带了 OPENID（观测用；当前仍放行）:', event.TriggerName);
+    }
     await visitTimeoutTick();
     return { ok: true, cron: true };
   }
