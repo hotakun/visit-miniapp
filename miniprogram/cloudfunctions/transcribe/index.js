@@ -278,21 +278,33 @@ async function pollMine(me, isBoss, e) {
   if (!cfg.enabled || !cfg.secretId || !cfg.secretKey) return { ok: false, code: 'ASR_OFF', msg: '语音转文字未启用' };
 
   let cond = { status: _.in(['processing', 'pending']) };
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》S04）：**指定 id / visitId 时也必须加归属条件** ——
+  //   原来这两个分支**不带 `salesmanId`**（只有"默认分支"带）→ 业务员只要知道别人的
+  //   transcriptId 或 visitId，就能**读到别人的转写文本**（那是现场录音的内容，属他人数据）。
+  //   老板（isBoss）仍然可以看全部（与 `list` 的口径一致）。
   if (Array.isArray(e.transcriptIds) && e.transcriptIds.length) {
     cond = { _id: _.in(e.transcriptIds.map(String)) };
+    if (!isBoss) cond.salesmanId = me._id;
   } else if (e.visitId) {
     cond.visitId = String(e.visitId);
+    if (!isBoss) cond.salesmanId = me._id;
   } else if (!isBoss) {
     cond.salesmanId = me._id;
   }
   const r = await db.collection('transcripts').where(cond).limit(20).get();
   const list = r.data || [];
   for (const t of list) await settleOne(t, cfg);
-  const after = await db.collection('transcripts').where(
-    Array.isArray(e.transcriptIds) && e.transcriptIds.length
-      ? { _id: _.in(e.transcriptIds.map(String)) }
-      : (e.visitId ? { visitId: String(e.visitId) } : { _id: _.in(list.map(x => x._id)) })
-  ).limit(50).field({ segIndex: true, status: true, text: true, duration: true, errorMsg: true, asrTaskId: true, doneAt: true }).get();
+  // ⚠️ 返回"这批的最终状态"时**同样要带归属条件** —— 这是**独立的一次查询**，
+  //    若不带上，"指定 id"那条路会把**别人的记录**原样返回给调用方（查询拦住了、返回又漏出去）。
+  const afterCond = Array.isArray(e.transcriptIds) && e.transcriptIds.length
+    ? { _id: _.in(e.transcriptIds.map(String)) }
+    : (e.visitId ? { visitId: String(e.visitId) } : { _id: _.in(list.map(x => x._id)) });
+  // ⚠️ 只有"指定 id / visitId"这两条路要补归属条件；"默认分支"用的是 `list`，它本身已按本人过滤过。
+  if (!isBoss && ((Array.isArray(e.transcriptIds) && e.transcriptIds.length) || e.visitId)) {
+    afterCond.salesmanId = me._id;
+  }
+  const after = await db.collection('transcripts').where(afterCond)
+    .limit(50).field({ segIndex: true, status: true, text: true, duration: true, errorMsg: true, asrTaskId: true, doneAt: true }).get();
   return { ok: true, list: after.data || [] };
 }
 
@@ -315,6 +327,12 @@ async function pollAll() {
 
 // 查询单条任务并落库；返回最终状态
 async function settleOne(t, cfg) {
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》S04）：**已出结果的记录一律幂等返回，绝不改写** ——
+  //   原来下面那段"超过 30 分钟判失败"是**无条件**执行的，而 `pollMine` 在"指定 transcriptIds"
+  //   那条路上**不带 status 条件**（能查到已完成的记录）→ 于是"反复查一条 done 的记录、跨过 30 分钟"
+  //   会把它**从 done 改成 failed**（报告已用内存桩复现；业务员看到的就是"转好了又变失败"）。
+  //   ⚠️ 终态（done / failed）本来就不该被"超时收割"碰到。
+  if (t.status === 'done' || t.status === 'failed') return t.status;
   // 2026-09-11 保险（老板拍板）：提交超过 30 分钟仍未出结果 → 直接判失败，防止僵尸任务被无限轮询（后台可手动重转）
   if (t.requestedAt && Date.now() - Number(t.requestedAt) > 30 * 60 * 1000) {
     await db.collection('transcripts').doc(t._id).update({
