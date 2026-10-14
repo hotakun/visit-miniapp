@@ -18,6 +18,22 @@
    → 再把 `clearStart()` / `loc.beacon()` 各自包 try/catch → 最后置 `this._submitted = true`，
    并在 `confirmSubmit()` 开头 `if (this.submitting || this._submitted) return;` **防同页重复提交**。
    ⚠️ 编辑模式（`_editId`）走 `_submitEdit()`，**不受影响**。⚠️ **改的是手机端 → 必须重新上传体验版才生效**。
+5. ⭐⭐ **缓存失效「不再靠人记」（2026-10-14 事故根治 —— 同一天第二起，老板原话「几乎造成大错，业务员积极性深受打击」）**：
+   老板报障「**提交拜访后，客户详情页看不到刚写的拜访记录**（几家都一样）」——**数据其实全在云端**，
+   是**详情页拿了「提交前那一刻」的旧缓存**。根因：详情页自 2026-10-15 起"当天有缓存就直接渲染"，
+   而"让缓存过期"的开关 `custNeedRefresh` **只在 `_submitEdit()`（编辑已提交记录）里置过** ——
+   **正常提交那条主路都漏了**（连同"取消拜访""更正信息"等，实测**漏了 5 处**）。
+   **根治（改法）**：不在各调用点补，而是**收到唯一入口** —— `utils/api.js` 的 `call()` 里统一判断：
+   只要调用成功、且是「改客户/拜访」的动作，就自动置 `custNeedRefresh`
+   （白名单 `CUST_WRITE`：`visits` = submit/cancel/editSubmitted/endMyOngoing/deleteVisit；
+   `tasks` = saveCustPhoto/correctCustomer/newShopSubmit/updateNewShop；`coordfix` = `*`）。
+   ⭐ **配套对账（体检第 14 项）**：① **不许绕过 `api.js`** 直接 `wx.cloud.callFunction`
+   （绕过 = 缓存失效逻辑被跳过；已登记放行 `app.js` 两处只读取版本/审核状态）；
+   ② `CUST_WRITE` 里的 action **云端必须存在**（写错名 = 该置标记时不置）。**已双向验证**（改坏必报错）。
+   ⚠️ **以后新增"会写客户/拜访"的 action，必须加进 `CUST_WRITE`**（否则对账盯不住）。
+6. ⚠️ **待上传体验版**：以上 4/5 都是**手机端**改动（`visit.js` / `utils/api.js` / `app.js`）→ **必须重新上传体验版**。
+   `app.js` 另加了「**详情缓存版本自愈**」`DC_VER`：版本一变就清掉所有 `dc:` 键，
+   **全体用户的旧缓存一次作废**（以后改了 `detailCache` 的存法/字段，记得改 `DC_VER`）。
 
 ## 📚 详细内容都在 docs/（本文只留「命令 + 硬规矩 + 索引」）
 

@@ -574,6 +574,66 @@ for (const abs of files) {
 
 console.log(`检查了：JS ${checked.js} 个 · JSON ${checked.json} 个 · WXML ${checked.wxml} 个 · 行尾 ${checked.eol} 个 · admin.html 内嵌 JS ${checked.htmlJs} 段`);
 checkActionsWhitelist();
+// ===== 第 14 项：缓存失效「写类调用」对账（2026-10-14 事故后新增）=====
+//   事故：客户详情页有"当天缓存"，而"提交拜访"没让缓存过期 → 返回详情页看不到刚写的记录（几家都一样）。
+//   根治：把"改了客户/拜访 → 置 custNeedRefresh"**收到 `utils/api.js` 唯一入口**里统一判断，
+//        不再靠"每个调用点自己记得"（原来就是靠记，实测漏了 5 处，连"提交"主路都漏）。
+//   于是有两条必须盯死：
+//     ① **不许绕过 api.js** 直接 `wx.cloud.callFunction`（绕过 = 那套缓存失效逻辑被跳过）
+//     ② api.js 白名单里的 action，**云端必须真的存在**（写错名 = 该置标记时静默不置）
+const CALLFN_EXTRA = ['miniprogram/miniprogram/app.js'];   // 直连只读取版本/审核状态（已登记放行）
+function checkCustWriteWatch() {
+  const apiAbs = path.join(ROOT, 'miniprogram/miniprogram/utils/api.js');
+  if (!fs.existsSync(apiAbs)) { fails.push('写类调用对账：缺 utils/api.js → 检查无法执行（按失败处理）'); return; }
+  const api = fs.readFileSync(apiAbs, 'utf8');
+  let bad = 0;
+
+  // ① 绕过唯一入口的地方
+  const hits = [];
+  const walk = d => {
+    fs.readdirSync(d, { withFileTypes: true }).forEach(e => {
+      const abs = path.join(d, e.name);
+      if (e.isDirectory()) { walk(abs); return; }
+      if (!/\.js$/.test(e.name)) return;
+      const rel = path.relative(ROOT, abs).replace(/\\/g, '/');
+      if (rel === 'miniprogram/miniprogram/utils/api.js') return;
+      if (CALLFN_EXTRA.indexOf(rel) >= 0) return;
+      if (fs.readFileSync(abs, 'utf8').indexOf('wx.cloud.callFunction') >= 0) hits.push(rel);
+    });
+  };
+  walk(path.join(ROOT, 'miniprogram/miniprogram'));
+  if (hits.length) {
+    bad++;
+    fails.push(`写类调用对账：这些文件**绕过了 utils/api.js** 直接 wx.cloud.callFunction → ${hits.join(', ')}\n   ⚠️ 绕过去 = "改客户/拜访后置 custNeedRefresh"那套逻辑被跳过 → 页面显示旧缓存（2026-10-14 事故）\n   修法：改用 api.call()；确实只读的，登记进 check.js 的 CALLFN_EXTRA`);
+  }
+
+  // ② 白名单里的 action 云端必须存在
+  const blk = (api.match(/const CUST_WRITE = \{([\s\S]*?)\n\s*\};/) || [])[1] || '';
+  if (!blk) { fails.push('写类调用对账：api.js 里找不到 CUST_WRITE 表 → 检查无法执行（按失败处理）'); return; }
+  const pairs = [];
+  blk.replace(/(\w+)\s*:\s*\[([^\]]*)\]/g, (m, fn, inner) => {
+    (inner.match(/'([^']+)'/g) || []).map(s => s.replace(/'/g, '')).forEach(a => pairs.push([fn, a]));
+    return m;
+  });
+  if (!pairs.length) { fails.push('写类调用对账：CUST_WRITE 解析不到条目'); return; }
+  const fns = {};
+  ['visits', 'tasks'].forEach(fn => {
+    const p = path.join(ROOT, `miniprogram/cloudfunctions/${fn}/index.js`);
+    fns[fn] = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+  });
+  const miss = [];
+  pairs.forEach(([fn, act]) => {
+    if (act === '*') return;
+    if (!fns[fn]) { miss.push(fn + '.' + act + '(云函数文件缺失)'); return; }
+    if (fns[fn].indexOf(`action === '${act}'`) < 0) miss.push(fn + '.' + act);
+  });
+  if (miss.length) {
+    bad++;
+    fails.push(`写类调用对账：api.js 白名单里的 action 云端不存在 → ${miss.join(', ')}\n   ⚠️ 写错名 = 该置标记时不置 = 页面显示旧缓存`);
+  }
+  if (!bad) console.log('  ✔ 写类调用对账：唯一入口没被绕过 · 白名单 action 云端都在（缓存失效不再靠人记）');
+}
+
 checkResultNames();
 checkAdminActionCalls();
 checkPagePaths();
@@ -581,6 +641,7 @@ checkCompliance();
 checkCacheFields();
 checkMallFields();
 checkMallCodeRule();
+checkCustWriteWatch();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
@@ -592,5 +653,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段 / 商城字段）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段 / 商城字段 / 剥编号 / 写类调用对账）');
 process.exit(0);

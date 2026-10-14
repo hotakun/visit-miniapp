@@ -29,7 +29,32 @@ function call(name, data = {}) {
     wx.cloud.callFunction({
       name,
       data,
-      success: (r) => resolve(r.result),
+      success: (r) => {
+        // ⭐⭐ 2026-10-14 事故根治（老板报障「提交拜访后，客户详情页看不到刚写的记录」——几家都一样）：
+        //   客户详情页自 2026-10-15 起"当天有缓存就直接渲染"（秒开、零请求）→
+        //   **任何"改了客户档案 / 拜访记录"的调用，都必须让这份缓存过期**，
+        //   否则返回详情页看到的还是"改之前那一刻"的旧数据 → 看起来就像"记录没写进去"。
+        //   ⚠️ 原来靠"每个调用点自己记得置 `custNeedRefresh`"→ 实测**漏了 5 处**，连"提交拜访"那条主路都漏了
+        //      （只有"编辑已提交记录"置过）。所以改到**唯一入口统一判断**，源头治，不靠人记。
+        //   ⚠️ 只在**调用成功**（`result.ok`）时才置 —— 失败了不该让缓存作废。
+        //   ⚠️ 以后新增"会写客户/拜访"的 action，**记得加进下面这两张表**（`admin/tools/check.js` 有对账盯着）。
+        try {
+          const r2 = (r && r.result) || null;
+          if (r2 && r2.ok) {
+            const CUST_WRITE = {
+              visits: ['submit', 'cancel', 'editSubmitted', 'endMyOngoing', 'deleteVisit'],
+              tasks: ['saveCustPhoto', 'correctCustomer', 'newShopSubmit', 'updateNewShop'],
+              coordfix: ['*']   // 坐标报错 / 现场提报：这个云函数整个就是"写客户"的
+            };
+            const acts = CUST_WRITE[name];
+            const act = String((data && data.action) || '');
+            if (acts && (acts.indexOf('*') >= 0 || acts.indexOf(act) >= 0)) {
+              wx.setStorageSync('custNeedRefresh', 1);
+            }
+          }
+        } catch (e) { /* 静默：置标记失败绝不能影响调用本身 */ }
+        resolve(r.result);
+      },
       fail: reject
     });
   });
