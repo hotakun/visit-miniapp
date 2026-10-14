@@ -177,7 +177,7 @@
 
     | 缓存键（`detailCache` / `mapCache`） | 装什么 | 有效期 / 失效方式 | **谁写它 → 必须让它过期** |
     |---|---|---|---|
-    | `dc:custDetail:<登录人>:<客户id>` | 客户详情整块（档案+订单+备注+拜访历史+URL） | 当天；**另有"静默更新"自愈** | ✅ **已统一到 `api.js` 的 `CUST_WRITE`**：`visits` = start/submit/cancel/editSubmitted/endMyOngoing/deleteVisit；`tasks` = saveCustPhoto/correctCustomer/newShopSubmit/updateNewShop；`coordfix` = 全部。⚠️ **新增写类 action 必须加进那张表**（体检第 14 项会盯着"绕过入口"） |
+    | `dc:custDetail:<登录人>:<客户id>` | 客户详情整块（档案+订单+备注+拜访历史+URL） | 当天；**另有"静默更新"自愈** | ✅ **已统一到 `api.js` 的 `CUST_WRITE`**：`visits` = start/submit/cancel/editSubmitted/endMyOngoing/deleteVisit；`tasks` = saveCustPhoto/correctCustomer/newShopSubmit/updateNewShop；`coordfix` = 全部。⚠️ **新增写类 action 必须加进那张表**（体检第 14 项会盯着"绕过入口"）。⚠️⚠️ **另外一条独立的坑（2026-10-14 业务员报障「删了还在」）**：**页面内自己"删完/改完立刻重拉"时，必须先 `this._forceReload = true` 再 `onLoad()`** —— `CUST_WRITE` 置的 `custNeedRefresh` 只管**下次 `onShow`**，管不到"当前这一页当场重拉"（`customer.js` 有 3 处：`delVisit` 删除拜访 / `onCorrectDone` 更正回填 / 删客户照片，**都已补**） |
     | `dc:taskSkeleton:<登录人>:<taskId>` | 任务骨架（任务信息+客户卡片字段） | 当天 | 建/改/派/撤任务 → ⚠️ 目前靠"**重进任务页时 `load()` 拉云端覆盖**"（没有主动作废；超 100 家的大改动要等重进） |
     | `dc:taskVisitState:<登录人>:<taskId>` | 拜访状态（哪家打过勾） | 当天 | ⚠️ **只写不读**（任务页刷新实际走云端 `taskCardStatus`）—— 属**死缓存**，删不删都行 |
     | `dc:homeTasks:<登录人>:boss / :me` | 首页任务卡 | 当天（TTL **2 小时**） | ✅ **2026-10-14 起与客户详情同一套：缓存先渲染 + 静默更新**（`_silentHomeRefresh`：节流 60 秒、没变不 setData）→ **派了任务、下次进首页几秒内就刷新**；审核结果变化另有 `load(true)` 强制绕过 |
