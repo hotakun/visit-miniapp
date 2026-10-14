@@ -298,7 +298,10 @@ const srv = http.createServer(async (req, res) => {
       const since = Date.now() - days * 86400000;
       const r = await q('SELECT id, name, name_raw, phone, address, district, biz_circle, lat, lng, created_at, ctype ' +
         "FROM customers WHERE source = 'field' AND created_at > $1 AND coalesce(deleted,false) = false " +
-        'AND id NOT IN (SELECT id FROM deleted_ids) ' +   // ⭐ 2026-10-12：已删名单也排除（云端同步刻意跳过已删，PG 靠这张名单才知道谁被删了）
+        // ⭐ 2026-10-15（依《全项目审查》D04）：排除名单**加上 tbl 过滤** —— `deleted_ids` 一张表同时存
+        //   客户和拜访的墓碑（有 `tbl` 列），原来不区分表：虽然两边 id 都是随机串、实际不会撞，
+        //   但语义上"用拜访的 id 去排客户的列表"是错的，顺手收紧。
+        "AND id NOT IN (SELECT id FROM deleted_ids WHERE tbl = 'customers') " +
         'ORDER BY created_at DESC LIMIT 500', [since]);
       return out(res, 200, { ok: true, days: days, rows: (r.rows || []), at: Date.now() });
     }

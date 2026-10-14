@@ -1461,7 +1461,11 @@ async function pollDirty(event) {
   //   ⚠️ 只捎**最近 7 天**删的（够用、结果小）；服务器侧写进 `deleted_ids` 表、查询时排除。
   try {
     const since = Date.now() - 7 * 86400000;
-    const d = await db.collection('customers').where({ deleted: true, deletedAt: _.gt(since) }).field({ _id: true }).limit(1000).get();
+    // ⭐ 2026-10-15（依《全项目审查》D04）：上限 1000 → **5000**。
+    //   原来"一次删超过 1000 家"时，多出来的就**进不了名单**（而名单是服务器删 PG 那几行的唯一依据）
+    //   → 那些客户会在 PG/后台**一直留着**。后台删除是"勾选后删"、很难到 5000，
+    //   但这里只是把上限抬高（正常情况结果仍是几十条，响应体没变大），**零成本兜住极端情况**。
+    const d = await db.collection('customers').where({ deleted: true, deletedAt: _.gt(since) }).field({ _id: true }).limit(5000).get();
     out.deletedIds = (d.data || []).map(x => x._id);
   } catch (e) { out.deletedIds = []; }
   // ⭐⭐ 2026-10-15 老板定：**顺路捎带"最近被删掉的拜访 id"**（与客户删除名单同一套路，**零额外云端调用**）——
@@ -1471,7 +1475,8 @@ async function pollDirty(event) {
   //   ⚠️ 同样只捎**最近 7 天**（够用、结果小）；集合可能还不存在 → 静默返回空数组，不影响其它字段。
   try {
     const vSince = Date.now() - 7 * 86400000;
-    const v = await db.collection('visit_deleted').where({ at: _.gt(vSince) }).limit(1000).get();
+    // ⭐ 2026-10-15（依《全项目审查》D04）：同上面客户名单，上限 1000 → 5000（极端批量删除不漏）。
+    const v = await db.collection('visit_deleted').where({ at: _.gt(vSince) }).limit(5000).get();
     out.deletedVisitIds = (v.data || []).map(x => x._id);
   } catch (e) { out.deletedVisitIds = []; }
   return out;
