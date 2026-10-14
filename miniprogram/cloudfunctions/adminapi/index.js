@@ -1512,6 +1512,11 @@ async function autoArchiveExpired(event) {
     await db.collection('tasks').doc(t._id).update({ data: { archivedAt: now, logs } });
     archived++;
   }
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》D02）：**真归档了才报变动信号** ——
+  //   归档后任务从"未结束"变成历史 → PG 的 tasks 表里那条该消失，必须让同步器重跑一次。
+  //   ⚠️ 但**必须在 `archived > 0` 时才算"有变动"**：这个函数每 10 分钟跑一次，
+  //      若无条件写信号，「有变动才跑」就彻底失效了（每 10 分钟都算"有变动"）。
+  if (archived > 0) await touchTaskDirty();
   const tracksCleaned = await cleanExpiredTracks(); // 2026-09-08 M2：轨迹过期清理附带执行
   return { ok: true, archived, cutoff, tracksCleaned };
 }
@@ -1985,6 +1990,10 @@ async function rescheduleTask(event) {
   await db.collection('tasks').doc(taskId).update({
     data: { startDate: start, deadline, logs }
   });
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》D02）：**改期也是"任务变了"，必须报变动信号** ——
+  //   否则服务器同步器那套「有变动才跑」看不到它 → PG 里的任务开始日/截止日**一直是旧的**
+  //   （后台「任务管理」看到的就是过期/错误的日期）。原来 6 个任务写函数里恰好漏了这一个。
+  await touchTaskDirty();
   let notify = null;
   if (t.status === 'published') {
     notify = await sendNotify(t.salesmanId, { name: t.name, taskNo: t.taskNo, salesmanName: t.salesmanName, purpose: t.purpose || 'activate', deadline, startDate: start, days, total: (t.customerIds || []).length, type: 'update' });
@@ -2000,6 +2009,9 @@ async function extendTask(event) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(newDeadline || ''))) return { ok: false, code: 'BAD_ARG', msg: '请选择新截止日期' };
   const logs = withLog(t, { at: Date.now(), by: (event._admin && event._admin.name) || '系统', role: 'admin', type: 'extend', detail: { from: t.deadline || '', to: newDeadline } });
   await db.collection('tasks').doc(taskId).update({ data: { deadline: newDeadline, logs } });
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》D02）：同 rescheduleTask —— **延期必须报变动信号**，
+  //   否则 PG 里那条任务的截止日不更新，后台看到的还是旧截止日。
+  await touchTaskDirty();
   const notify = await sendNotify(t.salesmanId, { name: t.name, taskNo: t.taskNo, salesmanName: t.salesmanName, purpose: t.purpose || 'activate', deadline: newDeadline, startDate: t.startDate, days: t.plannedDays, total: (t.customerIds || []).length, type: 'update' });
   return { ok: true, notify };
 }
@@ -6084,6 +6096,10 @@ async function finishTask(event) {
     finishReason: String(reason || '').slice(0, 200),
     updatedAt: now
   } });
+  // ⭐⭐ 2026-10-15 补（依《全项目审查》D02）：**后台强制结束任务也要报变动信号** ——
+  //   结束后这条任务从"未结束"变"已完成"，而同步器同步 tasks 时**只导未结束的**
+  //   → 不报信号的话，PG 里那条会一直留着（后台「任务管理」仍显示它还在进行中）。
+  await touchTaskDirty();
   return { ok: true, msg: '任务已结束（正在拜访中的那一家的记录保留，业务员仍可提交）' };
 }
 
