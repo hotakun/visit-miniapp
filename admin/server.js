@@ -993,8 +993,26 @@ function writeChangeLog(rec) {
 
   const raw = req.url.split('?')[0]; // 剥掉 query（如 nt-map.js?v=0906 防缓存版本号）
   const file = raw === '/' ? 'admin.html' : (() => { try { return decodeURIComponent(raw.slice(1)); } catch (e) { return raw.slice(1); } })();
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》S05 —— **实测确认是真泄露，不是理论风险**）：
+  //   原来只挡"逃出 admin 目录"（`!safe.startsWith(__dirname)`）→ **等于把整个 admin 目录公开**：
+  //   · `GET /config.json`  → **HTTP 200**，明文返回云开发 `appsecret`、服务号 `mpAppSecret`、`pgApiToken`；
+  //     ⚠️ 拿到 appsecret 就能**冒充后端直接调所有云函数**（含 adminapi 的全部管理动作）。
+  //   · `GET /cache/map-points.json` → **HTTP 200、75MB**，全量客户数据（电话/地址/坐标）被整包下载。
+  //   而 `server.listen(port)` 是**故意不绑 127.0.0.1** 的（文员端在另一台电脑，要靠局域网连这台）——
+  //   所以**不能靠"没人访问"，只能靠白名单**：只放行"界面真正会请求的那几个"。
   const safe = path.normalize(path.join(__dirname, file));
-  if (!safe.startsWith(__dirname)) { res.writeHead(403); res.end(); return; }
+  // ① 先挡目录穿越（用路径语义判断，不用字符串前缀 —— 前缀法会被 "adminXXX" 这类绕过）
+  const rel = path.relative(__dirname, safe).replace(/\\/g, '/');
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) { res.writeHead(403); res.end('Forbidden'); return; }
+  // ② 再走白名单：页面本体 / 自绘地图 / 地图缓存 SW / 根目录的图片图标 / media（店铺照片）/ voice（语音缓存）
+  //   ⚠️ 以后新增"界面要直接读的本地文件"（如再拆一个 JS），**必须加到这里**，否则会 403。
+  //   ⚠️ `sw-map-cache.js` 是页面上用 `serviceWorker.register('/sw-map-cache.js')` 注册的
+  //      （见 admin.html 的「地图缓存」那段）—— 漏了它会让 SW 注册失败、地图缓存退化成"每次都联网"。
+  const _okStatic = (r) =>
+    r === 'admin.html' || r === 'nt-map.js' || r === 'sw-map-cache.js' ||
+    /^[\w.-]+\.(png|jpg|jpeg|gif|webp|svg|ico)$/i.test(r) ||
+    r.startsWith('media/') || r.startsWith('voice/');
+  if (!_okStatic(rel)) { res.writeHead(403); res.end('Forbidden'); return; }
   fs.readFile(safe, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not Found'); return; }
     const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.mp3': 'audio/mpeg', '.wav': 'audio/wav' }[path.extname(safe)] || 'application/octet-stream';
