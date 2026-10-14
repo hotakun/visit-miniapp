@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
+const $ = db.command.aggregate;   // ⭐ 2026-10-15：聚合（算累计单数/金额时**只回数字、不拉数据**）
 
 // ===== ⭐ 2026-09-29 新增：静默吞错的"可见化"（高危1 修复，勘察报告 §F1）=====
 //   背景：全项目曾有 22 处 `.catch(() => 默认值)` 既不打日志也不抛错 ——
@@ -106,6 +107,8 @@ exports.main = async (event) => {
 
   if (action === 'list') return await list(salesmanId, isBoss);
   if (action === 'detail') return await detail(salesmanId, taskId, isBoss);
+  // ⭐ 2026-10-15：**只回卡片状态**的轻接口（任务详情页刷新用它 —— 不查客户档案、不拉大字段）
+  if (action === 'taskCardStatus') return await taskCardStatus(salesmanId, taskId, isBoss);
   if (action === 'mapData') return await mapData(salesmanId, taskId, isBoss); // 2026-09-09 提速 B：地图轻量接口
   if (action === 'finish') return await finish(salesmanId, taskId, meDoc, isBoss);
   if (action === 'subStatus') return await subStatus(salesmanId, isBoss);
@@ -1178,6 +1181,21 @@ async function countVisitedCustomers(taskId) {
 }
 
 // 2026-09-09 提速（C 方案）：每客户最新一条已完成拜访记录（分页取全，先到先占）
+// ⭐ 2026-10-15 老板定「进任务只拉卡片要的」：按 `_id` 批量取文档 ——
+//   ① **分批**（`_.in(ids)` 一次能给的 id 有限，任务客户多时会"取不全"，老板要我顺手修）；
+//   ② **只取指定字段**（原来读客户整篇文档、只在返回时才裁 —— 网络省了、读库没省）。
+async function multiIn(coll, ids, field) {
+  const out = [];
+  const CH = 100;
+  for (let i = 0; i < ids.length; i += CH) {
+    let q = db.collection(coll).where({ _id: _.in(ids.slice(i, i + CH)) });
+    if (field) q = q.field(field);
+    const r = await q.get().catch(silentCatch('tasks·multiIn', { data: [] }));
+    out.push(...(r.data || []));
+  }
+  return out;
+}
+
 async function lastVisitMap(taskId, ids) {
   const lastMap = {};
   if (!ids || !ids.length) return lastMap;
@@ -1186,6 +1204,10 @@ async function lastVisitMap(taskId, ids) {
   while (true) {
     const r = await db.collection('visits')
       .where({ taskId, customerId: _.in(ids), status: _.in(['normal', 'pending_review']) })
+      // ⭐ 2026-10-15：**只取这几个字段** —— 原来拉的是整篇拜访文档（含 photos/audios/samples/remark 这些大字段），
+      //   而这里只用 `customerId`（归组）+ `result`/`visitedAt`/`salesmanName`（卡片上要显示）。
+      //   ⚠️ `salesmanName` 不能漏 —— `detail` 的 `lastVisit.salesmanName` 用它。
+      .field({ customerId: true, result: true, visitedAt: true, salesmanName: true, createdAt: true })
       .orderBy('createdAt', 'desc')
       .skip(skip).limit(PAGE).get();
     r.data.forEach(v => { if (!lastMap[v.customerId]) lastMap[v.customerId] = v; });
@@ -1238,6 +1260,46 @@ async function loadSettings() {
   };
 }
 
+// ⭐⭐ 2026-10-15 老板定：「进任务只用拉取卡片上显示的状态就行了，点击进入客户详情时候才拉取一下」——
+//   任务详情页「从拜访页返回」等刷新场景改用这个：**不查客户档案**（原来那块最大 —— 读的是每家客户的整篇文档），
+//   只回卡片上要的"这家打过勾没 / 什么结果 / 拜访中 / 坐标待审"。
+//   ⚠️ 判定口径**与 `detail` 逐字一致**（`visitedToday: !!last`、`lastClosed`/`lastNoNeed` 按"包含"判定），
+//      别自己另立一套 —— 两处不一致 = 同一个界面两个说法。
+async function taskCardStatus(salesmanId, taskId, isBoss) {
+  const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+  const t = tRes && tRes.data;
+  if (!t || (t.salesmanId !== salesmanId && !isBoss)) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  const ids = t.customerIds || [];
+  if (!ids.length) return { ok: true, at: Date.now(), states: {} };
+  const [lastMap, ongP, fixP] = await Promise.all([
+    lastVisitMap(taskId, ids),
+    db.collection('visits')
+      .where({ taskId, customerId: _.in(ids), status: 'ongoing', visitedAt: todayStr() })
+      .field({ customerId: true }).limit(100).get().catch(silentCatch('tasks·cardStatus', { data: [] })),
+    db.collection('coord_fix_requests')
+      .where({ customerId: _.in(ids), status: 'pending' })
+      .field({ customerId: true }).limit(100).get().catch(silentCatch('tasks·cardStatus', { data: [] }))
+  ]);
+  const ongSet = new Set();
+  (ongP.data || []).forEach(v => ongSet.add(v.customerId));
+  const fixSet = {};
+  (fixP.data || []).forEach(f => { fixSet[f.customerId] = true; });
+  const states = {};
+  ids.forEach(id => {
+    const last = lastMap[id] || null;
+    states[id] = {
+      visitedToday: !!last,
+      lastResult: (last && last.result) || '',
+      lastClosed: !!(last && last.result && String(last.result).indexOf('闭店') >= 0),
+      lastNoNeed: !!(last && last.result && String(last.result).indexOf('无需拜访') >= 0),
+      visitOngoing: ongSet.has(id),
+      coordFixPending: !!fixSet[id],
+      lastVisit: last ? { visitedAt: last.visitedAt, result: last.result, salesmanName: last.salesmanName } : null
+    };
+  });
+  return { ok: true, at: Date.now(), states: states };
+}
+
 async function detail(salesmanId, taskId, isBoss) {
   const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const t = tRes && tRes.data;
@@ -1246,8 +1308,16 @@ async function detail(salesmanId, taskId, isBoss) {
   // 任务内客户（保持任务内排列顺序：有 dayPlan 按计划顺序，否则按 customerIds 原序）
   const ids = t.customerIds || [];
   // 2026-09-09 提速（C 方案）：客户/拜访状态/拜访中/坐标审核/系统配置 五路并行（原 10+ 次串行 await）
-  const [cRes, lastMap, ongP, fixP, cfgP] = await Promise.all([
-    ids.length ? db.collection('customers').where({ _id: _.in(ids) }).get() : Promise.resolve({ data: [] }),
+  const [cRows, lastMap, ongP, fixP, cfgP] = await Promise.all([
+    // ⭐ 2026-10-15 老板定「进任务只拉卡片上显示的状态/字段」：
+    //   ① **只取卡片要用的字段**（原来 `where({_id:_.in(ids)}).get()` 读的是**客户整篇文档**，
+    //      返回给前端时才裁 —— 结果是"网络省了、读库没省"，日志里那些"数据库请求"就是这么来的）；
+    //   ② **分批**（`_.in(ids)` 一次能给的 id 有限 → 任务客户超过 100 家会取不全）。
+    multiIn('customers', ids, {
+      name: true, address: true, lat: true, lng: true,
+      phone: true, phone2: true, customerType: true, remark: true,
+      mallKey: true, mallJoinedAt: true
+    }),
     lastVisitMap(taskId, ids),
     ids.length ? db.collection('visits')
       .where({ taskId, customerId: _.in(ids), status: 'ongoing', visitedAt: todayStr() })
@@ -1258,7 +1328,7 @@ async function detail(salesmanId, taskId, isBoss) {
     loadSettings()
   ]);
   const map = {};
-  cRes.data.forEach(c => { map[c._id] = c; });
+  cRows.forEach(c => { map[c._id] = c; });
   const customers = ids.filter(id => map[id]).map(id => map[id]);
   const ongSet = new Set();
   ongP.data.forEach(v => ongSet.add(v.customerId));
@@ -2128,12 +2198,31 @@ async function custDetail(salesmanId, event, isBoss) {
   const c = cDoc.data;
   const code = c.mallCode || '';
 
-  // —— ① 订单：**全部拉下来**（"累计 N 单 / 金额合计"要真数；云开发单页上限 1000，分页取）——
+  // —— ① 订单：⭐ 2026-10-15 老板定「订单每天一次、看缓存」——**不再为了算合计把全部订单拉下来**：
+  //   ① 界面只要**最近 20 单** → 直接 `orderBy(orderedAt desc).limit(20)`（原来 `fetchAllPaged` 全量分页，
+  //      会随订单历史越攒越多轮 —— 正是老板说的"将来量越来越大"那根）；
+  //   ② "累计 N 单 / 金额合计"改用**聚合**（只回两个数字、不拉数据）。
   let orders = [];
+  let orderTotal = 0, orderAmountSum = 0;
   if (code) {
-    orders = await fetchAllPaged('orders', { customerCode: code },
-      { orderNo: true, orderedAt: true, actualAmount: true, orderStatus: true, payMethod: true });
-    orders.sort((a, b) => String(b.orderedAt || '').localeCompare(String(a.orderedAt || '')));
+    orders = await db.collection('orders')
+      .where({ customerCode: code })
+      .field({ orderNo: true, orderedAt: true, actualAmount: true, orderStatus: true, payMethod: true })
+      .orderBy('orderedAt', 'desc').limit(20)
+      .get().then(r => (r.data || [])).catch(silentCatch('tasks·custDetail·orders', []));
+    try {
+      const agg = await db.collection('orders').aggregate()
+        .match({ customerCode: code })
+        .group({ _id: null, n: $.sum(1), amt: $.sum('$actualAmount') })
+        .end();
+      const row = (agg.list && agg.list[0]) || null;
+      if (row) { orderTotal = Number(row.n) || 0; orderAmountSum = Number(row.amt) || 0; }
+    } catch (e) {
+      // 聚合不可用 → 保守回落（至少把已拉的这 20 单算上，不让界面显示 0）
+      orderTotal = orders.length;
+      orderAmountSum = orders.reduce((a, o) => a + (Number(o.actualAmount) || 0), 0);
+      console.error('[custDetail] 订单聚合失败，已回落：', e && e.message);
+    }
   }
 
   // —— ② 明细：只查**最近 20 单**（与后台口径一致；上百单的明细全拉会拖慢甚至超时）——
@@ -2197,9 +2286,13 @@ async function custDetail(salesmanId, event, isBoss) {
     .where({ customerId, status: 'ongoing' }).limit(1).get().catch(silentCatch('tasks·for', { data: [] }));
   const visitOngoing = !!(ongRes.data && ongRes.data.length);
 
-  // —— ④ 管理员备注（新 → 旧）——
-  const rmk = await fetchAllPaged('customer_remarks', { customerId }, {});
-  rmk.sort((a, b) => (b.at || 0) - (a.at || 0));
+  // —— ④ 管理员备注（新 → 旧）⭐ 2026-10-15：**只取最近 30 条** ——
+  //   界面本来就只显示 30 条（`slice(0,30)`），原来却用 `fetchAllPaged` 把**全部备注**拉下来再裁，
+  //   备注攒多了就是纯浪费（老板「看订单/信息就看缓存、别每次全量」那条思路的同一处）。
+  const rmk = await db.collection('customer_remarks')
+    .where({ customerId })
+    .orderBy('at', 'desc').limit(30)
+    .get().then(r => (r.data || [])).catch(silentCatch('tasks·custDetail·remarks', []));
 
   // —— ⑤ 现场提报（待审核：招牌菜 / 设施 / 团购外卖）—— 手机端在对应位置显示「（待审核）」（修正 008）——
   const fr = await db.collection('coord_fix_requests')
@@ -2273,8 +2366,9 @@ async function custDetail(salesmanId, event, isBoss) {
       });
       return by;
     })(),
-    orderTotal: orders.length,
-    orderAmountSum: orders.reduce((a, o) => a + (Number(o.actualAmount) || 0), 0),
+    // ⭐ 2026-10-15：这两个值现在来自上面的**聚合查询**（不再靠"把全部订单拉下来再 reduce"）
+    orderTotal: orderTotal,
+    orderAmountSum: orderAmountSum,
     topGoods,
     visits,
     remarks: rmk.slice(0, 30).map(r => ({ text: r.text || '', at: r.at || 0, by: r.by || '' }))

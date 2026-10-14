@@ -1423,7 +1423,7 @@ async function touchCustDirty() {
 }
 
 async function pollDirty(event) {
-  const out = { ok: true, at: Date.now(), pollDirtyAt: 0, custDirtyAt: 0, batchDirtyAt: 0, taskDirtyAt: 0 };
+  const out = { ok: true, at: Date.now(), pollDirtyAt: 0, custDirtyAt: 0, batchDirtyAt: 0, taskDirtyAt: 0, deletedIds: [], deletedVisitIds: [] };
   try {
     const r = await db.collection('settings').where({ key: _.in(['pollDirtyAt', 'custDirtyAt', 'batchDirtyAt', 'taskDirtyAt']) }).get();
     (r.data || []).forEach(s => {
@@ -1445,6 +1445,16 @@ async function pollDirty(event) {
     const d = await db.collection('customers').where({ deleted: true, deletedAt: _.gt(since) }).field({ _id: true }).limit(1000).get();
     out.deletedIds = (d.data || []).map(x => x._id);
   } catch (e) { out.deletedIds = []; }
+  // ⭐⭐ 2026-10-15 老板定：**顺路捎带"最近被删掉的拜访 id"**（与客户删除名单同一套路，**零额外云端调用**）——
+  //   拜访是**真删**（铁律：取消拜访不留痕），服务器同步器原本只能靠"每轮 DELETE + 全量重拉"才发现谁没了
+  //   （老板原话：「为了检测拜访历史的删除，每次耗费这么多太不合算了」）。
+  //   `visits` 云函数删除时会往 `visit_deleted` 记一笔；这里读出来带回 → 同步器**按名单删掉 PG 里那几行**。
+  //   ⚠️ 同样只捎**最近 7 天**（够用、结果小）；集合可能还不存在 → 静默返回空数组，不影响其它字段。
+  try {
+    const vSince = Date.now() - 7 * 86400000;
+    const v = await db.collection('visit_deleted').where({ at: _.gt(vSince) }).limit(1000).get();
+    out.deletedVisitIds = (v.data || []).map(x => x._id);
+  } catch (e) { out.deletedVisitIds = []; }
   return out;
 }
 

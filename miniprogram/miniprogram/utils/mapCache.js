@@ -9,7 +9,8 @@
 //   现在：**只在这里定义一份**，键 = `map_cache:<模式>:<当前登录人 _id>`；
 //     模式：老板看板 = `boss`；某个任务 = `task:<taskId>`（自己的当前任务 = `task:self`）。
 //   ⚠️ 只用于「展示用的地图摘要」的缓存；**写操作（submit / finish / reportLocation）绝不走它**。
-const TTL = 10 * 60 * 1000; // 缓存 10 分钟（地图打开先渲染缓存，云端数据到达后静默更新）
+const TTL = 2 * 60 * 60 * 1000; // ⭐ 2026-10-15 老板定「地图也走缓存、别每次进都拉」：10 分钟 → **2 小时**。
+                                //   ⚠️ 写操作（提交/取消拜访）会**主动作废**它（见 visit.js），所以不会"改了看不到地图"。
 
 // 缓存键：把「谁在看什么」编进去，避免不同身份/任务互相污染
 function key(mode) {
@@ -37,4 +38,10 @@ function set(res, mode) {
   } catch (e) { /* 静默 */ }
 }
 
-module.exports = { TTL, key, curMode, get, set };
+// ⭐ 2026-10-15 老板定「写成功就作废缓存」：地图页现在"有缓存就不再拉"，
+//   所以**提交/取消拜访后必须主动作废**，否则再进地图**看不到刚拜访的那家**（"改完必须真的刷新"的延伸）。
+function del(mode) {
+  try { wx.removeStorageSync(key(mode)); } catch (e) { /* 静默 */ }
+}
+
+module.exports = { TTL, key, curMode, get, set, del };

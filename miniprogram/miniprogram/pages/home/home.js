@@ -241,7 +241,7 @@ Page({
     try { const tb = this.getTabBar && this.getTabBar(); if (tb) tb.setTab(0, !!app.globalData.bossMode); } catch (e) { /* 低版本基础库忽略 */ }
     if (!this._revFn) {
       // 注册审核观察员：审核结果变化时静默刷新首页数据（15 秒被动感知）
-      this._revFn = (list) => { if (this._shown) this.load(); };
+      this._revFn = (list) => { if (this._shown) this.load(true); };   // ⭐ 2026-10-15：审核结果变化 → **强制绕过缓存**（必须看到新的）
       app.registerReviewListener(this._revFn);
     }
     this._shown = true;
@@ -512,7 +512,72 @@ Page({
       api.toast('订阅失败，请重试');
     }
   },
-  async load() {
+  // ⭐ 2026-10-15 老板定「进首页先用缓存、别每次全量拉」：抽一个**只做"数据 → 界面"**的函数
+  //   （不联网），让"云端数据"与"本地缓存"共用同一套渲染 —— 与 task.js 的 _renderDetail 同一做法。
+  //   ⚠️ 字段名与原来的逐字一致（todayTotal/todayLeft 这些是历史遗留名，别顺手改）。
+  _applyHomeTasks(rawTasks, boss) {
+    const fmtDeadline = s => {
+      const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : (s || '—');
+    };
+    if (boss) {
+      const tasks = (rawTasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
+      this.setData({ tasks, showTasks: tasks });
+      return;
+    }
+    // deadlineRaw 保留云端原值（下面按它挑"最近要截止"的任务：格式化后的"10月20日"没法比大小）
+    const tasks = (rawTasks || []).map(t => ({ ...t, deadlineRaw: t.deadline, deadline: fmtDeadline(t.deadline) }));
+    this.setData({ tasks, showTasks: tasks.slice(0, 5) });
+    if (tasks.some(t => t.status === 'reviewing')) getApp().startReviewWatcher();
+    // ⭐ 2026-09-28 老板定：橙色大卡 = **同一个任务**（取"最新的进行中任务"）
+    const active = tasks.filter(t => t.status !== 'done');
+    const heroTask = active.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] || null;
+    const total = heroTask ? (heroTask.total || 0) : 0;
+    const done = heroTask ? (heroTask.visited || 0) : 0;
+    const left = Math.max(0, total - done);
+    const pct = total ? Math.round(done / total * 100) : 0;
+    const heroDeadline = heroTask ? fmtDeadline(heroTask.deadlineRaw) : '';
+    let cardMode = 'empty';
+    if (total > 0) cardMode = 'today';
+    else if (active.length) cardMode = 'rest';
+    else if (tasks.length) cardMode = 'allDone';
+    this.setData({ todayTotal: total, todayDone: done, todayLeft: left, todayPct: pct, cardMode, heroDeadline });
+    if (cardMode === 'today') this.drawRing();
+  },
+  // ⭐ 2026-10-15：老板首页的"新店数量"（本地优先、0 请求）——抽出来给"缓存渲染"复用，别写两遍
+  _applyBossNewShops() {
+    try {
+      const _nc = wx.getStorageSync('newshopsCache');
+      if (_nc && _nc.shops && _nc.shops.length) {
+        this.setData({ bossNewShops: _nc.shops.length });
+      } else {
+        // ⚠️ 必须调 tasks（不是 adminapi！）：手机端只有微信身份，adminapi 要账号密码 → 一律 NO_AUTH
+        api.call('tasks', { action: 'listNewShops' }).then(ns => {
+          if (ns && ns.ok) {
+            const shops = ns.shops || [];
+            this.setData({ bossNewShops: shops.length });
+            try { wx.setStorageSync('newshopsCache', { shops: shops, maxAt: ns.maxAt || 0, syncedAt: Date.now() }); } catch (e) { }
+          }
+        }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
+      }
+    } catch (e) { /* 读缓存失败就当没有 */ }
+  },
+  async load(force) {
+    const _dc = require('../../utils/detailCache');
+    const _boss = !!getApp().globalData.bossMode;
+    const _key = _boss ? 'boss' : 'me';
+    // ⭐⭐ 2026-10-15 老板定「进首页先用缓存」：**当天 2 小时内已经拉过 → 直接用缓存、不再调云端**。
+    //   `force=true` 绕过缓存（审核结果变化等"必须看到新的"场景走它）。
+    //   ⚠️ TTL 用 2 小时而不是"一整天"：任务会在白天被派/被改，隔太久不刷会"看不到新任务"。
+    if (!force) {
+      const hit = _dc.get('homeTasks', _key, 2 * 60 * 60 * 1000);
+      if (hit && hit.tasks && hit.tasks.length) {
+        this._applyHomeTasks(hit.tasks, _boss);
+        if (_boss) this._applyBossNewShops();
+        this.setData({ loading: false });
+        return;
+      }
+    }
     this.setData({ loading: true });
     try {
       // 老板模式（2026-09-09 §7.13）：bossBoard 一次返回统计+全量任务
@@ -525,27 +590,11 @@ Page({
           };
           const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
           this.setData({ tasks, showTasks: tasks, bossStats: res.stats || null });
-          // ⭐ 2026-10-12 老板定：首页第 4 格「新店」的数量 —— 与「新店」列表页**同一口径**。
-          //   ⚠️⚠️ 必须调 **tasks**（不是 adminapi！）：adminapi 是「后台账号密码」专属入口，
-          //   手机端只有微信身份、没有密码 → 调它一律 NO_AUTH → 首页会显示 0（2026-10-12 实测踩到）。
-          //   ⭐ 2026-10-13 老板定（新店改**本地优先**）：这里**优先读本机缓存**（0 请求）；
-          //      本机还没有（首次装）才去云端拉一次，并把结果顺手存进同一份缓存
-          //      （缓存键与「新店」列表页共用 `newshopsCache`，两边永远一致）。
-          try {
-            const _nc = wx.getStorageSync('newshopsCache');
-            if (_nc && _nc.shops && _nc.shops.length) {
-              this.setData({ bossNewShops: _nc.shops.length });
-            } else {
-              api.call('tasks', { action: 'listNewShops' }).then(ns => {
-                if (ns && ns.ok) {
-                  const shops = ns.shops || [];
-                  this.setData({ bossNewShops: shops.length });
-                  try { wx.setStorageSync('newshopsCache', { shops: shops, maxAt: ns.maxAt || 0, syncedAt: Date.now() }); } catch (e) { }
-                }
-              }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
-            }
-          } catch (e) { /* 读缓存失败就当没有 */ }
-          prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）
+          // ⭐ 2026-10-15：存一份本地（2 小时内再进首页就不必再拉一遍）
+          try { _dc.set('homeTasks', 'boss', { tasks: res.tasks || [], stats: res.stats || null }); } catch (e) { /* 静默 */ }
+          this._applyBossNewShops();
+          if (!mapCache.get(mapCache.curMode())) prefetchMapData();   // ⭐ 只在本地没有"今天的"地图缓存时才预取（原来无条件 = 每次进首页白拉一次）
+          // （「新店数量」与「地图预取」都已经在上面用 `_applyBossNewShops()` / 条件预取做掉了，这里不再重复）
         } else {
           api.toast(res.msg || '加载失败');
         }
@@ -588,7 +637,9 @@ Page({
         else if (tasks.length) cardMode = 'allDone';
         this.setData({ todayTotal: total, todayDone: done, todayLeft: left, todayPct: pct, cardMode, heroDeadline });
         if (cardMode === 'today') this.drawRing();
-        prefetchMapData(); // 2026-09-09 提速 A：静默预取地图摘要（进地图秒开）
+        // ⭐ 2026-10-15：存一份本地（2 小时内再进首页就不必再拉一遍）
+        try { _dc.set('homeTasks', 'me', { tasks: res.tasks || [] }); } catch (e) { /* 静默 */ }
+        if (!mapCache.get(mapCache.curMode())) prefetchMapData();   // ⭐ 只在本地没有"今天的"地图缓存时才预取
       } else {
         api.toast(res.msg || '加载失败');
       }

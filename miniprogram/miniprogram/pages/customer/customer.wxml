@@ -453,7 +453,7 @@
         <text class="sheet-x" bindtap="closeSheet">✕</text>
       </view>
       <scroll-view class="sheet-b" scroll-y>
-        <view class="sheet-note">共 {{d.orders.length}} 单 · 合计 {{d.purchase.amount}}（点一单看明细）</view>
+        <view class="sheet-note">共 {{d.purchase.total}} 单 · 合计 {{d.purchase.amount}}（点一单看明细）</view>
         <block wx:for="{{d.orders}}" wx:key="d">
           <view class="ord" data-i="{{index}}" bindtap="toggleOrder">
             <text class="ord-d">{{item.d}}</text>

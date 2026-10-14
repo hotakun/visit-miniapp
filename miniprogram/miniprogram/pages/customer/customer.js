@@ -385,6 +385,23 @@ Page({
     }
     if (!id) { this.setData({ loadErr: '缺少客户参数（上一页没传客户 id）' }); return; }
     this.setData({ loadErr: '' });
+    // ⭐⭐ 2026-10-15 老板定「客户的订单/信息每天拉一次就够，看就看缓存」：
+    //   **今天已经拉过这家 → 直接用本地缓存渲染**（秒开、零请求）；只有"刚改过"（`custNeedRefresh`）才强制重拉。
+    //   ⚠️ 云存储临时 URL 有效期约 2 小时 → 超过 90 分钟**只重换 URL**，不重拉数据。
+    const dc = require('../../utils/detailCache');
+    const _force = !!this._forceReload;
+    this._forceReload = false;
+    if (!_force) {
+      const hit = dc.get('custDetail', id);
+      if (hit && hit.res) {
+        try {
+          this._renderCust(hit.res, hit.photoUrls || [], hit.recUrls || {});
+          this._shareImgFrom(hit.res);                                   // 分享封面（本地文件，每次都要重新下）
+          if (!hit.urlAt || Date.now() - hit.urlAt > 90 * 60 * 1000) this._refreshMediaUrls(hit.res, id);
+          return;
+        } catch (e) { /* 缓存坏了 → 落到下面走云端 */ }
+      }
+    }
     try {
       const res = await api.call('tasks', { action: 'custDetail', customerId: id });
       // 把云函数返回的**原始错误**带出来（光看"加载失败"没法排查）
@@ -430,18 +447,61 @@ Page({
         } catch (e) { /* 取录音失败不影响其它内容 */ }
       }
 
-      const d = buildD(res, photoUrls, recUrls);
-      // ⭐ 2026-09-27：默认展开按内容算（defaultOpen），不再写死
-      // ⚠️ centerLat/centerLng 一起初始化：地图的 latitude/longitude 绑的是它俩（见 wxml），
-      //    平时 = 客户坐标；缩放结束后会被"拉回"这里实现"以针点为中心缩放"。
-      this.setData({ d, open: defaultOpen(d), markers: this._mkMarkers(d, false), polyline: [], centerLat: d.lat, centerLng: d.lng });
-      if (d.name) wx.setNavigationBarTitle({ title: d.name });
+      // ⭐ 2026-10-15：拉回来的整块结果**存本地**（当天有效）—— 今天再进这家就不必再拉
+      try { dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt: Date.now() }); } catch (e) { /* 静默：缓存失败不影响显示 */ }
+      this._renderCust(res, photoUrls, recUrls);
     } catch (e) {
       // 2026-09-25 修：错误**直接显示在页面上**（原来只用 toast，会被 hideLoading 盖掉 → 只看到"一直加载中"，没法排查）
       const msg = (e && (e.errMsg || e.message)) || String(e);
       this.setData({ loadErr: msg });
       console.error('[客户详情] 加载失败：', e);
     }
+  },
+  // ⭐ 2026-10-15：把「数据 + 已换好的 URL → 界面」抽出来 —— **云端数据与本地缓存共用同一套渲染**
+  //   （原来这段在 onLoad 里，缓存命中时没法复用；两处各写一遍迟早不一致）
+  _renderCust(res, photoUrls, recUrls) {
+    this._cust = res.customer || {};
+    const d = buildD(res, photoUrls, recUrls);
+    // ⭐ 2026-09-27：默认展开按内容算（defaultOpen），不再写死
+    // ⚠️ centerLat/centerLng 一起初始化：地图的 latitude/longitude 绑的是它俩（见 wxml），
+    //    平时 = 客户坐标；缩放结束后会被"拉回"这里实现"以针点为中心缩放"。
+    this.setData({ d, open: defaultOpen(d), markers: this._mkMarkers(d, false), polyline: [], centerLat: d.lat, centerLng: d.lng });
+    if (d.name) wx.setNavigationBarTitle({ title: d.name });
+  },
+  // ⭐ 2026-10-15：分享封面 —— 云存储 fileID 换成**本地文件**（`wx.cloud.downloadFile` 不受域名白名单限制）。
+  //   ⚠️ 本地临时文件重启即失效，所以每次进页面都要重新下（很便宜，只有 1 张）。
+  _shareImgFrom(res) {
+    try {
+      const raw = ((res && res.customer && res.customer.photos) || []);
+      const ids = raw.map(p => (p && (p.fileID || p.thumbID)) || (typeof p === 'string' ? p : '')).filter(Boolean);
+      if (!ids.length) return;
+      wx.cloud.downloadFile({ fileID: ids[0] })
+        .then(dl => { if (dl && dl.tempFilePath) this._shareImg = dl.tempFilePath; })
+        .catch(() => { /* 下载失败 → 分享时回退统一封面 */ });
+    } catch (e) { /* 静默 */ }
+  },
+  // ⭐ 2026-10-15：缓存命中但**临时 URL 快过期**时，只重换 URL（数据一个字不重拉）
+  async _refreshMediaUrls(res, id) {
+    try {
+      const dc = require('../../utils/detailCache');
+      const raw = ((res.customer && res.customer.photos) || []);
+      const fids = raw.map(p => (p && (p.fileID || p.thumbID)) || (typeof p === 'string' ? p : '')).filter(Boolean);
+      let photoUrls = [];
+      if (fids.length) {
+        const r = await wx.cloud.getTempFileURL({ fileList: fids.slice(0, 3) });
+        photoUrls = (r.fileList || []).map(x => x.tempFileURL).filter(Boolean);
+      }
+      const recIds = [];
+      (res.visits || []).forEach(v => (v.audios || []).forEach(a => { if (a && a.fileID) recIds.push(a.fileID); }));
+      ((res.customer && res.customer.audios) || []).forEach(a => { if (a && a.fileID) recIds.push(a.fileID); });
+      let recUrls = {};
+      if (recIds.length) {
+        const r2 = await wx.cloud.getTempFileURL({ fileList: recIds.slice(0, 20) });
+        (r2.fileList || []).forEach(x => { if (x.fileID && x.tempFileURL) recUrls[x.fileID] = x.tempFileURL; });
+      }
+      dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt: Date.now() });
+      this._renderCust(res, photoUrls, recUrls);
+    } catch (e) { /* 静默：换不到 URL 就保持现状 */ }
   },
 
   // 地图标记：① 客户 = 橙针（60% 透明）+ **常显店名气泡**；② 「我」= 微信风格蓝点（拿到定位才加）
@@ -669,7 +729,9 @@ Page({
     // ⭐ 2026-10-10：从「编辑拜访记录」回来 → 重拉详情（铁律：改完必须真的刷新）
     if (wx.getStorageSync('custNeedRefresh')) {
       wx.removeStorageSync('custNeedRefresh');
-      if (this._cid) setTimeout(() => this.onLoad({ id: this._cid }), 50);
+      if (this._cid) { this._forceReload = true; setTimeout(() => this.onLoad({ id: this._cid }), 50); }
+      // ⭐ 2026-10-15：**必须设 `_forceReload`** —— 现在详情页"当天有缓存就直接用"，
+      //   不设这个标记的话，改完返回会拿旧缓存、**看不到刚改的内容**（正是老板最反感的那种）。
     }
   },
 

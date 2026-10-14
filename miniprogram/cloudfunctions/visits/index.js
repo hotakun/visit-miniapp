@@ -131,6 +131,33 @@ async function saveTrText(user, e, isBoss) {
 //   —— 卡片上的「已拜访 N 家」= 这个数组的长度（**按客户去重**：同一家跑几次都算 1 家）。
 //   ⚠️ 只统计**已提交**的拜访（status != ongoing）→ 取消拜访后记录被删，家数自然减少。
 //   ⚠️ 客户后来被删进回收站时，列表页会自动跳过（这里不特殊处理，保证数据简单）。
+// ⭐⭐ 2026-10-15 老板定（原话：「拜访历史因为要删除，所以每次都全量拉取…每次耗费这么多太不合算了」）：
+//   拜访是**真删**（铁律：取消拜访不留痕）→ 云端对"删掉了哪条"没有任何痕迹
+//   → 服务器同步器**只能每轮 `DELETE` + 全量重拉**才知道谁没了（那正是老板说"太不合算"的那处）。
+//   这里在删除时**顺手记一笔**：只给同步器用的辅助名单，**业务上仍然不留痕**（界面/接口都看不到它），
+//   `pollDirty` 会把它顺带带回（**零额外云端调用**）→ 同步器**按名单删掉 PG 里那几行**，不必再全量重拉。
+//   ⚠️ 记失败**绝不影响删除本身**（那一条最多靠 1 小时兜底的全量对账兜住）。
+async function markVisitDeleted(ids) {
+  const list = (Array.isArray(ids) ? ids : [ids]).map(x => String(x || '')).filter(Boolean);
+  if (!list.length) return;
+  const at = Date.now();
+  const put = (id) => db.collection('visit_deleted').doc(id).set({ data: { at: at } });
+  for (const id of list) {
+    try {
+      await put(id);
+    } catch (e) {
+      // 集合不存在 → 自愈创建后重试一次（项目既有做法：**别指望"用户会先跑 init"**）
+      const m = String((e && (e.errMsg || e.message)) || '');
+      if (m.indexOf('not exist') >= 0 || String((e && e.errCode) || '') === '-502005') {
+        try { await db.createCollection('visit_deleted'); } catch (e2) { /* 已存在 */ }
+        try { await put(id); } catch (e2) { console.error('[visit_deleted] 自愈后仍失败：', e2 && e2.message); }
+      } else {
+        console.error('[visit_deleted] 记删除名单失败（不影响删除本身）：', e && e.message);
+      }
+    }
+  }
+}
+
 async function _resyncFreeTrip(tripId) {
   if (!tripId) return;
   try {
@@ -325,7 +352,8 @@ async function deleteVisit(user, e, isBoss) {
   // ⚠️ 2026-10-11：**老板/管理员也放行**（老板要管数据）
   if (v.salesmanId !== user._id && !isBoss) return { ok: false, code: 'FORBIDDEN', msg: '只能删除自己的拜访记录' };
   if (v.status === 'ongoing') return { ok: false, code: 'STATE', msg: '这条还在拜访中，请回拜访页正常取消' };
-  // 1) 删拜访本体
+  // 1) 删拜访本体（⭐ 2026-10-15：删前先记一笔"删除名单" —— 让服务器同步器能按名单删，不必全量重拉）
+  await markVisitDeleted(visitId);
   await db.collection('visits').doc(visitId).remove();
   // 2) 连带清掉这条的语音转写文字（不留孤儿）
   try {
@@ -352,6 +380,7 @@ async function endMyOngoing(user) {
   const r = await db.collection('visits').where({ salesmanId: user._id, status: 'ongoing' }).limit(20).get();
   const list = (r && r.data) || [];
   if (!list.length) return { ok: true, ended: 0 };
+  await markVisitDeleted(list.map(o => o._id));   // ⭐ 2026-10-15：先记删除名单（同步器据此删 PG）
   for (const o of list) { await db.collection('visits').doc(o._id).remove(); }
   const tripIds = Array.from(new Set(list.map(o => String(o.freeTripId || '')).filter(Boolean)));
   for (const t of tripIds) { try { await _resyncFreeTrip(t); } catch (e) { /* 静默 */ } }
@@ -374,6 +403,7 @@ async function cancelVisit(user, e, isBoss) {
     .get();
   if (!ong.data.length) return { ok: false, code: 'NO_ONGOING', msg: '没有进行中的拜访，无需取消' };
   const doc = ong.data[0];
+  await markVisitDeleted(doc._id);   // ⭐ 2026-10-15：删前记一笔（给同步器用；业务上仍然不留痕）
   await db.collection('visits').doc(doc._id).remove();
   // ⭐ 2026-10-03 自由拜访：取消 = 记录被删 → 卡片「已拜访 N 家」要跟着减少
   await _resyncFreeTrip(String(e.freeTripId || doc.freeTripId || ''));

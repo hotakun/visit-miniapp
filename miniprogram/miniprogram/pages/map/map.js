@@ -63,6 +63,18 @@ Page({
     } else {
       this.setData({ loading: true });
     }
+    // ⭐ 2026-10-15 老板定「把缓存用好」：老板看板同样**有新鲜缓存就不再拉**（原来每次进地图都拉一次）
+    if (!this._forceMapReload) {
+      const _hit = mapCache.get('boss');
+      if (_hit && _hit.map && (_hit.tasks || []).length) {
+        const bossMen = (_hit.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
+        this.setData({ bossMode: true, bossMen, curBossIdx: 0, loading: false });
+        this.applyMapData(_hit.map);
+        this._loaded = true;
+        return;
+      }
+    }
+    this._forceMapReload = false;
     try {
       const res = await api.call('tasks', { action: 'mapData' }); // 2026-09-09 提速 B：轻量接口一次拿全
       if (!res.ok) { this.setData({ loading: false, empty: res.msg || '加载失败' }); return; }
@@ -98,6 +110,20 @@ Page({
       const c = mapCache.get('task:self');
       if (c && c.map) this.applyMapData(c.map);
     }
+    // ⭐⭐ 2026-10-15 老板定「把缓存用好」：**本地有新鲜缓存就不再拉云端**
+    //   （原来这里无条件调 `mapData` —— 每次进地图都花一次调用，哪怕 1 分钟前刚拉过）。
+    //   ⚠️ 写操作（提交/取消拜访）会主动作废缓存 → 不会"改了看不到"；手动 ↻ 会强制拉（见 refreshMap）。
+    const _mode = taskId ? ('task:' + taskId) : 'task:self';
+    if (!this._forceMapReload) {
+      const _hit = mapCache.get(_mode);
+      if (_hit && _hit.map) {
+        this.applyMapData(_hit.map, keepDay);
+        this._loaded = true;
+        this.setData({ loading: false });
+        return;
+      }
+    }
+    this._forceMapReload = false;
     try {
       const res = await api.call('tasks', { action: 'mapData', taskId }); // 2026-09-09 提速 B：轻量接口
       if (!res.ok) { this.setData({ loading: false, empty: '任务加载失败，请重试' }); return; }
@@ -389,6 +415,7 @@ Page({
   async refreshMap() {
     if (this._refreshing) return;
     this._refreshing = true;
+    this._forceMapReload = true;   // ⭐ 2026-10-15：手动 ↻ = **绕过缓存**强制拉云端（老板点刷新就得看到新的）
     // 2026-09-09 修复：按钮旋转 0.8 秒动效（静默刷新也要有视觉反馈，否则老板点了几次像没反应）
     this.setData({ refreshing: true });
     setTimeout(() => this.setData({ refreshing: false }), 800);

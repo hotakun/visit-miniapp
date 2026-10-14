@@ -882,6 +882,26 @@ Page({
       if (res.ok) {
         this.clearStart(); // 提交成功：计时基准清除，下次进入重新计时
         loc.beacon(); // 状态信标：拜访中→已回访（2026-09-08 老板定）
+        // ⭐ 2026-10-15 老板定：「有新增的拜访记录就**同时云端和本地都保存**」——
+        //   本地记一笔（任务 + 这家 + 结果 + 日期）→ 任务详情页返回时据此**就地更新卡片**，不用再从云端拉一遍。
+        //   ⚠️ 云端仍是唯一真相源，这里只是副本（当天有效、跨天自动失效）。
+        try {
+          const dc = require('../../utils/detailCache');
+          const tid = this.data.c && this.data.c.taskId;
+          if (tid) {
+            const st = dc.get('taskVisitState', tid) || {};
+            st[this.data.c._id] = { result: this.data.result || '', day: dc.dayStr(), at: Date.now() };
+            dc.set('taskVisitState', tid, st);
+          }
+        } catch (e) { /* 静默：缓存失败不影响提交 */ }
+        // ⭐ 2026-10-15：**作废地图缓存** —— 地图页现在"有新鲜缓存就不再拉"，这次拜访已经打了勾/换了状态，
+        //   不作废的话再进地图**看不到刚拜访的那家**（这是"改完必须真的刷新"铁律的延伸）。
+        try {
+          const mc = require('../../utils/mapCache');
+          mc.del(mc.curMode());                                   // 自己那份（业务员 = task:self）
+          const _t = this.data.c && this.data.c.taskId;
+          if (_t) mc.del('task:' + _t);                            // 老板看某个任务时那份
+        } catch (e) { /* 静默：缓存失败不影响提交 */ }
         // 2026-09-11 M2b：转写兜底 —— 对「勾选但还没提交转写」的段触发（提前点过「开始转录」的段不重复计费）
         if (!res.boss && res.visitId) {
           const idx = (this.data.recs || [])

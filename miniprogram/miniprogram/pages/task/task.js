@@ -77,56 +77,55 @@ Page({
   },
   async lightRefresh() {
     try {
-      const res = await api.call('tasks', { action: 'detail', taskId: this.taskId });
+      // ⭐⭐ 2026-10-15 老板定：「进任务只拉取卡片上显示的状态就行」——**不再调完整 `detail`**
+      //   （完整 `detail` 会读"任务里每家客户的整篇文档"+翻该任务全部历史拜访；这里只要状态那一小块）。
+      const res = await api.call('tasks', { action: 'taskCardStatus', taskId: this.taskId });
       if (!res.ok) return;
-      const customers = res.customers.map(c => ({ ...c, typeName: c.customerType === 'new' ? 'new' : 'mall' }));
+      const st = res.states || {};
+      // 把状态**贴到现有列表上**（name / address 这些静态字段一个字不动）
+      const customers = (this.allCustomers || []).map(c => (st[c._id] ? Object.assign({}, c, st[c._id]) : c));
       this.allCustomers = customers;
       this.setData({ customers });
       this.refreshShow();
     } catch (e) { /* 静默：下一轮进入再刷 */ }
   },
-  async load() {
-    try {
-      const res = await api.call('tasks', { action: 'detail', taskId: this.taskId });
-      if (!res.ok) { api.toast(res.msg || '任务加载失败'); wx.navigateBack(); return; }
-      const customers = res.customers.map(c => ({ ...c, typeName: c.customerType === 'new' ? 'new' : 'mall' }));
-      // 天页签带月日：第 N 天日期 = 开始日期 + N-1（老任务用创建日推算；都缺失则不显示日期）
-      const fmtMD = s => {
-        const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-        return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : '';
-      };
-      const addDays = (s, n) => {
-        const d = new Date(s + 'T00:00:00');
-        d.setDate(d.getDate() + n);
-        const p = x => String(x).padStart(2, '0');
-        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-      };
-      const baseDate = res.task.startDate || (res.task.createdAt ? new Date(res.task.createdAt + 8 * 3600 * 1000).toISOString().slice(0, 10) : '');
-      const rawPlan = res.task.dayPlan && res.task.dayPlan.length ? res.task.dayPlan : [{ day: 1, customerIds: customers.map(c => c._id) }];
-      const dayPlan = rawPlan.map(p => ({ ...p, dateLabel: baseDate ? fmtMD(addDays(baseDate, p.day - 1)) : '' }));
-      // ⭐⭐ 2026-10-13 老板定（原话：「任务详情虽然写的是第1页、第2页这样，但你还是按日期在默认显示；
-      //   其实现在不用按日期默认了，应该按**已经拜访到的最大页数**显示 —— 譬如已经拜访到第三页，就默认显示第三页」）：
-      //   默认页签 = **已拜访到的最大那一天**。
-      //   算法：每个客户最近一次拜访的日期（`lastVisit.visitedAt`，云端 lastVisitMap 取的就是"不限时间的最近一条"）
-      //        → 反推它是任务第几天 → 取最大值；一天都没拜访过才回退原来的逻辑（今天 / 第1天 / 最后一天）。
-      //   ⚠️ `baseDate` 是任务开始日（上面刚算过），与云端 `dayIndexOf` 同一套算法（按天取整，不用时区）。
-      const _dayNo = (dateStr) => {
-        if (!baseDate || !dateStr) return 0;
-        const a = new Date(String(baseDate).slice(0, 10) + 'T00:00:00Z').getTime();
-        const b = new Date(String(dateStr).slice(0, 10) + 'T00:00:00Z').getTime();
-        if (!isFinite(a) || !isFinite(b)) return 0;
-        return Math.round((b - a) / 86400000) + 1;
-      };
-      let maxVisitedDay = 0;
-      customers.forEach(c => {
-        const at = c.lastVisit && c.lastVisit.visitedAt;
-        if (!at) return;
-        const d = _dayNo(at);
-        if (d > maxVisitedDay) maxVisitedDay = d;
-      });
-      // 进入任务自动定位天页签（2026-09-05 老板定、2026-10-13 调整）：已跑到的天 → 那天；没跑过 → 当天/第 1 天/最后一天
+  // ⭐ 2026-10-15：把「拿到的数据 → 渲染」抽出来，**云端数据与本地骨架共用**（老板定「进任务先用缓存」）。
+  //   `opts.keepDay=true` 时**不重算当前页签** —— 从拜访页返回的刷新不该把用户切到的天重置。
+  _renderDetail(res, opts) {
+    const keepDay = !!(opts && opts.keepDay);
+    const customers = (res.customers || []).map(c => ({ ...c, typeName: c.customerType === 'new' ? 'new' : 'mall' }));
+    // 天页签带月日：第 N 天日期 = 开始日期 + N-1（老任务用创建日推算；都缺失则不显示日期）
+    const fmtMD = s => {
+      const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : '';
+    };
+    const addDays = (s, n) => {
+      const d = new Date(s + 'T00:00:00');
+      d.setDate(d.getDate() + n);
+      const p = x => String(x).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    };
+    const baseDate = res.task.startDate || (res.task.createdAt ? new Date(res.task.createdAt + 8 * 3600 * 1000).toISOString().slice(0, 10) : '');
+    const rawPlan = res.task.dayPlan && res.task.dayPlan.length ? res.task.dayPlan : [{ day: 1, customerIds: customers.map(c => c._id) }];
+    const dayPlan = rawPlan.map(p => ({ ...p, dateLabel: baseDate ? fmtMD(addDays(baseDate, p.day - 1)) : '' }));
+    // ⭐⭐ 2026-10-13 老板定：默认页签 = **已拜访到的最大那一天**（一天都没拜访过才回退旧逻辑）
+    const _dayNo = (dateStr) => {
+      if (!baseDate || !dateStr) return 0;
+      const a = new Date(String(baseDate).slice(0, 10) + 'T00:00:00Z').getTime();
+      const b = new Date(String(dateStr).slice(0, 10) + 'T00:00:00Z').getTime();
+      if (!isFinite(a) || !isFinite(b)) return 0;
+      return Math.round((b - a) / 86400000) + 1;
+    };
+    let maxVisitedDay = 0;
+    customers.forEach(c => {
+      const at = c.lastVisit && c.lastVisit.visitedAt;
+      if (!at) return;
+      const d = _dayNo(at);
+      if (d > maxVisitedDay) maxVisitedDay = d;
+    });
+    let activeDay = this.data.activeDay;
+    if (!keepDay) {
       const td = Number(res.task.todayDay);
-      let activeDay;
       if (maxVisitedDay > 0) {
         // ⚠️ 夹在计划范围内：万一记录落在计划之外（延期/加天）也不会选中一个不存在的页签
         const cands = dayPlan.filter(p => p.day <= maxVisitedDay).map(p => p.day);
@@ -138,27 +137,45 @@ Page({
       } else {
         activeDay = dayPlan[dayPlan.length - 1].day;
       }
-      this.allCustomers = customers;
-      this.setData({
-        task: { ...res.task, dayPlan, deadline: fmtMD(res.task.deadline) || res.task.deadline || '' },
-        customers, activeDay, loading: false
-      });
-      // 时间分层配置同步全局（2026-09-08 M2 审查修复：task 页也要同步，loc.js 采集器依赖）
-      // 2026-09-11 降频：把轨迹开关与工作档位一并写入（loc.js 采集器读这里）；同时存一份完整系统配置供各页读开关
-      const app = getApp();
-      if (app) {
-        app.globalData.locCfg = {
-          workStartHour: res.task.workStartHour, workEndHour: res.task.workEndHour, offDutyTier: res.task.offDutyTier,
-          locTrackEnabled: res.task.locTrackEnabled, locLatestEnabled: res.task.locLatestEnabled,
-          locWorkTier: res.task.locWorkTier, locMoveThreshold: res.task.locMoveThreshold
-        };
-        app.globalData.sysCfg = res.task;
-      }
-      // 任务在审核中：启动全局审核观察员，15 秒被动等待审批结果
-      if (res.task.status === 'reviewing') getApp().startReviewWatcher();
-      this.refreshShow();
-      this.tryLocate();
-      this.startLocTimer();
+    }
+    this.allCustomers = customers;
+    this.setData({
+      task: { ...res.task, dayPlan, deadline: fmtMD(res.task.deadline) || res.task.deadline || '' },
+      customers, activeDay, loading: false
+    });
+  },
+  // 只有"云端数据"才做的侧效应（配置同步 / 审核观察员 / 定位）—— 缓存渲染不碰这些
+  _afterDetail(res) {
+    // 时间分层配置同步全局（loc.js 采集器依赖）
+    const app = getApp();
+    if (app) {
+      app.globalData.locCfg = {
+        workStartHour: res.task.workStartHour, workEndHour: res.task.workEndHour, offDutyTier: res.task.offDutyTier,
+        locTrackEnabled: res.task.locTrackEnabled, locLatestEnabled: res.task.locLatestEnabled,
+        locWorkTier: res.task.locWorkTier, locMoveThreshold: res.task.locMoveThreshold
+      };
+      app.globalData.sysCfg = res.task;
+    }
+    // 任务在审核中：启动全局审核观察员，15 秒被动等待审批结果
+    if (res.task.status === 'reviewing') getApp().startReviewWatcher();
+    this.refreshShow();
+    this.tryLocate();
+    this.startLocTimer();
+  },
+  async load() {
+    // ⭐ 2026-10-15 老板定「进任务先用缓存」：**有本地骨架就先渲染（秒开）**，云端回来再覆盖上面那层。
+    try {
+      const sk = require('../../utils/detailCache').get('taskSkeleton', this.taskId);
+      if (sk && sk.task && sk.customers && sk.customers.length) this._renderDetail(sk);
+    } catch (e) { /* 静默：没有缓存就走云端 */ }
+    try {
+      const res = await api.call('tasks', { action: 'detail', taskId: this.taskId });
+      if (!res.ok) { api.toast(res.msg || '任务加载失败'); wx.navigateBack(); return; }
+      this._renderDetail(res);
+      // ⭐ 2026-10-15：**把骨架存本地**（老板定「客户没被业务员改过的信息，每天拉一次就够」）。
+      //   ⚠️ 存原始 res.customers（不带 typeName），跨天自动失效。
+      try { require('../../utils/detailCache').set('taskSkeleton', this.taskId, { task: res.task, customers: res.customers }); } catch (e) { /* 静默 */ }
+      this._afterDetail(res);
     } catch (e) {
       api.toast('加载失败，请检查云函数部署');
       this.setData({ loading: false });

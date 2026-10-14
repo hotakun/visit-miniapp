@@ -150,6 +150,22 @@ async function syncPollDirty() {
         await d.query('UPDATE customers SET deleted = true WHERE id = ANY($1::text[])', [r.deletedIds.map(String)]);
       }
     }
+    // ⭐⭐ 2026-10-15 老板定（原话：「为了检测拜访历史的删除，每次耗费这么多太不合算了」）：
+    //   **按"删除名单"删拜访** —— 原来增量扫不到"已消失的文档"，只能每轮 `DELETE` + 全量重拉。
+    //   ① 名单里的 id → 直接从 PG 的 `visits` 删掉；② 顺手往 `deleted_ids` 留档（`tbl='visits'`），与客户那套一致。
+    //   ⚠️ 名单由云端 `pollDirty` **顺路带回**（零额外云端调用）；万一漏了，靠 1 小时兜底的全量对账兜住。
+    if (Array.isArray(r.deletedVisitIds) && r.deletedVisitIds.length) {
+      try {
+        const d2 = await conn();
+        const vids = r.deletedVisitIds.map(String);
+        await d2.query('DELETE FROM visits WHERE id = ANY($1::text[])', [vids]);
+        await d2.query('CREATE TABLE IF NOT EXISTS deleted_ids (id text PRIMARY KEY, tbl text, deleted_at bigint)');
+        for (const id of vids) {
+          await d2.query('INSERT INTO deleted_ids (id,tbl,deleted_at) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [id, 'visits', Date.now()]);
+        }
+        console.log(`[sync] visits 按删除名单删掉 ${vids.length} 条`);
+      } catch (e) { console.error('[sync] visits 删除名单处理失败（下轮再试）:', e.message); }
+    }
   } catch (e) { console.error('[sync] pollDirty 同步失败（下轮再试）:', e.message); }
 }
 
