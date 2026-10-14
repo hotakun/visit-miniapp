@@ -56,6 +56,13 @@
   - **方案 C：建店后自动刷缓存**：手机端建店 → 写 `settings.custDirtyAt` → 后台读缓存时 `store.checkDirty()` → 有变动就 `custSync` 拉增量 → 前端每 15 秒问 `/mapPoints/status`（几 KB，**绝不重拉 22MB**）→ 条数变了就地重绘。缓存的 `maxU` 是**同步水位**（别用本地时钟打点）。
 - ⭐⭐ **L4「数据自主」**：**写仍走云开发（唯一真相源），只把"读大头"搬走**；手机端一行没改；**服务器挂了后台自动回退云开发**。
   · 链路：`业务员手机 ──写──> 云开发 ──同步器(每5分钟)──> 服务器 PG ──只读API(18081)──> 后台读`
+  · ⭐⭐ **2026-10-14：同步器全面改「有变动才跑」+ 各表「信号驱动 + 增量 + 兜底」**（老板定「充分利用缓存、别每次全量拉」）——
+    · **拜访 `visits`**：原来**每轮 `DELETE` + 全量重拉**（为检测"删除"），现在**有拜访变动（`pollDirtyAt`，零额外云端调用）或距上次全量超 `VISIT_FALLBACK_MIN`（默认 **60 分钟**）才全量对账，否则纯增量**（通常 0 条）。
+      ⚠️ **删除的反映最多滞后 1 小时**；下一步要加「**删除名单**」（照 `customers` 的 `deletedIds` 那套：云端 `pollDirty` 顺带带回、零额外调用）把滞后降到"下一轮"。
+    · **批次成员 `batch_members`**：同理（`batchDirtyAt` + `BM_FALLBACK_MIN` 6 小时兜底）。
+    · ⚠️ **水位必须放 `sync_cursor` 表**（cursor 列 text）—— `sync_state.watermark` 是 **bigint**，装不下 `_id` 字符串游标。
+    · ⚠️ **部署同步器时的坑**：`schtasks /end` 之后若 `schtasks /run` 那条 SSH 断掉 → **同步器会一直停着**（监控页显示 `pgsync 🔴 没跑`，2026-10-14 实际停了 18 分钟）。**改完必须回监控页确认它是 🟢**。
+    · ⚠️ **监控页那句「⚠️ 同步可能停了」现在会常见误报** —— 它只看"客户数据截至"，而客户是"有变动才跑"，没变动时时间戳会长时间不变（**不是故障**）。
   · 服务器 `124.222.29.73`：**PostgreSQL 18.6**（库 `juhuo`，**公网不开**）+ 两个用户（`juhuo_ro` 只读给 API / `juhuo_rw` 读写给同步器）+ 表 `customers`/`orders`/`sync_state`/`sync_cursor`/`deleted_ids`/批次相关 + **`pgapi.js`**（只读 API + 监控页）/ **`pgsync.js`**（同步器）。配置在 `admin/config.json` 的 `pgApiUrl`+`pgApiToken`。
   · **监控页** `http://124.222.29.73:18081/status?pw=juhuo`；服务器桌面另有 `服务器监控.html`。
   · **5 个计划任务**（`JuhuoPgApi` / `JuhuoPgSync` / `JuhuoNginx` / `JuhuoReboot3` / `JuhuoReboot18`，均 BootTrigger+SYSTEM）；**每天 3:00 / 18:00 自动重启**服务器。
