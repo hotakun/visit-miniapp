@@ -4,6 +4,9 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const $ = db.command.aggregate;   // ⭐ 2026-10-15：聚合（算累计单数/金额时**只回数字、不拉数据**）
+// ⭐ 2026-10-15 老板定：客户详情「购买记录」只展示/只拉**最近 10 单**（原 20 → 收到 10）。
+//   一处定义 —— 订单查询、明细查询、返回给前端的列表**都看它**，以后要改只改这一行。
+const ORDER_PREVIEW_N = 10;
 
 // ===== ⭐ 2026-09-29 新增：静默吞错的"可见化"（高危1 修复，勘察报告 §F1）=====
 //   背景：全项目曾有 22 处 `.catch(() => 默认值)` 既不打日志也不抛错 ——
@@ -2204,8 +2207,8 @@ async function custDetail(salesmanId, event, isBoss) {
   const code = c.mallCode || '';
 
   // —— ① 订单：⭐ 2026-10-15 老板定「订单每天一次、看缓存」——**不再为了算合计把全部订单拉下来**：
-  //   ① 界面只要**最近 20 单** → 直接 `orderBy(orderedAt desc).limit(20)`（原来 `fetchAllPaged` 全量分页，
-  //      会随订单历史越攒越多轮 —— 正是老板说的"将来量越来越大"那根）；
+  //   ① 界面只要**最近 10 单**（老板 2026-10-15 定：从 20 再收到 **10**）→ `orderBy(orderedAt desc).limit(10)`
+  //      （原来 `fetchAllPaged` 全量分页，会随订单历史越攒越多轮 —— 正是老板说的"将来量越来越大"那根）；
   //   ② "累计 N 单 / 金额合计"改用**聚合**（只回两个数字、不拉数据）。
   let orders = [];
   let orderTotal = 0, orderAmountSum = 0;
@@ -2213,7 +2216,7 @@ async function custDetail(salesmanId, event, isBoss) {
     orders = await db.collection('orders')
       .where({ customerCode: code })
       .field({ orderNo: true, orderedAt: true, actualAmount: true, orderStatus: true, payMethod: true })
-      .orderBy('orderedAt', 'desc').limit(20)
+      .orderBy('orderedAt', 'desc').limit(ORDER_PREVIEW_N)
       .get().then(r => (r.data || [])).catch(silentCatch('tasks·custDetail·orders', []));
     try {
       const agg = await db.collection('orders').aggregate()
@@ -2223,15 +2226,15 @@ async function custDetail(salesmanId, event, isBoss) {
       const row = (agg.list && agg.list[0]) || null;
       if (row) { orderTotal = Number(row.n) || 0; orderAmountSum = Number(row.amt) || 0; }
     } catch (e) {
-      // 聚合不可用 → 保守回落（至少把已拉的这 20 单算上，不让界面显示 0）
+      // 聚合不可用 → 保守回落（至少把已拉的这 10 单算上，不让界面显示 0）
       orderTotal = orders.length;
       orderAmountSum = orders.reduce((a, o) => a + (Number(o.actualAmount) || 0), 0);
       console.error('[custDetail] 订单聚合失败，已回落：', e && e.message);
     }
   }
 
-  // —— ② 明细：只查**最近 20 单**（与后台口径一致；上百单的明细全拉会拖慢甚至超时）——
-  const orderNoList = orders.slice(0, 20).map(o => o.orderNo).filter(Boolean);
+  // —— ② 明细：只查**最近 10 单**（与上面的列表一致；上百单的明细全拉会拖慢甚至超时）——
+  const orderNoList = orders.slice(0, ORDER_PREVIEW_N).map(o => o.orderNo).filter(Boolean);
   let items = [];
   for (let i = 0; i < orderNoList.length; i += 20) {
     const r = await db.collection('order_items')
@@ -2351,15 +2354,15 @@ async function custDetail(salesmanId, event, isBoss) {
       if (_lastReal) o.lastOrderAt = _lastReal;   // 只有"一单都没有"时才回落到库里那个兜底值
       return o;
     })(),
-    // 订单摘要 + 最近 20 单（每单带 lines=商品行数，列表里显示"N 品种"）
-    orders: orders.slice(0, 20).map(o => ({
+    // 订单摘要 + 最近 10 单（每单带 lines=商品行数，列表里显示"N 品种"）
+    orders: orders.slice(0, ORDER_PREVIEW_N).map(o => ({
       orderNo: o.orderNo, orderedAt: o.orderedAt, actualAmount: o.actualAmount,
       orderStatus: o.orderStatus, payMethod: o.payMethod, lines: linesOf[o.orderNo] || 0
     })),
-    // 这 20 单的商品明细（单号 → 商品行）—— 手机端点某一单展开明细要用
+    // 这 10 单的商品明细（单号 → 商品行）—— 手机端点某一单展开明细要用
     orderItems: (() => {
       const keep = {};
-      orders.slice(0, 20).forEach(o => { if (o.orderNo) keep[o.orderNo] = true; });
+      orders.slice(0, ORDER_PREVIEW_N).forEach(o => { if (o.orderNo) keep[o.orderNo] = true; });
       const by = {};
       items.forEach(it => {
         if (!it.orderNo || !keep[it.orderNo]) return;

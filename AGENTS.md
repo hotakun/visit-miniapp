@@ -126,7 +126,8 @@
   · **谁在用**：`task.js` 任务骨架（`taskSkeleton`）+ 拜访状态（`taskVisitState`）；`customer.js` 整块客户详情（`custDetail`，含订单/备注/URL）；
     `home.js` 首页任务卡（`homeTasks`，**2 小时 TTL**）；`map.js` 地图（有缓存就不拉，手动 ↻ 强制）。
   · ⭐ **云端配套**：`tasks.detail` 的客户查询**只取卡片字段 + 分批**（`multiIn`）；`lastVisitMap` 只取 4 个小字段；
-    `custDetail` 订单**只拉最近 20 单**（累计改**聚合** `$.sum`，不再全量分页）、备注 `limit(30)`；
+    `custDetail` 订单**只拉最近 10 单**（老板 2026-10-15 定，原 20 → 10；**一处定义 `ORDER_PREVIEW_N`**）、
+    累计改**聚合**（`$.sum`，不再全量分页）、备注 `limit(30)`；
     **新增轻接口 `tasks.taskCardStatus`**（只回卡片状态，任务页刷新用它，**不查客户档案**）。
   · 🔴 **铁律（违反 = "改了看不到"，老板最反感）**：
     ① **键必须带登录人**（切身份/换任务绝不能串档 —— 地图缓存踩过一次）；
