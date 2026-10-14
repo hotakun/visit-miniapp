@@ -234,8 +234,21 @@ async function round() {
   _lastTaskHandled = _taskSeen;
 
   let since = await watermark(), got = 0, maxU = since;
-  for (let i = 0; i < 40; i++) {                               // 一次最多 4 万条，防跑太久
-    const r = await callCloud('custSync', { since, limit: 1000 });
+  // ⭐⭐ 2026-10-14 修（依《全项目审查》D01，报告属实 —— 这是"后台永久漏客户"的根因）：
+  //   ⚠️ 原来每页都 `since = maxU`（用"本批最大 updatedAt"当前进水位），**且从不传 cursor** ——
+  //      而云端是**按 `_id` 升序分页**的。两个维度一错位：
+  //      「`_id` 靠后、但 `updatedAt` 更旧」的记录会被 `updatedAt > maxU` 过滤掉，
+  //      **永久漏掉、下次也不会补**（报告的例子：1500 条里后 500 条全丢）。
+  //   ✅ 正确做法（本轮固定 since，只推进游标；**全部成功后才提交水位**）：
+  //      · `since` **整轮不动** → 凡是 `updatedAt > since` 的记录都会被完整翻一遍，一个不漏；
+  //      · 翻页靠云端返回的 `next`（本批最后一条 `_id`），它本来就返回、以前没用；
+  //      · 中途任何一页失败 → 前面 `throw` 掉、**不提交水位** → 下轮从旧水位重跑（重复 upsert 无害）。
+  let cursor = '';
+  // ⚠️ 上限 = 300 轮（30 万条/轮）：**必须够跑一轮全量** —— 库内约 17.87 万家 ÷ 1000 = 179 页，
+  //    若上限低于它，"重置水位后补历史"会在中途停下、还把水位提交上去 → 剩下的又漏。
+  //    （2026-10-14 实测：分段翻页正常、零重复；旧做法在抽样 1200 条里会漏约 900 条。）
+  for (let i = 0; i < 300; i++) {
+    const r = await callCloud('custSync', { since, limit: 1000, cursor });
     if (!r || !r.ok) throw new Error('custSync 返回异常: ' + JSON.stringify(r).slice(0, 200));
     // ⚠️ 2026-10-09 实测：custSync 返回的字段名是 **points**（不是 list/rows）——
     //    写错会"拿不到数据但也不报错"，表现为同步器空转、水位不动（踩过一次）
@@ -247,11 +260,18 @@ async function round() {
       if (Number(p.u) > maxU) maxU = Number(p.u);
       got++;
     }
-    since = maxU;
-    if (list.length < 1000) break;
+    // ⚠️⚠️ 这里**绝不能**再写 `since = maxU`（那就是 D01 的 bug）；只推进游标。
+    cursor = r.next || '';
+    if (!cursor || list.length < 1000) break;
     await sleep(200);
   }
-  if (got) { await setWatermark(maxU); console.log(`[sync] 补了 ${got} 条，水位 → ${new Date(maxU).toLocaleString()}`); }
+  if (got) {
+    // ⚠️ 到上限说明"这轮没翻完"：**照旧提交水位**（否则下轮重头、永远跑不完），但要**大声记一笔**，
+    //    好判断"是不是该把上限再调大 / 该换 (updatedAt,id) 复合水位"。
+    if (cursor) console.warn(`[sync] ⚠️ 本轮到了翻页上限还没翻完（已补 ${got} 条），剩余留到下一轮：把上限调大或需要复合水位`);
+    await setWatermark(maxU);
+    console.log(`[sync] 补了 ${got} 条，水位 → ${new Date(maxU).toLocaleString()}`);
+  }
   // ⭐ 顺带同步批次成员（失败不影响上面 customers 的结果，下轮再试）
   // ⚠️ 2026-10-14：`syncPollDirty()` 已提到 round() 开头（信号判断要用它），这里**不再重复调**。
   try { await syncBatchMembers(); } catch (e) { console.error('[sync] batch_members 同步失败（下轮再试）:', e.message); }
