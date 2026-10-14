@@ -771,6 +771,26 @@ Page({
       // ⭐ 2026-10-15：**必须设 `_forceReload`** —— 现在详情页"当天有缓存就直接用"，
       //   不设这个标记的话，改完返回会拿旧缓存、**看不到刚改的内容**（正是老板最反感的那种）。
     }
+    // ⭐⭐ 2026-10-14（依《全项目审查》V01）：上次在拜访页**强行离页自动提交**时，
+    //   有照片/录音没跟着传上（照片还是临时路径、离开页面可能就失效）→ 进这家店时**提醒补拍**。
+    //   ⚠️ 清单由 `visit.js` 的 `_notePendingEvidence()` 写入；**提示过一次就清掉**（不反复弹）。
+    try {
+      const all = this._cid ? (wx.getStorageSync('evPending') || {}) : {};
+      const p = all[this._cid];
+      if (p && (p.pics || p.recs)) {
+        delete all[this._cid];
+        wx.setStorageSync('evPending', all);
+        setTimeout(() => {
+          try {
+            wx.showModal({
+              title: '上次有证据没传上',
+              content: '上次离开拜访页时，有 ' + (p.pics || 0) + ' 张照片、' + (p.recs || 0) + ' 段录音没确认上传。如果还需要，请重新拍一次。',
+              showCancel: false, confirmText: '知道了'
+            });
+          } catch (e) { /* 静默 */ }
+        }, 700);
+      }
+    } catch (e) { /* 静默：提示失败不能影响页面 */ }
   },
 
   // ---------- ✏️ 更正信息（⭐ 2026-10-10 老板定：电话行右侧那块 44×44，原「快速记事」被替换）----------

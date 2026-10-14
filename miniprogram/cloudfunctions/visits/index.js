@@ -496,20 +496,30 @@ async function submit(user, e, isBoss) {
   const date = todayStr();
 
   // 5. 定位校验（客户缺坐标自动跳过；定位失败拦截提交；超阈值拦截；后台可关）
-  //    skipLoc（2026-09-08 M1）：仅"已超时"的自动提交允许跳过距离校验——必须 ongoing 存在且 autoCancelAt 已到
+  //    · skipLoc（2026-09-08 M1）：仅"自动收尾"允许跳过距离校验——必须 ongoing 存在且 autoCancelAt 已到
+  //    · fromLeave（⭐⭐ 2026-10-14，依《全项目审查》V01 + 老板定「离页直接交」）：
+  //      **强行离页（滑返回→确认）时的那次自动提交** —— 唯一目的是**把业务员已经录进去的内容先保住**。
+  //      它**不要求"已超时"、也不要求"已选结果"**：那两个条件是给"超时自动收尾"用的，
+  //      而强行离页时通常都不满足 → 实测这导致 2026-10-12 定的"有内容就自动保存"**从来没真正生效过**。
+  //      ⚠️ 只放宽**定位校验**；其余（客户存在 / 单开 / 状态 / 权限）与正常提交完全一致。
+  //      ⚠️ 前端**只在 `onUnload` 里传它**，正常点「提交」按钮绝不传 → 现场定位校验不受影响。
   let skipLoc = false;
   if (e.skipLoc) {
-    const ongChk = await db.collection('visits')
-      .where({ customerId, taskId: taskId || '', visitedAt: date, status: 'ongoing', salesmanId: user._id })
-      .get();
-    const o = ongChk.data[0];
-    if (!o || !o.autoCancelAt || Number(o.autoCancelAt) > Date.now()) {
-      return { ok: false, code: 'BAD_ARG', msg: '未到超时，不可跳过定位校验' };
+    if (e.fromLeave) {
+      skipLoc = true;   // 离页保全内容：不校验"是否已超时 / 是否已选结果"
+    } else {
+      const ongChk = await db.collection('visits')
+        .where({ customerId, taskId: taskId || '', visitedAt: date, status: 'ongoing', salesmanId: user._id })
+        .get();
+      const o = ongChk.data[0];
+      if (!o || !o.autoCancelAt || Number(o.autoCancelAt) > Date.now()) {
+        return { ok: false, code: 'BAD_ARG', msg: '未到超时，不可跳过定位校验' };
+      }
+      if (!o.draft || !o.draft.result) {
+        return { ok: false, code: 'BAD_ARG', msg: '未选择拜访结果，不能自动提交' };
+      }
+      skipLoc = true;
     }
-    if (!o.draft || !o.draft.result) {
-      return { ok: false, code: 'BAD_ARG', msg: '未选择拜访结果，不能自动提交' };
-    }
-    skipLoc = true;
   }
   const setRes = await db.collection('settings').where({ key: 'locationCheck' }).get();
   const locCfg = setRes.data[0] ? setRes.data[0].value : { enabled: true, threshold: 100 };

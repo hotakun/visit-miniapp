@@ -331,6 +331,24 @@ Page({
       result: this.data.result, text: this.data.text, samples: this.data.samples
     }).catch(() => { /* 静默：下次再报 */ });
   },
+  // ⭐⭐ 2026-10-14（依《全项目审查》V01）：**记下"这次没跟着上传成功的证据"** ——
+  //   强行离页时照片/录音往往来不及上传（何况照片本来就是临时路径、离开页面可能就失效），
+  //   所以这里**同步**记进本机清单（按客户 id），**下次进这家店时由客户详情页提示"请补拍"**。
+  //   ⚠️ 只记"还没传成功的"（照片 `up` 为假 / 录音 `fileID` 为空）；两个都传好了就**不记**。
+  //   ⚠️ 只存本机 storage（不进云端：体积和隐私都不合适）；客户详情页提示过一次就清掉。
+  _notePendingEvidence() {
+    try {
+      const c = this.data.c || {};
+      const cid = c._id;
+      if (!cid) return;
+      const pics = (this.data.pics || []).filter(p => !p.up).length;
+      const recs = (this.data.recs || []).filter(r => !r.fileID).length;
+      if (!pics && !recs) return;                       // 都传好了：不记
+      const all = wx.getStorageSync('evPending') || {};
+      all[cid] = { pics, recs, at: Date.now(), name: c.name || '' };
+      wx.setStorageSync('evPending', all);
+    } catch (e) { /* 静默：记不上也不能影响提交 */ }
+  },
   clearStart() {
     // ⭐ 2026-10-08：提交 / 取消 / 超时**离开前必须先放行** —— 否则页面那把"锁"会把自己也挡在门里
     this._unlockLeave();
@@ -354,11 +372,22 @@ Page({
       const has = !!(this.data.result || String(this.data.text || '').trim() || String(this.data.samples || '').trim()
         || (this.data.pics || []).length || (this.data.recs || []).length);
       if (has) {
+        // ⭐⭐ 2026-10-14（依《全项目审查》V01）：**顺序不能变** ——
+        //   ① 记清单必须**同步**（页面马上就没了）；
+        //   ② 提交要**先发起、且不 `await`** —— 页面卸载后 `await` 之后的代码**不保证执行**，
+        //      而"内容（结果/文字/样品）"是最值钱的，绝不能让一个"等上传"的 await 挡在它前面；
+        //   ③ 传 `fromLeave: true` → 云端**不要求"已超时 / 已选结果"**（强行离页时通常都不满足）。
+        this._notePendingEvidence();
         api.call('visits', {
           action: 'submit', taskId: c.taskId || '', customerId: c._id || '', freeTripId: c.freeTripId || '',
           result: this.data.result || '', text: this.data.text || '', samples: this.data.samples || '',
-          durationSeconds: Math.floor((Date.now() - (this.t0 || Date.now())) / 1000), skipLoc: true
+          photos: (this._evPhotos || []), audios: (this._evAudios || []),
+          durationSeconds: Math.floor((Date.now() - (this.t0 || Date.now())) / 1000),
+          skipLoc: true, fromLeave: true
         }).catch(() => { /* 静默：页面已在卸载，失败只能靠草稿 */ });
+        // ③ 再**尽力**把还没传的照片/录音传一下（fire-and-forget：页面已卸载，传不完不报错；
+        //    没传上的已经记进本机清单 → 下次进这家店会提示"请补拍"）
+        try { this.uploadEvidence().catch(() => { }); } catch (e) { /* 静默 */ }
       } else {
         api.call('visits', { action: 'cancel', taskId: c.taskId || '', customerId: c._id || '' }).catch(() => { /* 静默 */ });
       }
