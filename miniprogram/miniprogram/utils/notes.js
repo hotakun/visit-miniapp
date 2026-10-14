@@ -9,8 +9,19 @@
 // ---------------------------------------------------------------------------
 
 const fs = wx.getFileSystemManager();
-const KEY = 'notes_v1';                                    // 全部记事（数组）存这个 storage key
+const KEY = 'notes_v1';                                    // ⚠️ 旧键（全局共享；现在只用于"无损迁移"时读一次）
+const KEY_LEGACY = 'notes_v1__legacy';                     // 迁移后老数据的**原始副本**（可回退）
 const DIR = (wx.env.USER_DATA_PATH || '') + '/notes';      // 照片 / 录音的本机目录
+// ⭐⭐ 2026-10-15（依《全项目审查》A01 + 老板口径「**记事是个人的，不要共享**」）：
+//   **记事索引按登录人隔离** —— 原来所有微信共用 `notes_v1` 一个键 →
+//   同一台手机上换了微信登录，**能看到别人的记事**（老板已明确这不是他想要的）。
+//   ⚠️ 取不到身份时（没登录 / globalData 还没有 user）**退回旧键** ——
+//      宁可退回共享，也绝不因为"取不到 uid"就让人**看不见自己的记事**。
+function myKey() {
+  let uid = '';
+  try { const u = getApp().globalData.user; uid = (u && u._id) || ''; } catch (e) { /* 静默 */ }
+  return uid ? (KEY + ':' + uid) : KEY;
+}
 
 function ensureDir() {
   try { fs.mkdirSync(DIR, true); } catch (e) { /* 已存在 */ }
@@ -19,13 +30,30 @@ function ensureDir() {
 // 读全部（永远返回数组）
 function read() {
   try {
-    const a = wx.getStorageSync(KEY);
+    const k = myKey();
+    let a = wx.getStorageSync(k);
+    // ⭐ 无损迁移（**只会发生一次**）："我的键"还是空的、而"老全局键"里有数据 →
+    //   把老数据**归给本机当前这个登录人**；老数据**原样留一份副本**（KEY_LEGACY）之后，**清空老键**。
+    //   ⚠️ 为什么必须清空老键：否则同一台手机换个人登录时会**又迁移一次** —— 等于没隔离。
+    //   ⚠️ 为什么留副本：报告明确要求"不能直接删、不能丢既有记事"；留副本 = **可一键回退**
+    //      （把 KEY_LEGACY 的内容写回 notes_v1 即可）。
+    if ((!Array.isArray(a) || !a.length) && k !== KEY) {
+      try {
+        const legacy = wx.getStorageSync(KEY);
+        if (Array.isArray(legacy) && legacy.length) {
+          wx.setStorageSync(k, legacy);
+          if (!wx.getStorageSync(KEY_LEGACY)) wx.setStorageSync(KEY_LEGACY, legacy);
+          wx.removeStorageSync(KEY);
+          a = legacy;
+        }
+      } catch (e) { /* 迁移失败就当没有（下次再试），绝不因此报错挡住记事 */ }
+    }
     return Array.isArray(a) ? a : [];
   } catch (e) { return []; }
 }
 // 写全部；返回是否成功（单 key 超 1MB 会抛 → 调用方提示"记的内容太多了"）
 function write(list) {
-  try { wx.setStorageSync(KEY, list); return true; }
+  try { wx.setStorageSync(myKey(), list); return true; }   // ⭐ 2026-10-15：按登录人隔离（见 myKey 注释）
   catch (e) { return false; }
 }
 
@@ -121,6 +149,6 @@ function qs(v) {
 }
 
 module.exports = {
-  KEY, DIR, all, byCustomer, countBy, get, draft, save, remove,
+  KEY, myKey, DIR, all, byCustomer, countBy, get, draft, save, remove,
   fmtTime, saveLocal, delLocal, delFiles, qs
 };
