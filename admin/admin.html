@@ -12710,15 +12710,53 @@ async function confirmMallImport() {
     $('mallResult').innerHTML =
       `<p style="font-size:15px;font-weight:700">🛒 商城客户库入库完成</p>
        <p style="font-size:14px;margin-top:8px">共 <b>${mallRows.length}</b> 条（新增 ${added}，更新 ${updated}）</p>
-       <p style="font-size:13px;color:var(--sub);margin-top:8px">下一步：点本页右上角「🔎 与商城库比对」，把"待商城建档"的店跟商城库对上。</p>`;
+       <p style="font-size:13px;color:var(--sub);margin-top:8px" id="mallNextTip">马上把你带到「🛒 商城待配对」，正在等服务器同步…</p>`;
     loadCustomers();
     loadLastMallImport();
     loadFieldList();          // ⭐ 2026-10-07：导入现在是从「⏳ 待商城建档」页发起的 → 顺手刷新这页列表
+    // ⭐⭐⭐ 2026-10-15 老板定（原话：「我导入后你要给到信息和结果给我，如果每次都要重启进来才能看到
+    //   结果，那这个是不对的」）：**导入完自动把「商城待配对」刷出来**，不让老板再点、再进页面。
+    //   ⚠️ 为什么会有延迟：那份列表读的是**他自己的服务器 PG**（两台电脑共享），
+    //      而 PG 靠同步器从云端拉（本轮已给 public importMallCustomers 补了变动信号 → 下一轮 ≤5 分钟）。
+    //   → 所以这里：① 1.5 秒后自动关弹层、切到「商城待配对」；② 立刻拉一次；③ 再**自动轮询等待**
+    //     （每 10 秒一次、最多 2 分钟），条数一对上就停 —— 老板什么都不用按。
+    mallAutoWaitForPair(mallRows.length);
   } catch (e) {
     alert('导入中断：' + e.message + '（可重新点确认继续——已入库部分自动去重，不会重复）');
   }
   $('mallConfirm').disabled = false;
   $('mallConfirm').textContent = '✅ 确认导入';
+}
+
+// ⭐⭐⭐ 2026-10-15 老板定（原话：「我导入后你要给到信息和结果给我，如果每次都要重启进来才能看到
+//   结果，那这个是不对的」）：**导入完自动把「商城待配对」刷出来，并自动盯着等服务器同步过来** ——
+//   老板什么都不用按，也不用重进页面。
+//   ⚠️ 为什么会有延迟：那份列表读的是**他自己的服务器 PG**（两台电脑共享、不花云端钱），
+//      而 PG 靠同步器从云端拉 —— 本轮已给 importMallCustomers 补了"变动信号"，
+//      所以下一轮（≤5 分钟）一定会拉到；这里我们**主动等**，一拉到就显示出来。
+//   ⚠️ 本函数**只切页 + 拉列表**，不改任何数据；条数对上（或等满 2 分钟）就停。
+function mallAutoWaitForPair(expected) {
+  let n = 0;
+  const MAX = 12;                       // 12 次 × 10 秒 ≈ 2 分钟
+  const setTip = (t) => { const e = $('mallNextTip'); if (e) e.textContent = t; };
+  const tick = async () => {
+    n++;
+    try { await mpLoad(true); } catch (e) { /* 静默 */ }
+    const got = (_mpRows || []).length;
+    if (got >= expected || n >= MAX) {
+      setTip(got >= expected
+        ? ('✅ 「商城待配对」已就绪（' + got + ' 家），可以开始配对了')
+        : ('服务器同步还没跟上（拉到 ' + got + ' 家）—— 过一会儿点「🔄 刷新」即可'));
+      return;
+    }
+    setTip('正在等服务器同步…（已拉到 ' + got + ' / ' + expected + ' 家）');
+    setTimeout(tick, 10000);
+  };
+  setTimeout(() => {
+    try { closeMallImport(); } catch (e) { /* 静默 */ }
+    try { nav('field'); fieldTab('mp'); } catch (e) { /* 静默 */ }
+    tick();                              // 立刻拉一次（服务器可能已经同步过）
+  }, 1500);                              // 先让老板把"入库完成"看清 1.5 秒
 }
 
 // ===== 待确认认领清单（人工确认/拒绝） =====

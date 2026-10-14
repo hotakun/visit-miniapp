@@ -1453,7 +1453,7 @@ const CUST_WRITE_ACTIONS = new Set([
   // 录音转写文字回写客户
   'saveCustAudioText', 'deleteCustAudio',
   // 导入
-  'importCustomers',
+  'importCustomers', 'importMallCustomers',
   // 回收站（这两个原本各自也报过一次，重复无害）
   'deleteCustomers', 'restoreCustomers',
   // 补数据 / 修数据 / 清数据（运维工具；跑一次改很多，报一次正好）
