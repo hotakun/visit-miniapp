@@ -256,7 +256,12 @@ function patch(patches, removeIds, adds) {
     points.push(a); seen[a.i] = 1; added++;
   });
   // syncedAt 保持不动（它表示“上次全量同步时间”，界面的「数据截至」用它）
-  write({ v: VERSION, syncedAt: c.syncedAt, count: points.length, points: points });
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》D05）：**这里必须把 `maxU`（同步水位）一起带过去** ——
+  //   原来漏了它，于是"任何一次 patch（改备注 / 改坐标 / 删客户 / 新增客户）之后水位就丢了"，
+  //   `watermark()` 只能退回 `syncedAt - 5000` 这个**按本机时钟估算**的值；
+  //   一旦这台机器的时钟比云端快，就会**漏掉那段窗口里发生的客户变动**（增量再也补不回来）。
+  //   （`unbatch()` 一直是对的、保留着 maxU —— 这里就是对齐它。）
+  write({ v: VERSION, syncedAt: c.syncedAt, maxU: c.maxU || 0, count: points.length, points: points });
   return { ok: true, patched: patched, removed: removed, added: added, count: points.length };
 }
 
@@ -313,17 +318,26 @@ async function syncIncremental(callApi, cred, since) {
     cursor = res.next;
   }
   // merge：云端返回的覆盖本地同名条；其余原样保留；云端多出来的**追加**（这正是"新建的店"）
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》D05）：**合并与写回之前先重读一次缓存** ——
+  //   上面的 for 里有 `await callApi(...)`（可能持续几秒），**期间前端完全可能已经 patch 过**
+  //   （改备注 / 改坐标 / 删客户，或"商城待配对"里「新建」插进来的新客户）。
+  //   如果还拿"进函数那一刻的 `c.points`"当基底去合并，这些**本地已确认的改动就会被整块覆盖掉**
+  //   （表现：刚改的又变回去了）。
+  //   以重读到的 `base` 为基底，就只会把"云端这批增量"叠上去，**不会反向抹掉本地**。
+  const cur = read();
+  const base = (cur && Array.isArray(cur.points)) ? cur.points : c.points;
+  const baseU = Math.max(Number(cur && cur.maxU) || 0, Number(maxU) || 0);   // 水位只前进、不回退
   const byId = {};
   got.forEach(p => { if (p && p.i) byId[p.i] = p; });
   const merged = [];
   const seen = {};
-  c.points.forEach(p => {
+  base.forEach(p => {
     if (byId[p.i]) { merged.push(byId[p.i]); seen[p.i] = 1; } else { merged.push(p); }
   });
   got.forEach(p => { if (p && p.i && !seen[p.i]) merged.push(p); });
   // syncedAt 保持不动（界面「数据截至」显示的仍是上次全量时间）
-  write({ v: VERSION, syncedAt: c.syncedAt, maxU: maxU, count: merged.length, points: merged });
-  console.log(`[store] 增量补完成：云端 ${got.length} 条变动，缓存 ${c.points.length} → ${merged.length} 家，耗时 ${Date.now() - t0}ms`);
+  write({ v: VERSION, syncedAt: (cur && cur.syncedAt) || c.syncedAt, maxU: baseU, count: merged.length, points: merged });
+  console.log(`[store] 增量补完成：云端 ${got.length} 条变动，缓存 ${base.length} → ${merged.length} 家，耗时 ${Date.now() - t0}ms`);
   return { ok: true, changed: got.length, count: merged.length };
 }
 

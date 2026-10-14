@@ -556,7 +556,18 @@ async function submit(user, e, isBoss) {
     finishedAt: Date.now(),
     createdAt: Date.now()
   };
-  const ong = await db.collection('visits').where({ customerId, visitedAt: date, status: 'ongoing' }).get();
+  // ⭐⭐ 2026-10-15 修（依《全项目审查》V03，报告属实）：
+  //   **这里的查询必须带 `salesmanId`** —— 原来只按 `customerId + 当天 + ongoing` 找，
+  //   而下面是无条件 `update(doc)`、`doc.salesmanId` 又是**当前提交人** →
+  //   两个业务员同时到同一家店时（`start` 的单开拦截是**跨业务员**的，B 会被挡在外面，
+  //   但 B 仍停在拜访页上、`submit` 并不要求先 `start`），B 一提交就会**把 A 那条记录
+  //   连 salesmanId / salesmanName / taskId / 照片 / 录音一起覆盖成 B 的**。
+  //   加上 `salesmanId: user._id` 后：只升级"自己的"那条；找不到就新建一条自己的
+  //   （两人都真的去过，本来就该两条记录，历史才完整）。
+  //   ⚠️ `start` 里那条**跨业务员**的单开拦截**保持不变**（那是老板定的"同一任务只允许 1 家拜访中"，
+  //      是防冲突用的，不是本条要改的东西）。
+  const ong = await db.collection('visits')
+    .where({ customerId, visitedAt: date, status: 'ongoing', salesmanId: user._id }).get();
   if (ong.data.length) {
     await db.collection('visits').doc(ong.data[0]._id).update({ data: doc });
     doc._id = ong.data[0]._id;

@@ -486,6 +486,7 @@ Page({
   //   ⚠️ 临时 URL **沿用缓存里那份**（没过期就不重换，省一次云调用）；确有变化时由 _refreshMediaUrls 兜。
   async _silentRefresh(id, hit) {
     const dc = require('../../utils/detailCache');
+    const _w = dc.who();          // ⭐ C01：**请求开始那一刻**的身份快照（回包时若身份已变，就不写进新名义下）
     // ⚠️ **节流 60 秒**：刚拉过这家就不再静默拉 —— 连续进出详情页（业务员常干）不重复问云端，
     //   否则"缓存"就只剩"首屏秒开"、调用一点没省（省调用本来就是这次改造的目标之一）。
     //   ⚠️ 真"刚改过"的情况有 `custNeedRefresh` → `_forceReload` **强制重拉**兜底（那条路不走这里），
@@ -501,9 +502,15 @@ Page({
     let same = false;
     try { same = JSON.stringify(strip(hit && hit.res)) === JSON.stringify(strip(res)); } catch (e) { same = false; }
     if (same) return;                                      // 没变 → 一个字都不动
-    const photoUrls = (hit && hit.photoUrls) || [];
-    const recUrls = (hit && hit.recUrls) || {};
-    try { dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt: (hit && hit.urlAt) || 0 }); } catch (e) { /* 静默 */ }
+    // ⭐⭐ 2026-10-15 修（依《全项目审查》C03）：**写之前重读一次缓存**。
+    //   本函数与 `_refreshMediaUrls` 是**并行**的（`onLoad` 里两个都不 await）——
+    //   如果媒体那边已经写入了**更新过的临时 URL**，这里用 `hit` 里那份旧的盖回去就白干了。
+    //   所以 URL 相关三项一律**以缓存里的为准**，实在没有才退回 `hit`。
+    const cur = dc.get('custDetail', id);
+    const photoUrls = (cur && cur.photoUrls) || (hit && hit.photoUrls) || [];
+    const recUrls = (cur && cur.recUrls) || (hit && hit.recUrls) || {};
+    const urlAt = (cur && cur.urlAt) || (hit && hit.urlAt) || 0;
+    try { dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt }, _w); } catch (e) { /* 静默 */ }
     try { this._renderCust(res, photoUrls, recUrls, { keepOpen: true }); } catch (e) { /* 静默：渲染失败保留原样 */ }
   },
   // ⭐ 2026-10-15：分享封面 —— 云存储 fileID 换成**本地文件**（`wx.cloud.downloadFile` 不受域名白名单限制）。
@@ -522,6 +529,7 @@ Page({
   async _refreshMediaUrls(res, id) {
     try {
       const dc = require('../../utils/detailCache');
+      const _w = dc.who();          // ⭐ C01：身份快照
       const raw = ((res.customer && res.customer.photos) || []);
       const fids = raw.map(p => (p && (p.fileID || p.thumbID)) || (typeof p === 'string' ? p : '')).filter(Boolean);
       let photoUrls = [];
@@ -537,8 +545,16 @@ Page({
         const r2 = await wx.cloud.getTempFileURL({ fileList: recIds.slice(0, 20) });
         (r2.fileList || []).forEach(x => { if (x.fileID && x.tempFileURL) recUrls[x.fileID] = x.tempFileURL; });
       }
-      dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt: Date.now() });
-      this._renderCust(res, photoUrls, recUrls);
+      // ⭐⭐ 2026-10-15 修（依《全项目审查》C03）：**不要把"进页面时那份 res"整块写回去** ——
+      //   本函数与 `_silentRefresh` **并行**（`onLoad` 里两个都不 await）。如果静默更新先拿到了**新详情**并写入，
+      //   随后这里用**旧的 `res`** 覆盖 → **刚出现的记录又消失**；而且 `urlAt: Date.now()` 还会把它贴上
+      //   "刚更新过"的时间戳，让"URL 快过期"的判断一并失灵。
+      //   所以：**以缓存里当前那份 res 为准**（它可能是静默更新刚写的新详情），只覆盖 URL 三项。
+      //   ⚠️ 若此刻缓存已不可用（读不到 / 身份变了被 `get` 拦掉）→ **不写、也不渲染**（别把旧数据糊上去）。
+      const cur = dc.get('custDetail', id);
+      if (!cur || !cur.res) return;
+      dc.set('custDetail', id, { res: cur.res, photoUrls, recUrls, urlAt: Date.now() }, _w);
+      this._renderCust(cur.res, photoUrls, recUrls);
     } catch (e) { /* 静默：换不到 URL 就保持现状 */ }
   },
 
