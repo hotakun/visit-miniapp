@@ -177,7 +177,7 @@
     | `dc:custDetail:<登录人>:<客户id>` | 客户详情整块（档案+订单+备注+拜访历史+URL） | 当天；**另有"静默更新"自愈** | ✅ **已统一到 `api.js` 的 `CUST_WRITE`**：`visits` = start/submit/cancel/editSubmitted/endMyOngoing/deleteVisit；`tasks` = saveCustPhoto/correctCustomer/newShopSubmit/updateNewShop；`coordfix` = 全部。⚠️ **新增写类 action 必须加进那张表**（体检第 14 项会盯着"绕过入口"） |
     | `dc:taskSkeleton:<登录人>:<taskId>` | 任务骨架（任务信息+客户卡片字段） | 当天 | 建/改/派/撤任务 → ⚠️ 目前靠"**重进任务页时 `load()` 拉云端覆盖**"（没有主动作废；超 100 家的大改动要等重进） |
     | `dc:taskVisitState:<登录人>:<taskId>` | 拜访状态（哪家打过勾） | 当天 | ⚠️ **只写不读**（任务页刷新实际走云端 `taskCardStatus`）—— 属**死缓存**，删不删都行 |
-    | `dc:homeTasks:<登录人>:boss / :me` | 首页任务卡 | **2 小时** | 审核结果变化 → `load(true)` 绕过；⚠️ **建/改/派任务后最多 2 小时才反映**（手机上退到首页再进也一样） |
+    | `dc:homeTasks:<登录人>:boss / :me` | 首页任务卡 | 当天（TTL **2 小时**） | ✅ **2026-10-14 起与客户详情同一套：缓存先渲染 + 静默更新**（`_silentHomeRefresh`：节流 60 秒、没变不 setData）→ **派了任务、下次进首页几秒内就刷新**；审核结果变化另有 `load(true)` 强制绕过 |
     | `dc:bossWar:<登录人>:all` | 战况数据 | **5 分钟** | ⏱ 自然过期（业务员在跑时会变，5 分钟够近） |
     | `map_cache:<模式>:<登录人>` | 地图摘要（模式：`boss` / `task:<id>` / `task:self`） | **2 小时** | ✅ 拜访提交/取消 → `mapCache.del`（`visit.js`） |
 
