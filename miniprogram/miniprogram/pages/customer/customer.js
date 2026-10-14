@@ -398,6 +398,13 @@ Page({
           this._renderCust(hit.res, hit.photoUrls || [], hit.recUrls || {});
           this._shareImgFrom(hit.res);                                   // 分享封面（本地文件，每次都要重新下）
           if (!hit.urlAt || Date.now() - hit.urlAt > 90 * 60 * 1000) this._refreshMediaUrls(hit.res, id);
+          // ⭐⭐ 2026-10-14 老板定（依《手机端-详情页缓存与减负方案》B 条「**先渲染缓存 → 后台静默更新**」）：
+          //   以前这里是直接 `return`（拿缓存就不再问云端）→ **一旦某处漏了失效标记，页面会一直显示旧数据**
+          //   （2026-10-14 两次事故正是这个套路：提交了拜访 / 改了信息，回来看还是旧的）。
+          //   现在：**照样先渲染缓存（秒开），但顺手在后台静默再拉一次** —— 拉回来有变化就覆盖。
+          //   于是"漏了标记"最多只错几秒，**不再依赖"每处都记得置标记"**（这正是根治那两次事故的思路）。
+          //   ⚠️ 静默更新：不显示 loading、失败完全静默、内容没变一个字不 setData（不打断、不闪、不白费）。
+          this._silentRefresh(id, hit);
           return;
         } catch (e) { /* 缓存坏了 → 落到下面走云端 */ }
       }
@@ -459,14 +466,45 @@ Page({
   },
   // ⭐ 2026-10-15：把「数据 + 已换好的 URL → 界面」抽出来 —— **云端数据与本地缓存共用同一套渲染**
   //   （原来这段在 onLoad 里，缓存命中时没法复用；两处各写一遍迟早不一致）
-  _renderCust(res, photoUrls, recUrls) {
+  _renderCust(res, photoUrls, recUrls, opts) {
     this._cust = res.customer || {};
     const d = buildD(res, photoUrls, recUrls);
     // ⭐ 2026-09-27：默认展开按内容算（defaultOpen），不再写死
+    // ⚠️ 2026-10-14：**后台静默更新**（`opts.keepOpen`）时**不要重置折叠状态** ——
+    //   用户可能正把某张卡折起来看，数据一变就整块重算 `open` 会把它又弹开（页面"自己抖一下"）。
+    const open = (opts && opts.keepOpen && this.data.open) ? this.data.open : defaultOpen(d);
     // ⚠️ centerLat/centerLng 一起初始化：地图的 latitude/longitude 绑的是它俩（见 wxml），
     //    平时 = 客户坐标；缩放结束后会被"拉回"这里实现"以针点为中心缩放"。
-    this.setData({ d, open: defaultOpen(d), markers: this._mkMarkers(d, false), polyline: [], centerLat: d.lat, centerLng: d.lng });
+    this.setData({ d, open, markers: this._mkMarkers(d, false), polyline: [], centerLat: d.lat, centerLng: d.lng });
     if (d.name) wx.setNavigationBarTitle({ title: d.name });
+  },
+  // ⭐⭐ 2026-10-14 老板定：**后台静默更新**（缓存先渲染 → 再拉一次云端；有变化才覆盖）。
+  //   只用在**客户详情页**这一页 —— 它数据面最广、最容易被"别处写"改到
+  //   （拜访提交/取消/编辑、更正信息、拍照/删照、现场提报、坐标报错），
+  //   而任何一处漏了失效标记，旧做法"拿缓存就 return"就会一直显示旧数据。静默拉一次 = 一层自愈保险。
+  //   ⚠️ 三条纪律：① 不显示 loading（不打断）② 失败完全静默 ③ **内容没变就什么都不做**（省重绘、避免页面抖）。
+  //   ⚠️ 临时 URL **沿用缓存里那份**（没过期就不重换，省一次云调用）；确有变化时由 _refreshMediaUrls 兜。
+  async _silentRefresh(id, hit) {
+    const dc = require('../../utils/detailCache');
+    // ⚠️ **节流 60 秒**：刚拉过这家就不再静默拉 —— 连续进出详情页（业务员常干）不重复问云端，
+    //   否则"缓存"就只剩"首屏秒开"、调用一点没省（省调用本来就是这次改造的目标之一）。
+    //   ⚠️ 真"刚改过"的情况有 `custNeedRefresh` → `_forceReload` **强制重拉**兜底（那条路不走这里），
+    //   所以这里节流是安全的：最多 60 秒后自然自愈。
+    const _at = (dc.meta('custDetail', id) || {}).at || 0;
+    if (Date.now() - _at < 60 * 1000) return;
+    let res = null;
+    try { res = await api.call('tasks', { action: 'custDetail', customerId: id }); }
+    catch (e) { return; }                                  // 离线/超时：不影响已经渲染出来的缓存
+    if (!res || !res.ok || !res.customer) return;
+    // 内容指纹对比（**必须去掉每次都变的 `at`**，否则每次都判"有变化"）
+    const strip = o => { if (!o || typeof o !== 'object') return o; const c = Object.assign({}, o); delete c.at; return c; };
+    let same = false;
+    try { same = JSON.stringify(strip(hit && hit.res)) === JSON.stringify(strip(res)); } catch (e) { same = false; }
+    if (same) return;                                      // 没变 → 一个字都不动
+    const photoUrls = (hit && hit.photoUrls) || [];
+    const recUrls = (hit && hit.recUrls) || {};
+    try { dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt: (hit && hit.urlAt) || 0 }); } catch (e) { /* 静默 */ }
+    try { this._renderCust(res, photoUrls, recUrls, { keepOpen: true }); } catch (e) { /* 静默：渲染失败保留原样 */ }
   },
   // ⭐ 2026-10-15：分享封面 —— 云存储 fileID 换成**本地文件**（`wx.cloud.downloadFile` 不受域名白名单限制）。
   //   ⚠️ 本地临时文件重启即失效，所以每次进页面都要重新下（很便宜，只有 1 张）。
