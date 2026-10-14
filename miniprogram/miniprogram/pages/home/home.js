@@ -573,7 +573,8 @@ Page({
       const hit = _dc.get('homeTasks', _key, 2 * 60 * 60 * 1000);
       if (hit && hit.tasks && hit.tasks.length) {
         this._applyHomeTasks(hit.tasks, _boss);
-        if (_boss) this._applyBossNewShops();
+        // ⚠️ 老板模式的统计卡不在 `_applyHomeTasks` 里（它只做任务列表），这里补上
+        if (_boss) { this.setData({ bossStats: hit.stats || null }); this._applyBossNewShops(); }
         this.setData({ loading: false });
         return;
       }
@@ -584,12 +585,9 @@ Page({
       if (getApp().globalData.bossMode) {
         const res = await api.call('tasks', { action: 'bossBoard' });
         if (res.ok) {
-          const fmtDeadline = s => {
-            const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-            return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : (s || '—');
-          };
-          const tasks = (res.tasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
-          this.setData({ tasks, showTasks: tasks, bossStats: res.stats || null });
+          // ⭐ 2026-10-15：**走与"缓存渲染"同一套**（`_applyHomeTasks`）—— 只留一处实现
+          this._applyHomeTasks(res.tasks, true);
+          this.setData({ bossStats: res.stats || null });
           // ⭐ 2026-10-15：存一份本地（2 小时内再进首页就不必再拉一遍）
           try { _dc.set('homeTasks', 'boss', { tasks: res.tasks || [], stats: res.stats || null }); } catch (e) { /* 静默 */ }
           this._applyBossNewShops();
@@ -603,40 +601,11 @@ Page({
       }
       const res = await api.call('tasks', { action: 'list' });
       if (res.ok) {
-        // 截止日期显示格式：YYYY-MM-DD → X月X日
-        const fmtDeadline = s => {
-          const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-          return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : (s || '—');
-        };
-        // deadlineRaw：保留云端原值（YYYY-MM-DD）—— 下面要按它挑"最近要截止"的任务
-        //（格式化后的"10月20日"没法比大小：字典序下 "10月…" 会排在 "9月…" 前面）
-        const tasks = (res.tasks || []).map(t => ({ ...t, deadlineRaw: t.deadline, deadline: fmtDeadline(t.deadline) }));
-        // 首页只显示最近 5 个任务，更多在"全部任务"页查看
-        this.setData({ tasks, showTasks: tasks.slice(0, 5) });
-        // 有审核中任务：启动全局审核观察员（15 秒轮询等待审批结果；无则维持现状）
-        if (tasks.some(t => t.status === 'reviewing')) getApp().startReviewWatcher();
-        // ⭐ 2026-09-28 老板定：口径由"今日"改为**任务累计**（不再使用云端 todayTotal/todayDone）——
-        //   大数字 = **剩余未拜访总数**（所有未结束任务 total - visited 的合计）
-        //   「已完成」= 这些任务里**总共已完成**的拜访家数
-        //   （data 字段名仍沿用 todayTotal/todayLeft/todayDone，只是含义变了，避免大范围改名）
-        const active = tasks.filter(t => t.status !== 'done');
-        // ⭐ 2026-09-28 老板定：橙色大卡整体就是**同一个任务**的信息 ——
-        //   截止日 / 剩余未拜访（大数字）/ 已完成 / 环形进度，**全部取自同一个任务**（不再多任务合计）。
-        //   挑哪个任务：**最新的那个进行中任务** —— 老板口径：业务员通常只有"最上面那个"任务是活跃的
-        //   （既然发了新任务，下面的大概率已结束或过期），所以统计最新的那个就没错。按 createdAt 降序取第一个。
-        const heroTask = active.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] || null;
-        const total = heroTask ? (heroTask.total || 0) : 0;
-        const done = heroTask ? (heroTask.visited || 0) : 0;
-        const left = Math.max(0, total - done);
-        const pct = total ? Math.round(done / total * 100) : 0;
-        const heroDeadline = heroTask ? fmtDeadline(heroTask.deadlineRaw) : '';
-        // 大卡四场景：今日有计划 / 有任务但今日无安排 / 任务全部结束 / 无任何任务
-        let cardMode = 'empty';
-        if (total > 0) cardMode = 'today';
-        else if (active.length) cardMode = 'rest';
-        else if (tasks.length) cardMode = 'allDone';
-        this.setData({ todayTotal: total, todayDone: done, todayLeft: left, todayPct: pct, cardMode, heroDeadline });
-        if (cardMode === 'today') this.drawRing();
+        // ⭐ 2026-10-15：**改走与"缓存渲染"同一套**（`_applyHomeTasks`）——
+        //   原来这两处各写一份同样的渲染，是个"同步点"（改一处忘一处就会出现
+        //   "缓存进来显示一套、云端回来显示另一套"）。现在只留一处实现。
+        this._applyHomeTasks(res.tasks, false);
+        // （hero 大卡 / 审核观察员 / 默认页签 / drawRing 等，都已在上面的 `_applyHomeTasks` 里做了）
         // ⭐ 2026-10-15：存一份本地（2 小时内再进首页就不必再拉一遍）
         try { _dc.set('homeTasks', 'me', { tasks: res.tasks || [] }); } catch (e) { /* 静默 */ }
         if (!mapCache.get(mapCache.curMode())) prefetchMapData();   // ⭐ 只在本地没有"今天的"地图缓存时才预取

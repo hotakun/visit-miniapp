@@ -1081,51 +1081,56 @@ async function list(salesmanId, isBoss) {
     }
   }
 
-  // 统计各任务拜访进度（按客户家数去重：同一客户多次拜访只算 1 家；ongoing 拜访中不算）
-  // 今日计划：任务创建日=第 1 天推算今天该拜访的客户名单，统计名单内已完成家数
-  // 今日有拜访中客户的任务集合（首页任务卡蓝边框用）
-  const ongSet = new Set();
-  {
-    const allIds = res.data.map(t => t._id);
-    if (allIds.length) {
-      let skip = 0;
-      const PAGE = 100;
-      while (true) {
-        const r = await db.collection('visits')
-          .where({ taskId: _.in(allIds), status: 'ongoing', visitedAt: todayStr() })
-          .field({ taskId: true })
-          .skip(skip).limit(PAGE).get();
-        r.data.forEach(v => ongSet.add(v.taskId));
-        if (r.data.length < PAGE) break;
-        skip += PAGE;
-      }
+  // ⭐⭐ 2026-10-15 老板定「别 N+1」：**一次把这些任务的拜访读回来，在内存里按任务分组** ——
+  //   原来是「每个任务各跑一遍分页循环」（`countVisitedCustomers` + 今日名单各一个 while），
+  //   10 个任务就是 20+ 次查询；老板看板 `bossBoard` 直接调本函数且是**全量任务**，N 更大。
+  //   现在不管多少个任务，都是**常数次查询**（1000/页，通常 1~2 页）。
+  //   ⚠️ 口径必须与原来逐任务查的**逐字一致**：
+  //     · 累计"已拜访" = status ∈ {normal, pending_review}、**按 customerId 去重**
+  //     · "拜访中" = status === 'ongoing' 且 visitedAt === 今天（原来只查今天的 ongoing）
+  //     · "今日完成" = 今日名单里的客户中、今天有拜访记录的（原来查的是 customerId ∈ 今日名单）
+  const allIds = res.data.map(t => t._id);
+  const visSetByTask = {};      // taskId -> Set(customerId)：累计已拜访（去重）
+  const todaySetByTask = {};    // taskId -> Set(customerId)：今天拜访过的
+  const ongSet = new Set();     // 今天有"拜访中"的任务（首页任务卡蓝边框用）
+  if (allIds.length) {
+    const _today = todayStr();
+    let skip = 0;
+    const PAGE = 1000;
+    while (true) {
+      const r = await db.collection('visits')
+        .where({ taskId: _.in(allIds) })
+        .field({ taskId: true, customerId: true, status: true, visitedAt: true })
+        .skip(skip).limit(PAGE).get();
+      (r.data || []).forEach(v => {
+        const tid = v.taskId;
+        if (!tid) return;
+        if (v.status === 'ongoing') { if (v.visitedAt === _today) ongSet.add(tid); return; }
+        if (v.status !== 'normal' && v.status !== 'pending_review') return;
+        (visSetByTask[tid] = visSetByTask[tid] || new Set()).add(v.customerId);
+        if (v.visitedAt === _today) (todaySetByTask[tid] = todaySetByTask[tid] || new Set()).add(v.customerId);
+      });
+      if ((r.data || []).length < PAGE) break;
+      skip += PAGE;
+      if (skip > 50000) break;   // 保险：最多 5 万条
     }
   }
-  const tasks = [];
-  for (const t of res.data) {
-    const visited = await countVisitedCustomers(t._id);
+  const _today2 = todayStr();
+  const tasks = res.data.map(t => {
+    // ⭐ 2026-10-15：累计"已拜访"改用上面**一次性分好组**的 Set（原来每个任务单独跑一遍分页查询）
+    const visited = (visSetByTask[t._id] || new Set()).size;
     const dayIdx = dayIndexOf(t.startDate, t.createdAt);
     const plan = (t.dayPlan || []).find(p => p.day === dayIdx);
     const todayIds = plan ? (plan.customerIds || []) : [];
+    // ⚠️ 口径与原来一致：**只数"今日名单里"的**（原来查的就是 `customerId ∈ 今日名单`）
     let todayDone = 0;
     if (todayIds.length) {
-      const doneSet = new Set();
-      let skip = 0;
-      const PAGE = 100;
-      while (true) {
-        const r = await db.collection('visits')
-          .where({ taskId: t._id, customerId: _.in(todayIds), status: _.in(['normal', 'pending_review']) })
-          .field({ customerId: true })
-          .skip(skip).limit(PAGE).get();
-        r.data.forEach(v => doneSet.add(v.customerId));
-        if (r.data.length < PAGE) break;
-        skip += PAGE;
-      }
-      todayDone = doneSet.size;
+      const set = todaySetByTask[t._id];
+      if (set) todayIds.forEach(id => { if (set.has(id)) todayDone++; });
     }
     const total = (t.customerIds || []).length;
-    const expired = t.status === 'published' && t.deadline && String(t.deadline) <= todayStr();
-    tasks.push({
+    const expired = t.status === 'published' && t.deadline && String(t.deadline) <= _today2;
+    return {
       _id: t._id,
       name: t.name,
       taskNo: t.taskNo || '',
@@ -1143,8 +1148,8 @@ async function list(salesmanId, isBoss) {
       // 老板模式（2026-09-09 §7.13）：任务归属信息供首页/任务地图显示
       salesmanId: isBoss ? (t.salesmanId || '') : undefined,
       salesmanName: isBoss ? (nameMap[t.salesmanId] || t.salesmanName || '') : undefined
-    });
-  }
+    };
+  });
   return { ok: true, tasks };
 }
 

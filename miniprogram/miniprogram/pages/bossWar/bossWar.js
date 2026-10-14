@@ -42,7 +42,33 @@ Page({
   onUnload() { this.clearTimer(); },
   clearTimer() { if (this._timer) { clearInterval(this._timer); this._timer = null; } },
 
-  async load(silent) {
+  // ⭐ 2026-10-15 老板定「把缓存用好」：抽一个**只做"数据 → 界面"**的函数（不联网），
+  //   让"云端数据"与"本地缓存"共用同一套渲染（与 task.js/home.js 同一做法）。
+  _renderWar(b, w) {
+    const allPts = w.points || [];
+    const warnCount = allPts.filter(p => p && !p.noData && p.state === 'still' && p.ageMin > 40).length;
+    const upd = new Date(Date.now() + 8 * 3600 * 1000);
+    const updateText = `${String(upd.getUTCHours()).padStart(2, '0')}:${String(upd.getUTCMinutes()).padStart(2, '0')} 更新`;
+    this._points = allPts;
+    // 动态流时间格式化（毫秒 → HH:mm，wxml 直接显示）
+    const events = (w.events || []).map(v => ({ ...v, t: this.fmtHM(v.t) }));
+    this.setData({
+      loading: false, empty: '',
+      points: allPts, events, stats: (b && b.ok) ? (b.stats || null) : null,
+      warnCount, updateText
+    });
+    this.renderMarkers();
+    // 2026-09-09 老板定：只在首次进入战况地图时自动撑满一次；之后自动刷新只更新数据不动视野
+    if (!this._fitted) { this._fitted = true; this.fitAll(); }
+  },
+  async load(silent, force) {
+    const dc = require('../../utils/detailCache');
+    // ⭐⭐ 2026-10-15 老板定「把缓存用好」：**5 分钟内已经拉过 → 直接用缓存**（与它自己 5 分钟自动刷新的间隔一致）。
+    //   手动 ↻ 传 `force=true` 绕过。⚠️ 战况是"要实时"的，所以 TTL 只给 5 分钟、不是一整天。
+    if (!force) {
+      const hit = dc.get('bossWar', 'all', 5 * 60 * 1000);
+      if (hit && hit.w && hit.w.ok) { this._renderWar(hit.b || {}, hit.w); return; }
+    }
     if (!silent) this.setData({ loading: true });
     try {
       const [b, w] = await Promise.all([
@@ -50,21 +76,8 @@ Page({
         api.call('tasks', { action: 'bossWar' })
       ]);
       if (!w.ok) { this.setData({ loading: false, empty: w.msg || '加载失败' }); return; }
-      const allPts = w.points || [];
-      const warnCount = allPts.filter(p => p && !p.noData && p.state === 'still' && p.ageMin > 40).length;
-      const upd = new Date(Date.now() + 8 * 3600 * 1000);
-      const updateText = `${String(upd.getUTCHours()).padStart(2, '0')}:${String(upd.getUTCMinutes()).padStart(2, '0')} 更新`;
-      this._points = allPts;
-      // 动态流时间格式化（毫秒 → HH:mm，wxml 直接显示）
-      const events = (w.events || []).map(v => ({ ...v, t: this.fmtHM(v.t) }));
-      this.setData({
-        loading: false, empty: '',
-        points: allPts, events, stats: b.ok ? (b.stats || null) : null,
-        warnCount, updateText
-      });
-      this.renderMarkers();
-      // 2026-09-09 老板定：只在首次进入战况地图时自动撑满一次；之后 30 秒自动刷新只更新数据不动视野
-      if (!this._fitted) { this._fitted = true; this.fitAll(); }
+      try { dc.set('bossWar', 'all', { b: b, w: w }); } catch (e) { /* 静默：缓存失败不影响显示 */ }
+      this._renderWar(b, w);
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
     }
@@ -91,7 +104,7 @@ Page({
     this.setData({ refreshing: true });
     setTimeout(() => this.setData({ refreshing: false }), 800);
     try {
-      await this.load(true);
+      await this.load(true, true);   // ⭐ 2026-10-15：手动 ↻ = **绕过 5 分钟缓存**强制拉（老板点刷新就得看到新的）
       this.fitAll();
     } finally {
       this._refreshing = false;
