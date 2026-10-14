@@ -787,20 +787,28 @@ function writeChangeLog(rec) {
         fs2.writeFileSync(tmp, content, 'utf8');
         fs2.renameSync(tmp, full);
       };
+      // ⭐⭐ 2026-10-15 修（依《全项目审查》D10）：**先把四个文件的内容全取回来，再动磁盘** ——
+      //   原来的顺序是"先覆盖 admin.html / nt-map.js，**之后**才去下载并校验后端"：
+      //   一旦后端那两片拉不到（或校验不过），前端**已经换成新版**了 → 立刻变成「**新前端 + 旧后端**」
+      //   —— 正是 2026-10-07 踩过的那个坑（新前端调不到新接口，文员端拉数据全失败）。
+      //   现在：任何一步 grab 失败都**还没写任何文件**（旧版完整保留）；四份都拿到了才依次落盘。
+      //   ⚠️ 报告建议的"不可变 releaseId + manifest/hash + 切版本目录"是更大的改造，本次未做（记入待办）；
+      //      这里先把"半更新"这个最要命的窗口关掉。
       const html = await grab('adminHtml', meta.adminHtmlParts);
       const ntmap = await grab('ntMapJs', meta.ntMapJsParts);
-      require('fs').writeFileSync(require('path').join(__dirname, 'admin.html'), html, 'utf8');
-      require('fs').writeFileSync(require('path').join(__dirname, 'nt-map.js'), ntmap, 'utf8');
-      // ⭐ 2026-10-07 老板定「一劳永逸」：**后端文件也一起更新**。
-      //   背景：文员端以前只能更新前端 → 出现「新 admin.html + 一个月前的旧 server.js」→
-      //   新前端调不到 /mapPoints 等新接口 → **拉取数据全失败**。
-      //   ⚠️ 兼容：云端没传过这两个 kind 时（serverJsParts/storeJsParts 为 0）自动跳过。
-      //   ⚠️ 这两个文件**改完必须重启后台**才生效 —— 所以返回里带 needRestart，由前端提示用户。
-      // ⚠️ 后端文件在云端是 **base64** 存的（原因见 admin/upload_dist.js 里的说明），这里解回 utf8 再写
       const backend = [];
       const unb64 = s => Buffer.from(String(s || ''), 'base64').toString('utf8');
-      if (meta.serverJsParts > 0) { writeBackend('server.js', unb64(await grab('serverJs', meta.serverJsParts))); backend.push('server.js'); }
-      if (meta.storeJsParts > 0) { writeBackend('store.js', unb64(await grab('storeJs', meta.storeJsParts))); backend.push('store.js'); }
+      // ⚠️ 后端文件在云端是 **base64** 存的（原因见 admin/upload_dist.js 里的说明），这里解回 utf8 再写
+      //   ⚠️ 兼容：云端没传过这两个 kind 时（Parts 为 0）保持 null → 下面跳过，不动本地这两个文件
+      const serverJsSrc = meta.serverJsParts > 0 ? unb64(await grab('serverJs', meta.serverJsParts)) : null;
+      const storeJsSrc = meta.storeJsParts > 0 ? unb64(await grab('storeJs', meta.storeJsParts)) : null;
+      // —— 到这里四份内容都在手里了，才开始落盘 ——
+      require('fs').writeFileSync(require('path').join(__dirname, 'admin.html'), html, 'utf8');
+      require('fs').writeFileSync(require('path').join(__dirname, 'nt-map.js'), ntmap, 'utf8');
+      // ⭐ 2026-10-07 老板定「一劳永逸」：**后端文件也一起更新**（文员端不再出现"新前端 + 旧后端"）。
+      //   ⚠️ 这两个文件**改完必须重启后台**才生效 —— 返回里带 needRestart，由前端提示用户。
+      if (serverJsSrc !== null) { writeBackend('server.js', serverJsSrc); backend.push('server.js'); }
+      if (storeJsSrc !== null) { writeBackend('store.js', storeJsSrc); backend.push('store.js'); }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, version: meta.version, backend: backend, needRestart: backend.length > 0 }));
     } catch (e) {

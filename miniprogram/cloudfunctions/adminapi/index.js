@@ -3755,6 +3755,12 @@ async function refreshFromMall(event) {
       diff.push({ field: 'salesman', from: String(c.salesman || ''), to: nvSm });
       upd.salesman = m.salesman;
     }
+    // ⭐⭐ 2026-10-15 修（依《全项目审查》D09 + 项目铁律「合并时店名一律以商城为准」）：
+    //   **写了 `name` 就必须同步 `nameRaw`** —— 列表 / 任务页读的是 `nameRaw || name`，
+    //   只写 `name` 就会出现「**详情页是新名、列表还是旧名**」。
+    //   `mallFieldsFrom()` 末尾本来就有这句（`if (out.name) out.nameRaw = out.name;`），
+    //   但**本函数不走它**（这里是逐字段 diff 后直接写 `upd`）→ 所以必须在这儿补一遍。
+    if (upd.name) upd.nameRaw = upd.name;
     if (diff.length) {
       items.push({ customerId: c._id, name: c.name, mallName: m.name || '', changes: diff });
       writes.push({ id: c._id, upd });
