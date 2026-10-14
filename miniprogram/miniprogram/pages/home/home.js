@@ -1,5 +1,6 @@
 const api = require('../../utils/api');
 const { SUBSCRIBE_TEMPLATE_ID } = require('../../utils/config');
+const mapCache = require('../../utils/mapCache');   // ⭐ 2026-10-14：地图秒开缓存（与 pages/map 共用「一处定义」，别再各写一份）
 
 // 每日鸡汤短语（随机显示，可随时增删替换；100 条）
 const PHRASES = [
@@ -177,26 +178,14 @@ function bossPhrase(uid) {
 }
 
 // ===== 地图秒开预取（2026-09-09 提速 A 方案：首页停留时静默把地图摘要拉好存本地缓存）=====
-const MAP_CACHE_KEY = 'map_cache';
-const MAP_CACHE_TTL = 10 * 60 * 1000; // 缓存 10 分钟内有效（地图打开先渲染缓存，云端数据到达后静默更新）
-
-function getMapCache() {
-  try {
-    const c = wx.getStorageSync(MAP_CACHE_KEY);
-    if (c && c.at && Date.now() - Number(c.at) < MAP_CACHE_TTL && c.map) return c;
-  } catch (e) { /* 静默 */ }
-  return null;
-}
-
-function setMapCache(res) {
-  try {
-    wx.setStorageSync(MAP_CACHE_KEY, { at: Date.now(), map: res.map || null, tasks: res.tasks || null });
-  } catch (e) { /* 静默 */ }
-}
-
+// ⚠️ 2026-10-14（依审计报告）：缓存实现**已抽到 `utils/mapCache.js` 一处定义** ——
+//   原来这里和 `pages/map/map.js` 各写一份、还共用固定键 `'map_cache'`，两个毛病：
+//     ① 改一处漏一处 → 首页预取写的键与地图页读的键对不上 → **"秒开"静默失效**；
+//     ② 固定键在同一台手机切身份（业务员 ↔ 老板）或换任务时 → **首屏串上一个身份/任务的数据**。
+//   现在键统一为 `map_cache:<模式>:<当前登录人 _id>`，模式由 `mapCache.curMode()` 给（老板=boss / 业务员=task:self）。
 // 首页后台预取地图摘要（静默，失败不影响首页）
 function prefetchMapData() {
-  api.call('tasks', { action: 'mapData' }).then(setMapCache).catch(() => {});
+  api.call('tasks', { action: 'mapData' }).then(r => mapCache.set(r, mapCache.curMode())).catch(() => {});
 }
 
 // 通用取句：uid + 日期做确定性种子

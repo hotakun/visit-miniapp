@@ -1,26 +1,17 @@
 const api = require('../../utils/api');
 const loc = require('../../utils/loc');
+const mapCache = require('../../utils/mapCache');   // ⭐ 2026-10-14：地图秒开缓存（与 pages/home 共用「一处定义」）
 
 // 仓库坐标（2026-09-09 老板定：线路起点=仓库时显示小五角星标记）
 const WH = { lat: 28.970802, lng: 120.154526 };
 
-// ===== 地图秒开缓存（2026-09-09 提速 A 方案：首页预取 → 地图打开先渲染缓存，云端到达后静默更新）=====
-const MAP_CACHE_KEY = 'map_cache';
-const MAP_CACHE_TTL = 10 * 60 * 1000;
-
-function getMapCache() {
-  try {
-    const c = wx.getStorageSync(MAP_CACHE_KEY);
-    if (c && c.at && Date.now() - Number(c.at) < MAP_CACHE_TTL && c.map) return c;
-  } catch (e) { /* 静默 */ }
-  return null;
-}
-
-function setMapCache(res) {
-  try {
-    wx.setStorageSync(MAP_CACHE_KEY, { at: Date.now(), map: res.map || null, tasks: res.tasks || null });
-  } catch (e) { /* 静默 */ }
-}
+// ===== 地图秒开缓存 =====
+// ⚠️ 2026-10-14（依审计报告）：实现**已抽到 `utils/mapCache.js` 一处定义** ——
+//   原来 `pages/home/home.js`（首页预取·只写）与本页**各写一份、共用固定键 `'map_cache'`**，两个毛病：
+//     ① 改一处漏一处 → 首页预取写的键与地图页读的键对不上 → **"秒开"静默失效**；
+//     ② 固定键在同一台手机**切身份**（业务员 ↔ 老板）或**换任务**时 → **首屏串上一个身份/任务的数据**。
+//   键规则：`map_cache:<模式>:<当前登录人 _id>`；模式：老板看板 `boss` / 某任务 `task:<taskId>` / 自己的当前任务 `task:self`。
+//   本页用法：老板看板 → `mapCache.get('boss')`、`mapCache.set(res,'boss')`；任务 → `'task:<id>'` 或 `'task:self'`。
 
 // 地图页（2026-09-08 二期核心：独立自取当前任务，天页签+客户点/绿色路线/下一家引导/导航）
 Page({
@@ -64,7 +55,7 @@ Page({
   // 2026-09-10：bossMen 增加 name（业务员名）——下拉按钮只显示 name，避免「业务员名 · 任务名」把按钮撑宽
   async loadBoss() {
     // 2026-09-09 提速 A：缓存先行秒开（首页已静默预取：任务下拉+第一个任务地图）
-    const c = getMapCache();
+    const c = mapCache.get('boss');
     if (c && c.map) {
       const bossMen = (c.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
       this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
@@ -75,11 +66,16 @@ Page({
     try {
       const res = await api.call('tasks', { action: 'mapData' }); // 2026-09-09 提速 B：轻量接口一次拿全
       if (!res.ok) { this.setData({ loading: false, empty: res.msg || '加载失败' }); return; }
-      setMapCache(res);
+      mapCache.set(res, 'boss');
       const bossMen = (res.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
       this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
       if (!bossMen.length) { this.setData({ loading: false, empty: '暂无进行中的任务' }); return; }
       this.applyMapData(res.map);
+      // ⭐ 2026-10-14（依审计报告）：**真的拿到任务才标"已加载"**。
+      //   原来全文**没有一处置 true** → `onShow` 的 `if (!this._loaded)` 永远成立 →
+      //   每次切回地图 Tab / 从子页返回都白拉一次 `tasks.mapData`（纯浪费的云调用）。
+      //   ⚠️ 刻意**不在"暂无任务"分支置 true**：那种情况保持"每次进来都试一下"，任务一发布就能看到。
+      this._loaded = true;
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
     }
@@ -99,7 +95,7 @@ Page({
     // 2026-09-09 提速 A：业务员首载先渲染缓存（老板模式由 loadBoss 处理缓存）；之后云端数据到达静默更新
     if (!taskId && !this._cacheTried) {
       this._cacheTried = true;
-      const c = getMapCache();
+      const c = mapCache.get('task:self');
       if (c && c.map) this.applyMapData(c.map);
     }
     try {
@@ -109,8 +105,10 @@ Page({
         this.setData({ loading: false, empty: '暂无进行中的任务\n任务发布后，这里会显示拜访路线与顺序' });
         return;
       }
-      setMapCache(res);
+      mapCache.set(res, taskId ? ('task:' + taskId) : 'task:self');
       this.applyMapData(res.map, keepDay);
+      // ⭐ 2026-10-14：成功拿到任务才标"已加载"（同 loadBoss；"暂无任务"分支刻意不置，保持及时性）
+      this._loaded = true;
     } catch (e) {
       this.setData({ loading: false, empty: '网络异常，请重试' });
     }
