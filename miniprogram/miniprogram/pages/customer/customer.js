@@ -827,6 +827,11 @@ Page({
     wx.hideLoading();
     if (!r || !r.ok) { api.toast((r && r.msg) || '删除失败，请稍后再试'); return; }
     wx.showToast({ title: '已删除', icon: 'success' });
+    // ⭐⭐ 2026-10-14 老板报障（业务员："提示删除了、记录还在"）：**重拉前必须先强制**！
+    //   详情页现在是"当天有缓存就直接渲染、不问云端"（`onLoad` 里的 `if (!_force)`），
+    //   所以**不置 `_forceReload` 的"重拉"等于什么都没拉到** —— 表现就是"删了、还在"。
+    //   ⚠️ 云端那一次其实**真删掉了**（实测 `visit_deleted` 名单有记录），纯粹是页面没刷新。
+    this._forceReload = true;
     this.onLoad({ id: this._cid });   // 重拉详情（铁律：改完必须真的刷新）
   },
   // ---------- 📝 快速记事（2026-10-10 老板当天改回：放在「更正信息」**左边**）----------
@@ -839,8 +844,10 @@ Page({
     });
   },
   // 更正保存后由 custedit 页回调（铁律：改完之后必须真的刷新）—— 重跑一次详情加载
+  // ⚠️ 2026-10-14：**必须先置 `_forceReload`** —— 否则"重跑 onLoad"会命中当天缓存、拿的还是旧数据
+  //   （同 `delVisit` 那处；这是"改了看不到"的另一条同类路径）。
   onCorrectDone() {
-    if (this._cid) this.onLoad({ id: this._cid });
+    if (this._cid) { this._forceReload = true; this.onLoad({ id: this._cid }); }
   },
   // ---------- 📝 我的记事（这一家本机记了几条；点进列表只看这一家）----------
   goNotes() {
@@ -1122,6 +1129,7 @@ Page({
     if (!r || !r.ok) { api.toast((r && r.msg) || '删除失败，请稍后再试'); return; }
     this.setData({ viewerShow: false });
     wx.showToast({ title: '已删除', icon: 'success' });
+    this._forceReload = true;   // ⚠️ 2026-10-14：同 delVisit —— 不强制就命中当天缓存，删了也看不到
     this.onLoad({ id: this._cid });   // 重拉详情（照片会前移，界面保持一致）
   },
 
