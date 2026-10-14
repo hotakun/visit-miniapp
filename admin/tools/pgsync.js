@@ -205,34 +205,10 @@ async function syncMallPending() {
   } catch (e) { console.error('[sync] mall_pending 同步失败（下轮再试）:', e.message); }
 }
 
-async function round() {
-  // ⭐⭐ 2026-10-14 老板定（方案 D：**有变动才跑**）——
-  //   `pollDirty` 一次调用带回云端全部「变动时间戳」；**三个都没变 → 整轮只花这 1 次调用**，
-  //   跳过后面 6 个同步（原来每轮无条件全跑 ≈ 7 次/轮 ≈ 2100 次/天，其中绝大多数是"没人在用"的空转）。
-  //   ⚠️ **兜底**：信号一直没变也每 IDLE_FALLBACK_MIN 分钟无条件跑一轮（防漏写信号 → 静默不更新）。
-  try { await syncPollDirty(); } catch (e) { console.error('[sync] pollDirty 失败（下轮再试）:', e.message); }
-  const _changed = (_pollSeen && _pollSeen !== _lastPollHandled)
-    || (_custSeen && _custSeen !== _lastCustHandled)
-    || (_taskSeen && _taskSeen !== _lastTaskHandled)
-    || (_bmDirtySeen && _bmDirtySeen !== _lastBmDirtyHandled);
-  const _idleTooLong = !_lastBusyRun || (Date.now() - _lastBusyRun >= IDLE_FALLBACK_MIN * 60000);
-  if (!_changed && !_idleTooLong) {
-    const _left = Math.max(0, Math.round((IDLE_FALLBACK_MIN * 60000 - (Date.now() - _lastBusyRun)) / 60000));
-    console.log('[sync] 无变动 → 只查了信号（省调用；约 ' + _left + ' 分钟后兜底跑一轮）');
-    return;
-  }
-  _lastBusyRun = Date.now();
-  _lastPollHandled = _pollSeen;
-  _lastCustHandled = _custSeen;
-  // ⭐⭐ 2026-10-14 补漏（老板要求"抱着找茬的态度逐项核查"时揪出来的）：
-  //   `_lastTaskHandled` **只在上面 `_changed` 判断里被用过、从来没人给它赋值** →
-  //   只要云端存在过 `taskDirtyAt`（建/改/派/撤任务都会写），`_taskSeen !== 0` **恒为真** →
-  //   `_changed` 永远成立 → **「有变动才跑」彻底失效、每轮照样跑全套**（方案 D 等于没生效）。
-  //   这里在"跑完全套"之后补上赋值，与 `_lastPollHandled` / `_lastCustHandled` 同级。
-  //   ⚠️ 另外两个（`_lastBmDirtyHandled` / `_lastVisitDirtyHandled`）是在各自"全量对账跑完"后赋值的，
-  //      语义更精确，**不要**挪到这里来。
-  _lastTaskHandled = _taskSeen;
-
+// ⭐⭐ 2026-10-15 新增：**客户增量同步**（从 round() 的主干里抽出来）——
+//   抽出来的唯一目的：让它可以**每轮无条件调用**（不受下面"有变动才跑"的门限制）。
+//   背景见 round() 开头那段说明（老板实测：改了店名 → 详情对了、后台列表还是旧名）。
+async function syncCustomers() {
   let since = await watermark(), got = 0, maxU = since;
   // ⭐⭐ 2026-10-14 修（依《全项目审查》D01，报告属实 —— 这是"后台永久漏客户"的根因）：
   //   ⚠️ 原来每页都 `since = maxU`（用"本批最大 updatedAt"当前进水位），**且从不传 cursor** ——
@@ -272,6 +248,49 @@ async function round() {
     await setWatermark(maxU);
     console.log(`[sync] 补了 ${got} 条，水位 → ${new Date(maxU).toLocaleString()}`);
   }
+}
+
+async function round() {
+  // ⭐⭐ 2026-10-14 老板定（方案 D：**有变动才跑**）——
+  //   `pollDirty` 一次调用带回云端全部「变动时间戳」；**三个都没变 → 整轮只花这 1 次调用**，
+  //   跳过后面 6 个同步（原来每轮无条件全跑 ≈ 7 次/轮 ≈ 2100 次/天，其中绝大多数是"没人在用"的空转）。
+  //   ⚠️ **兜底**：信号一直没变也每 IDLE_FALLBACK_MIN 分钟无条件跑一轮（防漏写信号 → 静默不更新）。
+  try { await syncPollDirty(); } catch (e) { console.error('[sync] pollDirty 失败（下轮再试）:', e.message); }
+  const _changed = (_pollSeen && _pollSeen !== _lastPollHandled)
+    || (_custSeen && _custSeen !== _lastCustHandled)
+    || (_taskSeen && _taskSeen !== _lastTaskHandled)
+    || (_bmDirtySeen && _bmDirtySeen !== _lastBmDirtyHandled);
+  const _idleTooLong = !_lastBusyRun || (Date.now() - _lastBusyRun >= IDLE_FALLBACK_MIN * 60000);
+  // ⭐⭐ 2026-10-15 修（老板实测撞上：手机端/后台改了客户 → 详情页对了，但**后台列表还是旧名**）：
+  //   **客户增量同步必须【每轮都跑】**，不能等变动信号 —— 因为"会改客户"的写点太多：
+  //   后台改字段(updateCustomerFields) / 手机端「更正信息」(correctCustomer) / 商城更新(applyMallMatch·refreshFromMall)
+  //   / 现场提报采纳 / 删客户·恢复客户 …… **只要漏写一处 `custDirtyAt`，那条改动就要等兜底**
+  //   （最长 IDLE_FALLBACK_MIN 分钟）才看得见。实测：`custDirtyAt` 停在 10-14 04:22 UTC，而客户改动在 10-14 21:43 UTC
+  //   → 信号没动 → 整轮被跳过 → PG 一直停在昨天。
+  //   ⚠️ 成本极低：`custSync` 是**增量**（按水位拉，通常 0~几条 upsert）——
+  //      真正贵的是 `batch_members`（5585 条全量）/ `visits`（全量对账）那种**全量重拉**，
+  //      那些仍然留在下面这道门之后（省调用的大头照省）。
+  //   ⚠️ 单独 try/catch：客户同步万一失败，**不能连累**后面那 6 项（各自也有 try/catch）。
+  try { await syncCustomers(); } catch (e) { console.error('[sync] 客户增量同步失败（下轮再试）:', e.message); }
+  if (!_changed && !_idleTooLong) {
+    const _left = Math.max(0, Math.round((IDLE_FALLBACK_MIN * 60000 - (Date.now() - _lastBusyRun)) / 60000));
+    console.log('[sync] 无变动 → 只查了信号（省调用；约 ' + _left + ' 分钟后兜底跑一轮）');
+    return;
+  }
+  _lastBusyRun = Date.now();
+  _lastPollHandled = _pollSeen;
+  _lastCustHandled = _custSeen;
+  // ⭐⭐ 2026-10-14 补漏（老板要求"抱着找茬的态度逐项核查"时揪出来的）：
+  //   `_lastTaskHandled` **只在上面 `_changed` 判断里被用过、从来没人给它赋值** →
+  //   只要云端存在过 `taskDirtyAt`（建/改/派/撤任务都会写），`_taskSeen !== 0` **恒为真** →
+  //   `_changed` 永远成立 → **「有变动才跑」彻底失效、每轮照样跑全套**（方案 D 等于没生效）。
+  //   这里在"跑完全套"之后补上赋值，与 `_lastPollHandled` / `_lastCustHandled` 同级。
+  //   ⚠️ 另外两个（`_lastBmDirtyHandled` / `_lastVisitDirtyHandled`）是在各自"全量对账跑完"后赋值的，
+  //      语义更精确，**不要**挪到这里来。
+  _lastTaskHandled = _taskSeen;
+
+  // ⚠️ 2026-10-15：客户同步那段已抽成 `syncCustomers()`，并**提到上面那道门之前**（每轮都跑）——
+  //    原因见 round() 开头处的说明。这里**不再重复跑一遍**（原来它就在这个位置）。
   // ⭐ 顺带同步批次成员（失败不影响上面 customers 的结果，下轮再试）
   // ⚠️ 2026-10-14：`syncPollDirty()` 已提到 round() 开头（信号判断要用它），这里**不再重复调**。
   try { await syncBatchMembers(); } catch (e) { console.error('[sync] batch_members 同步失败（下轮再试）:', e.message); }
@@ -322,10 +341,10 @@ let _lastCustHandled = 0;      // 上次"跑过全套"时的 custDirtyAt
 let _lastTaskHandled = 0;      // 上次"跑过全套"时的 taskDirtyAt
 let _lastBusyRun = 0;          // 上次真正跑全套的时刻（0 = 还没跑过 → 首轮必跑）
 // ⚠️ 兜底：即使信号一直没变，也每 IDLE_FALLBACK_MIN 分钟无条件跑一轮 —— 防某处漏写信号造成"静默不更新"。
-//   ⭐ 定 2 小时（老板 2026-10-14 定）：**计时只在"真正跑全套"时才重置**，所以只要有人在用
-//      （一直有变动信号 → 一直跑全套 → 一直重置），兜底**根本轮不到**；只有真的没人用时才触发。
-//      → 有信号写点覆盖的动作**都是即时反映**，兜底只当"漏信号的保险"，设长一点更省。
-const IDLE_FALLBACK_MIN = Number(CFG.idleFallbackMinutes) || 120;
+//   ⭐ 2026-10-14 原定 2 小时；**2026-10-15 收紧到 20 分钟** —— 因为客户同步已改成"每轮都跑"，
+//      这道兜底现在只当"其余 6 项（批次成员/拜访/任务/商城…）漏写信号"的保险。
+//      设长一点更省（有信号时本来就是即时跑），但要能兜住"漏信号"的意外，20 分钟比较稳妥。
+const IDLE_FALLBACK_MIN = Number(CFG.idleFallbackMinutes) || 20;
 // ⚠️⚠️ 2026-10-14 实测（部署前用探针脚本验过，拦下一次事故）：
 //   `sync_state.watermark` 的列类型是 **bigint**（它一直是给时间戳用的），
 //   **存不了字符串游标**（`batch_members._id` 是 CloudBase 生成的字符串）——
