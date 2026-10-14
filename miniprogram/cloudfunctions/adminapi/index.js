@@ -652,6 +652,15 @@ exports.main = async (event) => {
     event._admin = user;
   }
 
+  // ⭐⭐ 2026-10-15（老板定）：**"会改客户档案"的 action，鉴权通过后统一报一次客户变动信号** ——
+  //   这样后台/手机端改完客户，服务器同步器**下一轮（≤5 分钟）**就会把 PG 与后台缓存刷新；
+  //   不必再依赖"每一处写点都记得报信号"（30+ 处散在十几条链路里，必漏 —— 2026-10-15 老板实测撞上）。
+  //   ⚠️ 放在鉴权**之后**：未授权的请求不报（否则被人刷就是白刷信号）。
+  //   ⚠️ 不判断"这次到底成功没有"：多报一次只是"多同步一轮"（增量、极轻）；漏报才是"改了看不到"。
+  //   ⚠️ 必须 `await` —— 云函数 return 后会冻结，fire-and-forget 的异步写**可能根本没执行**。
+  //   （`touchCustDirty` 内部已 try/catch + 3 秒防抖，写失败只 log，绝不影响主流程。）
+  if (CUST_WRITE_ACTIONS.has(action)) { await touchCustDirty(); }
+
   try {
     if (action === 'login') return await login(event);
     if (action === 'listTasks') return await listTasks(event);
@@ -1426,6 +1435,33 @@ async function touchTaskDirty() {
 // ⭐ 2026-10-14：**客户变动信号**（`custDirtyAt`）的统一写口 —— 给「删客户 / 恢复客户」用。
 //   为什么需要：同步器改成"有变动才跑"后，这两个动作（原来**不写任何信号**）会让后台看到的数据滞后。
 //   ⚠️ 与 `touchBatchDirty` / `touchTaskDirty` 同一套路：失败只 log、不影响主流程、带 3 秒防抖。
+// ⭐⭐ 2026-10-15（老板定）：**会"改客户档案"的 action 白名单** —— 鉴权通过后统一报一次客户变动信号。
+//   · 为什么"统一报"而不是逐处补：会改客户的写点有 30+ 处、散在十几条链路里
+//     （后台改字段/改坐标/改备注、商城比对与从商城更新、审核采纳、照片/录音、导入、回收站…），**逐处补必漏**；
+//     漏一处的后果 = "改完要等兜底（默认 20 分钟）才在后台/地图上看得见"（2026-10-15 老板实测撞上）。
+//   · 清单怎么来的：对 adminapi 做静态归属（扫 collection('customers') 后紧跟写操作），再人工剔掉一个 ——
+//     ⚠️ `pollCustAudioText`（**轮询**用的：每次调用都会推进转写。若也报信号，信号会被持续刷新 →
+//        同步器每轮都跑全套 → 「有变动才跑」白做）。**只读 action 一律不准进这张表。**
+//   · ⚠️ 表里的名字必须都在上面的 `ACTIONS` 里（体检有对账）；维护口径一句话：**这个 action 会不会写 customers？**
+const CUST_WRITE_ACTIONS = new Set([
+  // 后台直接改客户
+  'updateCustomerFields', 'updateCustomerCoords', 'updateCustomerRemark', 'setCustPhotos',
+  // 商城链路（都写 customers 的商城字段）
+  'runMallMatch', 'applyMallMatch', 'applyMallPair', 'refreshFromMall', 'createMallCustomer', 'resolveMallClaim',
+  // 审核采纳（坐标审核 / 现场提报）
+  'reviewCoordFix', 'reviewFieldReport',
+  // 录音转写文字回写客户
+  'saveCustAudioText', 'deleteCustAudio',
+  // 导入
+  'importCustomers',
+  // 回收站（这两个原本各自也报过一次，重复无害）
+  'deleteCustomers', 'restoreCustomers',
+  // 补数据 / 修数据 / 清数据（运维工具；跑一次改很多，报一次正好）
+  'backfillMallCode', 'backfillGeo', 'backfillAddressFromPlat', 'backfillLastOrder',
+  'fixDupCustomers', 'fixLegacyPendingCoords', 'fixPlatMatched',
+  'purgeCustomers', 'resetTestData', 'wipeData',
+]);
+
 let _custDirtyTouched = 0;
 async function touchCustDirty() {
   const now = Date.now();

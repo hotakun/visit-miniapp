@@ -634,6 +634,39 @@ function checkCustWriteWatch() {
   if (!bad) console.log('  ✔ 写类调用对账：唯一入口没被绕过 · 白名单 action 云端都在（缓存失效不再靠人记）');
 }
 
+// ===== 第 15 项：客户变动信号「写类 action」对账（2026-10-15 老板实测后新增）=====
+//   事故：后台/手机端改了店名 → 客户详情页显示新名，但**后台客户管理列表还是旧名**。
+//   根因：同步器"有变动才跑"，而"会改客户的写点"里**只有删/恢复客户报了信号** → 整轮被跳过 → PG 不更新。
+//   根治：把"会改 customers 的 action"收成**一张清单** `CUST_WRITE_ACTIONS`，在 adminapi 入口统一报信号。
+//   必须盯死两条（否则改成"静默不报"，仍然只能肉眼发现）：
+//     ① 清单里的每个名字**必须真的在 `ACTIONS` 里**（写错名 = 该报信号时不报）
+//     ② 入口处**必须真的挂着**那句 `if (CUST_WRITE_ACTIONS.has(action)) …`（被误删就没人报了）
+function checkCustWriteActions() {
+  const abs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
+  if (!fs.existsSync(abs)) { fails.push('客户变动信号对账：缺 adminapi/index.js → 检查无法执行（按失败处理）'); return; }
+  const src = fs.readFileSync(abs, 'utf8');
+
+  const mAct = src.match(/const ACTIONS = \[([\s\S]*?)\];/);
+  if (!mAct) { fails.push('客户变动信号对账：抓不到 adminapi 的 ACTIONS → 检查无法执行（按失败处理）'); return; }
+  const actions = new Set((mAct[1].match(/'([^']+)'/g) || []).map(s => s.replace(/'/g, '')));
+
+  const mCw = src.match(/const CUST_WRITE_ACTIONS = new Set\(\[([\s\S]*?)\]\);/);
+  if (!mCw) { fails.push('客户变动信号对账：抓不到 adminapi 的 CUST_WRITE_ACTIONS → 检查无法执行（按失败处理）'); return; }
+  const cw = (mCw[1].match(/'([^']+)'/g) || []).map(s => s.replace(/'/g, ''));
+  if (!cw.length) { fails.push('客户变动信号对账：CUST_WRITE_ACTIONS 解析不到条目'); return; }
+
+  const missing = cw.filter(a => !actions.has(a));
+  if (missing.length) {
+    fails.push(`客户变动信号对账：CUST_WRITE_ACTIONS 里有 ${missing.length} 个名字不在 ACTIONS 白名单 → ${missing.join('、')}\n   ⚠️ 写错名 = 该报"客户变动"信号时不报 = 改了客户要等兜底才在后台/地图上看得见（2026-10-15 实测）\n   修法：改成 ACTIONS 里真实存在的 action 名，或把它从 CUST_WRITE_ACTIONS 删掉`);
+    return;
+  }
+  if (src.indexOf('if (CUST_WRITE_ACTIONS.has(action))') < 0) {
+    fails.push('客户变动信号对账：main 入口没有按 CUST_WRITE_ACTIONS 报信号 → 这张表形同虚设\n   修法：在鉴权通过后补回 `if (CUST_WRITE_ACTIONS.has(action)) { await touchCustDirty(); }`');
+    return;
+  }
+  console.log(`  ✔ 客户变动信号对账：CUST_WRITE_ACTIONS ${cw.length} 个 · 全在 ACTIONS 里 · 入口已挂钩（改客户 ≤5 分钟反映）`);
+}
+
 checkResultNames();
 checkAdminActionCalls();
 checkPagePaths();
@@ -642,6 +675,7 @@ checkCacheFields();
 checkMallFields();
 checkMallCodeRule();
 checkCustWriteWatch();
+checkCustWriteActions();
 console.log('─'.repeat(64));
 
 if (VERBOSE && !fails.length) { console.log('明细：'); okFiles.forEach(l => console.log(l)); console.log('─'.repeat(64)); }
@@ -653,5 +687,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段 / 商城字段 / 剥编号 / 写类调用对账）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段 / 商城字段 / 剥编号 / 写类调用对账 / 客户变动信号对账）');
 process.exit(0);
