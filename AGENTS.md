@@ -80,7 +80,14 @@
 - **小程序**（`miniprogram/miniprogram/`）**18 页**（照 `app.json` 的 `pages`，别再照旧文档的"15 页"）：home / login / task / customer / visit / map / mine / tasks-all / bossWar / notes / notes-editor / newshop / myshops / newshops / freevisit / freevisit-map / **coordfix**（📍报错整屏取点页）/ **custedit**（更正信息）；公共层 `utils/api.js`（**云函数调用单入口 `api.call(name, data)`，别绕开**）、`utils/media.js`、`utils/notes.js`、`utils/gps/`。`app.js` 配 envId `cloud1-d0gwlmbwp31181eb5` + `APP_VERSION`。
 - **云函数 12 个**（`miniprogram/cloudfunctions/`）：`adminapi`（**后台唯一入口**，130+ action）/ `tasks` / `visits` / `login` / `transcribe`（腾讯云 ASR 转写，带 `transcribePoll` 定时器每 5 分钟）/ `coordfix` / `importdata` / `init`（建集合自愈）/ `subscribe` / `bindadmin` / `ping` / `seed`。
 - **后台**（`admin/`）：`admin.html` 单文件前端（**CRLF**，1.36 万行 = 13,680 行）+ `server.js` 本地代理（HTTP API 直连 + `/mpTokenRefresh`）+ **`store.js` 本地缓存层** + `nt-map.js` + `tts_gen.py`。
-  - **`store.js`**：客户点缓存到 `admin/cache/map-points.json`，供地图与**客户管理页/批次总表**秒读；接口 `GET /mapPoints`、`POST /mapPoints/refresh`、`GET /mapPoints/status`、**`POST /mapPoints/patch`**（写后回写）。`VERSION` 控制字段版本（**当前 = 6**，改字段就要 +1，否则老缓存不作废）。**拉取要带后台账号密码**（`STORE_AUTH`）。
+  - **`store.js`**：客户点缓存到 `admin/cache/map-points.json`，供地图与**客户管理页/批次总表**秒读；接口 `GET /mapPoints`、`POST /mapPoints/refresh`、**`POST /mapPoints/refreshAgg`**（⭐ 2026-10-15 新增）、`GET /mapPoints/status`、**`POST /mapPoints/patch`**（写后回写）。`VERSION` 控制字段版本（**当前 = 6**，改字段就要 +1，否则老缓存不作废）。**拉取要带后台账号密码**（`STORE_AUTH`）。
+    · ⭐⭐ **2026-10-15：后台点「🔄 更新地图数据」改走 `refreshAgg`（只补那 7 个聚合列），不再重拉 65MB 全量。**
+      起因：老板那条网络拉全量单片要 30 秒+（我这边同样请求 2 秒）→ 每次点都超时失败。
+      而"订单数/额/最近下单 + 拜访数/最近拜访/全局态/任务内状态"这 7 列自己只有 ~1.4MB。
+      落地：`pgapi` 的 **`/aggAll`**（只查 `cust_agg` 一张表、零 JOIN、走主键索引；实测 2 万条 0.35 秒 / 159KB）
+      → `store.refreshAgg()`（**就地只改那 7 个键**，其余字段一字不碰；`syncedAt`/`maxU` 一律不动）
+      → `server.js` 的 `POST /mapPoints/refreshAgg`（**没本地缓存时自动退回全量 `refresh()`**）。
+      ⚠️ **`POST /mapPoints/refresh`（真全量）仍然保留** —— 新电脑 / 导入后刷新整个缓存 / 删掉缓存文件时还靠它。
   - **方案 C：建店后自动刷缓存**：手机端建店 → 写 `settings.custDirtyAt` → 后台读缓存时 `store.checkDirty()` → 有变动就 `custSync` 拉增量 → 前端每 15 秒问 `/mapPoints/status`（几 KB，**绝不重拉 22MB**）→ 条数变了就地重绘。缓存的 `maxU` 是**同步水位**（别用本地时钟打点）。
 - ⭐⭐ **L4「数据自主」**：**写仍走云开发（唯一真相源），只把"读大头"搬走**；手机端一行没改；**服务器挂了后台自动回退云开发**。
   · 链路：`业务员手机 ──写──> 云开发 ──同步器(每5分钟)──> 服务器 PG ──只读API(18081)──> 后台读`
