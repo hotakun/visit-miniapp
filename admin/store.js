@@ -123,7 +123,22 @@ async function refresh(callApi, cred) {
           //   这个 await 会**永久挂住** → 下面的 `finally` 永远走不到 → `syncing` 标志**永不释放**
           //   → 之后谁点都只回「正在拉取中，请稍候」，页面看起来"死了"。
           //   现在：30 秒拿不到这一片就抛错 → 外层 catch 给出人话 → finally 释放 syncing（可重试）。
-          const _resp = await fetch(_u, { signal: AbortSignal.timeout(30000) });
+          // ⚠️⚠️ 2026-10-15 二次加固（老板那条网络实测"单片也要 30 秒+"，而我这边只要 2 秒）：
+          //   ① 超时 30 → **60 秒**（给慢网络留一倍余量）；
+          //   ② **每片失败自动重试 3 次**（网络抖一下就自己扛过去，不再"整轮失败"）。
+          //   —— 分片已调到 5000 条/片（≈0.5 秒），所以"重试"的代价很小，不会拖很久。
+          let _resp = null, _lastErr = null;
+          for (let _try = 0; _try < 3; _try++) {
+            try {
+              _resp = await fetch(_u, { signal: AbortSignal.timeout(60000) });
+              break;
+            } catch (e) {
+              _lastErr = e;
+              progress.phase = '这一片没下来（第 ' + (_try + 1) + ' 次），正在重试…';
+              await new Promise(r => setTimeout(r, 1200 * (_try + 1)));
+            }
+          }
+          if (!_resp) throw new Error('有一片数据连试 3 次都没拿到（' + ((_lastErr && _lastErr.message) || '网络超时') + '）—— 请检查这台电脑到服务器的网络，或稍后再试');
           if (_first) { progress.phase = '已连上服务器，正在分片下载…'; _first = false; }
           const rr = await _resp.json();
           if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次拉取' }; }
