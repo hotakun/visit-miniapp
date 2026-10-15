@@ -272,11 +272,12 @@ async function round() {
   //      那些仍然留在下面这道门之后（省调用的大头照省）。
   //   ⚠️ 单独 try/catch：客户同步万一失败，**不能连累**后面那 6 项（各自也有 try/catch）。
   try { await syncCustomers(); } catch (e) { console.error('[sync] 客户增量同步失败（下轮再试）:', e.message); }
-  if (!_changed && !_idleTooLong) {
+  if (!_forceFull && !_changed && !_idleTooLong) {
     const _left = Math.max(0, Math.round((IDLE_FALLBACK_MIN * 60000 - (Date.now() - _lastBusyRun)) / 60000));
     console.log('[sync] 无变动 → 只查了信号（省调用；约 ' + _left + ' 分钟后兜底跑一轮）');
     return;
   }
+  _forceFull = false;            // ⭐ 强制那一轮已经进门了，复位（别让后面每轮都全跑）
   _lastBusyRun = Date.now();
   _lastPollHandled = _pollSeen;
   _lastCustHandled = _custSeen;
@@ -346,6 +347,7 @@ const _deletedVisitSeen = new Set();  // ⭐ 2026-10-14：本进程已处理过�
 //   —— 名单是"近 7 天"的、而处理它的那段在**每轮**都跑；不记一下就每 5 分钟重复删同一批（幂等无害但白做功 + 刷日志）。
 let _lastVisitFullSync = 0;    // 上次"全量对账 visits"的时刻（0 = 还没跑过 → 首轮全量，安全）
 let _lastCustAgg = 0;          // ⭐ 2026-10-15：上次"重算客户聚合 cust_agg"的时刻（10 分钟节流；0 = 还没跑过 → 首轮会算）
+let _forceFull = false;        // ⭐ 2026-10-15：被 /syncNow 叫醒时置 true —— 这一轮**强制跑全套**（不看信号）
 let _lastPollHandled = 0;      // 上次"跑过全套"时的 pollDirtyAt
 let _lastCustHandled = 0;      // 上次"跑过全套"时的 custDirtyAt
 let _lastTaskHandled = 0;      // 上次"跑过全套"时的 taskDirtyAt
@@ -777,7 +779,10 @@ async function waitOrForce(ms) {
     try {
       if (fs.existsSync(FORCE_FLAG)) {
         fs.unlinkSync(FORCE_FLAG);
-        console.log('[sync] 收到「立刻同步」请求 → 不等了，马上跑一轮');
+        console.log('[sync] 收到「立刻同步」请求 → 不等了，马上跑一轮（强制跑全套）');
+        _forceFull = true;   // ⭐ 关键：不只是"不等待"，而是"这一轮**强制跑全套**" ——
+                             //   因为订单/客户导入**不写变动信号**（走的是 importdata，不经过 adminapi 的信号写口），
+                             //   只看信号的话这一轮会被"无变动"跳过 → 导入的订单永远拉不进来。
         return true;
       }
     } catch (e) { /* 读/删失败就当没有，继续等 */ }
