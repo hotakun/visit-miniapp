@@ -9,8 +9,19 @@
 //   现在：**只在这里定义一份**，键 = `map_cache:<模式>:<当前登录人 _id>`；
 //     模式：老板看板 = `boss`；某个任务 = `task:<taskId>`（自己的当前任务 = `task:self`）。
 //   ⚠️ 只用于「展示用的地图摘要」的缓存；**写操作（submit / finish / reportLocation）绝不走它**。
-const TTL = 2 * 60 * 60 * 1000; // ⭐ 2026-10-15 老板定「地图也走缓存、别每次进都拉」：10 分钟 → **2 小时**。
-                                //   ⚠️ 写操作（提交/取消拜访）会**主动作废**它（见 visit.js），所以不会"改了看不到地图"。
+// ⭐⭐ 2026-10-16 老板定：「缓存从云端拉取数值的跨度还能加大一些，因为可以主动刷新了嘛」——
+//   地图摘要的时效：**2 小时 → 「当天」（跨天失效）**。
+//   以前"过期"是唯一让数据更新的手段、不敢放长；现在地图页有「↻ 刷新」、首页/任务页也补了下拉刷新，
+//   人想立刻要最新就自己拉一下 —— 所以"当天内直接用缓存"是安全的。
+//   ⚠️ **"当天"是硬天花板**：跨天必须重拉（否则第二天打开会拿昨天的地图 = 老板最反感的"改了看不到"）。
+//   ⚠️ 写操作（提交 / 取消拜访）仍会**主动作废**它（见 visit.js）—— 所以"刚拜访完看到旧地图"不可能发生。
+//   ⚠️ 与 utils/detailCache.js 同口径：用 +8 时区的日期串判"跨天"。
+function _dayStr() {
+  const d = new Date(Date.now() + 8 * 3600 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+// ⚠️ `TTL` 只为兼容旧导出保留 —— **2026-10-16 起过期判断已改成"跨天"（见上面 `get`），它不再参与判定**。
+const TTL = 2 * 60 * 60 * 1000;
 
 // 缓存键：把「谁在看什么」编进去，避免不同身份/任务互相污染
 function key(mode) {
@@ -27,14 +38,19 @@ function curMode() {
 function get(mode) {
   try {
     const c = wx.getStorageSync(key(mode));
-    if (c && c.at && Date.now() - Number(c.at) < TTL && c.map) return c;
+    // ⚠️ 2026-10-16 改：判「跨天」（原来是"2 小时内"）—— 跨天失效是硬规则，当天内直接用缓存
+    if (c && c.at && c.day === _dayStr() && c.map) return c;
   } catch (e) { /* 静默 */ }
   return null;
 }
 
 function set(res, mode) {
   try {
-    wx.setStorageSync(key(mode), { at: Date.now(), map: res.map || null, tasks: res.tasks || null });
+    wx.setStorageSync(key(mode), {
+      at: Date.now(),
+      day: _dayStr(),                          // ⭐ 2026-10-16：记下"哪一天"，`get` 据此判"跨天"
+      map: res.map || null, tasks: res.tasks || null
+    });
   } catch (e) { /* 静默 */ }
 }
 

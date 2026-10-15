@@ -603,11 +603,14 @@ Page({
     const _dc = require('../../utils/detailCache');
     const _boss = !!getApp().globalData.bossMode;
     const _key = _boss ? 'boss' : 'me';
-    // ⭐⭐ 2026-10-15 老板定「进首页先用缓存」：**当天 2 小时内已经拉过 → 直接用缓存、不再调云端**。
+    // ⭐⭐ 2026-10-15 老板定「进首页先用缓存」：**当天之内拉过 → 直接用缓存、不再调云端**。
     //   `force=true` 绕过缓存（审核结果变化等"必须看到新的"场景走它）。
-    //   ⚠️ TTL 用 2 小时而不是"一整天"：任务会在白天被派/被改，隔太久不刷会"看不到新任务"。
+    // ⭐ 2026-10-16 老板定：「缓存从云端拉取数值的跨度还能加大一些，因为可以主动刷新了嘛」——
+    //   时效从 "2 小时" 放开到 **"当天"**（不传 `ttlMs` 即用 detailCache 的默认口径：跨天失效、当天内直接用）。
+    //   ⚠️ 原来担心"任务白天被派/被改、隔太久会看不到新任务" —— 现在首页**有下拉刷新**兜底，
+    //      所以放到"当天"是安全的。（跨天仍是硬失效，不会拿昨天的。）
     if (!force) {
-      const hit = _dc.get('homeTasks', _key, 2 * 60 * 60 * 1000);
+      const hit = _dc.get('homeTasks', _key);
       if (hit && hit.tasks && hit.tasks.length) {
         this._applyHomeTasks(hit.tasks, _boss);
         // ⚠️ 老板模式的统计卡不在 `_applyHomeTasks` 里（它只做任务列表），这里补上
