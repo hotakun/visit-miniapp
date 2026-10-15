@@ -2997,6 +2997,12 @@ function pollImpJob(job, lbl, cn) {
       showImpProgress('✅ 【' + cn + '】' + (p.text || '完成'), 100, '', 'done');
       if (lbl) lbl.textContent = '✅ 完成';
       try { loadImportStats(); } catch (e) { /* 刷新计数失败无所谓 */ }
+      // ⭐⭐ 2026-10-15（《订单本地方案》第 5 块）：**导入完立刻让服务器同步 + 自动等它算好**
+      //   原来导入完只刷了计数 → 后台那几列（订单数/额/最近下单 + 拜访/全局态）要等同步器下一轮才有值，
+      //   老板看到的是"导了但没变"。
+      //   现在：调 `/syncNow` 让同步器**马上**跑一轮 → 每 8 秒重刷一次本地缓存、最多等 5 轮 → 好了就重绘。
+      //   ⚠️ 全程**不阻塞**：导入本身已经成功了，同步只是"让它早点显示出来"，失败也不影响导入。
+      syncThenRefresh(cn);
       return;
     }
     if (p.state === 'fail') {
@@ -3009,6 +3015,38 @@ function pollImpJob(job, lbl, cn) {
     setTimeout(tick, 800);
   };
   tick();
+}
+
+// ⭐⭐ 2026-10-15（《订单本地方案》第 5 块）：**导入完 → 让服务器立刻同步 → 自动等它算好 → 重绘**
+//   为什么需要这一步：导入进去的是**云端**，而后台那几列现在读的是**服务器 PG** —— 中间隔着同步器。
+//   不叫它一声的话，导入完还得干等它下一轮（1 分钟）才有值，老板看到的是"导了但没变"。
+//   ⚠️ 三条纪律：① 通知失败也**不影响导入**（同步器自己那轮照样会把数据带过来）
+//                ② 重拉前**先作废本地缓存**（只重拉会拿到旧缓存 —— "改完之后必须真的刷新"）
+//                ③ 只重拉 3 次（每次隔 8 秒），别把服务器刷爆
+async function syncThenRefresh(cn) {
+  try { await fetch('/syncNow', { method: 'POST' }).catch(() => null); } catch (e) { /* 通知失败无所谓 */ }
+  for (let i = 0; i < 3; i++) {
+    showImpProgress('✅ 【' + cn + '】导入完成 · 正在等服务器同步…（' + (i + 1) + '/3）', 100, '', 'done');
+    await new Promise(r => setTimeout(r, 8000));
+    try {
+      if (typeof invalidateCustLocal === 'function') invalidateCustLocal();
+      const r = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json()).catch(() => null);
+      if (r && r.ok) {
+        // 看"订单列"有没有值了（有 = 服务器那边已经算好并同步下来了）
+        const pts = (custLocal && custLocal.points) || [];
+        let got = false;
+        for (let k = 0; k < pts.length && k < 200; k++) {
+          if (pts[k] && pts[k].oc !== undefined && pts[k].oc !== null) { got = true; break; }
+        }
+        if (got) {
+          showImpProgress('✅ 【' + cn + '】导入完成 · 服务器已同步', 100, '', 'done');
+          if (vis(document.getElementById('page-geo')) && typeof loadGeoPage === 'function') loadGeoPage();
+          return;
+        }
+      }
+    } catch (e) { /* 这轮没成，下一轮再试 */ }
+  }
+  showImpProgress('✅ 【' + cn + '】导入完成（服务器稍后会自动同步）', 100, '', 'done');
 }
 
 // 选文件（明细支持多选/整目录）—— 旧的"分片"通道，已被上面三条新函数取代，保留仅为兼容
