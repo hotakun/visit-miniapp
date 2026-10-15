@@ -6720,16 +6720,19 @@ let cdOrderItems = {};
 let cdOrders = [];   // 同上：当前客户的订单头（最近 20 单，含日期/状态/支付方式），弹窗头部显示用
 // ⭐ 2026-09-26 老板定：坐标**直接显示来源**（不再显示"正常"）——
 //   商城 / 平台 / 采集（业务员拜访采集，审核通过后写回） / 新店（手机端「加新店」现场录入） /
-//   修改（管理员后台改） / 待审核 / 未知（认不出的来源值，不再冒充"商城"）；
+//   修改（管理员后台改） / 待审核 / 导入（后台做商城匹配时人工录入的，来源值认不出） ；
 //   没坐标的仍显示"补标"（否则看不出这家缺坐标）。名字统一两字，整齐。
+// ⭐⭐ 2026-10-15 老板定（改色 + 改名）：mall→商城(天蓝) / platform→平台(灰) / salesman→采集(深绿) /
+//   newshop→新店(绿) / admin→修改(浅绿)；原来叫「未知」的**改名为「导入」**(墨绿) ——
+//   老板原话：「未知的来源我考虑了一下，这是在后台进行商城匹配的时候人工输入的，就改名为'导入'」。
 const CD_GEO_SRC = {
-  '商城':   { bg: '#E7F6EC', fg: '#16A34A' },   // 绿：商城导入（实地验证过）
-  '平台':   { bg: '#EEF1F4', fg: '#66707A' },   // 灰：大众点评抓取
-  '采集':   { bg: '#E8F1FD', fg: '#2F80ED' },   // 蓝：业务员拜访采集
-  '新店':   { bg: '#E6F7F6', fg: '#0E9384' },   // 青：手机端「加新店」现场录入（⭐ 2026-10-02）
-  '修改':   { bg: '#FFEDE5', fg: '#D93E0E' },   // 橙：管理员后台改
+  '商城':   { bg: '#E6F0FD', fg: '#1E6FD9' },   // 天蓝：商城导入（实地验证过）
+  '平台':   { bg: '#EEF1F4', fg: '#66707A' },   // 灰：大众点评抓取（保持）
+  '采集':   { bg: '#DFF3E5', fg: '#0F7A3D' },   // 深绿：业务员拜访采集
+  '新店':   { bg: '#E9F9EF', fg: '#22A35B' },   // 绿：手机端「加新店」现场录入
+  '修改':   { bg: '#F1FBF4', fg: '#6DBE8B' },   // 浅绿：管理员后台改
+  '导入':   { bg: '#E3EDE6', fg: '#1B4B33' },   // 墨绿：后台商城匹配时人工录入（原「未知」）
   '待审核': { bg: '#FEF3C7', fg: '#B45309' },   // 琥珀：坐标报错待审 / 已审待定
-  '未知':   { bg: '#F2F3F5', fg: '#8A9199' },   // 淡灰：来源值认不出（⭐ 2026-10-02）
   '补标':   { bg: '#FCEBEC', fg: '#C93A40' }    // 红：还没有坐标
 };
 function cdSrcName(c) {
@@ -6741,7 +6744,8 @@ function cdSrcName(c) {
     : c.coordSource === 'newshop' ? '新店'          // ⭐ 2026-10-02 老板定：手机端「加新店」现场建店的坐标
     : c.coordSource === 'admin' ? '修改'
     : c.coordSource === 'mall' ? '商城'             // ⭐ 只有明确是 mall 才算"商城"
-    : '未知';                                       // ⭐ 老板定：认不出的值不再冒充"商城"（以前会显示成商城）
+    // ⭐⭐ 2026-10-15 老板定：认不出的来源 → 改叫「导入」（那是**后台做商城匹配时人工录入**的）
+    : '导入';
 }
 function cdSrcStyleAttr(src) {
   const s = CD_GEO_SRC[src] || CD_GEO_SRC['平台'];
@@ -9294,9 +9298,11 @@ async function loadGeoPage() {
     //   商城 / 平台 / 采集（业务员采集、审核通过后写回） / 修改（管理员后台改） / 待审核 / 补标（没坐标）
     //   规则与标签都复用客户详情页同一个函数 cdSrcName()，两处显示口径永远一致。
     const srcName = typeof cdSrcName === 'function' ? cdSrcName(c) : '商城';
-    const srcCls = srcName === '待审核' ? 'p-warn' : srcName === '补标' ? 'p-bad' : srcName === '采集' ? 'p-blue'
-      : srcName === '修改' ? 'p-or' : srcName === '平台' ? 'p-gray' : 'p-ok';
-    const coord = `<span class="pill ${srcCls}">${srcName}</span>`;
+    // ⭐⭐ 2026-10-15 老板定（改色 + 改名）：**这里改用与客户详情页同一张配色表 `CD_GEO_SRC`** ——
+    //   原来列表走 CSS 类（p-ok/p-gray/…）、客户详情走内联 style，**是两套颜色**：
+    //   改一次配色要动两处、必然漂移（老板这次改色就撞上了）。现在统一到一张表。
+    const srcStyle = (typeof cdSrcStyleAttr === 'function') ? cdSrcStyleAttr(srcName) : '';
+    const coord = `<span class="pill" style="${srcStyle}">${srcName}</span>`;
     const amt = Number(c.orderAmountSum) || 0;
     // ⭐ 2026-09-26 老板定：订单总额（紧跟订单总数右边）—— 累加 actualAmount，与客户详情页同口径
     const amtCell = amt ? ('¥' + amt.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '—';
