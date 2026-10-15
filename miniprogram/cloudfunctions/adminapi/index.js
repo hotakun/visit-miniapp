@@ -4284,15 +4284,27 @@ async function mergeCustomers(event) {
     await db.collection('customers').doc(targetId).update({ data });
   }
 
-  // ---------- ⑤ 拜访记录改挂 ----------
-  let visitsMoved = 0;
+  // ---------- ⑤ 拜访记录改挂（⚠️ 光改 customerId 不够，**还要补 taskId**）----------
+  //   ⚠️⚠️ 2026-10-15 老板实测报的：「合并的效果还可以，但是因为在任务中，
+  //      所以未拜访的状态要变成已拜访的第一条拜访结果的状态。」
+  //   真因：任务页/任务卡片的"已拜访"是 `tasks.taskCardStatus → lastVisitMap(taskId, ids)` 算出来的，
+  //     那函数**按 taskId + customerId 两个条件一起查**；而被并掉那条的拜访多半是
+  //     **"无任务拜访"（taskId 为空** —— 比如现场录的店被自由拜访过）→
+  //     只改 customerId、taskId 还是空 → 任务页照样查不到 → 合并后那条在任务里仍显示"待回访"。
+  //   ✅ 所以：找出"保留的那条"所在的**进行中任务**，把迁过来的拜访 **taskId 一并补上**。
+  //     （一个客户可能在多个任务里 → 取**最新的那个进行中任务**，与手机端 heroTask 口径一致；
+  //       不在任何任务里 → 保持原样，不强塞。）
+  let visitsMoved = 0, visitsTaskFilled = 0;
   if (doMoveVisits) {
-    const vs = await fetchAll('visits', { customerId: sourceId }, { _id: true });
+    const tid = await findLiveTaskOf(targetId);
+    const vs = await fetchAll('visits', { customerId: sourceId }, { _id: true, taskId: true });
     for (const v of vs) {
       try {
-        await db.collection('visits').doc(v._id).update({ data: { customerId: targetId, updatedAt: now } });
+        const d = { customerId: targetId, updatedAt: now };
+        if (tid && v.taskId !== tid) { d.taskId = tid; visitsTaskFilled++; }
+        await db.collection('visits').doc(v._id).update({ data: d });
         visitsMoved++;
-      } catch (e) { /* 单条失败不影响其它；下面返回里会体现数量 */ }
+      } catch (e) { /* 单条失败不影响其它；返回里会体现数量 */ }
     }
   }
 
@@ -4334,6 +4346,32 @@ async function mergeCustomers(event) {
 // 合并时**逐字段可选**的文本字段清单（与 EDITABLE_CUST_FIELDS 对齐，去掉"坐标/图片"这类要单独处理的）
 const MERGE_FIELDS = ['name', 'phone', 'phone2', 'address', 'contactName', 'businessHours',
   'category', 'district', 'bizCircle', 'cat1', 'cat2', 'cat3', 'salesman'];
+
+// ⭐ 2026-10-15（合并用）：找"这个客户所在的**进行中任务**" —— 取**最新的那个**（createdAt 最大）。
+//   为什么要它：合并时把"被并掉那条的拜访"迁过来，**光改 customerId 不够** ——
+//   任务页算"已拜访"用的是 `tasks.taskCardStatus → lastVisitMap(taskId, ids)`，
+//   它按 **taskId + customerId 两个条件一起查**；而"无任务拜访"（taskId 空）迁过去后仍然查不到
+//   → 那条在任务里还是"待回访"（老板 2026-10-15 实测报的）。所以要把 taskId 也补上。
+//   ⚠️ 为什么取"最新的那个"：与手机端 heroTask 口径一致（业务员通常只有最上面那个任务是活跃的）。
+//   ⚠️ 已过期的不算（deadline ≤ 今天 = 已过期），与 listCustomers / custPageAgg 的"任务中"口径一致。
+//   ⚠️ 不在任何进行中任务里 → 返回 null（调用方保持原样，不强塞）。
+async function findLiveTaskOf(customerId) {
+  if (!customerId) return null;
+  const _today = todayStr();
+  let rows = [];
+  try {
+    // ⚠️ 云开发的数组字段查询：`customerIds: customerId` = "这个数组里包含它"
+    rows = await fetchAll('tasks', { status: _.in(['published', 'reviewing']), customerIds: customerId },
+      { _id: true, createdAt: true, deadline: true });
+  } catch (e) { return null; }
+  let best = null, bestAt = 0;
+  rows.forEach(t => {
+    if (t.deadline && String(t.deadline) <= _today) return;   // 过期的不算
+    const at = Number(t.createdAt) || 0;
+    if (at > bestAt) { bestAt = at; best = t._id; }
+  });
+  return best;
+}
 
 async function reassignVisit(event) {
   const rows = Array.isArray(event && event.rows) ? event.rows : [];
