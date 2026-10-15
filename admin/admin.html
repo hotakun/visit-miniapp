@@ -3030,9 +3030,7 @@ async function syncThenRefresh(cn) {
     await new Promise(r => setTimeout(r, 8000));
     try {
       if (typeof invalidateCustLocal === 'function') invalidateCustLocal();
-      // ⭐ 2026-10-15：改走**轻量补字段**（只补那 7 列，1MB）—— 导入后要的正是"订单/拜访那几列"，
-      //   没必要重拉 65MB 全量（老板那条网络拉全量会超时）。服务端没缓存时会自己退回全量。
-      const r = await fetch('/mapPoints/refreshAgg', { method: 'POST' }).then(x => x.json()).catch(() => null);
+      const r = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json()).catch(() => null);
       if (r && r.ok) {
         // 看"订单列"有没有值了（有 = 服务器那边已经算好并同步下来了）
         const pts = (custLocal && custLocal.points) || [];
@@ -5879,10 +5877,7 @@ async function refreshMapData() {
     try { pvRender(await fetch('/mapPoints/status').then(x => x.json())); } catch (e) { /* 进度拉不到不影响拉数 */ }
   }, 700);
   try {
-    // ⭐ 2026-10-15：战况监控这个「🔄 更新地图数据」改走**轻量补字段**（只补那 7 列，约 1MB）——
-    //   实测老板那条网络拉 65MB 全量会超时（我这边 2 秒、他那边 30 秒+），而这 7 列自己只要 1MB。
-    //   ⚠️ 服务端在"没有本地缓存"（新电脑 / 首次）时会**自动退回全量**，所以这条路是安全的。
-    const r = await fetch('/mapPoints/refreshAgg', { method: 'POST' }).then(x => x.json());
+    const r = await fetch('/mapPoints/refresh', { method: 'POST' }).then(x => x.json());
     if (!r || !r.ok) { alert('更新失败：' + ((r && r.msg) || '未知错误')); return; }
     trackCustCache = null; trackCustCacheAt = 0;   // 丢弃旧内存缓存，下次重读
     custAggCache = null; custAggCacheKey = '';
