@@ -38,6 +38,15 @@ Page({
     // ⭐ 2026-10-12 老板定：60 秒 → **5 分钟**（当天云端调用量 14 万，老板拍板砍：战况地图 5 分钟一刷）
     this._timer = setInterval(() => this.load(true), 300000);
   },
+  // ⭐⭐ 2026-10-16 老板定：**补「下拉刷新」**（他在新店页看到"刷新 / 下拉"很有用，问能不能推广到别处）。
+  //   口径与新店页一致：**平时用缓存 / 自动刷新；下拉 = 主动要最新**（强行绕过本地缓存）。
+  //   ⚠️ `load(silent, force)`：**`force=true`** 才会绕过本地缓存去云端拿最新。
+  //   ⚠️ 战况是**地图页**（原生组件在最上层），下拉手势有被地图吃掉的先例 —— **真机要验一次**；
+  //      若拉不动，就改成页面上加一颗「🔄 刷新」按钮（与新店页那颗同款）。
+  async onPullDownRefresh() {
+    try { await this.load(false, true); } catch (e) { /* 静默：刷新失败保留原样，不打断 */ }
+    wx.stopPullDownRefresh();
+  },
   onHide() { this.clearTimer(); },
   onUnload() { this.clearTimer(); },
   clearTimer() { if (this._timer) { clearInterval(this._timer); this._timer = null; } },

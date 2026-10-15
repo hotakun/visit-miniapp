@@ -592,6 +592,13 @@ Page({
       if (boss) { this.setData({ bossStats: res.stats || null }); this._applyBossNewShops(); }
     } catch (e) { /* 静默：渲染失败保留原来那屏 */ }
   },
+  // ⭐⭐ 2026-10-16 老板定：**补「下拉刷新」**（他在新店页看到"刷新 / 下拉"很有用，问能不能推广到别处）。
+  //   口径与新店页一致：**平时用缓存 / 静默更新；下拉 = 主动要最新**。
+  //   ⚠️ `load(force)` 的第一个参数就是"强制绕过缓存"（2026-10-15 加的；审核结果变化时也走它）。
+  async onPullDownRefresh() {
+    try { await this.load(true); } catch (e) { /* 静默：刷新失败保留原样，不打断 */ }
+    wx.stopPullDownRefresh();
+  },
   async load(force) {
     const _dc = require('../../utils/detailCache');
     const _boss = !!getApp().globalData.bossMode;

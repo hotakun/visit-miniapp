@@ -1,4 +1,5 @@
 {
   "usingComponents": {},
-  "navigationBarTitleText": "战况地图"
+  "navigationBarTitleText": "战况地图",
+  "enablePullDownRefresh": true
 }
