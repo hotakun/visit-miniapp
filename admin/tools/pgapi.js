@@ -6,6 +6,8 @@
 // ⚠️ PG 只在服务器本机被访问（listen 127.0.0.1），公网只暴露这个 18081 + 口令
 const http = require('http');
 const zlib = require('zlib');
+const fs = require('fs');
+const path = require('path');
 const { Client } = require('pg');
 
 let CFG = {};
@@ -20,7 +22,17 @@ const COLS = 'id,name,name_raw,code,ctype,source,phone,address,city,district,biz
 const COLS_C = 'c.id,c.name,c.name_raw,c.code,c.ctype,c.source,c.phone,c.address,c.city,c.district,c.biz_circle,' +
   'c.lat,c.lng,c.coord_source,c.coord_status,c.mall_key,c.mall_joined_at,c.remark,c.created_at,c.updated_at';
 const BI_JOIN = " LEFT JOIN (SELECT customer_id, string_agg(batch_id, ',' ORDER BY batch_id) AS bids FROM batch_members GROUP BY customer_id) m ON m.customer_id = c.id";
-const SELECT_CUST = 'SELECT ' + COLS_C + ", COALESCE(m.bids,'') AS batch_ids FROM customers c" + BI_JOIN;
+// ⭐ 2026-10-15（《订单本地方案》第 4 块）：客户聚合表（订单数/额/最近下单 + 拜访数/最近拜访/全局态/任务内状态）
+//   由同步器 `pgsync.recalcCustAgg()` 算好写进去；这里只 JOIN 读出来（只读账号也能读 —— 已 GRANT SELECT）。
+const AGG_JOIN = " LEFT JOIN cust_agg ag ON ag.id = c.id";
+const SELECT_CUST = 'SELECT ' + COLS_C + ", COALESCE(m.bids,'') AS batch_ids, " +
+  // ⭐⭐ 2026-10-15（《订单本地方案》第 4 块）：**把这 7 个聚合列一起回了** ——
+  //   原来它们只有云端 `custPageAgg` 算得出来 → 前端每翻一页都要问云端；
+  //   现在由同步器算好写进 PG 的 `cust_agg`，这里一次 JOIN 带出来，**彻底不问云端**。
+  //   ⚠️ 短键名必须与 `store.js` / `admin.html` 读的**逐字一致**（oc/oa/lo/vc/lv/vs/vt），改一个就"改了看不到"。
+  "ag.order_count AS oc, ag.order_amount_sum AS oa, ag.last_order_at AS lo, " +
+  "ag.visit_count AS vc, ag.last_visit_at AS lv, ag.visit_state AS vs, ag.visit_status AS vt " +
+  'FROM customers c' + BI_JOIN + AGG_JOIN;
 // 「任务中」客户集合的 SQL 片段（published/reviewing 且**未过期**；过期是实时算的，云端不改 status）
 const TASK_ALIVE = "SELECT DISTINCT cid FROM tasks, LATERAL jsonb_array_elements_text(tasks.customer_ids) AS cid " +
   "WHERE tasks.status IN ('published','reviewing') AND jsonb_typeof(tasks.customer_ids) = 'array' " +
@@ -187,6 +199,20 @@ const srv = http.createServer(async (req, res) => {
       return out(res, 200, { ok: true, rows: r.rows, removed: d.rows.map(x => x.id), at: Date.now() });
     }
     // 状态：条数 + 水位（后台用来判断"要不要更新"）
+    // ⭐⭐ 2026-10-15（《订单本地方案》第 4 块）：**「立刻同步」** —— 后台导入订单后调它，
+    //   让同步器**马上跑一轮**，不必等它自己的周期（导入完几秒就能看到那 6 列）。
+    //   ⚠️ 实现：在磁盘上放一个**标记文件**（同步器每秒瞄一眼，有就立刻跑、并把标记删掉）。
+    //      为什么不用数据库：本服务连的是**只读账号** `juhuo_ro`，写不了库；
+    //      而它和同步器在**同一台机器**上，一个文件最省事也最可靠。
+    if (u.pathname === '/syncNow') {
+      try {
+        fs.writeFileSync(path.join(__dirname, 'sync-now.flag'), String(Date.now()), 'utf8');
+        return out(res, 200, { ok: true, msg: '已通知同步器立刻同步', at: Date.now() });
+      } catch (e) {
+        console.error('[pgapi] 写 sync-now.flag 失败', e && e.message);
+        return out(res, 500, { ok: false, msg: '通知失败' });
+      }
+    }
     if (u.pathname === '/stat') {
       const r = await q('SELECT count(*)::int AS n, max(updated_at) AS w FROM customers');
       // ⭐ 2026-10-12 省调用量 ③：多带两个「变化时间戳」—— 后台据此决定"要不要叫云端"（问了不花钱）

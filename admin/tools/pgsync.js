@@ -699,7 +699,7 @@ async function recalcCustAgg() {
   try {
     const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);   // 与云端 todayStr() 同口径（东八区）
     const sql = `
-      INSERT INTO cust_agg (id, order_count, order_amount_sum, last_order_at, visit_count, last_visit_at, visit_state, updated_at)
+      INSERT INTO cust_agg (id, order_count, order_amount_sum, last_order_at, visit_count, last_visit_at, visit_state, visit_status, updated_at)
       SELECT c.id,
              COALESCE(o.n, 0),
              COALESCE(o.amt, 0),
@@ -707,12 +707,20 @@ async function recalcCustAgg() {
              COALESCE(v.n, 0),
              COALESCE(NULLIF(v.last_at, ''), ''),
              CASE WHEN t.cid IS NOT NULL THEN 'in_task' ELSE 'free' END,
+             CASE WHEN t.cid IS NULL THEN ''
+                  WHEN COALESCE(vt.visited, false) THEN 'visited'
+                  WHEN COALESCE(vt.ongoing, false) THEN 'ongoing'
+                  ELSE 'pending' END,
              $1
       FROM customers c
       LEFT JOIN (SELECT code, count(*) AS n, sum(amount) AS amt, max(ordered_at) AS last_at
                    FROM orders WHERE coalesce(code,'') <> '' GROUP BY code) o ON o.code = c.code
       LEFT JOIN (SELECT customer_id, count(*) AS n, max(visited_at) AS last_at
                    FROM visits WHERE status IN ('normal','pending_review') GROUP BY customer_id) v ON v.customer_id = c.id
+      LEFT JOIN (SELECT customer_id,
+                        bool_or(status = 'normal' AND coalesce(task_id,'') <> '') AS visited,
+                        bool_or(status = 'ongoing' AND visited_at = $2) AS ongoing
+                   FROM visits GROUP BY customer_id) vt ON vt.customer_id = c.id
       LEFT JOIN (SELECT DISTINCT jsonb_array_elements_text(customer_ids) AS cid
                    FROM tasks
                   WHERE status IN ('published','reviewing')
@@ -721,7 +729,7 @@ async function recalcCustAgg() {
         order_count = EXCLUDED.order_count, order_amount_sum = EXCLUDED.order_amount_sum,
         last_order_at = EXCLUDED.last_order_at, visit_count = EXCLUDED.visit_count,
         last_visit_at = EXCLUDED.last_visit_at, visit_state = EXCLUDED.visit_state,
-        updated_at = EXCLUDED.updated_at`;
+        visit_status = EXCLUDED.visit_status, updated_at = EXCLUDED.updated_at`;
     const c = await conn();
     const t0 = Date.now();
     await c.query(sql, [Date.now(), today]);
@@ -758,10 +766,30 @@ async function syncVisitedCustomers() {
   console.log('[sync] visited_customers 同步 ' + rows.length + ' 个客户（下次 ' + MIN + ' 分钟后）');
 }
 
+// ⭐⭐ 2026-10-15（《订单本地方案》第 4 块）：**等待可被「立刻同步」打断**
+//   后台导入订单后调 pgapi 的 `/syncNow` → 它在磁盘上放一个标记文件 → 这里每秒瞄一眼，
+//   有标记就立刻跑一轮（并删掉标记），**不用干等那一分钟**。
+//   ⚠️ 用文件而不是数据库：`pgapi` 连的是只读账号，写不了库；而两者在同一台机器上，文件最省事。
+const FORCE_FLAG = path.join(__dirname, 'sync-now.flag');
+async function waitOrForce(ms) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    try {
+      if (fs.existsSync(FORCE_FLAG)) {
+        fs.unlinkSync(FORCE_FLAG);
+        console.log('[sync] 收到「立刻同步」请求 → 不等了，马上跑一轮');
+        return true;
+      }
+    } catch (e) { /* 读/删失败就当没有，继续等 */ }
+    await sleep(1000);
+  }
+  return false;
+}
+
 (async () => {
-  console.log('[sync] 启动，每 ' + MIN + ' 分钟同步一次');
+  console.log('[sync] 启动，每 ' + MIN + ' 分钟同步一次（支持 /syncNow 立刻同步）');
   for (;;) {
     try { await round(); } catch (e) { console.error('[sync] 这轮失败（下轮再试）:', e.message); db = null; }
-    await sleep(MIN * 60 * 1000);
+    await waitOrForce(MIN * 60 * 1000);
   }
 })();
