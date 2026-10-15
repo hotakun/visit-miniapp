@@ -108,12 +108,15 @@ async function refresh(callApi, cred) {
         const _t0 = Date.now();
         const _base = String(_pgc.pgApiUrl).replace(/\/+$/, '') + '/points' +
           (_pgc.pgApiToken ? ('?token=' + encodeURIComponent(_pgc.pgApiToken)) : '');
-        // ⭐⭐ 2026-10-12 老板定（B 方案）：**分片拉取** —— 每片 2 万家，拉一片报一次进度。
-        //   （原来整包返回 178,755 家：看不到进度、断了得重来。pgapi 那边已按 id 游标分片。）
+        // ⭐⭐ 2026-10-12 老板定（B 方案）：**分片拉取**，每片报一次进度。
+        //   ⚠️ 2026-10-15 调小：20000 → **5000** ——
+        //      实测单片 2 万条要 2.0~2.7 秒（服务器不慢），但"单片越大、一次失败代价越大"；
+        //      5000 条/片 ≈ 0.5 秒，40 片串行也就 20 秒，而**任何一片失败只重试那一小片**。
+        //      （起因：老板点「更新地图数据」撞上我重启 pgapi 的几秒 → 那一大片直接超时整轮失败。）
         const _jl = (_base.indexOf('?') >= 0 ? '&' : '?');
         let _after = '', _rows = [], _first = true;
-        for (let _p = 0; _p < 40; _p++) {
-          const _u = _base + _jl + 'limit=20000' + (_after ? ('&after=' + encodeURIComponent(_after)) : '');
+        for (let _p = 0; _p < 80; _p++) {
+          const _u = _base + _jl + 'limit=5000' + (_after ? ('&after=' + encodeURIComponent(_after)) : '');
           // ⚠️⚠️ 2026-10-15 修（老板实测「更新地图数据」**永久卡住 8 分钟**、之后谁点都拉不了）：
           //   **fetch 必须带超时** —— 原来这一句没有超时，一旦服务器不响应
           //   （`pgapi` 只用一个数据库连接，并发一撞就不响应 —— 见 AGENTS 记过的隐患），
