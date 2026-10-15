@@ -7,7 +7,7 @@
        1 📍 定位   必填 = 已采用一个点位（手机 / 北斗卫星 / 微调 三选一，要手点「✓ 采用」）
        2 🏪 门店信息  必填 = 店名 + 地址；防重检测**只由按钮触发**，结果显示在表单上方
        3 🍜 品类与设施  无必填
-       4 📷 现场证据  店面照必拍；录音 ≤3 段、**不做转文字**；＋ 加入商城意愿、备注 → 提交
+       4 📷 现场证据  店面照必拍；录音 ≤3 段、**不做转文字**；＋ 加入商城意愿、新店记录 → 提交
      ⚠️ 四个步骤**同一个页面切换显示**（hidden），数据不丢。
      ⚠️ 铁律：WXML 只用 view / text（禁 HTML 标签；<br> 曾致白屏）。要换行写两个 view。
      口径：_scratch/newshop-steps-demo.html（老板逐条打磨定稿） -->
@@ -346,7 +346,7 @@
     </view>
 
     <!-- ============================================================
-         第 4 步：📷 现场证据（店面照必拍 + 录音 + 意愿 + 备注）
+         第 4 步：📷 现场证据（店面照必拍 + 录音 + 意愿 + 新店记录）
          ============================================================ -->
     <view class="pane" id="pane4" hidden="{{step !== 4}}">
 
@@ -416,7 +416,7 @@
 
       <!-- 📝 备注 -->
       <view class="card">
-        <view class="cardh">📝 备注</view>
+        <view class="cardh">📝 新店记录</view>
         <textarea class="note" value="{{note}}" bindinput="onNote" placeholder="现场了解到的，写一句（可留空）"
           placeholder-class="rph" maxlength="-1" auto-height show-confirm-bar="{{false}}" cursor-spacing="18"></textarea>
       </view>
