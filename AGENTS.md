@@ -101,6 +101,16 @@
     ⚠️ 改动**只在服务器上的 `admin/tools/pgsync.js`**（信号写点在云函数里，见下）。
   · ⭐ **批次成员同步（2026-10-14 改造，省掉一天约 160 万次读写）**：平时走 `_id` 游标**增量**（水位存 `sync_cursor` 表）→ 后台建/删批次、加/移成员时写 `settings.batchDirtyAt`（云端 `touchBatchDirty()`，**5 个写点**，3 秒防抖）→ 靠 `pollDirty` **顺带带回**（零额外调用）→ 同步器**只在信号变过时**全量对账（增量感知不到"删除"）+ 6 小时兜底。写库走**批量 upsert**。⚠️ **改了云函数写点必须重传 `adminapi`**。
   · ⚠️ **四个静默坑**：① 建表 SQL 必须 `SET client_encoding='UTF8'`；② `custSync` 返回字段名是 **`points`**；③ 手动重启 pgapi 要 `schtasks /end` 再 `/run`；④ **`sync_state.watermark` 是 `bigint`，存不了字符串 `_id`** —— 字符串游标要用 `sync_cursor`（详见 `docs/坑清单.md`）。
+  · ⚠️⚠️ **第五个静默坑（2026-10-15，一笔"白传一次"换来的）：排除清单不能凭记忆写，要按实测的 key 名一个个对。**
+    `adminapi.getSettings` 原来是**整表读** `settings`，而里面躺着 **5 个大文档**（实测体积）：
+    `adminDist` **1,160.7 KB** ／ `admin_dist_adminHtml` 933.4 KB ／ `admin_dist_serverJs` 86.6 KB ／
+    `admin_dist_ntMapJs` 47.5 KB ／ `admin_dist_storeJs` 34.0 KB → 合计 **>2 MB**，
+    **一读就超云开发"单次响应 1MB"上限**（`EXCEED_MAX_RESPONSE_SIZE` / `-501000`）→ 后台 `/api` 返回 **502**
+    （受影响页面：`startAuto` 自动轮询 /「系统设置」页 / 另一处，共 3 处调它）。
+    ✅ 修法：**读的时候就排除**（`_.nin([6 个 key])`），不是在"读完之后的 forEach 里跳过"（那样数据已经读出来了，拦不住超限）。
+    ⚠️ **第一版只写了 `admin_dist*`（带下划线），漏了 `adminDist`（不带）** —— 而**恰恰是它最大**，
+    所以"改完仍然 502"，害老板**白传了一次**。**改前后都用探针实测**：漏它 = 1.4 MB（被拒）／补上 = 1.3 KB ✅。
+    ⚠️ **教训**：凡是"排除/跳过某几个 key"的清单，**先用探针把每个 key 的真实体积量出来**，再照着实测名字写 —— 别照记忆、也别只按前缀猜。
 - **壳程序**（`packager/shell/`）：无边框 WebView2 壳（普惠体 / DPI 声明 PMv2 / 禁右键禁 F5 / 自定义最大化）；标题条按钮遍历必须 `foreach (Control b in right)`。⚠️ `D:\JuHuoVisit\` **不是常驻目录**（那是 `install.bat` 的安装目标，平时不用它启动后台）。
 
 ---
