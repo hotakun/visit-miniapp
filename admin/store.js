@@ -114,7 +114,13 @@ async function refresh(callApi, cred) {
         let _after = '', _rows = [], _first = true;
         for (let _p = 0; _p < 40; _p++) {
           const _u = _base + _jl + 'limit=20000' + (_after ? ('&after=' + encodeURIComponent(_after)) : '');
-          const _resp = await fetch(_u);
+          // ⚠️⚠️ 2026-10-15 修（老板实测「更新地图数据」**永久卡住 8 分钟**、之后谁点都拉不了）：
+          //   **fetch 必须带超时** —— 原来这一句没有超时，一旦服务器不响应
+          //   （`pgapi` 只用一个数据库连接，并发一撞就不响应 —— 见 AGENTS 记过的隐患），
+          //   这个 await 会**永久挂住** → 下面的 `finally` 永远走不到 → `syncing` 标志**永不释放**
+          //   → 之后谁点都只回「正在拉取中，请稍候」，页面看起来"死了"。
+          //   现在：30 秒拿不到这一片就抛错 → 外层 catch 给出人话 → finally 释放 syncing（可重试）。
+          const _resp = await fetch(_u, { signal: AbortSignal.timeout(30000) });
           if (_first) { progress.phase = '已连上服务器，正在分片下载…'; _first = false; }
           const rr = await _resp.json();
           if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次拉取' }; }

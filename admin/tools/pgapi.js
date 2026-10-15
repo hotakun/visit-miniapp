@@ -8,7 +8,7 @@ const http = require('http');
 const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
-const { Client } = require('pg');
+const { Pool } = require('pg');   // ⚠️ 2026-10-15：改用连接池（原来单个 Client 不能并发 query，会卡死）
 
 let CFG = {};
 try { CFG = require('./pgapi.config.json'); } catch (e) { console.error('[pgapi] 缺 pgapi.config.json'); process.exit(1); }
@@ -128,14 +128,18 @@ function outGz(res, code, obj) {
   res.end(gz);
 }
 
-let db = null;
+// ⚠️⚠️ 2026-10-15 修（老板实测「更新地图数据」**永久卡死 8 分钟**）：**原来只用一个 Client 连接** ——
+//   而 `pg` 的单个 Client **不能并发 query**：同时来两个请求时，它会报
+//   "client is already executing a query"，或者**这个连接干脆挂住不返回**。
+//   AGENTS 里早记过这条隐患（日志有 `ECONNRESET` 和那句警告），今天真出事了：
+//   后台分片拉缓存撞上别的查询 → 那个请求永久挂住 → 连累 `store.js` 的 fetch 也不返回 → 全局卡死。
+//   ✅ 改用**连接池**：`pool.query()` 天生支持并发，谁也不会堵住谁。
+//      （max=8 够用；connectionTimeoutMillis 保证"拿不到连接就尽快报错"，不无限等。）
+const db = new Pool({ host: CFG.pgHost || '127.0.0.1', port: CFG.pgPort || 5432,
+  database: CFG.pgDatabase || 'juhuo', user: CFG.pgUser, password: CFG.pgPassword,
+  max: 8, idleTimeoutMillis: 30000, connectionTimeoutMillis: 8000 });
+db.on('error', (e) => { console.error('[pgapi] 连接池出错（不影响下次查询）', e.message); });
 async function q(sql, params) {
-  if (!db) {
-    db = new Client({ host: CFG.pgHost || '127.0.0.1', port: CFG.pgPort || 5432,
-      database: CFG.pgDatabase || 'juhuo', user: CFG.pgUser, password: CFG.pgPassword });
-    db.on('error', (e) => { console.error('[pgapi] 连接断了', e.message); db = null; });
-    await db.connect();
-  }
   return db.query(sql, params || []);
 }
 
