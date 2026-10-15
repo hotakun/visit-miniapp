@@ -303,6 +303,15 @@ async function round() {
   // ⭐ 2026-10-11 老板定：「📝 拜访记录」两页改走轻量服务器 → 拜访**明细**也进 PG
   try { await syncVisits(); } catch (e) { console.error('[sync] visits 同步失败（下轮再试）:', e.message); }
   try { await syncMallPending(); } catch (e) { console.error('[sync] mall_pending 同步失败（下轮再试）:', e.message); }
+  // ⭐ 2026-10-15（《订单本地方案》第 3 块）：订单/明细同步 + 聚合重算（后台那 6 列的数据来源）
+  //   ⚠️ 订单同步是**增量**（`since` 不变时通常 0 条，一次调用就回）—— 每轮跑无压力。
+  //   ⚠️ 聚合重算是**全量**（17.8 万家一条 SQL，几秒）→ 加 **10 分钟节流**，别每 5 分钟都算一遍。
+  try { await syncOrders(); } catch (e) { console.error('[sync] orders 同步失败（下轮再试）:', e.message); }
+  try { await syncOrderItems(); } catch (e) { console.error('[sync] order_items 同步失败（下轮再试）:', e.message); }
+  if (!_lastCustAgg || Date.now() - _lastCustAgg >= 10 * 60 * 1000) {
+    try { await recalcCustAgg(); _lastCustAgg = Date.now(); }
+    catch (e) { console.error('[sync] 聚合重算失败（下轮再试）:', e.message); }
+  }
 }
 
 // ⭐⭐ 2026-10-14 老板定（省数据库读量 / 压 QPS 尖峰）：**batch_members 改成「增量 + 定期全量对账」**。
@@ -336,6 +345,7 @@ let _lastVisitDirtyHandled = 0; // 上次"因信号"对 visits 做过全量的�
 const _deletedVisitSeen = new Set();  // ⭐ 2026-10-14：本进程已处理过的「拜访删除名单」id
 //   —— 名单是"近 7 天"的、而处理它的那段在**每轮**都跑；不记一下就每 5 分钟重复删同一批（幂等无害但白做功 + 刷日志）。
 let _lastVisitFullSync = 0;    // 上次"全量对账 visits"的时刻（0 = 还没跑过 → 首轮全量，安全）
+let _lastCustAgg = 0;          // ⭐ 2026-10-15：上次"重算客户聚合 cust_agg"的时刻（10 分钟节流；0 = 还没跑过 → 首轮会算）
 let _lastPollHandled = 0;      // 上次"跑过全套"时的 pollDirtyAt
 let _lastCustHandled = 0;      // 上次"跑过全套"时的 custDirtyAt
 let _lastTaskHandled = 0;      // 上次"跑过全套"时的 taskDirtyAt
@@ -601,6 +611,124 @@ async function syncVisits() {
   }
   await setVisitWatermark(lastSeen);                  // 记住水位（空值不会覆盖）
   console.log(`[sync] visits 同步 ${total} 条（${full ? '全量对账' : '增量'}）`);
+}
+
+// ⭐⭐ 2026-10-15 老板定（《订单本地方案》第 3 块）：**订单 / 订单明细 同步到 PG**
+//   目的：后台那 6 列改从【自己的服务器】算（不再每翻页问云端）。
+//   ⚠️ 水位用 **`updatedAt`**（不是 `_id` 游标）—— 因为订单 **`_id` 是随机串**，
+//      新导入的订单可能"排在任何旧 _id 之前"，用 `_id` 游标会**永久漏掉**它们（与 D01 同类错位）。
+//      → `since` 整轮不动、只推进 `cursor`（cursor 只用于同一轮内翻页）。
+//   ⚠️ 水位存 `sync_state`（name='orders' / 'order_items'）—— 那列的 `watermark` 是 bigint，`updatedAt` 正好是数字。
+//   ⚠️ 与其它同步一样：**只 upsert，不清表**（订单是老单不变、新单追加，没有"删除"要检测）。
+async function orderWatermark(name) {
+  try { const r = await (await conn()).query('SELECT watermark FROM sync_state WHERE name=$1', [name]); return Number(r.rows[0] && r.rows[0].watermark) || 0; }
+  catch (e) { return 0; }
+}
+async function setOrderWatermark(name, w) {
+  if (!w) return;
+  await (await conn()).query('INSERT INTO sync_state (name,watermark,synced_at) VALUES ($3,$1,$2) ' +
+    'ON CONFLICT (name) DO UPDATE SET watermark=$1, synced_at=$2', [w, Date.now(), name]);
+}
+
+async function syncOrders() {
+  try {
+    const coll = 'orders';
+    const since = await orderWatermark(coll);
+    const cols = ['id', 'code', 'order_no', 'amount', 'status', 'ordered_at', 'pay_method', 'salesman', 'created_at', 'updated_at'];
+    const rows = [];
+    let cursor = '', maxU = since, got = 0;
+    for (let i = 0; i < 60; i++) {                       // 上限 6 万条（实际 1 万出头）
+      const r = await callCloud('exportOrdersForSync', { since, cursor, limit: 1000 });
+      if (!r || !r.ok) throw new Error('exportOrdersForSync 返回异常: ' + JSON.stringify(r).slice(0, 160));
+      const list = r.rows || [];
+      if (!list.length) break;
+      for (const x of list) {
+        rows.push([x.id, x.code, x.orderNo, x.amount, x.status, x.orderedAt, x.payMethod, x.salesman, x.createdAt, x.updatedAt]);
+        if (Number(x.updatedAt) > maxU) maxU = Number(x.updatedAt);
+        got++;
+      }
+      cursor = r.last || '';
+      if (!r.hasMore || !cursor) break;
+      await sleep(150);
+    }
+    await upsert('orders', cols, rows, ['id']);
+    await setOrderWatermark(coll, maxU);                 // 全部成功后才推进水位
+    if (got) console.log('[sync] orders 同步 ' + got + ' 条（' + (since ? '增量' : '首次全量') + '）');
+  } catch (e) { console.error('[sync] orders 同步失败（下轮再试）:', e.message); }
+}
+
+async function syncOrderItems() {
+  try {
+    const coll = 'order_items';
+    const since = await orderWatermark(coll);
+    const cols = ['id', 'order_no', 'goods_code', 'goods_name', 'barcode', 'brand', 'category', 'spec', 'unit', 'supplier',
+      'self_code', 'line_no', 'order_qty', 'amount', 'actual_price', 'retail_price', 'sale_price', 'wholesale_price',
+      'other_share', 'out_qty', 'feature', 'remark', 'created_at', 'updated_at'];
+    const rows = [];
+    let cursor = '', maxU = since, got = 0;
+    for (let i = 0; i < 80; i++) {                       // 上限 8 万条（实际 2.1 万）
+      const r = await callCloud('exportOrderItemsForSync', { since, cursor, limit: 1000 });
+      if (!r || !r.ok) throw new Error('exportOrderItemsForSync 返回异常: ' + JSON.stringify(r).slice(0, 160));
+      const list = r.rows || [];
+      if (!list.length) break;
+      for (const x of list) {
+        rows.push([x.id, x.orderNo, x.goodsCode, x.goodsName, x.barcode, x.brand, x.category, x.spec, x.unit, x.supplier,
+          x.selfCode, x.lineNo, x.orderQty, x.amount, x.actualPrice, x.retailPrice, x.salePrice, x.wholesalePrice,
+          x.otherShare, x.outQty, x.feature, x.remark, x.createdAt, x.updatedAt]);
+        if (Number(x.updatedAt) > maxU) maxU = Number(x.updatedAt);
+        got++;
+      }
+      cursor = r.last || '';
+      if (!r.hasMore || !cursor) break;
+      await sleep(150);
+    }
+    await upsert('order_items', cols, rows, ['id']);
+    await setOrderWatermark(coll, maxU);
+    if (got) console.log('[sync] order_items 同步 ' + got + ' 条（' + (since ? '增量' : '首次全量') + '）');
+  } catch (e) { console.error('[sync] order_items 同步失败（下轮再试）:', e.message); }
+}
+
+// ⭐⭐ 2026-10-15：《订单本地方案》第 3 块的核心 —— **把这 6 个统计算好写进 `cust_agg`**
+//   ① 订单总数 / ② 订单总额 / ③ 最近下单 —— 按 `customers.code` ↔ `orders.code` 关联
+//   ④ 拜访次数 / ⑤ 最近拜访 —— 按 `customer_id` 关联 `visits`（只算已提交：normal / pending_review）
+//   ⑥ 全局态（visit_state）—— 这家在不在"进行中任务"里（published / reviewing 且未过期）
+//   ⚠️ **全量重算**（17.8 万家一条 INSERT ... SELECT，实测几秒）—— 比"增量维护"简单可靠得多。
+//   ⚠️ 幂等：`ON CONFLICT (id) DO UPDATE`，重复跑结果一样。
+//   ⚠️ 失败只 log（下轮再试）—— 绝不影响别的同步。
+async function recalcCustAgg() {
+  try {
+    const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);   // 与云端 todayStr() 同口径（东八区）
+    const sql = `
+      INSERT INTO cust_agg (id, order_count, order_amount_sum, last_order_at, visit_count, last_visit_at, visit_state, updated_at)
+      SELECT c.id,
+             COALESCE(o.n, 0),
+             COALESCE(o.amt, 0),
+             COALESCE(NULLIF(o.last_at, ''), ''),
+             COALESCE(v.n, 0),
+             COALESCE(NULLIF(v.last_at, ''), ''),
+             CASE WHEN t.cid IS NOT NULL THEN 'in_task' ELSE 'free' END,
+             $1
+      FROM customers c
+      LEFT JOIN (SELECT code, count(*) AS n, sum(amount) AS amt, max(ordered_at) AS last_at
+                   FROM orders WHERE coalesce(code,'') <> '' GROUP BY code) o ON o.code = c.code
+      LEFT JOIN (SELECT customer_id, count(*) AS n, max(visited_at) AS last_at
+                   FROM visits WHERE status IN ('normal','pending_review') GROUP BY customer_id) v ON v.customer_id = c.id
+      LEFT JOIN (SELECT DISTINCT jsonb_array_elements_text(customer_ids) AS cid
+                   FROM tasks
+                  WHERE status IN ('published','reviewing')
+                    AND (deadline IS NULL OR deadline = '' OR deadline > $2)) t ON t.cid = c.id
+      ON CONFLICT (id) DO UPDATE SET
+        order_count = EXCLUDED.order_count, order_amount_sum = EXCLUDED.order_amount_sum,
+        last_order_at = EXCLUDED.last_order_at, visit_count = EXCLUDED.visit_count,
+        last_visit_at = EXCLUDED.last_visit_at, visit_state = EXCLUDED.visit_state,
+        updated_at = EXCLUDED.updated_at`;
+    const c = await conn();
+    const t0 = Date.now();
+    await c.query(sql, [Date.now(), today]);
+    const n = await c.query('SELECT count(*)::int AS n, sum(order_count)::int AS oc, sum(visit_count)::int AS vc FROM cust_agg');
+    const s = n.rows[0] || {};
+    console.log('[sync] 聚合重算完成：' + s.n + ' 家 · 订单合计 ' + (s.oc || 0) + ' 单 · 拜访合计 ' + (s.vc || 0) + ' 次（' + (Date.now() - t0) + 'ms）');
+  } catch (e) { console.error('[sync] 聚合重算失败（下轮再试）:', e.message); }
 }
 
 async function syncVisitedCustomers() {
