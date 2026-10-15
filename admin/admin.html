@@ -9332,6 +9332,12 @@ async function loadGeoPage() {
   const rows = list.map((c, i) => {
     const no = (geoF.page - 1) * geoF.size + i + 1;
     const taskSt = c.visitStatus ? (VS[c.visitStatus] || c.visitStatus) : '';
+    // ⭐ 2026-10-15 老板定：任务状态按状态用不同颜色 ——
+    //   · 已回访 visited → 绿（p-ok）
+    //   · 拜访中 ongoing → 蓝（p-blue）
+    //   · 待回访 pending → 灰（p-gray，保持原样；老板这次没指定，先不动）
+    //   （三个类都在 #page-geo 作用域里定义，见文件上方 CSS。）
+    const taskStCls = c.visitStatus === 'visited' ? 'p-ok' : (c.visitStatus === 'ongoing' ? 'p-blue' : 'p-gray');
     // ⭐ 2026-09-26 老板定：「坐标」列**不再显示"正常/补标/待定"**，直接显示**来源**：
     //   商城 / 平台 / 采集（业务员采集、审核通过后写回） / 修改（管理员后台改） / 待审核 / 补标（没坐标）
     //   规则与标签都复用客户详情页同一个函数 cdSrcName()，两处显示口径永远一致。
@@ -9359,7 +9365,7 @@ async function loadGeoPage() {
       + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.district || '—')}</td>`
       + `<td><span class="pill p-pu">${esc(c.bizCircle || '—')}</span></td>`
       + `<td>${c.visitState === 'in_task' ? '<span class="pill p-blue">任务中</span>' : '—'}</td>`
-      + `<td>${taskSt ? '<span class="pill p-gray">' + taskSt + '</span>' : '—'}</td>`
+      + `<td>${taskSt ? '<span class="pill ' + taskStCls + '">' + taskSt + '</span>' : '—'}</td>`
       + `<td style="text-align:center">${c.orderCount || '—'}</td>`
       + `<td style="text-align:right;white-space:nowrap">${amtCell}</td>`
       + `<td class="lft" style="white-space:nowrap;color:var(--sub)">${esc(c.lastOrderAt || '—')}</td>`
