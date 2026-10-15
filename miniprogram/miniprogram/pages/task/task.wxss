@@ -43,6 +43,17 @@
 .day.done .dt { color: var(--green); }
 .day.done .dd { color: var(--green); }
 .day.done .dc { color: var(--green); }
+/* ⭐⭐ 2026-10-16 老板定：「之前已经完成并变成绿色的页数卡，我再选择的时候就没有任何变化 ——
+   我希望还是保持绿色，但是选择后它的外框变成类似选中的红色，保持里面是原本的绿色状态，外框变成红色即可。」
+   ⚠️ 根因：`.day.on`（2 个类）与 `.day.done`（2 个类）**优先级相同**，而 `.done` 写在后面 → 选中时被它盖住，
+      所以"点了看不出变化"。（老板 2026-10-16 实测报的就是这个）
+   ✅ 这条 `.day.on.done` 是 **3 个类 → 优先级更高**：**里面保持绿底绿字**，只把**外框**换成选中的橙色
+      （`.day.on.done .dt` = 3 类 + 1 类 = 4，同样压过 `.day.done .dt` 的 3 类，文字色也稳）。
+   ⚠️ 以后再加"完成态"的样式，注意别把这条又盖掉。 */
+.day.on.done { background: var(--green-tint); border-color: var(--primary); }
+.day.on.done .dt { color: var(--green); }
+.day.on.done .dd { color: var(--green); }
+.day.on.done .dc { color: var(--green); }
 .customers { margin-top: 14px; }
 .cust { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 16px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(31,36,48,.06); }
 /* 拜访中的卡片：蓝色边框高亮（老板 2026-09-04 定） */
