@@ -93,6 +93,14 @@
 .dup.ok { background: #EAF6EE; border: 1px solid #CBE8D6; color: #14663A; }
 .dup.warn { background: #FFF8E8; border: 1px solid #F3E2BE; color: #8A6412; }
 .dup.bad { background: #FDECEC; border: 1px solid #F3C9C4; color: #B3261E; }
+/* ⭐⭐ 2026-10-15 老板定：三档防重弹窗**按严重程度用不同的红色浓度** ——
+   （原来 same / near 都用黄色 warn，看不出谁更严重）
+   · bad（最深）= 电话铁证：这家已经在客户库里了 —— 拦
+   · mid（中）  = 附近有一家同名店铺 —— 提示
+   · low（最浅）= 附近有一家很像的店（店名高度相似 / 电话近似）—— 预警
+   三档只用"红色的浓度"区分，不换色系 —— 一眼看得出轻重。 */
+.dup.mid { background: #FEF4F2; border: 1px solid #F6D8D2; color: #C4401E; }
+.dup.low { background: #FFFAF8; border: 1px solid #FAE6E0; color: #D2694A; }
 /* ⭐ 2026-09-29：**引导卡**（中性蓝，**不是错误**）——
    手动点了「防重检测」但还没填好店名/电话时给指引，别让人以为出了错 */
 .dup.tips { background: #F1F5FF; border: 1px solid #BFD3F5; color: #1F63C4; }
@@ -108,6 +116,9 @@
   background: #1E9E5A; color: #fff; }
 .dup .d-b.ghost { background: #fff; color: #5B6472; border: 1px solid #E9EDF3; }
 .dup.bad .d-b { background: #B3261E; }
+/* ⭐ 与弹窗的红色浓度配套（bad 最深 / mid 中 / low 最浅） */
+.dup.mid .d-b { background: #C4401E; }
+.dup.low .d-b { background: #D2694A; }
 
 /* 防重检测按钮那一排 */
 .dbtn-row { display: flex; align-items: center; gap: 9px; margin-top: 4px; }

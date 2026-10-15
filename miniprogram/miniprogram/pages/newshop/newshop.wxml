@@ -146,7 +146,7 @@
         <view class="d-b" bindtap="openDup">打开这家看看</view>
       </view>
       <!-- 仅同名 → 提示、不拦 -->
-      <view class="dup warn" wx:elif="{{dupShow && same}}">
+      <view class="dup mid" wx:elif="{{dupShow && same}}">
         <text class="d-t">🔎 附近有一家同名店铺</text>
         <view class="d-c">
           <text class="d-n">{{same.name}}</text>
@@ -163,7 +163,7 @@
       <!-- ⭐ 2026-09-29 新增：**疑似重复**（店名高度相似 / 电话近似）→ 黄卡预警，但**不拦**，
            业务员确认过就能继续建。
            （老板实测报的："名字几乎一样、座机号也近似，结果防重检测毫无反应"） -->
-      <view class="dup warn" wx:elif="{{dupShow && near}}">
+      <view class="dup low" wx:elif="{{dupShow && near}}">
         <text class="d-t">🔎 附近有一家很像的店，先确认一下</text>
         <view class="d-c">
           <text class="d-n">{{near.name}}</text>
