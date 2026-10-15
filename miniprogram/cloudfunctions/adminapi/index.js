@@ -5261,9 +5261,13 @@ async function getSettings(event) {
   //      → **读这一步就被云端拒**（EXCEED_MAX_RESPONSE_SIZE / -501000）→ 后台拿到错、包成 **502**。
   //   ⚠️ 2026-10-11 曾尝试修过：在**读完之后的 forEach 里** `if (key.indexOf('admin_dist') === 0) return;`
   //      —— **但那时数据已经读出来了，拦不住超限**，等于没修（2026-10-15 老板又撞上：后台自动轮询/设置页反复失败）。
-  //   ✅ 正确做法：**读的时候就排除**（用 `_.nin` 列全那几个 key；换方案前的旧 `admin_dist` 也一并排除）。
+  //   ✅ 正确做法：**读的时候就排除**（用 `_.nin` 列全那几个 key）。
   //      这些文件本来就有专门的分片接口（`getAdminDistMeta` / `getAdminDistPart`），不该走这里。
-  const DIST_KEYS = ['admin_dist', 'admin_dist_adminHtml', 'admin_dist_ntMapJs', 'admin_dist_serverJs', 'admin_dist_storeJs'];
+  //   ⚠️⚠️ 2026-10-15 二次修正：**第一版漏了 `adminDist`（没有下划线）** ——
+  //      它是**更早那版命名**留下的旧文档，实测 **1,160.7 KB（1.16 MB）**，
+  //      比那 4 个新文档**加起来还大** → 光排除 `admin_dist*` 仍然超限（实测 1.4 MB）。
+  //      **必须把它一起列进来**（教训：排除清单别凭记忆写，要按实测的 key 名一个个对）。
+  const DIST_KEYS = ['adminDist', 'admin_dist', 'admin_dist_adminHtml', 'admin_dist_ntMapJs', 'admin_dist_serverJs', 'admin_dist_storeJs'];
   const res = await db.collection('settings').where({ key: _.nin(DIST_KEYS) }).get();
   const map = {};
   res.data.forEach(s => { map[s.key] = s.value; });
