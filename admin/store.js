@@ -271,6 +271,73 @@ async function refresh(callApi, cred) {
   }
 }
 
+// ⭐⭐ 2026-10-15 老板定（「轻量补字段」）：**只把那 7 个聚合列补进现有缓存**（不重拉全量）。
+//   为什么要它：为了看那几列（订单数/额/最近下单 + 拜访数/最近拜访/全局态/任务内状态），
+//   原来每次都要重拉 **65MB 全量** —— 老板那条网络一慢就拉不动（实测他单片要 30 秒+，我这边 2 秒）。
+//   这几列自己只有约 **1MB（gzip）** → 慢网几秒就下来。
+//   ⚠️ 前提：缓存必须已存在（新电脑要先走一次 refresh() 灌全量 —— 由 server.js 的路由判断）。
+//   ⚠️ **只改这 7 个键，其余字段一个字不碰**（同一个 `i` 就地覆盖）。
+async function refreshAgg() {
+  if (syncing) return { ok: false, msg: '正在拉取中，请稍候' };
+  syncing = true;
+  progress = { done: 0, total: 0, phase: '开始', cancel: false };
+  try {
+    const c = read();
+    if (!c || !Array.isArray(c.points) || !c.points.length) {
+      return { ok: false, msg: '本地缓存还没有（需要先做一次完整更新）', needFull: true };
+    }
+    let _pgc = {};
+    try { _pgc = require('./config.json'); } catch (e) { /* 没配就报错 */ }
+    if (!_pgc.pgApiUrl) return { ok: false, msg: '没配 pgApiUrl（按设定：不拉云端）' };
+    const _base = String(_pgc.pgApiUrl).replace(/\/+$/, '') + '/aggAll' +
+      (_pgc.pgApiToken ? ('?token=' + encodeURIComponent(_pgc.pgApiToken)) : '');
+    const _jl = (_base.indexOf('?') >= 0 ? '&' : '?');
+
+    let _after = '', _rows = [];
+    for (let _p = 0; _p < 80; _p++) {
+      const _u = _base + _jl + 'limit=20000' + (_after ? ('&after=' + encodeURIComponent(_after)) : '');
+      // 与 refresh() 同款：60 秒超时 + 每片重试 3 次（这张表小、更快，但不能因为一片失败就整轮失败）
+      let _resp = null, _lastErr = null;
+      for (let _try = 0; _try < 3; _try++) {
+        try { _resp = await fetch(_u, { signal: AbortSignal.timeout(60000) }); break; }
+        catch (e) { _lastErr = e; progress.phase = '这一片没下来（第 ' + (_try + 1) + ' 次），正在重试…'; await new Promise(r => setTimeout(r, 1200 * (_try + 1))); }
+      }
+      if (!_resp) throw new Error('有一片没拿到（' + ((_lastErr && _lastErr.message) || '网络超时') + '）—— 请检查这台电脑到服务器的网络');
+      const rr = await _resp.json();
+      if (progress.cancel) { progress.phase = '已取消'; return { ok: false, msg: '你取消了这次更新' }; }
+      if (!rr || !rr.ok || !Array.isArray(rr.rows)) break;
+      progress.total = rr.total || progress.total;
+      _rows = _rows.concat(rr.rows);
+      progress.done = _rows.length;
+      progress.phase = '正在补那几列：已收 ' + _rows.length.toLocaleString() +
+        (progress.total ? (' / ' + progress.total.toLocaleString() + ' 家') : ' 家');
+      if (!rr.hasMore || !rr.rows.length) break;
+      _after = rr.last || '';
+    }
+    if (!_rows.length) return { ok: false, msg: '服务器没回这几列的数据' };
+
+    // 就地补进缓存（只改这 7 个键）
+    const byId = {};
+    _rows.forEach(x => { if (x && x.id) byId[x.id] = x; });
+    let hit = 0;
+    c.points.forEach(p => {
+      const a = byId[p.i];
+      if (!a) return;
+      p.oc = a.oc; p.oa = a.oa; p.lo = a.lo; p.vc = a.vc; p.lv = a.lv; p.vs = a.vs; p.vt = a.vt;
+      hit++;
+    });
+    // ⚠️ syncedAt / maxU 一律不动（它们表示"上次全量同步"与"增量水位"，补几列不该动它们）
+    write({ v: VERSION, syncedAt: c.syncedAt, maxU: c.maxU || 0, count: c.points.length, points: c.points });
+    console.log('[store] 轻量补字段完成：' + hit + ' 家补上那 7 列（共收到 ' + _rows.length + ' 条）');
+    return { ok: true, hit: hit, got: _rows.length, count: c.points.length, from: 'pg-agg' };
+  } catch (e) {
+    console.error('[store] 轻量补字段失败：', e && e.message);
+    return { ok: false, msg: (e && e.message) || '补字段失败' };
+  } finally {
+    syncing = false;
+  }
+}
+
 // ⭐ 2026-09-27 M3：**写后回写**（架构文档 §四）—— 前端改完（备注/坐标/字段/删除/建批次）把**那几条**
 //   同步进本地缓存，不用等下次全量刷新。写路径不变：**永远先写云端，成功后才调这里**。
 //   patches: [{ id, set: { 短键: 值 } }] ｜ removeIds: ['_id', ...]
@@ -490,4 +557,4 @@ function startAutoRefresh(callApi, cred) {
     .catch(() => null);
 }
 
-module.exports = { read, write, status, refresh, cancelRefresh, patch, unbatch, checkDirty, checkDirtyFromPg, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
+module.exports = { read, write, status, refresh, refreshAgg, cancelRefresh, patch, unbatch, checkDirty, checkDirtyFromPg, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };

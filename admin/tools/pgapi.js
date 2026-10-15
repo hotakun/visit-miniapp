@@ -174,6 +174,24 @@ const srv = http.createServer(async (req, res) => {
   }
   if (!auth(req, u)) return out(res, 401, { ok: false, msg: 'unauthorized' });
   try {
+    // ⭐⭐ 2026-10-15（老板定「轻量补字段」）：**只回"聚合那几列"** —— 后台点「更新地图数据」时用它。
+    //   背景：为了看那几列（订单数/额/最近下单 + 拜访数/最近拜访/全局态/任务内状态），
+    //   原来每次都要把 **65MB 的全量客户数据**重拉一遍；老板那条网络一慢就拉不动（实测他单片要 30 秒+，我这边 2 秒）。
+    //   而这几列自己只有约 12MB（未压缩）/ ~1MB（gzip）→ **慢网也能几秒下来**。
+    //   ⚠️ 只查 `cust_agg` 一张表、**没有任何 JOIN**（`id` 是主键，走索引）→ 非常快。
+    //   ⚠️ 分片方式与 `/points` 一致（`limit` + `after` 游标）。
+    if (u.pathname === '/aggAll') {
+      const lim = Math.min(Math.max(Number(u.searchParams.get('limit') || 0) || 20000, 100), 50000);
+      const after = String(u.searchParams.get('after') || '');
+      const SEL = 'SELECT id, order_count AS oc, order_amount_sum AS oa, last_order_at AS lo, ' +
+        'visit_count AS vc, last_visit_at AS lv, visit_state AS vs, visit_status AS vt FROM cust_agg';
+      const tot = await q('SELECT count(*)::int AS n FROM cust_agg');
+      const r = after
+        ? await q(SEL + ' WHERE id > $1 ORDER BY id LIMIT $2', [after, lim])
+        : await q(SEL + ' ORDER BY id LIMIT $1', [lim]);
+      const last = r.rows.length ? r.rows[r.rows.length - 1].id : after;
+      return outGz(res, 200, { ok: true, rows: r.rows, total: tot.rows[0].n, last: last, hasMore: r.rows.length >= lim, at: Date.now() });
+    }
     // 全量客户点（地图用；首次给新电脑灌本地缓存也用它）
     if (u.pathname === '/points') {
       // ⭐⭐ 2026-10-12 老板定（B 方案）：**支持分片** ——

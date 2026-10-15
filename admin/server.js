@@ -868,6 +868,19 @@ function writeChangeLog(rec) {
     })().catch(e => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: false, msg: e.message })); });
     return;
   }
+  // ⭐⭐ 2026-10-15 老板定（「轻量补字段」）：**只补那 7 个聚合列**，不重拉 65MB 全量。
+  //   背景：老板那条网络拉全量单片要 30 秒+（我这边 2 秒）→ 每次点「更新地图数据」都失败。
+  //   这几列自己只有 ~1MB（gzip），慢网也几秒就下来。
+  //   ⚠️ 没缓存（新电脑 / 首次）→ **自动退回全量** refresh()（否则没有基础数据可补）。
+  if (req.method === 'POST' && req.url === '/mapPoints/refreshAgg') {
+    (async () => {
+      let r = await store.refreshAgg();
+      if (r && r.needFull) r = await store.refresh(callApi, STORE_AUTH);   // 没缓存 → 走全量
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(r));
+    })().catch(e => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: false, msg: e.message })); });
+    return;
+  }
   // ⭐ 2026-10-12 老板要「能不能强行中断」→ 点进度浮层上的 ✕ 就调这里，让 store 放弃这次拉取
   if (req.method === 'POST' && req.url === '/mapPoints/cancel') {
     try { store.cancelRefresh(); } catch (e) { /* 没有也不报错 */ }
