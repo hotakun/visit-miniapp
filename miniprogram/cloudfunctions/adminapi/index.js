@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'exportOrdersForSync', 'exportOrderItemsForSync', 'applyMallPair', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'exportOrdersForSync', 'exportOrderItemsForSync', 'applyMallPair', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'mergeCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -790,6 +790,7 @@ exports.main = async (event) => {
     if (action === 'applyMallPair') return await applyMallPair(event);
     if (action === 'fixDupCustomers') return await fixDupCustomers(event);              // ⭐ 2026-10-11：商城**人工配对**的合并（「🛒 商城配对确认」页用）
     if (action === 'reassignVisit') return await reassignVisit(event);                  // ⭐ 2026-10-12：把拜访记录挪到正确的客户名下（串档修复；只改归属、留备案）
+    if (action === 'mergeCustomers') return await mergeCustomers(event);              // ⭐⭐ 2026-10-15：合并两条重复客户（逐字段可选；**不做备案**；source 只软删、可恢复）
     if (action === 'mallPairList') return await mallPairList(event);                // ⭐ 2026-10-11：配对确认页的**候选清单**（只读）
     if (action === 'bizSuggest') return await bizSuggest(event);                    // ⭐ 2026-10-11：按坐标给**商圈建议**（200→500 米）
     if (action === 'createMallCustomer') return await createMallCustomer(event);    // ⭐ 2026-10-11：新建「已加入商城」客户（**经纬度必填**）
@@ -4164,6 +4165,176 @@ async function mallPairList(event) {
 //   老板逐条指认（原汤牛肉馆第3条 → 安顺本味馆 等），要求按他的清单挪回来。
 //   ⚠️ **只改 `visits.customerId`** —— 内容 / 备注 / 照片 / 录音 / 时间**一个字不动**；
 //   ⚠️ **每次必留备案**（返回 from→to 的 log，交给调用方存盘）—— 老板最高红线。
+// ⭐⭐⭐ 2026-10-15 老板定：**「合并重复客户」**（后台防重检测里发现两条其实是同一家店时用）。
+//   老板原话：「最好能让我选择，因为各个字段有可能选 B，有可能选 A」——
+//   所以入参 `picks` **逐字段**指定取哪边：`'t'` = 用要保留那条(target)的值、`'s'` = 用要并掉那条(source)的值；
+//   **没给 picks 的字段走默认**："哪边有值用哪边，两边都有值用 target"（前端会把这个默认值**显示出来**给老板改）。
+//
+//   ⚠️⚠️ 这是**动店铺信息**的操作，按老板最高红线：**必须老板明确同意**（在界面上逐字段看过、点了确认）才调这个接口。
+//   ⚠️ 2026-10-15 老板定：**这个操作不做备案** —— 原话「这个不要备案，也就是合并就合并了，没有退回的道理，
+//      这个情况肯定是我们勘察确实了的！」（合并前是在现场确认过"就是同一家"的）
+//      → 所以本函数**不进后台的 `CHANGE_ACTIONS`**（不会写 `cust_change_log.jsonl`）。
+//      ⚠️ 但 source 仍然**只软删**（进回收站、数据一条不丢）—— 那不是"备案"，是项目一贯的删除口径。
+//      （下面仍然把 before/after 返回给调用方，**只为"合并结果显示得清楚"**，不落盘。）
+//
+//   顺带把"附着在 source 身上的东西"迁到 target（不迁就会丢 / 会挂空）：
+//     · 拜访记录 `visits.customerId`    —— 业务员跑出来的成果，绝不能丢
+//     · 批次成员 `batch_members.customerId` —— 否则合并后批次里少一家
+//     · 现场照片 —— source 有、target 不满 3 张 → 接上去（沿用 setCustPhotos 的"最多 3 张"口径）
+//     · `deleted_ids` 删除名单 —— ⚠️ 不写它！source 是"进回收站"不是"真删"，
+//       写了会把这个 id 加进同步器的删除名单（那条名单是给"真删"用的）。
+//
+//   ⚠️ 坐标**不跟着 picks 走**：老板红线「坐标绝不覆盖」——
+//      默认保留 target 的坐标，除非显式传 `takeCoords: true`（界面上那一项默认不勾）。
+//
+//   🛡️ **防御式**：先查 source 有没有"我们没能力安全迁移"的牵连（在任务里 / 在自由拜访卡里）——
+//      有就**直接拒绝并说清**，绝不半吊子改（宁可不合，也不留一堆指向空档的引用）。
+async function mergeCustomers(event) {
+  const admin = await verifyAdmin(event);
+  if (!admin) return { ok: false, code: 'NO_AUTH', msg: '账号或密码不正确（或无权限）' };
+  const targetId = String((event && event.targetId) || '').trim();   // 保留这条
+  const sourceId = String((event && event.sourceId) || '').trim();   // 并掉这条（软删）
+  if (!targetId || !sourceId || targetId === sourceId) {
+    return { ok: false, code: 'BAD_ARG', msg: '要合并的两条不对' };
+  }
+  const picks = (event && event.picks) || {};
+  const doMoveVisits = event.moveVisits !== false;      // 默认迁
+  const doMovePhotos = event.movePhotos !== false;      // 默认接照片
+  const takeCoords = event.takeCoords === true;         // ⚠️ 默认【不】用 source 的坐标
+
+  const [td, sd] = await Promise.all([
+    db.collection('customers').doc(targetId).get().catch(() => null),
+    db.collection('customers').doc(sourceId).get().catch(() => null)
+  ]);
+  const T = td && td.data, S = sd && sd.data;
+  if (!T) return { ok: false, code: 'NOT_FOUND', msg: '要保留的那条客户不存在' };
+  if (!S) return { ok: false, code: 'NOT_FOUND', msg: '要并掉的那条客户不存在' };
+  if (T.deleted === true || S.deleted === true) {
+    return { ok: false, code: 'BAD_STATE', msg: '这两条里有已经删除的，请先从回收站恢复再合并' };
+  }
+
+  const now = Date.now();
+  const by = (admin.name || '管理员');
+
+  // ---------- 🛡️ 先查"没能力安全迁移"的牵连 ----------
+  const _today = todayStr();
+  const _live = await fetchAll('tasks', { status: _.in(['published', 'reviewing']) },
+    { customerIds: true, name: true, taskNo: true, deadline: true });
+  const _hitTasks = [];
+  _live.forEach(t => {
+    if (t.deadline && String(t.deadline) <= _today) return;        // 过期的不算"任务中"
+    if ((t.customerIds || []).indexOf(sourceId) >= 0) _hitTasks.push(t.name || t.taskNo || t._id);
+  });
+  if (_hitTasks.length) {
+    return { ok: false, code: 'IN_TASK',
+      msg: '「' + (S.nameRaw || S.name || sourceId) + '」还在进行中的任务里（' + _hitTasks.join('、') +
+           '），要先把它从任务里摘掉才能合并 —— 请先在任务里处理它，再来合并' };
+  }
+  const _trips = await fetchAll('free_trips', {}, { customerIds: true, district: true, bizCircle: true });
+  const _hitTrips = _trips.filter(t => (t.customerIds || []).indexOf(sourceId) >= 0).length;
+  if (_hitTrips) {
+    return { ok: false, code: 'IN_FREETRIP',
+      msg: '「' + (S.nameRaw || S.name || sourceId) + '」还在 ' + _hitTrips + ' 张自由拜访卡里，请先处理再来合并' };
+  }
+
+  // ---------- ① 字段：逐字段按 picks 决定 ----------
+  const before = {}, after = {}, conflicts = [];
+  const data = { updatedAt: now };
+  const tv = k => (T[k] === undefined || T[k] === null ? '' : String(T[k]).trim());
+  const sv = k => (S[k] === undefined || S[k] === null ? '' : String(S[k]).trim());
+  MERGE_FIELDS.forEach(k => {
+    const a = tv(k), b = sv(k);
+    if (a === b) return;                                  // 一样，不用动
+    if (!a && !b) return;                                 // 都空，不用动
+    let use;
+    if (picks[k] === 's') use = b;
+    else if (picks[k] === 't') use = a;
+    else use = a || b;                                    // 默认：target 有值用 target，否则用 source
+    if (use === a) return;                                // 结果和 target 现值一样 → 不用写
+    before[k] = a; after[k] = use; data[k] = use;
+    if (a && b && a !== b) conflicts.push({ field: k, keep: a, other: b });   // 备案里标出"两边都有值、选了谁"
+  });
+  if (data.name !== undefined) data.nameRaw = data.name;   // ⚠️ 铁律：改店名必须同步 nameRaw
+
+  // ---------- ② 坐标：默认不覆盖（红线）----------
+  const coordsTouched = [];
+  if (takeCoords && S.lat && S.lng) {
+    before.lat = T.lat; before.lng = T.lng;
+    after.lat = S.lat;  after.lng = S.lng;
+    data.lat = S.lat; data.lng = S.lng;
+    data.coordSource = S.coordSource || 'merge';
+    coordsTouched.push('lat', 'lng');
+  }
+
+  // ---------- ③ 照片：source 有、target 不满 3 张 → 接上 ----------
+  let photosMoved = 0;
+  if (doMovePhotos) {
+    const tp = Array.isArray(T.photos) ? T.photos : [];
+    const sp = Array.isArray(S.photos) ? S.photos : [];
+    if (sp.length && tp.length < 3) {
+      const merged = tp.concat(sp).slice(0, 3);
+      photosMoved = merged.length - tp.length;
+      before._photoCount = tp.length; after._photoCount = merged.length;
+      data.photos = merged;
+    }
+  }
+
+  // ---------- ④ 写 target ----------
+  if (Object.keys(data).length > 1) {                      // 只有 updatedAt 说明没字段要改
+    await db.collection('customers').doc(targetId).update({ data });
+  }
+
+  // ---------- ⑤ 拜访记录改挂 ----------
+  let visitsMoved = 0;
+  if (doMoveVisits) {
+    const vs = await fetchAll('visits', { customerId: sourceId }, { _id: true });
+    for (const v of vs) {
+      try {
+        await db.collection('visits').doc(v._id).update({ data: { customerId: targetId, updatedAt: now } });
+        visitsMoved++;
+      } catch (e) { /* 单条失败不影响其它；下面返回里会体现数量 */ }
+    }
+  }
+
+  // ---------- ⑥ 批次成员改挂 ----------
+  let batchMoved = 0;
+  try {
+    const bm = await fetchAll('batch_members', { customerId: sourceId }, { batchId: true });
+    for (const m of bm) {
+      const ex = await db.collection('batch_members')
+        .where({ customerId: targetId, batchId: m.batchId }).limit(1).get().catch(() => ({ data: [] }));
+      if (ex.data && ex.data.length) {                     // target 已在这个批次里 → 删掉 source 那条即可
+        await db.collection('batch_members').doc(m._id).remove().catch(() => {});
+      } else {
+        await db.collection('batch_members').doc(m._id).update({ data: { customerId: targetId } }).catch(() => {});
+      }
+      batchMoved++;
+    }
+  } catch (e) { /* 批次迁移失败不阻断（会在返回里体现） */ }
+
+  // ---------- ⑦ source 进回收站（软删，可恢复）----------
+  await db.collection('customers').doc(sourceId).update({
+    data: { deleted: true, deletedAt: now, deletedBy: 'merge→' + by, updatedAt: now }
+  });
+
+  // ---------- ⑧ 报"客户变动"信号（让服务器同步器立刻拉走）----------
+  await touchCustDirty();
+
+  return {
+    ok: true, at: now, by: by,
+    targetId: targetId, sourceId: sourceId,
+    sourceName: S.nameRaw || S.name || '', targetName: data.name || T.nameRaw || T.name || '',
+    changedFields: Object.keys(after).filter(k => k.charAt(0) !== '_'),
+    before: before, after: after, conflicts: conflicts,
+    coordsTouched: coordsTouched,
+    photosMoved: photosMoved, visitsMoved: visitsMoved, batchMoved: batchMoved
+  };
+}
+
+// 合并时**逐字段可选**的文本字段清单（与 EDITABLE_CUST_FIELDS 对齐，去掉"坐标/图片"这类要单独处理的）
+const MERGE_FIELDS = ['name', 'phone', 'phone2', 'address', 'contactName', 'businessHours',
+  'category', 'district', 'bizCircle', 'cat1', 'cat2', 'cat3', 'salesman'];
+
 async function reassignVisit(event) {
   const rows = Array.isArray(event && event.rows) ? event.rows : [];
   if (!rows.length) return { ok: false, code: 'BAD_ARG', msg: '没有要挪的记录' };

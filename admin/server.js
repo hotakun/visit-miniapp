@@ -667,6 +667,9 @@ const server = http.createServer(async (req, res) => {
 const CHANGE_ACTIONS = {
   updateCustomerFields: 1, updateCustomerCoords: 1, fixDupCustomers: 1,
   deleteCustomers: 1, restoreCustomers: 1, applyMallPair: 1, applyMallMatch: 1
+  // ⚠️ 2026-10-15 老板定：**mergeCustomers 不进这张表** ——
+  //   原话「这个不要备案，也就是合并就合并了，没有退回的道理，这个情况肯定是我们勘察确实了的！」
+  //   （合并前是现场确认过"就是同一家"的，不需要像改字段那样留改前快照。）
 };
 function changeIdsOf(act, p) {
   const ids = [];
@@ -676,6 +679,7 @@ function changeIdsOf(act, p) {
   else if (act === 'deleteCustomers' || act === 'restoreCustomers') (p.ids || []).forEach(push);
   else if (act === 'applyMallPair') push(p.customerId);
   else if (act === 'applyMallMatch') (p.claims || []).forEach(c => push(c && c.customerId));
+  // ⚠️ mergeCustomers 不在这里 —— 老板 2026-10-15 定：**合并不做备案**（现场勘察确认过，不退回）
   return ids;
 }
 function changePayloadOf(act, p) {
