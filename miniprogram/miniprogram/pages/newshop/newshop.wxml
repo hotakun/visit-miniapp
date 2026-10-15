@@ -143,7 +143,7 @@
           <text class="d-l" wx:if="{{blk.address}}">{{blk.address}}</text>
           <text class="d-l">电话 {{blk.phoneMask}} —— 和你填的一模一样</text>
         </view>
-        <view class="d-b" bindtap="openDup">打开这家客户 ›</view>
+        <view class="d-b" bindtap="openDup">打开这家看看</view>
       </view>
       <!-- 仅同名 → 提示、不拦 -->
       <view class="dup warn" wx:elif="{{dupShow && same}}">
@@ -154,9 +154,9 @@
           <text class="d-l" wx:if="{{same.address}}">{{same.address}}</text>
           <text class="d-l">电话 {{same.phoneMask}}（{{same.phoneSame ? '和你填的一样' : '和你填的不一样'}}）</text>
         </view>
-        <text class="d-q">是不是同一家？</text>
+        <text class="d-q">是同一家吗？</text>
         <view class="d-btns">
-          <view class="d-b ghost" bindtap="openDup">是，打开它</view>
+          <view class="d-b ghost" bindtap="openDup">打开这家看看</view>
           <view class="d-b" bindtap="ignoreSame">不是，继续新建</view>
         </view>
       </view>
@@ -174,7 +174,7 @@
         <text class="d-q">是同一家吗？</text>
         <view class="d-btns">
           <view class="d-b ghost" bindtap="openDup">打开这家看看</view>
-          <view class="d-b" bindtap="ignoreSame">不是，继续建</view>
+          <view class="d-b" bindtap="ignoreSame">不是，继续新建</view>
         </view>
       </view>
       <!-- 查过、没撞上 -->

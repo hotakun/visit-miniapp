@@ -1175,7 +1175,11 @@ Page({
     wx.pageScrollTo({ scrollTop: 0, duration: 200 });
   },
   openDup() {
-    const t = this.data.blk || this.data.same;
+    // ⚠️⚠️ 2026-10-15 修（老板报「"很像的店"那个弹窗点『打开这家看看』毫无反馈」）：
+    //   原来只认 `blk` / `same` —— 而"疑似重复"那个弹窗用的是 **`near`**，
+    //   点下去这里取到的 t 是 undefined → 当场 return → 看着像"这个按钮是坏的"。
+    //   ✅ 现在三个数据源都认：blk=电话铁证（已在库里）/ same=同名 / near=疑似（店名高度相似或电话近似）。
+    const t = this.data.blk || this.data.same || this.data.near;
     if (!t || !t.id) return;
     // ⚠️⚠️ 2026-10-12 同上（串档真凶）：这里也必须带 freeVisit=1，否则"当前客户"不会刷成本家、记录会记到上一家
     wx.navigateTo({ url: '/pages/customer/customer?id=' + t.id + '&freeVisit=1' });
