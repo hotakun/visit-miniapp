@@ -108,20 +108,27 @@ Page({
     const baseDate = res.task.startDate || (res.task.createdAt ? new Date(res.task.createdAt + 8 * 3600 * 1000).toISOString().slice(0, 10) : '');
     const rawPlan = res.task.dayPlan && res.task.dayPlan.length ? res.task.dayPlan : [{ day: 1, customerIds: customers.map(c => c._id) }];
     const dayPlan = rawPlan.map(p => ({ ...p, dateLabel: baseDate ? fmtMD(addDays(baseDate, p.day - 1)) : '' }));
-    // ⭐⭐ 2026-10-13 老板定：默认页签 = **已拜访到的最大那一天**（一天都没拜访过才回退旧逻辑）
-    const _dayNo = (dateStr) => {
-      if (!baseDate || !dateStr) return 0;
-      const a = new Date(String(baseDate).slice(0, 10) + 'T00:00:00Z').getTime();
-      const b = new Date(String(dateStr).slice(0, 10) + 'T00:00:00Z').getTime();
-      if (!isFinite(a) || !isFinite(b)) return 0;
-      return Math.round((b - a) / 86400000) + 1;
-    };
+    // ⭐⭐ 2026-10-16 老板定（原话）：「进入任务详情卡片时候，请按已拜访客户**所在**的最大天数卡默认显示。」
+    //   追问确认两点：① 按「**客户所在的天数卡**」算（不是"哪天拜访的"）；② 口径与**页面卡片上那个 ✓**一致。
+    //   ⚠️ 旧算法是"按日历推"：拿 `lastVisit.visitedAt` 减任务开始日算"第几天"——
+    //      **跨天补跑**时就会停错页。例：第 1 天没跑完、第 2 天回来把第 1 天剩下的跑完
+    //      → 旧算法算出"第 2 天"、进来跳到第 2 页，**可他其实还在第 1 页的名单里跑**。
+    //   ✅ 现在：**从 dayPlan 反查"这个客户属于第几天"**，再取"已拜访客户"里这个值的最大者。
+    //   ⚠️ 口径：`c.lastVisit`（有拜访记录，含"无需拜访 / 休息中"）—— 与下面 `refreshShow()` 里
+    //      算「N 家 ✓ / x/y 家」用的 `map[id].visitedToday` 同源，两处天然一致。
+    const dayOfCust = {};                       // 客户id → 所属天数卡（若出现在多天里，取【最小】那天）
+    dayPlan.forEach(p => {
+      (p.customerIds || []).forEach(id => {
+        const k = String(id);
+        if (dayOfCust[k] === undefined || p.day < dayOfCust[k]) dayOfCust[k] = p.day;
+      });
+    });
     let maxVisitedDay = 0;
     customers.forEach(c => {
       const at = c.lastVisit && c.lastVisit.visitedAt;
-      if (!at) return;
-      const d = _dayNo(at);
-      if (d > maxVisitedDay) maxVisitedDay = d;
+      if (!at) return;                          // 没拜访过的不算（与卡片 ✓ 同口径）
+      const d = dayOfCust[String(c._id)];
+      if (d && d > maxVisitedDay) maxVisitedDay = d;
     });
     let activeDay = this.data.activeDay;
     if (!keepDay) {
