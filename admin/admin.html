@@ -4466,7 +4466,13 @@ async function openDupCheck() {
       '<td style="padding:6px 8px;color:var(--sub)">' + esc(x.mallCode || '') + '</td>' +
       // ⭐ 2026-10-03 老板定：点「详情」**不关防重** —— 把客户详情**叠在它上面**，
       //   关掉详情就回到这里接着看（原来先 hideDupCheck() 再开详情 = 一跳走就回不来了）。
-      '<td style="padding:6px 8px;text-align:right"><button class="btn ghost" style="height:24px;font-size:11px" onclick="showCustDetail(\'' + x.id + '\')">详情</button></td>' +
+      '<td style="padding:6px 8px;text-align:right">' +
+        '<button class="btn ghost" style="height:24px;font-size:11px" onclick="showCustDetail(\'' + x.id + '\')">详情</button>' +
+        // ⭐⭐ 2026-10-15 老板定：**合并重复客户** —— 每一行都给「⚖ 合并」，
+        //   点开是"逐字段挑哪边"的窗口（老板原话：「最好能让我选择，因为各个字段有可能选 B，有可能选 A」）。
+        //   ⚠️ 只在**当前这家人还在**时给按钮（cdCurId 是被并掉的那条 = 当前详情页正在看的这条）。
+        (cdCurId ? ' <button class="btn ghost" style="height:24px;font-size:11px" title="把这条并到当前这家（或反过来），逐字段可选" onclick="openMergeCust(\'' + x.id + '\')">⚖ 合并</button>' : '') +
+      '</td>' +
     '</tr>').join('');
   $('dupBody').innerHTML = tip + err + empty +
     (r.count
@@ -4482,6 +4488,172 @@ async function openDupCheck() {
       : '');
 }
 function hideDupCheck() { const o = $('dupOvl'); if (o) o.style.display = 'none'; }
+
+// ⭐⭐⭐ 2026-10-15 老板定：**合并重复客户**（从防重检测弹窗点某条的「⚖ 合并」进来）
+//   老板原话：「最好能让我选择，因为各个字段有可能选 B，有可能选 A」
+//   → 本窗口把两条的**每个字段并排摆出来**，逐行单选"用哪边"；另给三个"迁移开关"。
+//   ⚠️ 老板定：**这个操作不做备案**（「合就合了、没有退回的道理，是现场勘察确认过的」）。
+//   ⚠️ 但"并掉的那条"仍然**只进回收站**（软删）—— 那不是备案，是项目一贯的删除口径。
+//   ⚠️ 坐标单独一项、**默认不覆盖**（老板红线：现场采的坐标才是真到过那个点的）。
+const MG_FIELDS = [
+  ['name', '店名'], ['phone', '电话'], ['phone2', '备用电话'], ['address', '地址'],
+  ['contactName', '联系人'], ['businessHours', '营业时间'], ['category', '品类'],
+  ['district', '区域'], ['bizCircle', '商圈'], ['cat1', '大类'], ['cat2', '中类'], ['cat3', '小类'],
+  ['salesman', '业务员']
+];
+let _mg = null;   // 当前合并上下文 { t, s, keep: 't'|'s' }
+let _mgId = null; // 换向时用（另一条的 id）
+
+function mgVal(o, k) {
+  const v = o && o[k];
+  return (v === undefined || v === null || String(v).trim() === '') ? '' : String(v).trim();
+}
+function mgSame(a, b) { return mgVal(a, 'x') === mgVal(b, 'x'); }
+
+async function openMergeCust(otherId) {
+  const curId = cdCurId;                       // 当前详情页正在看的这条
+  if (!curId || !otherId) return;
+  _mgId = otherId;
+  const ovl = $('mgOvl');
+  if (!ovl) return;
+  $('mgBody').innerHTML = '<div style="padding:30px 0;text-align:center;color:var(--sub)">正在读两条档案…</div>';
+  ovlRaise(ovl);
+  ovl.style.display = 'flex';
+  const [ra, rb] = await Promise.all([
+    api('getCustomerDetail', { customerId: curId }),
+    api('getCustomerDetail', { customerId: otherId })
+  ]);
+  const A = ra && ra.customer, B = rb && rb.customer;
+  if (!A || !B) {
+    $('mgBody').innerHTML = '<div style="padding:20px 0;color:var(--danger)">读不到档案：' +
+      esc((ra && ra.msg) || (rb && rb.msg) || '请刷新后重试') + '</div>';
+    return;
+  }
+  // 拜访/照片数量（要显示出来给老板看"合并会迁走什么"）
+  const av = (ra.visits || []).length, bv = (rb.visits || []).length;
+  const ap = Array.isArray(A.photos) ? A.photos.length : 0, bp = Array.isArray(B.photos) ? B.photos.length : 0;
+  _mg = { A: A, B: B, av: av, bv: bv, ap: ap, bp: bp, keep: 'A' };
+  mgRender();
+}
+
+// 渲染整张合并表（换向时重画）
+function mgRender() {
+  const m = _mg; if (!m) return;
+  // keep = 'A' → 保留 A（当前看的这条）、并掉 B
+  const keepOne = m.keep === 'A' ? m.A : m.B;
+  const dropOne = m.keep === 'A' ? m.B : m.A;
+  const kv = (o, k) => { const v = mgVal(o, k); return v ? esc(v) : '<span style="color:#C3CAD4">（空）</span>'; };
+
+  let h = '<div style="margin-bottom:10px;padding:9px 12px;border-radius:9px;background:#FEF3C7;color:#B45309;font-size:12.5px;line-height:1.7">' +
+    '把 <b>' + esc(dropOne.name || '(没填店名)') + '</b> 并进 <b>' + esc(keepOne.name || '(没填店名)') + '</b>' +
+    '<br><span style="color:#92700C">被并掉的那条会进回收站（数据不丢，但列表里不再出现）</span>' +
+    '<button class="btn ghost" style="float:right;height:24px;font-size:11px;margin-top:-2px" onclick="mgSwap()">⇄ 对调</button>' +
+    '</div>';
+
+  h += '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<thead><tr style="color:var(--sub);font-weight:700;text-align:left">' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:88px">字段</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">' + esc(keepOne.name || '(保留)') + '</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">' + esc(dropOne.name || '(并掉)') + '</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:96px">用哪边</th>' +
+    '</tr></thead><tbody>';
+  MG_FIELDS.forEach(f => {
+    const k = f[0], label = f[1];
+    const a = mgVal(keepOne, k), b = mgVal(dropOne, k);
+    if (!a && !b) return;                                    // 两边都空 → 不占一行
+    // 默认：哪边有值用哪边，都有值用"保留的那条"
+    const def = a ? 'k' : 'd';
+    h += '<tr>' +
+      '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9;color:var(--sub)">' + label + '</td>' +
+      '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9">' + kv(keepOne, k) + '</td>' +
+      '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9">' + kv(dropOne, k) + '</td>' +
+      '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9;white-space:nowrap">' +
+        '<label style="margin-right:8px"><input type="radio" name="mgf_' + k + '" value="k"' + (def === 'k' ? ' checked' : '') + '> 左</label>' +
+        '<label><input type="radio" name="mgf_' + k + '" value="d"' + (def === 'd' ? ' checked' : '') + '> 右</label>' +
+      '</td>' +
+    '</tr>';
+  });
+  h += '</tbody></table>';
+
+  // 迁移开关（默认勾前两个、不勾坐标 —— 坐标是红线）
+  h += '<div style="margin-top:12px;padding:10px 12px;border-radius:9px;background:#F7F9FC;font-size:12.5px;line-height:2">' +
+    '<label style="display:block"><input type="checkbox" id="mgVisits"' + (m.kv !== false ? ' checked' : '') + '> ' +
+      '把被并掉那条的 <b>' + (m.keep === 'A' ? m.bv : m.av) + ' 条拜访记录</b> 挪到保留的这条</label>' +
+    '<label style="display:block"><input type="checkbox" id="mgPhotos"' + (m.kp !== false ? ' checked' : '') + '> ' +
+      '把被并掉那条的 <b>' + (m.keep === 'A' ? m.bp : m.ap) + ' 张现场照片</b> 接过来（最多 3 张）</label>' +
+    '<label style="display:block"><input type="checkbox" id="mgCoords"> ' +
+      '用被并掉那条的<b>坐标</b>覆盖 <span style="color:#C93A40">（默认不勾：现场采的坐标才是真到过那个点）</span></label>' +
+    '</div>';
+
+  h += '<div style="margin-top:14px;text-align:right">' +
+    '<button class="btn ghost" onclick="mgClose()">取消</button> ' +
+    '<button class="btn" style="background:var(--danger);margin-left:8px" onclick="mgConfirm()">⚖ 确认合并</button>' +
+    '</div>';
+  $('mgBody').innerHTML = h;
+}
+
+// ⇄ 对调"保留谁"：A↔B（下拉/单选会按新方向重画，默认值也跟着翻）
+function mgSwap() {
+  if (!_mg) return;
+  _mg.keep = (_mg.keep === 'A' ? 'B' : 'A');
+  mgRender();
+}
+
+function mgClose() { const o = $('mgOvl'); if (o) o.style.display = 'none'; }
+
+async function mgConfirm() {
+  const m = _mg; if (!m) return;
+  const keepId = (m.keep === 'A' ? m.A._id : m.B._id);
+  const dropId = (m.keep === 'A' ? m.B._id : m.A._id);
+  // 逐字段收集：radio value 'k' = 用保留那条的值 / 'd' = 用被并掉那条的值
+  const picks = {};
+  MG_FIELDS.forEach(f => {
+    const k = f[0];
+    const el = document.querySelector('input[name="mgf_' + k + '"]:checked');
+    if (!el) return;
+    if (el.value === 'd') picks[k] = 's';        // 云端口径：'s' = 用 source（= 被并掉那条）
+  });
+  const moveVisits = !($('mgVisits') && !$('mgVisits').checked);
+  const movePhotos = !($('mgPhotos') && !$('mgPhotos').checked);
+  const takeCoords = !!($('mgCoords') && $('mgCoords').checked);
+  const keepName = (m.keep === 'A' ? m.A.name : m.B.name) || '';
+  const dropName = (m.keep === 'A' ? m.B.name : m.A.name) || '';
+
+  if (!confirm('确认把「' + dropName + '」并进「' + keepName + '」？\n\n被并掉的那条会进回收站。')) return;
+  $('mgBody').innerHTML = '<div style="padding:30px 0;text-align:center;color:var(--sub)">正在合并…</div>';
+  const r = await api('mergeCustomers', {
+    targetId: keepId, sourceId: dropId, picks: picks,
+    moveVisits: moveVisits, movePhotos: movePhotos, takeCoords: takeCoords
+  });
+  if (!r || !r.ok) {
+    $('mgBody').innerHTML = '<div style="padding:20px 0;color:var(--danger)">合并失败：' + esc((r && r.msg) || '请重试') + '</div>' +
+      '<div style="text-align:right"><button class="btn ghost" onclick="mgClose()">关闭</button></div>';
+    return;
+  }
+  const moved = [];
+  if (r.visitsMoved) moved.push('拜访 ' + r.visitsMoved + ' 条');
+  if (r.photosMoved) moved.push('照片 ' + r.photosMoved + ' 张');
+  if (r.batchMoved) moved.push('批次 ' + r.batchMoved + ' 项');
+  $('mgBody').innerHTML =
+    '<div style="padding:8px 0;color:var(--green);font-size:13.5px;font-weight:800">✅ 合并完成</div>' +
+    '<div style="font-size:12.5px;color:var(--sub);line-height:1.9">' +
+      '保留：<b>' + esc(r.targetName || keepName) + '</b><br>' +
+      '进回收站：' + esc(r.sourceName || dropName) + '<br>' +
+      '改了 ' + (r.changedFields || []).length + ' 个字段' +
+      (moved.length ? '<br>迁移：' + esc(moved.join(' · ')) : '') +
+    '</div>' +
+    '<div style="margin-top:14px;text-align:right"><button class="btn" onclick="mgDone()">知道了</button></div>';
+  // ⚠️ 合并后必须刷新（"改完之后必须真的刷新"铁律）—— 但等老板点了"知道了"再刷，别打断他看结果
+}
+
+// 合并完成后收尾：关两个弹窗 + 作废缓存 + 刷新列表（顺序不能反）
+function mgDone() {
+  mgClose();
+  hideDupCheck();
+  try { if (typeof invalidateCustLocal === 'function') invalidateCustLocal(); } catch (e) { /* 静默 */ }
+  if (typeof loadGeoPage === 'function' && vis(document.getElementById('page-geo'))) loadGeoPage();
+  else if (typeof loadCustomers === 'function') loadCustomers();
+}
 
 // 2026-09-11 M2c：复制转写全文
 function copyTrText(btn) {
@@ -13779,6 +13951,23 @@ async function applyLocalMatch() {
           <button class="btn ghost" onclick="hideDupCheck()">关闭</button>
         </div>
         <div id="dupBody" style="padding:0 16px 16px;overflow:auto"></div>
+      </div>
+    </div>
+
+    <!-- ⭐⭐⭐ 2026-10-15 老板定：**合并重复客户**窗口（从上面防重检测每行的「⚖ 合并」进来）——
+         把两条的每个字段并排摆出来、逐行单选"用哪边"，另给三个迁移开关（拜访/照片/坐标）。
+         ⚠️ 老板定这个操作【不做备案】（「合就合了、没有退回的道理，是现场勘察确认过的」）；
+           但"被并掉的那条"仍然只进回收站（软删，数据不丢）。
+         内容全部由 JS（mgRender/mgConfirm）画进 #mgBody；容器固定 980px + 滚动（照"大列表一律弹窗+滚动"规矩）。 -->
+    <div class="ovl" id="mgOvl" style="display:none;z-index:10003" onclick="mgClose()">
+      <div class="modal" style="width:980px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px">
+          <b style="font-size:15px">⚖ 合并重复客户</b>
+          <span style="font-size:12.5px;color:var(--sub)">逐字段挑用哪边；被并掉的那条进回收站</span>
+          <span style="flex:1"></span>
+          <button class="btn ghost" onclick="mgClose()">✕ 关闭</button>
+        </div>
+        <div id="mgBody" style="padding:0 16px 16px;overflow:auto"></div>
       </div>
     </div>
 
