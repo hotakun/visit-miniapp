@@ -265,6 +265,24 @@ function lev(a, b) {
   }
   return prev[n];
 }
+// ⭐⭐ 2026-10-15 新增：**最长公共子序列长度**（按顺序出现的公共字数）——
+//   专门治"中间插字"这个最常见的情况。为什么不能只看编辑距离：
+//   老板 2026-10-15 实测报「贵州猪肉铺 vs 贵州韩记猪肉铺」（同一个店）——
+//   编辑距离把"插了韩记两个字"算成 2/6 = 33% 的差异 → sim 只有 66.7% < 阈值 72% → **漏判**；
+//   而人一眼就知道是同一家：**短串的每个字按顺序都出现在长串里**（贵州 ▸ 猪肉 ），只是中间夹了字。
+function lcsLen(a, b) {
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  let prev = new Array(n + 1).fill(0), cur = new Array(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      cur[j] = a.charAt(i - 1) === b.charAt(j - 1) ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    }
+    const t = prev; prev = cur; cur = t;
+    cur.fill(0);                       // ⚠️ 滚动数组复用，每轮必须清零
+  }
+  return prev[n];
+}
 // 店名相似度 0~1（归一化后算；一方包含另一方也算高相似）
 function nameSim(a, b) {
   const x = nameNorm(a), y = nameNorm(b);
@@ -272,9 +290,23 @@ function nameSim(a, b) {
   if (x === y) return 1;
   const L = Math.max(x.length, y.length);
   let sim = 1 - lev(x, y) / L;
-  // 短的那个被长的完全包含（"肥牛" vs "盛武肥牛"）→ 抬高一点，但仍要求短串别太短
   const short = x.length <= y.length ? x : y, long = x.length <= y.length ? y : x;
-  if (short.length >= 3 && long.indexOf(short) >= 0) sim = Math.max(sim, short.length / long.length * 0.5 + 0.5);
+  // ---- ① 包含抬升：短串整个出现在长串里（"肥牛" vs "盛武肥牛"）----
+  //   ⚠️ 原来是 `short.length >= 3` —— 那"肥牛(2字)"永远抬不起来，
+  //      与上面注释说的效果不符（2026-10-15 实测 50% 判不出，属实现与注释不一致）。
+  //      既然它只是"预警、不拦"，放宽到 2 字：宁可多提示一句，也别让业务员重复建店。
+  if (short.length >= 2 && long.indexOf(short) >= 0) {
+    sim = Math.max(sim, short.length / long.length * 0.5 + 0.5);
+  }
+  // ---- ② 公共子序列抬升：短串的字【按顺序】基本都在长串里（治"中间插了两三个字"）----
+  //   "贵州猪肉"(4) vs "贵州韩记猪肉"(6) → LCS=4 → 4/4=1.0 ✅ 判很像
+  //   "永康水果"(4) vs "永康便利"(4) → LCS=2 → 2/4=0.5 ❌ 不抬（那是两家不同店）
+  //   "老王面"(3)   vs "贵州韩记猪肉"  → LCS=0 → 0/3=0.0 ❌ 不抬
+  //   ⚠️ 要求"短串 ≥ 3 字"：两个字太泛（"超市""饭店"都能撞），交给①去管。
+  if (short.length >= 3) {
+    const l = lcsLen(x, y);
+    if (l / short.length >= 0.8) sim = Math.max(sim, 0.78);   // 0.78 稳过阈值 0.72
+  }
   return Math.max(0, Math.min(1, sim));
 }
 // 电话归一化：只留数字，剥掉 +86 / 86 前缀
