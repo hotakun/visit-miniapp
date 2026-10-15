@@ -1,5 +1,9 @@
 const api = require('../../utils/api');
 const loc = require('../../utils/loc');
+// ⭐ 2026-10-16：天数卡每张的**横向占位**（卡宽 64 + 右距 6）——
+//   只用于"刚进页面时把那一排滚到当前页"：偏移 = (第几页 − 1) × 这个值。
+//   ⚠️ 改 task.wxss 里 `.day` 的 `width` / `margin-right` 时，**这里要同步改**（否则滚偏）。
+const DAY_CARD_W = 70;
 
 Page({
   // 2026-09-11 老板要求：支持转发给同事好友（标题统一、点开进首页）
@@ -7,7 +11,7 @@ Page({
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
   data: {
-    task: null, customers: [], showCustomers: [], activeDay: 1, loading: true, dayScrollInto: '',
+    task: null, customers: [], showCustomers: [], activeDay: 1, loading: true, dayScrollLeft: 0,
     dayDone: {}, dayVisited: {}, ongoingDays: {}, nextSeq: 0, allDone: false, confirmShow: false, confirmMsg: ''
   },
   onLoad(options) {
@@ -158,10 +162,15 @@ Page({
       customers, activeDay, loading: false
     };
     // ⭐ 2026-10-16：刚进页面时，让天数卡那一排滚到"当前高亮那张"（老板定的「自动显示在画面之内」）。
-    //   ⚠️ `scroll-into-view` **只在值变化时才触发滚动** —— 所以值相同就**不设**（省一次无用的 setData）。
+    //   ⚠️ **不用 `scroll-into-view`** —— 它对"只露一半"的卡**不保证滚**
+    //      （老板实测：有的手机第 5 张只露一半，就未必会滚）。
+    //   ✅ 改成**精确算偏移**：目标卡左边缘 = (第几页 − 1) × DAY_CARD_W
+    //      （每张 = 卡宽 64px + 右距 6px = 70px；卡宽在 wxss 里是**固定值**，所以算得准）→
+    //      无论它原来露 1% 还是 99%，都会**整张滚进来、贴左**。
+    //   ⚠️ `scroll-left` 也只在值变化时才动 → 值相同就不设（省一次无用的 setData）。
     if (this._needDayScroll) {
-      const tgt = 'day-' + activeDay;
-      if (this.data.dayScrollInto !== tgt) patch.dayScrollInto = tgt;
+      const left = Math.max(0, (Number(activeDay) - 1) * DAY_CARD_W);
+      if (this.data.dayScrollLeft !== left) patch.dayScrollLeft = left;
     }
     this.setData(patch);
   },

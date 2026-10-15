@@ -12,12 +12,12 @@
   </view>
 
   <!-- ⭐⭐ 2026-10-16 老板定：「业务员干活到了第 6、7 页，这个红色的卡片就会显示在画面之外了，
-       让这个卡片能自动显示在画面之内」——
-       做法：scroll-view 加 `scroll-into-view`（微信官方的"滚到某个元素"），每张卡给个 id（`day-N`）。
-       ⚠️ id 不能以数字开头（微信要求），所以是 `day-6` 而不是 `6`。
-       ⚠️ 只在【刚进页面那一刻】设一次值（老板定的）：进页面时高亮那张若在屏幕外 → 滚进来；
-          手动点卡/从拜访页返回时不滚（不把用户自己滑的位置拉回去）。 -->
-  <scroll-view scroll-x enhanced show-scrollbar class="days" wx:if="{{task}}" scroll-into-view="{{dayScrollInto}}">
+       让这个卡片能自动显示在画面之内」；补充口径：「有的手机第 5 张也会显示在外面或者只显示一半」
+       → 所以**不用** `scroll-into-view`（它对"只露一半"的卡不保证滚），改成**精确算偏移**：
+       `scroll-left = (第几页 − 1) × 70`（70 = 卡宽 64 + 右距 6）→ 无论露多少，目标卡都**整张滚进来、贴左**。
+       ⚠️ 只在【刚进页面那一刻】设一次（老板定）：手动点卡 / 从拜访页返回时不滚，
+          免得把用户自己滑到的位置拉回去。 -->
+  <scroll-view scroll-x enhanced show-scrollbar class="days" wx:if="{{task}}" scroll-left="{{dayScrollLeft}}" scroll-with-animation="{{true}}">
     <view class="days-inner">
       <view class="day {{activeDay === d.day ? 'on' : ''}} {{dayDone[d.day] ? 'done' : ''}} {{ongoingDays[d.day] ? 'ong' : ''}}" id="day-{{d.day}}" wx:for="{{task.dayPlan}}" wx:for-item="d" wx:key="day" bindtap="switchDay" data-day="{{d.day}}">
         <view class="day-check" wx:if="{{ongoingDays[d.day]}}">✓</view>
