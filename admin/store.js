@@ -32,11 +32,23 @@ function ensureDir() {
 }
 
 // 读缓存；格式不对/不存在 → null（调用方自己决定是否重拉）
+// ⚠️⚠️ 2026-10-15 修（老板实测「更新地图数据」反复"60 秒超时"）：
+//   **`read()` 原来每次都要"读整个 65MB 文件 + JSON.parse 成 ~18 万个对象"**（几百 MB 内存），
+//   而它被调用 **17 处** —— 其中 `GET /mapPoints` 与 `status()` 是**前端每 15 秒就问一次**：
+//   → 每 15 秒 parse 一次 65MB → **内存涨到 2.1GB、GC 追不上 → 事件循环卡死**
+//   → 此时"拉全量"的 fetch 回调排不上队 → 表现成 **第一片 60 秒都不回来**
+//     （而实测：同一条 SQL 只要 16ms、9MB 数据只要 2 秒、36 片共 18.7 秒/124MB）。
+//   ✅ 修法：**内存里留最近一次读出来的对象**，`write()` 时同步更新它 —— 之后 `read()` 直接返回，
+//      不再重复"读盘 + 解析"。（⚠️ 本项目的写法**只有后台这一个进程会写这个文件**，所以安全；
+//      若以后有第二个进程写它，必须让这里的缓存失效。）
+let _cache = null;          // 最近一次读出来的缓存对象（null = 还没读过）
 function read() {
+  if (_cache) return _cache;
   try {
     const raw = fs.readFileSync(FILE, 'utf8');
     const j = JSON.parse(raw);
     if (!j || j.v !== VERSION || !Array.isArray(j.points)) return null;
+    _cache = j;
     return j;
   } catch (e) { return null; }
 }
@@ -47,6 +59,7 @@ function write(obj) {
   const tmp = FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(obj), 'utf8');
   fs.renameSync(tmp, FILE);
+  _cache = obj;             // ⭐ 同步内存缓存（下次 read() 不必再读盘/解析）
 }
 
 // 是否"今天拉的"（按自然日 —— 老板口径："当天第一次进系统就初始化，今天之内就用缓存"）
