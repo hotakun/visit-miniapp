@@ -5254,16 +5254,19 @@ async function getLastMallImport(event) {
 
 // ===== 系统设置 =====
 async function getSettings(event) {
-  const res = await db.collection('settings').get();
+  // ⭐⭐⭐ 2026-10-15 修（老板报「反复出现 502」，我实测确认是真 bug）：
+  //   ⚠️ 原来这里是 `db.collection('settings').get()` —— **整个集合一次读出来**，
+  //      而 settings 里躺着 4 个「文员端热更新大文件」（`admin_dist_adminHtml` ≈ 一整份 admin.html，
+  //      外加 ntMapJs / serverJs / storeJs），合计**超过云开发"单次响应 1MB"上限**
+  //      → **读这一步就被云端拒**（EXCEED_MAX_RESPONSE_SIZE / -501000）→ 后台拿到错、包成 **502**。
+  //   ⚠️ 2026-10-11 曾尝试修过：在**读完之后的 forEach 里** `if (key.indexOf('admin_dist') === 0) return;`
+  //      —— **但那时数据已经读出来了，拦不住超限**，等于没修（2026-10-15 老板又撞上：后台自动轮询/设置页反复失败）。
+  //   ✅ 正确做法：**读的时候就排除**（用 `_.nin` 列全那几个 key；换方案前的旧 `admin_dist` 也一并排除）。
+  //      这些文件本来就有专门的分片接口（`getAdminDistMeta` / `getAdminDistPart`），不该走这里。
+  const DIST_KEYS = ['admin_dist', 'admin_dist_adminHtml', 'admin_dist_ntMapJs', 'admin_dist_serverJs', 'admin_dist_storeJs'];
+  const res = await db.collection('settings').where({ key: _.nin(DIST_KEYS) }).get();
   const map = {};
-  res.data.forEach(s => {
-    // ⚠️⚠️ 2026-10-11 修（老板报「进系统设置就报错 EXCEPT_MAX_RESPONSE_SIZE / response size exceeded 1048576」）：
-    //   settings 里躺着**后台分发用的整份文件** —— `admin_dist_adminHtml`（≈一整份 admin.html）+ 三个 js，
-    //   还有换方案前留下的旧 `admin_dist`（875KB）→ **全量回传必然超云开发 1MB 响应上限**，设置页直接打不开。
-    //   这些文件有专门的分片接口（getAdminDistMeta / getAdminDistPart），**这里一律跳过**。
-    if (String(s.key || '').indexOf('admin_dist') === 0) return;
-    map[s.key] = s.value;
-  });
+  res.data.forEach(s => { map[s.key] = s.value; });
   // 服务号配置：不回传明文 AppSecret（防泄漏；保存时留空=保留旧值）
   if (map.mpConfig) {
     map.mpConfig = {
