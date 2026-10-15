@@ -126,6 +126,18 @@
     **根本不写变动信号** → "导入完叫它同步"等于白叫，**订单永远拉不进来**。
     ✅ 修法：`_forceFull` 标志（`waitOrForce` 收到标记时置 true → `round()` 的门放行 → 进门后复位）。
     ⚠️ **一般规律**：凡是"某条链路会写数据但不写变动信号"，就必须有一条"强制跑"的入口兜住它。
+  · ⚠️⚠️ **第八个静默坑（2026-10-15，老板实测「更新地图数据」永久卡死 8 分钟）：两个超时/并发隐患叠在一起。**
+    ① **`admin/store.js` 的分片拉取 `await fetch(_u)` 没有超时** —— 服务器一不响应，这个 await 就**永久挂住**
+       → 它下面的 `finally { syncing = false }` 永远走不到 → **`syncing` 标志永不释放**
+       → 之后谁点「🔄 更新地图数据」都只回「正在拉取中，请稍候」（**页面看起来死了**）。
+    ✅ 修：`fetch(_u, { signal: AbortSignal.timeout(30000) })` —— 超时抛错 → 提示人话 → finally 释放、可重试。
+    ② **`admin/tools/pgapi.js` 只用【一个】 `Client` 连接** —— 而 **pg 的单个 Client 不能并发 query**：
+       同时来两个请求，要么报 `client is already executing a query`，要么**这个连接干脆挂住不返回**
+       （AGENTS 早记过这条隐患、日志有 `ECONNRESET`，2026-10-15 真出事了）。
+    ✅ 修：改用**连接池 `new Pool({max:8, connectionTimeoutMillis:8000})`** —— `pool.query()` 天生支持并发。
+    ⚠️ **实测对照**：改后同时压 5 个请求 = **全部 200、最慢 0.85 秒**（改前这个场景就是卡死）。
+    ⚠️ **验收口诀**：**"凡是 `await` 一个网络请求，就要问它'永远不返回怎么办'"** ——
+      没有超时的 await + 一个"进入时置位、只在 finally 复位"的锁 = **一次卡死就永久瘫痪**。
 - **壳程序**（`packager/shell/`）：无边框 WebView2 壳（普惠体 / DPI 声明 PMv2 / 禁右键禁 F5 / 自定义最大化）；标题条按钮遍历必须 `foreach (Control b in right)`。⚠️ `D:\JuHuoVisit\` **不是常驻目录**（那是 `install.bat` 的安装目标，平时不用它启动后台）。
 
 ---
