@@ -1,65 +1,42 @@
-/* 我新加的店（2026-09-29 新增）—— 视觉跟「我的记事」等页保持一致：暖白底 + 白卡 + 橙点缀 */
+/* 我新加的店 —— ⭐⭐ 2026-10-15 老板定：**摆放方式与老板端「新店」页完全一致**
+   （横排卡 <缩略图 + 店名/地址/区域·商圈·录入人 + 箭头> + 搜索 + 按日期/按商圈 + 数据截至），
+   只是业务员端**底部多一个「＋ 加新店」**。
+   ⚠️ 上面那一整块样式就是照 newshops.wxss 抄的 —— 两边要一直保持一致，
+      改老板端那份时记得同步这份（老板要的就是"两边一样"）。 */
+page { background: #F5F6F8; }
+/* ⚠️ 底部留 100px：给固定的「＋ 加新店」让位，别挡住最后一张卡片 */
+.page { padding: 10px 12px 100px; }
+.bar { background: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.sbox { display: flex; align-items: center; background: #F3F5F8; border-radius: 9px; padding: 7px 10px; }
+.ico { font-size: 13px; margin-right: 6px; }
+.sin { flex: 1; font-size: 13px; }
+.sclr { color: #B7BEC7; font-size: 14px; padding: 0 4px; }
+.modes { display: flex; gap: 8px; margin-top: 9px; }
+.m { flex: 1; text-align: center; font-size: 12.5px; font-weight: 700; color: #68727E; background: #F3F5F8; border-radius: 8px; padding: 6px 0; }
+.m.on { background: #F5531C; color: #fff; }
+/* 第三颗是"动作"（刷新）——与老板端一致：朴素、同灰底灰字；刷新中只是字色更淡 */
+.m.rf { background: #F3F5F8; color: #68727E; }
+.m.rf.ing { background: #F3F5F8; color: #B9C1CB; }
+.st { color: #B9C1CB; }
+.cnt { font-size: 12px; color: #98A2AE; margin-top: 8px; }
+.gtitle { font-size: 12.5px; font-weight: 800; color: #68727E; padding: 10px 2px 6px; }
+.gn { color: #F5531C; font-weight: 700; margin-left: 6px; }
+.card { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.pic { width: 52px; height: 52px; border-radius: 9px; flex: none; background: #F0F2F6; }
+.cin { flex: 1; min-width: 0; }
+.nm { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub { font-size: 12px; color: #98A2AE; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: 11.5px; color: #68727E; margin-top: 3px; }
+.by { color: #98A2AE; }
+.arw { color: #C3CAD4; font-size: 17px; }
+.empty { text-align: center; color: #98A2AE; font-size: 13px; padding: 60px 0; }
+.pad { height: 16px; }
 
-/* 底部留白 100px：给固定的「＋ 加新店」让位，别挡住最后一张卡片（与记事页一致） */
-.page { padding: 12px 12px 100px; background: var(--bg); min-height: 100vh; box-sizing: border-box; }
-
-/* 顶部说明 */
-.hd { padding: 4px 4px 12px; }
-.hd-t { font-size: 18px; font-weight: 800; color: #22262E; }
-.hd-s { margin-top: 4px; font-size: 12px; color: #8A93A1; }
-
-/* 空态 */
-.empty { margin-top: 40px; text-align: center; }
-.empty .e-ic { font-size: 40px; opacity: .55; }
-.empty .e-t { margin-top: 10px; font-size: 14.5px; font-weight: 800; color: #5B6472; }
-.empty .e-s { margin-top: 8px; font-size: 12.5px; color: #A3ABB8; line-height: 1.8; padding: 0 24px; }
-
-/* 卡片 */
-.shopcard { background: #fff; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
-  border: 1px solid #EFF1F5; box-shadow: 0 2px 8px rgba(31, 36, 48, .05); }
-
-.shopcard .r1 { display: flex; align-items: center; gap: 8px; }
-.shopcard .nm { flex: 1; min-width: 0; font-size: 15px; font-weight: 800; color: #22262E;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 状态胶囊：待商城建档=橙 / 已对上商城=绿 */
-.shopcard .st { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
-.shopcard .st.wait { color: #8A6412; background: #FFF8E8; border: 1px solid #F3E2BE; }
-.shopcard .st.ok { color: #14663A; background: #EAF6EE; border: 1px solid #CBE8D6; }
-/* ⭐ 2026-10-03：「新店采集」胶囊（蓝）—— 业务员自己现场录的店，跟"有没有对上商城"无关。
-   ⚠️ 上面 .wait/.ok 两个类**已不再被 wxml 使用**（原来那套 mallPending 二值判断已撤），
-      留在这里没害处；要清理就连同 wxml 的注释一起删。 */
-.shopcard .st.new { color: #1B5E9B; background: #EAF3FB; border: 1px solid #C9E0F5; }
-
-.shopcard .r2 { margin-top: 6px; font-size: 12px; color: #5B6472; line-height: 1.6; }
-.shopcard .r3 { margin-top: 6px; font-size: 11.5px; color: #8A93A1; }
-.shopcard .r3 .t { font-weight: 700; color: #7A8494; }
-
-/* 底部一行：照片/录音数量（左）+ 「点一下改内容」（右） */
-.shopcard .r4 { display: flex; align-items: center; margin-top: 8px; padding-top: 8px;
-  border-top: 1px solid #F4F6F9; font-size: 11px; color: #A3ABB8; }
-.shopcard .r4 .go { margin-left: auto; font-size: 11.5px; font-weight: 700; color: var(--primary-deep); }
-
-/* ⭐ 2026-10-02 老板定：卡片右边的「开始拜访」按钮（无任务拜访）——
-   绝对定位到卡片右下角（不把卡片顶高），橙色实心 = 主操作 */
-.shopcard { position: relative; }
-.shopcard .fv { position: absolute; right: 14px; bottom: 12px;
-  padding: 7px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 700;
-  background: var(--primary, #E8871E); color: #fff; box-shadow: 0 2px 8px rgba(232, 135, 30, .28); }
-/* 右下角给按钮留位置，免得第四行文字被压住 */
-.shopcard .r4 { padding-right: 96px; }
-
-/* ⭐ 2026-10-02 老板定：**吸底固定的「＋ 加新店」** —— 位置与样式照搬「我的记事」的「＋ 记一笔」
-   （fixed 悬在底部；白底 + 虚线橙边橙字，**不是橙色实心** —— 两个页面保持一致） */
+/* ⭐ 2026-10-15 老板要求：业务员端**底部多一个「＋ 加新店」**
+   —— 样式照「我的记事」的「＋ 记一笔」（fixed 吸底 + 橙色实心大按钮） */
 .newbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
   padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
-/* ⭐ 2026-10-02 老板定：**位置照「记一笔」（吸底固定），但按钮样式用回原来那个橙色实心大按钮** */
 .newbar .nb-btn { height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
   background: var(--primary, #E8871E); color: #fff;
   font-size: 16px; font-weight: 800; letter-spacing: 1px;
   box-shadow: 0 4px 14px rgba(232, 135, 30, .30); }
-
-/* 加载更多 / 到底 */
-.more { margin: 14px 0 4px; text-align: center; padding: 11px 0; border-radius: 12px;
-  background: #fff; border: 1px solid #EFF1F5; font-size: 13px; font-weight: 700; color: #5B6472; }
-.bot { margin: 14px 0 4px; text-align: center; font-size: 11.5px; color: #C3CAD6; }
-.pad { height: 16px; }

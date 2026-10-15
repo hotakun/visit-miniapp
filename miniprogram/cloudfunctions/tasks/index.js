@@ -590,32 +590,50 @@ async function newShopSubmit(salesmanId, event) {
 const SHOP_PAGE_MAX = 50;
 
 async function myNewShops(salesmanId, event) {
-  const e = event || {};
-  const size = Math.min(Math.max(Number(e.size) || 20, 1), SHOP_PAGE_MAX);
-  const skip = Math.max(Number(e.skip) || 0, 0);
-  const w = { source: 'field', createdBy: salesmanId };      // 只看**我自己**建的
-  const col = db.collection('customers');
-  const [cnt, res] = await Promise.all([
-    col.where(w).count().catch(() => ({ total: 0 })),
-    // ⭐ 2026-10-02 老板定：**最新加的店排在最下面**（像记笔记一样往下加）→ 用 asc
-    col.where(w).orderBy('createdAt', 'asc').skip(skip).limit(size).get().catch(silentCatch('tasks·myNewShops', { data: [] }))
-  ]);
-  const total = cnt.total || 0;
-  const list = (res.data || []).map(c => ({
-    id: c._id,
-    name: c.name || c.nameRaw || '(没填店名)',
-    area: c.district || '',
-    bizCircle: c.bizCircle || '',
-    address: c.address || '',
-    // ⭐ 2026-10-02：**带上坐标** —— 卡片上的「开始拜访」要跳拜访页，拜访页需要 lng/lat 做定位校验
-    lng: c.lng || 0, lat: c.lat || 0,
-    createdAt: c.createdAt || 0,
-    createdByName: c.createdByName || '',
-    mallPending: c.mallPending !== false,                    // 默认按"待商城建档"看
-    photoCount: Array.isArray(c.photos) ? c.photos.length : 0,
-    audioCount: Array.isArray(c.audios) ? c.audios.length : 0
-  }));
-  return { ok: true, total: total, list: list, hasMore: (skip + list.length) < total };
+  // ⭐⭐ 2026-10-15 老板定：「业务员端的『我新加的店』改成和老板端『新店』一样的卡片摆放」
+  //   → 这个接口的返回**向 `listNewShops` 看齐**（同一套字段，手机端两边共用一套渲染）：
+  //     · 加 `photos`（**归一化成 fileID** —— 卡片要显示缩略图；原来只回 photoCount，卡片没图）
+  //     · 加 `at`（= createdAt）/ `by`（= createdByName）/ `phone` —— 与老板端字段名一致
+  //     · 加 `since` 增量 + `maxAt`（下次增量水位）+ `syncedAt`（页面「数据截至」用）
+  //     · 排序改**新的在前**（原来 asc = 最新的在最下面；老板端是新的在前，两边要一致）
+  //   ⚠️ 唯一必须保留的区别：**只看我自己建的**（`createdBy: salesmanId`）——
+  //      老板端 `listNewShops` 看全部；业务员端这一页是"我加的店"。
+  //   ⚠️ 兼容：同时回 `list`（旧前端用的字段）与 `shops`（新前端用），并给 `hasMore: false`。
+  const since = Math.max(0, Number((event && event.since) || 0));
+  const out = [];
+  for (let i = 0; i < 30; i++) {
+    const conds = [{ source: 'field' }, { createdBy: salesmanId }, { deleted: _.neq(true) }];
+    if (since > 0) conds.push({ createdAt: _.gt(since) });     // 增量：只要比水位新的
+    const r = await db.collection('customers')
+      .where(_.and(conds))
+      .field({ _id: true, name: true, nameRaw: true, phone: true, address: true, district: true,
+        bizCircle: true, lng: true, lat: true, photos: true, audios: true, createdByName: true,
+        createdAt: true, customerType: true, mallPending: true })
+      .skip(i * 100).limit(100).get()
+      .catch(silentCatch('tasks·myNewShops', { data: [] }));
+    const rows = r.data || [];
+    rows.forEach(c => out.push({
+      id: c._id, name: c.nameRaw || c.name || '(没填店名)', phone: c.phone || '',
+      address: c.address || '', area: c.district || '', bizCircle: c.bizCircle || '',
+      lng: (c.lng === undefined ? null : c.lng), lat: (c.lat === undefined ? null : c.lat),
+      // ⚠️ photos 库里有两种格式（字符串 / 对象 {fileID,thumbID}）→ 统一归一化成 fileID
+      //    （与 listNewShops 同一处理；不归一化的话卡片缩略图会变灰块）
+      photos: Array.isArray(c.photos)
+        ? c.photos.slice(0, 1).map(p => (p && typeof p === 'object') ? (p.fileID || p.thumbID || '') : String(p || '')).filter(Boolean)
+        : [],
+      by: c.createdByName || '', at: c.createdAt || 0, ctype: c.customerType || '',
+      createdAt: c.createdAt || 0, createdByName: c.createdByName || '',   // 旧字段名保留（兼容）
+      photoCount: Array.isArray(c.photos) ? c.photos.length : 0,
+      audioCount: Array.isArray(c.audios) ? c.audios.length : 0,
+      mallPending: c.mallPending !== false
+    }));
+    if (rows.length < 100) break;
+  }
+  out.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));   // 新的在前
+  let maxAt = since;
+  out.forEach(x => { const t = Number(x.at) || 0; if (t > maxAt) maxAt = t; });
+  return { ok: true, total: out.length, list: out, shops: out, hasMore: false,
+    since: since, maxAt: maxAt, syncedAt: Date.now() };
 }
 
 async function newShopDetail(salesmanId, event, isBoss) {

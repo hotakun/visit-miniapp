@@ -1,65 +1,49 @@
-<!-- 我新加的店（2026-09-29 新增）—— 「我的」页 → 我的记事 下面进来的
-     只列**我自己**提交的现场录入（source:'field'）。
-     卡片显示：店名 / 提交时间 / 提交人 / 状态（就用现成的 mallPending：待商城建档 / 已对上商城）
-     ⭐ 点一下 → 用「加新店」页**预填编辑**（改完直接生效）
+<!-- 我新加的店（2026-09-29 新增）——「我的」页 → 我的记事 下面进来。
+     ⭐⭐ 2026-10-15 老板定：**卡片摆放方式改成和老板端「新店」页完全一样**
+         （横排卡 <缩略图 + 店名/地址/区域·商圈·录入人 + 箭头> + 搜索 + 按日期/按商圈 + 「数据截至」），
+         **只是业务员端底部多一个「＋ 加新店」按钮**。
+     数据仍只显示**我自己**提交的现场录入（source:'field' + createdBy=我）——
+     云函数 `tasks.myNewShops` 已按 `listNewShops` 的格式返回（含 photos 归一化 / since 增量 / maxAt）。
+     点卡片 → 客户详情页（必须带 ?id=，页面身份只认 URL 那条铁律）。
      ⚠️ 铁律：WXML 只用 view / text（禁 HTML 标签） -->
 <view class="page">
-
-  <view class="hd">
-    <view class="hd-t">🏪 加新店</view>
-    <view class="hd-s" wx:if="{{loaded}}">我加过的店 · 共 {{total}} 家</view>
-    <view class="hd-s" wx:else>加载中…</view>
+  <view class="bar">
+    <view class="sbox">
+      <text class="ico">🔍</text>
+      <input class="sin" value="{{kw}}" bindinput="onKw" placeholder="搜我加的店名 / 地址 / 电话 / 商圈" confirm-type="search" />
+      <text class="sclr" wx:if="{{kw}}" bindtap="clearKw">✕</text>
+    </view>
+    <view class="modes">
+      <view class="m {{mode === 'date' ? 'on' : ''}}" bindtap="setMode" data-m="date">按日期</view>
+      <view class="m {{mode === 'circle' ? 'on' : ''}}" bindtap="setMode" data-m="circle">按商圈</view>
+      <!-- 与老板端一致：这颗是"动作"、朴素点（同灰底灰字），刷新中只是字色更淡 -->
+      <view class="m rf {{refreshing ? 'ing' : ''}}" bindtap="onRefresh">{{refreshing ? '刷新中…' : '刷新'}}</view>
+    </view>
+    <view class="cnt">我加过的店 共 {{total}} 家<text wx:if="{{kw}}"> · 筛出 {{list.length}} 家</text><text wx:if="{{syncedText}}" class="st"> · 数据截至 {{syncedText}}</text></view>
   </view>
 
-  <!-- 空态 -->
-  <view class="empty" wx:if="{{loaded && !list.length}}">
-    <view class="e-ic">🏪</view>
-    <view class="e-t">还没加过新店</view>
-    <view class="e-s">点下面的「＋ 加新店」现场建档，提交后就会出现在这里，还能回来改。</view>
-  </view>
+  <view wx:if="{{loading}}" class="empty">正在加载…</view>
+  <view wx:elif="{{!list.length}}" class="empty">{{kw ? '换个词搜搜' : '还没加过新店 —— 点下面「＋ 加新店」现场建档'}}</view>
 
-  <!-- 卡片列表 -->
-  <!-- ⭐⭐ 2026-10-12 老板定：**点卡片 = 进客户详情页**（原来是进「加新店」修改页，不对）——
-       要编辑走详情页里的「更正信息」；右边的「客户详情」小按钮保留（同一个去处）。 -->
-  <view class="shopcard" wx:for="{{list}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
-    <view class="r1">
-      <text class="nm">{{item.name}}</text>
-      <!-- ⭐ 2026-10-03 老板定：这张卡是「**我自己现场采集的店**」，胶囊固定显示「新店采集」。
-           原来拿 mallPending 二值判断显示"待商城建档 / 已对上商城" —— 但 mallPending 的 false
-           **有两种来源**：① 真导入商城表比对上了 ② 被旧的「手工已建档」点掉（那个按钮 09-29 已删，
-           可历史数据留下了 false 却没写任何商城字段）→ 后者明明没对上商城，卡片却报"已对上商城"
-           （老板 2026-10-03 实测报障就是这个）。
-           ⚠️ "是否已对上商城"是**老板后台**关心的事（判据看 customerType==='mall' / mallKey），
-              不该摆到业务员这张卡上。 -->
-      <text class="st new">新店采集</text>
+  <block wx:for="{{groups}}" wx:key="title" wx:for-item="g">
+    <view class="gtitle" wx:if="{{g.title}}">{{g.title}}<text class="gn">{{g.items.length}} 家</text></view>
+    <view class="card" wx:for="{{g.items}}" wx:key="id" wx:for-item="s" bindtap="openShop" data-id="{{s.id}}">
+      <image class="pic" wx:if="{{s.photos[0]}}" src="{{s.photos[0]}}" mode="aspectFill"></image>
+      <view class="cin">
+        <view class="nm">{{s.name}}</view>
+        <view class="sub">{{s.address || '（未填地址）'}}</view>
+        <view class="tag">
+          <text wx:if="{{s.area}}">{{s.area}}</text>
+          <text wx:if="{{s.bizCircle}}"> · {{s.bizCircle}}</text>
+          <text wx:if="{{s.by}}" class="by"> · {{s.by}} 录</text>
+        </view>
+      </view>
+      <text class="arw">›</text>
     </view>
-    <view class="r2" wx:if="{{item.addrLine}}">{{item.addrLine}}</view>
-    <view class="r3">
-      <text class="t">{{item.timeText}}</text>
-      <text wx:if="{{item.createdByName}}">　提交人 {{item.createdByName}}</text>
-    </view>
-    <view class="r4">
-      <text wx:if="{{item.photoCount}}">📷 {{item.photoCount}}</text>
-      <text wx:if="{{item.audioCount}}">　🎙 {{item.audioCount}}</text>
-      <text class="go">点一下改内容 ›</text>
-    </view>
-    <!-- ⭐ 2026-10-02 老板定：卡片右边加「开始拜访」—— 建完店能立刻去拜访（走无任务拜访）
-         ⚠️ 必须 catchtap（阻止冒泡），否则会同时触发卡片本身的"编辑" -->
-    <!-- ⭐ 2026-10-07 老板定：这张卡的按钮从「开始拜访」改成「客户详情」——
-         先看客户详情（7 张卡 + 能分享给同事），详情页最下面再「开始拜访」去拜访。
-         ⚠️ 跳转带 freeVisit=1：告诉详情页"这是无任务的自由拜访"，详情页会据此清掉 storage 里可能残留的 taskId。 -->
-    <view class="fv" catchtap="goDetail" data-id="{{item.id}}">客户详情</view>
-  </view>
-
-  <!-- 加载更多 -->
-  <view class="more" wx:if="{{hasMore}}" bindtap="loadMore">{{loadingMore ? '加载中…' : '加载更多'}}</view>
+  </block>
 
   <view class="pad"></view>
 
-  <!-- ⭐ 2026-10-02 老板定：**吸底固定的「＋ 加新店」** —— 位置与样式跟「我的记事」的「＋ 记一笔」
-       完全一致（fixed 悬在屏幕底部；白底 + 虚线橙边橙字，不是橙色实心） -->
-  <view class="newbar">
-    <view class="nb-btn" bindtap="goAdd">＋ 加新店</view>
-  </view>
-
+  <!-- ⭐ 2026-10-15 老板要求：业务员端**底部多一个「＋ 加新店」**（老板端那份没有这个按钮） -->
+  <view class="newbar"><view class="nb-btn" bindtap="goAdd">＋ 加新店</view></view>
 </view>
