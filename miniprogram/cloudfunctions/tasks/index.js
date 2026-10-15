@@ -530,6 +530,39 @@ async function newShopSubmit(salesmanId, event) {
     createdAt: now, updatedAt: now
   };
   const add = await db.collection('customers').add({ data: doc });
+
+  // ⭐⭐⭐ 2026-10-15 老板定：**「加新店」的 录音 / 加入商城意愿 / 备注，综合成【一条拜访记录】放进「拜访历史」** ——
+  //   背景：这三样原来只写进 `customers` 档案（`audios` / `mallWish` / `remarks`），
+  //        而**客户详情页的「拜访历史」读的是 `visits` 集合** → 提交完在详情页永远看不到
+  //        （老板实测：照片能看到（门店照片读 customers.photos），这三样看不到）。
+  //   ⚠️ 老板追加口径：**三样都空 → 不产生拜访记录**（别为"什么都没录的建店"凭空造一条）。
+  //   ⚠️ `taskId: ''` —— 新店**不属于任何任务**，绝不能带 taskId（否则会算进任务进度、还会撞"单开"拦截）。
+  //   ⚠️ 写失败**绝不影响建店**（只 log）：客户已经建好了，记录丢一条是小事。
+  try {
+    // 意愿 → 拜访结果（两边的名字 2026-10-15 已统一，逐字一致）
+    const _wishMap = { registered: '加入商城', pending: '待定再谈', no: '不愿意' };
+    const _result = _wishMap[String(e.mallWish || '')] || '';
+    const _audios = (Array.isArray(e.audios) ? e.audios : []).filter(a => a && a.fileID);
+    if (_result || _audios.length || note) {
+      await db.collection('visits').add({ data: {
+        customerId: add._id,
+        taskId: '',                                  // ⚠️ 不属于任务（不计任务进度、不参与单开拦截）
+        freeTripId: '',
+        salesmanId: salesmanId,
+        salesmanName: (me && me.data && me.data.name) || '',
+        visitedAt: todayStr(),
+        startedAt: now, finishedAt: now,
+        status: 'normal',                            // 已提交（不是 ongoing）
+        result: _result,                             // 加入商城 / 待定再谈 / 不愿意
+        text: note || '',                            // 备注 → 拜访记录正文
+        samples: '',
+        audios: _audios,                             // 录音（详情页「拜访历史」会显示成可播放条）
+        photos: [],                                  // ⚠️ 不重复放（门店照片那里已经在看了）
+        fromNewShop: true,                           // 标记来源：「加新店」生成的
+        createdAt: now, updatedAt: now
+      } });
+    }
+  } catch (err) { console.error('[newshop→visit] 写拜访记录失败（不影响建店）：', err); }
   // ⭐⭐ 2026-09-29【方案 C】建店成功后**发一个"客户有变动"的信号**
   //   背景：后台「🏪 客户管理 / 📦 批次管理」为提速改读**本地缓存快照**（admin/store.js），
   //        手机端新建的店不在快照里 → 老板在后台**看不到**（老板实测："菲菲杂粮煎饼"找不到）。

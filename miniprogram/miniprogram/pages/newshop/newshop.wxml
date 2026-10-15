@@ -408,8 +408,8 @@
       <view class="card wish">
         <view class="cardh">🤝 加入商城意愿</view>
         <view class="wrow">
-          <text class="w {{wish === 'registered' ? 'on yes' : ''}}" bindtap="pickWish" data-v="registered">已登记</text>
-          <text class="w {{wish === 'pending' ? 'on mid' : ''}}" bindtap="pickWish" data-v="pending">待定，再谈</text>
+          <text class="w {{wish === 'registered' ? 'on yes' : ''}}" bindtap="pickWish" data-v="registered">加入商城</text>
+          <text class="w {{wish === 'pending' ? 'on mid' : ''}}" bindtap="pickWish" data-v="pending">待定再谈</text>
           <text class="w {{wish === 'no' ? 'on no' : ''}}" bindtap="pickWish" data-v="no">不愿意</text>
         </view>
       </view>
