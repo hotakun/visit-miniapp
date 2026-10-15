@@ -438,14 +438,32 @@ Page({
   async tapSlot() {
     if (this.data.prepBusy) return;
     if (this.data.pics.length >= this.data.maxPics) { api.toast('最多 ' + this.data.maxPics + ' 张现场照片'); return; }
+    // ⭐⭐ 2026-10-16 老板定：**取图方式从两种变三种**（拍照 / 相册 / **从微信聊天记录选**），
+    //   入口改成"点「＋」弹菜单"（老板定的：点击弹菜单，不用长按）。
+    //   ⚠️ 三项都用微信官方能力：camera/album 走 wx.chooseMedia，chat 走 wx.chooseMessageFile。
+    const src = await this._askPicSource();
+    if (!src) return;                                   // 用户点了取消
     let files;
-    // ⭐⭐ 2026-10-12 老板定：**相册可以一次选多张**（老板："从相册上传能做到一次性选择多张吗？"）
-    //   底层 `media.chooseImage` 走的是 `wx.chooseMedia`，**天生支持多选**，原来写死 1 张 → 相册里只能一张一张点。
-    //   改成"还差几张就能一次选几张"；超上限由 `_addPics` 自动截断。⚠️ 走相机时微信本来就只给 1 张，不受影响。
     const left = Math.max(1, this.data.maxPics - this.data.pics.length);
-    try { files = await media.chooseImage(left, ['camera', 'album']); } catch (e) { return; }  // 取消 → 直接返回
+    try {
+      // 拍照：微信本来就只给 1 张（不受 left 影响）；相册：一次可多选 left 张
+      // 聊天记录：由 chooser 自己限制最多 left 张
+      files = (src === 'chat')
+        ? await media.chooseFromChat(left)
+        : await media.chooseImage(left, [src === 'album' ? 'album' : 'camera']);
+    } catch (e) { return; }                             // 取消 → 直接返回
     if (!files || !files.length) return;
     await this._addPics(files);
+  },
+  // 弹"照片从哪来"的菜单（返回 'camera' | 'album' | 'chat' | ''）
+  _askPicSource() {
+    return new Promise(resolve => {
+      wx.showActionSheet({
+        itemList: ['📷 拍照', '🖼️ 从手机相册选', '💬 从微信聊天记录选'],
+        success: r => resolve(['camera', 'album', 'chat'][r.tapIndex] || ''),
+        fail: () => resolve('')                          // 点取消 / 点蒙层
+      });
+    });
   },
   // 逐张处理（压缩成「原图 + 缩略图」双轨）后追加到列表
   async _addPics(files) {

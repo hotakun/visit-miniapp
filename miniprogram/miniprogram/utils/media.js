@@ -31,6 +31,24 @@ function chooseImage(count, sourceType) {
     success: r => ok(r.tempFiles || []), fail
   }));
 }
+// ⭐⭐ 2026-10-16 老板定：**第三种取图方式 —— 从微信聊天记录里选**
+//   老板原话：「获取照片的方式现在有两种：1、拍照；2、从手机相册；现在增加第三种，就是从微信聊天记录中选择」
+//   用微信官方 API `wx.chooseMessageFile`（不需要申请、不用资质），弹的是"选聊天会话 → 选图"的界面，
+//   正好对应"客户微信发来的图"这个场景。
+//   ⚠️ 它与 `wx.chooseMedia` **返回字段名不同**：这里给的是 `tempFiles[].path`（不是 `tempFilePath`）——
+//      所以本函数**归一化成 `{ tempFilePath }`**，让调用方（visit.js 的 _addPics）**不必分来源**。
+//   ⚠️ `type:'image'` 只让选图片；它没有 `sizeType` 参数（拿到的可能是原图 → 交给 prepPhoto 压到 ≤1280/300KB）。
+function chooseFromChat(count) {
+  return new Promise((ok, fail) => wx.chooseMessageFile({
+    count: count || 1, type: 'image',
+    success: r => ok((r.tempFiles || []).map(f => ({
+      tempFilePath: f.path || f.tempFilePath || '',
+      size: f.size || 0,
+      name: f.name || ''
+    })).filter(f => f.tempFilePath)),
+    fail
+  }));
+}
 // 画布单次绘制输出 jpg（2026-09-08 终版：无旋转分支、无质量循环、无缩边循环——
 // 每张照片走完全相同的代码路径，消除"一会儿对一会儿错"；微信 canvas 对本地照片自动按方向显示）
 async function drawOnce(srcPath, W, H, draw, quality) {
@@ -273,6 +291,6 @@ function isPlayingPath(path) { return !!path && _pvPath === path; }
 module.exports = {
   PHOTO_EDGE, PHOTO_MAX, THUMB_EDGE, THUMB_MAX,
   REC_SAMPLE, REC_FORMAT,
-  chooseImage, prepPhoto, uploadFile, getTempURLs, fmtSec, createRecorder, getFileSize, isIOS, recLimit,
+  chooseImage, chooseFromChat, prepPhoto, uploadFile, getTempURLs, fmtSec, createRecorder, getFileSize, isIOS, recLimit,
   playPath, stopPath, isPlayingPath
 };
