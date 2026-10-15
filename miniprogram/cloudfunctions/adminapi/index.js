@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'applyMallPair', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'exportOrdersForSync', 'exportOrderItemsForSync', 'applyMallPair', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -785,6 +785,8 @@ exports.main = async (event) => {
     if (action === 'exportTasksForSync') return await exportTasksForSync(event);
     if (action === 'exportVisitedCustomers') return await exportVisitedCustomers(event);
     if (action === 'exportVisitsForSync') return await exportVisitsForSync(event);   // ⭐ 2026-10-11：拜访**明细**导出（给 pgsync）
+    if (action === 'exportOrdersForSync') return await exportOrdersForSync(event);       // ⭐ 2026-10-15：订单导出（给 pgsync → PG orders）
+    if (action === 'exportOrderItemsForSync') return await exportOrderItemsForSync(event); // ⭐ 2026-10-15：订单明细导出（给 pgsync → PG order_items）
     if (action === 'applyMallPair') return await applyMallPair(event);
     if (action === 'fixDupCustomers') return await fixDupCustomers(event);              // ⭐ 2026-10-11：商城**人工配对**的合并（「🛒 商城配对确认」页用）
     if (action === 'reassignVisit') return await reassignVisit(event);                  // ⭐ 2026-10-12：把拜访记录挪到正确的客户名下（串档修复；只改归属、留备案）
@@ -6244,6 +6246,79 @@ async function exportVisitsForSync(event) {
     createdAt: Number(v.createdAt) || 0, updatedAt: Number(v.updatedAt) || 0
   }));
   return { ok: true, rows: rows, count: rows.length, last: rows.length ? rows[rows.length - 1].id : after, hasMore: rows.length >= limit };
+}
+
+// ⭐⭐ 2026-10-15 老板定（《订单本地方案》第 2 块）：**订单 / 订单明细 导出**（给服务器同步器 pgsync 用）
+//   目的：后台那 6 列（订单总数/总额/最近下单 + 全局态/任务状态/最近拜访）改从【自己的服务器 PG】算，
+//        不再每翻一页问云端（custPageAgg）。订单+明细实测 1.07 万 + 2.1 万条（约 20MB），搬走毫无压力。
+//   ⚠️ **只读**，不写任何东西。
+//   ⚠️ **两个维度都要**：`since`（按 updatedAt 增量 —— 导入后只拉变化的那批）+ `cursor`（按 _id 翻页 —— 防漏）。
+//      与 `custSync` 同一套路：**since 整轮不动、只推进游标**（这正是「D01 永久漏客户」那个教训的修法）。
+async function exportOrdersForSync(event) {
+  const e0 = event || {};
+  const since = Number(e0.since) || 0;
+  const cursor = String(e0.cursor || '').trim();
+  const limit = Math.min(Math.max(Number(e0.limit) || 500, 1), 1000);
+  const conds = [{ updatedAt: _.gt(since) }];
+  if (cursor) conds.push({ _id: _.gt(cursor) });
+  const where = conds.length > 1 ? _.and(conds) : conds[0];
+  const r = await db.collection('orders').where(where)
+    .orderBy('_id', 'asc').limit(limit)
+    .field({
+      customerCode: true, orderNo: true, actualAmount: true, orderAmount: true, orderStatus: true,
+      orderedAt: true, payMethod: true, bizOwner: true, updatedAt: true, createdAt: true
+    })
+    .get().catch(() => ({ data: [] }));
+  const rows = (r.data || []).map(o => ({
+    id: o._id,
+    code: String(o.customerCode || ''),                  // → PG orders.code（客户编号，与 customers.code 对应）
+    orderNo: String(o.orderNo || ''),
+    amount: Number(o.actualAmount) || 0,                 // 实付金额（与云端 custPageAgg 口径一致）
+    orderAmount: Number(o.orderAmount) || 0,             // 订单金额（留档）
+    status: String(o.orderStatus || ''),
+    orderedAt: String(o.orderedAt || ''),
+    payMethod: String(o.payMethod || ''),
+    salesman: String(o.bizOwner || ''),                  // 业务负责人（→ PG orders.salesman）
+    updatedAt: Number(o.updatedAt) || 0,
+    createdAt: Number(o.createdAt) || 0
+  }));
+  return { ok: true, rows: rows, count: rows.length, last: rows.length ? rows[rows.length - 1].id : cursor, hasMore: rows.length >= limit };
+}
+
+// ⭐ 同上：订单明细导出（给服务器 PG 的 order_items 表；后台"点开某一单看明细"用）
+async function exportOrderItemsForSync(event) {
+  const e0 = event || {};
+  const since = Number(e0.since) || 0;
+  const cursor = String(e0.cursor || '').trim();
+  const limit = Math.min(Math.max(Number(e0.limit) || 500, 1), 1000);
+  const conds = [{ updatedAt: _.gt(since) }];
+  if (cursor) conds.push({ _id: _.gt(cursor) });
+  const where = conds.length > 1 ? _.and(conds) : conds[0];
+  const r = await db.collection('order_items').where(where)
+    .orderBy('_id', 'asc').limit(limit)
+    .field({
+      orderNo: true, lineNo: true, goodsCode: true, goodsName: true, barcode: true, brand: true,
+      category: true, spec: true, unit: true, supplier: true, selfCode: true,
+      orderQty: true, amount: true, actualPrice: true, retailPrice: true, salePrice: true,
+      wholesalePrice: true, otherShare: true, outQty: true, feature: true, remark: true,
+      updatedAt: true, createdAt: true
+    })
+    .get().catch(() => ({ data: [] }));
+  const rows = (r.data || []).map(x => ({
+    id: x._id,
+    orderNo: String(x.orderNo || ''), lineNo: String(x.lineNo || ''),
+    goodsCode: String(x.goodsCode || ''), goodsName: String(x.goodsName || ''),
+    barcode: String(x.barcode || ''), brand: String(x.brand || ''), category: String(x.category || ''),
+    spec: String(x.spec || ''), unit: String(x.unit || ''), supplier: String(x.supplier || ''),
+    selfCode: String(x.selfCode || ''),
+    orderQty: Number(x.orderQty) || 0, amount: Number(x.amount) || 0,
+    actualPrice: Number(x.actualPrice) || 0, retailPrice: Number(x.retailPrice) || 0,
+    salePrice: Number(x.salePrice) || 0, wholesalePrice: Number(x.wholesalePrice) || 0,
+    otherShare: Number(x.otherShare) || 0, outQty: Number(x.outQty) || 0,
+    feature: String(x.feature || ''), remark: String(x.remark || ''),
+    updatedAt: Number(x.updatedAt) || 0, createdAt: Number(x.createdAt) || 0
+  }));
+  return { ok: true, rows: rows, count: rows.length, last: rows.length ? rows[rows.length - 1].id : cursor, hasMore: rows.length >= limit };
 }
 
 async function exportVisitedCustomers(event) {
