@@ -7,13 +7,20 @@ Page({
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
   data: {
-    task: null, customers: [], showCustomers: [], activeDay: 1, loading: true,
+    task: null, customers: [], showCustomers: [], activeDay: 1, loading: true, dayScrollInto: '',
     dayDone: {}, dayVisited: {}, ongoingDays: {}, nextSeq: 0, allDone: false, confirmShow: false, confirmMsg: ''
   },
   onLoad(options) {
     this.taskId = options.taskId;
     this._loaded = false;
     this.distMap = {};
+    // ⭐⭐ 2026-10-16 老板定：**刚进页面时，把天数卡那一排自动滚到"当前高亮那张"** ——
+    //   背景：天数卡是横向滚动的，业务员干到第 6、7 页时，高亮那张跑到屏幕右边外面 → 看不到自己在第几页。
+    //   ⚠️ 老板定的口径：**只在刚进页面这一刻滚一次**（手动点卡 / 从拜访页返回时不滚，
+    //      免得把用户自己滑到的位置拉回去）。
+    //   ⚠️ 用实例标记、而不是直接设值：渲染有两条路（骨架缓存先到 / 云端后到），两次都会渲染，
+    //      标记在"云端数据到位（_afterDetail）"时才清 —— 这样两条路都能滚到正确的那张。
+    this._needDayScroll = true;
   },
   // ⭐⭐ 2026-10-10 老板定：**任务心跳回调**（`app.js` 每 15 秒问一次，变了才叫到这里）
   //   任务详情页比首页更需要"说一声"：**后台把任务结束了**、或改了截止日 —— 业务员正看着这一页呢。
@@ -146,13 +153,23 @@ Page({
       }
     }
     this.allCustomers = customers;
-    this.setData({
+    const patch = {
       task: { ...res.task, dayPlan, deadline: fmtMD(res.task.deadline) || res.task.deadline || '' },
       customers, activeDay, loading: false
-    });
+    };
+    // ⭐ 2026-10-16：刚进页面时，让天数卡那一排滚到"当前高亮那张"（老板定的「自动显示在画面之内」）。
+    //   ⚠️ `scroll-into-view` **只在值变化时才触发滚动** —— 所以值相同就**不设**（省一次无用的 setData）。
+    if (this._needDayScroll) {
+      const tgt = 'day-' + activeDay;
+      if (this.data.dayScrollInto !== tgt) patch.dayScrollInto = tgt;
+    }
+    this.setData(patch);
   },
   // 只有"云端数据"才做的侧效应（配置同步 / 审核观察员 / 定位）—— 缓存渲染不碰这些
   _afterDetail(res) {
+    // ⭐ 2026-10-16：云端数据到位 = 这次「进页面」的渲染结束 → 关掉"滚天数卡"的标记
+    //   （之后的心跳 / 审核刷新再渲染就不会去滚了 —— 符合老板定的"只在刚进页面滚一次"）
+    this._needDayScroll = false;
     // 时间分层配置同步全局（loc.js 采集器依赖）
     const app = getApp();
     if (app) {
