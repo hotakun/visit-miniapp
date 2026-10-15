@@ -130,10 +130,17 @@ async function refresh(callApi, cred) {
         const r = _rows.length ? { ok: true, rows: _rows } : null;
         if (r && r.ok && Array.isArray(r.rows) && r.rows.length) {
           // pgapi 返回的是 PG 的 snake_case 列名 → 转成前端一直用的简写字段（与 custMapPoints 下发的完全一致）
+          // ⚠️⚠️ 2026-10-15：**这张表漏过字段**（就是下面那 7 个聚合列）——
+          //   漏了之后：pgapi 明明返回了、这里却被丢掉 → 缓存里没这个键 →
+          //   前端 `custFillPageAgg` 以为"缺"就**回云端按页补**（白花钱、而且显示不出来）。
+          //   **以后往 pgapi 的 SELECT 里加字段，必须同步加这张表**。
           const M = [['i','id'],['n','name'],['nr','name_raw'],['la','lat'],['ln','lng'],['c','city'],['d','district'],
             ['b','biz_circle'],['ad','address'],['cs','coord_source'],['cst','coord_status'],['mc','code'],['mk','mall_key'],
             ['u','updated_at'],['ca','created_at'],['ct','ctype'],['ph','phone'],['rm','remark'],['bi','batch_ids'],
-            ['mj','mall_joined_at'],['so','source']];
+            ['mj','mall_joined_at'],['so','source'],
+            // ⭐ 2026-10-15（《订单本地方案》第 5 块）：7 个聚合列 —— 来自 pgapi 的 cust_agg JOIN，
+            //   它的 SQL 别名本来就写成短名（oc/oa/lo/vc/lv/vs/vt），所以这里左右同名。
+            ['oc','oc'],['oa','oa'],['lo','lo'],['vc','vc'],['lv','lv'],['vs','vs'],['vt','vt']];
           points = r.rows.map(row => {
             const o = {};
             M.forEach(function (p) { const v = row[p[1]]; o[p[0]] = (v === null || v === undefined) ? '' : v; });
