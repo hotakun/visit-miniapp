@@ -319,7 +319,7 @@ const srv = http.createServer(async (req, res) => {
     if (u.pathname === '/mallPending') {
       const st = String(u.searchParams.get('status') || '');
       // ⭐ 2026-10-13：多回 lat/lng —— 后台「新建」时补的坐标要能读回来（点「发送到云端」时用它建客户）
-      const cols = 'mall_key,name,phone,address,region,mall_code,added_at,status,target_id,target_name,handled_by,handled_at,lat,lng';
+      const cols = 'mall_key,name,phone,address,region,mall_code,added_at,status,target_id,target_name,handled_by,handled_at,imported_at,lat,lng';
       const r = st
         ? await q('SELECT ' + cols + ' FROM mall_pending WHERE status = $1 ORDER BY mall_key LIMIT 1000', [st])
         : await q('SELECT ' + cols + " FROM mall_pending ORDER BY (status = 'pending') DESC, mall_key LIMIT 2000");

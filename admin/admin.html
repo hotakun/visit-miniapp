@@ -8606,7 +8606,20 @@ function mpRender() {
     if (ha !== hb) return hb - ha;                                                  // 最近处理的在上
     return String(a.mall_key || '').localeCompare(String(b.mall_key || ''));        // 都没处理过 → 原名稳定排
   };
-  if (_mpTab === 'done') {
+  // ⭐⭐ 2026-10-17 老板定（原话「改成'最近的排最上面'」）——
+  //   ⚠️ 原来「待处理」页签**压根没排序** → 直接吃服务器给的 `mall_key` 字母序 →
+  //      **刚导入的那条反而排在最底下**（老板实测：导了一行 AA071，页面上"看不见"
+  //      —— 其实是数据有延迟 + 那条排在最后，不往下滚根本找不到）。
+  //   → 待处理按 **imported_at（导入时间）倒序**：刚导进来的排最上面，一眼能看到。
+  //   ⚠️ `imported_at` 由 pgapi 的 /mallPending 下发（PG bigint，回来是字符串 → 用 Number() 比）。
+  const byImported = function (a, b) {
+    const ia = Number(a.imported_at) || 0, ib = Number(b.imported_at) || 0;
+    if (ia !== ib) return ib - ia;                                                  // 最近导入的在上
+    return String(a.mall_key || '').localeCompare(String(b.mall_key || ''));
+  };
+  if (_mpTab === 'pending') {
+    list = list.slice().sort(byImported);
+  } else if (_mpTab === 'done') {
     list = list.slice().sort(byHandled);
   } else if (_mpTab === 'all') {
     const ORD = { paired: 0, created: 0, failed: 1, pushed: 0, skipped: 2, pending: 3 };
