@@ -9530,7 +9530,7 @@ async function loadGeoPage() {
     return `<tr class="${geoPicked[c._id] ? 'picked' : ''}">`
       + `<td class="no">${no}</td>`
       + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px" onclick="showCustDetail('${c._id}')">详情</button></td>`
-      + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>`
+      + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>`
       + `<td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}"${on} onclick="geoPick('${c._id}', this, event)"></td>`
       + `<td class="lft" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
       // ⭐ 2026-10-13 老板要：**「商城」格挪到「区域」前面**（与表头同序，别错位）
@@ -10649,7 +10649,7 @@ function renderBatchTbody() {
     return `<tr data-id="${c._id}" data-search="${esc(((c.name || '') + ' ' + (c.phone || '') + ' ' + (c.phone2 || '') + ' ' + shortAddr(c.address || '')).toLowerCase())}"${rowSel}>
       <td class="no">${i + 1}</td>
       <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 8px" onclick="showCustDetail('${c._id}')">详情</button></td>
-      <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 8px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 8px" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>
       <td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}" ${batchChecked.has(c._id) ? 'checked' : ''}></td>
       <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(fullName)}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${nameCell}</span></td>
       <td style="text-align:center;white-space:nowrap">${c.bizCircle ? '<span class="pill p-pu">' + esc(c.bizCircle) + '</span>' : '—'}</td>
