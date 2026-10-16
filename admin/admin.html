@@ -9453,6 +9453,7 @@ function geoToggleSort(key) {
 async function loadGeoPage() {
   const tbody = $('geoTbody');
   if (!tbody) return;
+  geoLastPick = null;          // ⭐ Shift 区间多选：换页 / 换筛选 / 改排序都要清锚点（行顺序变了，不能连着选）
   // ⭐ 2026-10-06 老板定：**「商圈」排序只在选了具体区域时成立** ——
   //   兜底：如果之前按商圈排过，现在区域又变回"全部区域"了，就把排序退回默认（建档时间）。
   //   （放在最前面：不管从 nav() 还是筛选框进来，状态都会被清干净）
@@ -9530,7 +9531,7 @@ async function loadGeoPage() {
       + `<td class="no">${no}</td>`
       + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px" onclick="showCustDetail('${c._id}')">详情</button></td>`
       + `<td style="text-align:center;white-space:nowrap"><button class="btn ghost" style="height:22px;font-size:11px;padding:0 6px${c.remark ? ';border-color:var(--primary);color:var(--primary-deep)' : ''}" title="${c.remark ? '已有备注：' + esc(String(c.remark).slice(0, 40)) + '（点击修改）' : '添加客户备注（手机端业务员可见）'}" onclick="event.stopPropagation();openCustRemark('${c._id}', '${esc(c.name)}')">备注</button></td>`
-      + `<td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}"${on} onclick="geoPick('${c._id}', this)"></td>`
+      + `<td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}"${on} onclick="geoPick('${c._id}', this, event)"></td>`
       + `<td class="lft" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
       // ⭐ 2026-10-13 老板要：**「商城」格挪到「区域」前面**（与表头同序，别错位）
       + `<td>${(c.mallCode || c.mallKey) ? '<span class="pill p-ok">已加</span>' : '<span class="pill p-bad">未加</span>'}</td>`
@@ -9601,6 +9602,7 @@ function geoQClear() {
 //   · **完全走本地缓存** `custLocal.points` → **一次云开发都不打**（符合省钱原则）
 //   · 选完只更新"已选 N 家" + 重绘本页；**不动**原来的逐个勾选 / 本页全选 / 取消选择
 async function geoPickAllFiltered() {
+  geoLastPick = null;          // ⭐ Shift 区间多选：整片全选后，锚点没意义，清掉
   // ⭐ 2026-10-09 老板定：**只以「区域」为准** —— 必须先选一个区域才允许全选。
   //   老板原话：「只能以区域为准，选择单个区域才能全选，否则几万十几万的批次是毫无意义的。」
   if (!geoF.district) {
@@ -9629,15 +9631,45 @@ async function geoPickAllFiltered() {
     alert('全选失败，请稍后再试');                              // ⚠️ 不把原始异常弹给用户
   }
 }
-function geoPick(id, el) {
+function geoPick(id, el, ev) {
+  // ⭐⭐ 2026-10-17 老板定：**Shift 区间多选**（Windows 资源管理器 / Excel 那套）——
+  //   先点一行（锚点）→ 按住 Shift 点另一行 → **把这两行之间（按当前显示顺序）的全部设成同状态**。
+  //   口径：**跟着当前那一下走** —— Shift 点的是"勾上"，中间就全勾；是"取消"，中间就全清。
+  //   ⚠️ **Shift 之后锚点【不挪】** —— 可以继续 Shift 点、一段段往外扩（和资源管理器一致）。
+  //   ⚠️ **只在当前页范围内**（列表是分页的，翻页后上一页的行不在 DOM 里）；
+  //      要整片选请用「➕ 全选当前筛选」。
+  //   ⚠️ 锚点在【换页 / 换筛选 / 全选 / 清空】时清掉（见 geoLastPick 的几处重置），
+  //      否则会从"上一页的位置"乱连一大片。
+  if (ev && ev.shiftKey && geoLastPick && geoLastPick !== id) {
+    const boxes = Array.prototype.slice.call(document.querySelectorAll('#geoTbody input.rowchk'));
+    const i1 = boxes.findIndex(b => b.getAttribute('data-id') === geoLastPick);
+    const i2 = boxes.findIndex(b => b.getAttribute('data-id') === id);
+    if (i1 >= 0 && i2 >= 0) {
+      const lo = Math.min(i1, i2), hi = Math.max(i1, i2);
+      const on0 = el && el.checked;                       // 以"当前这一下"的状态为准
+      for (let k = lo; k <= hi; k++) {
+        const bx = boxes[k];
+        const bid = bx.getAttribute('data-id');
+        bx.checked = !!on0;
+        if (on0) geoPicked[bid] = 1; else delete geoPicked[bid];
+        const tr2 = bx.closest ? bx.closest('tr') : null;
+        if (tr2) tr2.className = on0 ? 'picked' : '';
+      }
+      updateGeoPicked();
+      return;                                             // ⚠️ 锚点不动，可继续扩
+    }
+  }
+  geoLastPick = id;                                       // 普通点：锚点挪到这里
   const on = el && el.checked;
   if (on) geoPicked[id] = 1; else delete geoPicked[id];
   const tr = el && el.closest ? el.closest('tr') : null;
   if (tr) tr.className = on ? 'picked' : '';
   updateGeoPicked();
 }
+let geoLastPick = null;    // ⭐ Shift 区间多选的"锚点"（上一次点的那一行 id）；换页/换筛选/全选/清空都会重置
 // 表头全选 / 取消本页（照客户批次表的方式）
 function geoCheckAll(on) {
+  geoLastPick = null;          // ⭐ Shift 区间多选：全选/取消本页后锚点就没意义了，清掉
   document.querySelectorAll('#geoTbody input.rowchk').forEach(b => {
     b.checked = !!on;
     const id = b.getAttribute('data-id');
@@ -9984,6 +10016,7 @@ async function geoRestoreIds(ids) {
 
 // ⭐ 2026-09-26 老板定：「已选 N 家」右边的 ✕ = **一键取消全部选择**
 function geoClearPicked() {
+  geoLastPick = null;                                                      // ⭐ Shift 区间多选：清空时锚点一起清
   geoPicked = {};                                                          // 清空内存里的选择
   document.querySelectorAll('#geoTbody input.rowchk').forEach(b => { b.checked = false; });  // 取消本页所有勾选
   document.querySelectorAll('#geoTbody tr').forEach(tr => { tr.className = ''; });           // 去掉选中行底色

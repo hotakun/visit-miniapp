@@ -17,8 +17,12 @@ const path = require('path');
 
 const CACHE_DIR = path.join(__dirname, 'cache');
 const FILE = path.join(CACHE_DIR, 'map-points.json');
-const VERSION = 6;              // ⭐ 2026-10-07：字段 +1（so = source，识别"现场录入的店"）→ 升版本，旧缓存自动作废重拉
-                                // （上一版 = 5：2026-09-27 M2b 字段 12 → 18 项）
+const VERSION = 7;              // ⭐ 2026-10-17：字段 +8（reg/sm/ml/msrc/mcat/clor/clbr/ph2 =
+                                //   region 区域 / 签约业务员 / 商城等级 / 商城来源 / 商城分类 /
+                                //   最近下单 / 最近浏览 / 手机2）→ 升版本，**旧缓存自动作废重拉**。
+                                //   ⚠️ 不升的话：后台那份老快照里没有这 8 个键 → 界面上"看不到"（体检会盯这条）。
+                                // （上一版 = 6：2026-10-07 字段 +1（so = source，识别"现场录入的店"））
+                                // （更早 = 5：2026-09-27 M2b 字段 12 → 18 项）
 const PAGE_LIMIT = 1000;        // 每片 1000 条（云函数单次返回上限 100KB，1000 条约 100KB 内）
 const MAX_PAGES = 1000;         // 硬上限（100 万条），防死循环
 
