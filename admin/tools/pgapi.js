@@ -20,7 +20,11 @@ const COLS = 'id,name,name_raw,code,ctype,source,phone,address,city,district,biz
 //   读取时把「该客户属于哪些批次」现算成逗号串，**输出字段名仍叫 batch_ids**
 //   → 后台（store.js 的 bi / admin.html / 前端）一行都不用改，切换对上层透明。
 const COLS_C = 'c.id,c.name,c.name_raw,c.code,c.ctype,c.source,c.phone,c.address,c.city,c.district,c.biz_circle,' +
-  'c.lat,c.lng,c.coord_source,c.coord_status,c.mall_key,c.mall_joined_at,c.remark,c.created_at,c.updated_at';
+  'c.lat,c.lng,c.coord_source,c.coord_status,c.mall_key,c.mall_joined_at,c.remark,c.created_at,c.updated_at,' +
+  // ⭐⭐ 2026-10-16（老板定「这 9 列 PG 里没有…同步器也要拉」）：补 8 列 ——
+  //   ⚠️ 加进来之后**必须同步加 `admin/store.js` 的映射表 M**（否则字段被静默丢掉、缓存里没这个键 —— 老坑）。
+  'c.region,c.salesman,c.mall_level,c.mall_source,c.mall_category,' +
+  'c.last_order_at,c.last_browse_at,c.phone2';
 const BI_JOIN = " LEFT JOIN (SELECT customer_id, string_agg(batch_id, ',' ORDER BY batch_id) AS bids FROM batch_members GROUP BY customer_id) m ON m.customer_id = c.id";
 // ⭐ 2026-10-15（《订单本地方案》第 4 块）：客户聚合表（订单数/额/最近下单 + 拜访数/最近拜访/全局态/任务内状态）
 //   由同步器 `pgsync.recalcCustAgg()` 算好写进去；这里只 JOIN 读出来（只读账号也能读 —— 已 GRANT SELECT）。

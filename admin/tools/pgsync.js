@@ -16,7 +16,14 @@ const MAP = [['id','i'],['name','n'],['name_raw','nr'],['code','mc'],['ctype','c
   ['phone','ph'],['address','ad'],['city','c'],['district','d'],['biz_circle','b'],
   ['lat','la'],['lng','ln'],['coord_source','cs'],['coord_status','cst'],
   ['mall_key','mk'],['mall_joined_at','mj'],['remark','rm'],['batch_ids','bi'],
-  ['created_at','ca'],['updated_at','u']];
+  ['created_at','ca'],['updated_at','u'],
+  // ⭐⭐ 2026-10-16（老板定「这 9 列 PG 里没有…同步器也要拉」）：补齐 8 列。
+  //   ⚠️ 方向是 **[PG 列名, 云端短键]**（与 admin/store.js 的 M 表**相反**，别写反）。
+  //   ⚠️ 云端字段驼峰 → 短键（见 adminapi 的 custSync/custMapPoints）：region→reg · salesman→sm ·
+  //      mallLevel→ml · mallSource→msrc · mallCategory→mcat ·
+  //      lastOrderAt→clor · lastBrowseAt→clbr · phone2→ph2
+  ['region','reg'],['salesman','sm'],['mall_level','ml'],['mall_source','msrc'],['mall_category','mcat'],
+  ['last_order_at','clor'],['last_browse_at','clbr'],['phone2','ph2']];
 const COLS = MAP.map(x => x[0]);
 const UPSERT = 'INSERT INTO customers (' + COLS.join(',') + ') VALUES (' +
   COLS.map((_, i) => '$' + (i + 1)).join(',') + ') ON CONFLICT (id) DO UPDATE SET ' +

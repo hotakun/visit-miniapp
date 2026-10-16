@@ -175,6 +175,12 @@ async function refresh(callApi, cred) {
             ['b','biz_circle'],['ad','address'],['cs','coord_source'],['cst','coord_status'],['mc','code'],['mk','mall_key'],
             ['u','updated_at'],['ca','created_at'],['ct','ctype'],['ph','phone'],['rm','remark'],['bi','batch_ids'],
             ['mj','mall_joined_at'],['so','source'],
+            // ⭐⭐ 2026-10-16（老板定「这 9 列 PG 里没有…同步器也要拉」）：补 8 项 ——
+            //   ⚠️ 方向是 **[短键, PG列名]**（与 pgsync.js 的 MAP **相反**）。
+            //   ⚠️ 与 pgapi.js 的 COLS_C、adminapi 的 custSync/custMapPoints 必须一一对应；
+            //      漏一项 = 该字段被**静默丢掉**（缓存里没这个键），前端就"看不到"。
+            ['reg','region'],['sm','salesman'],['ml','mall_level'],['msrc','mall_source'],['mcat','mall_category'],
+            ['clor','last_order_at'],['clbr','last_browse_at'],['ph2','phone2'],
             // ⭐ 2026-10-15（《订单本地方案》第 5 块）：7 个聚合列 —— 来自 pgapi 的 cust_agg JOIN，
             //   它的 SQL 别名本来就写成短名（oc/oa/lo/vc/lv/vs/vt），所以这里左右同名。
             ['oc','oc'],['oa','oa'],['lo','lo'],['vc','vc'],['lv','lv'],['vs','vs'],['vt','vt']];
@@ -495,7 +501,10 @@ async function checkDirtyFromPg() {
   const M = [['i', 'id'], ['n', 'name'], ['nr', 'name_raw'], ['la', 'lat'], ['ln', 'lng'], ['c', 'city'], ['d', 'district'],
     ['b', 'biz_circle'], ['ad', 'address'], ['cs', 'coord_source'], ['cst', 'coord_status'], ['mc', 'code'], ['mk', 'mall_key'],
     ['u', 'updated_at'], ['ca', 'created_at'], ['ct', 'ctype'], ['ph', 'phone'], ['rm', 'remark'], ['bi', 'batch_ids'],
-    ['mj', 'mall_joined_at'], ['so', 'source']];
+    ['mj', 'mall_joined_at'], ['so', 'source'],
+    // ⭐⭐ 2026-10-16（老板定「这 9 列 PG 里没有…同步器也要拉」）：补 8 项（方向 [短键, PG列名]）
+    ['reg', 'region'], ['sm', 'salesman'], ['ml', 'mall_level'], ['msrc', 'mall_source'], ['mcat', 'mall_category'],
+    ['clor', 'last_order_at'], ['clbr', 'last_browse_at'], ['ph2', 'phone2']];
   const got = (sy.rows || []).map(row => {
     const o = {};
     M.forEach(p => { const v = row[p[1]]; o[p[0]] = (v === null || v === undefined) ? '' : v; });

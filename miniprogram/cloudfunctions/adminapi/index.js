@@ -2707,7 +2707,11 @@ async function custMapPoints(event) {
              createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true,
              // ⭐ 2026-10-07 补 source：后台「🔎 比对认领」要把**现场录入的店**（source:'field'）也纳入比对池，
              //   而那个池子读的是本地缓存 → 缓存必须带这个字段，否则前端根本认不出哪些是现场录的。
-             source: true })
+             source: true,
+             // ⭐⭐ 2026-10-16（老板定：「这 9 列 PG 里居然没有…同步器也要拉」）：补齐 8 个原本没同步的字段
+             //   （与 custSync 保持同一套；⚠️ 云端驼峰 → PG 下划线的对应见 pgsync.js）
+             region: true, salesman: true, mallLevel: true, mallSource: true, mallCategory: true,
+             lastOrderAt: true, lastBrowseAt: true, phone2: true })
     .get().catch(silentCatch('adminapi·custMapPoints', { data: [] }));
   const rows = r.data || [];
   const _agg = await buildAggMaps(rows);   // 6 列预聚合（与 custPageAgg 同口径）
@@ -2736,6 +2740,12 @@ async function custMapPoints(event) {
     bi: '',
     mj: String(c.mallJoinedAt || ''),       // 注册商城时间（新客列表的「已入商城」日期）
     so: String(c.source || ''),             // ⭐ 2026-10-07 客户来源（'field' = 手机端「加新店」现场录入 → 待商城建档）
+    // ⭐⭐ 2026-10-16（老板定「同步器也要拉」）：补齐 8 个原本没同步的字段 —— 与 custSync 同一套短键。
+    //   ⚠️ 映射表见 admin/store.js 的 M、PG 列名见 pgsync.js 的 upsert；**三处必须一致**，
+    //      漏一处 = "不报错的静默不生效"（store.js 那个坑就是这么来的）。
+    reg: String(c.region || ''), sm: String(c.salesman || ''),
+    ml: String(c.mallLevel || ''), msrc: String(c.mallSource || ''), mcat: String(c.mallCategory || ''),
+    clor: String(c.lastOrderAt || ''), clbr: String(c.lastBrowseAt || ''), ph2: String(c.phone2 || '')
   })).map((p, idx) => mergeAgg(p, rows[idx]._id, rows[idx].mallCode, _agg));   // 6 列预聚合
   return { ok: true, points: points, next: rows.length >= limit ? String(rows[rows.length - 1]._id) : null, got: rows.length };
 }
@@ -2763,8 +2773,13 @@ async function custSync(event) {
     .orderBy('_id', 'asc').limit(limit)
     .field({ name: true, nameRaw: true, lat: true, lng: true, city: true, district: true, bizCircle: true,
              address: true, coordSource: true, coord_status: true, mallCode: true, mallKey: true, updatedAt: true,
-             createdAt: true, customerType: true, phone: true, remark: true, batchIds: true, mallJoinedAt: true,
-             source: true })   // ⭐ 2026-10-07：source（'field' = 现场录入）—— 与 custMapPoints 同步
+             createdAt: true, customerType: true, phone: true, phone2: true, remark: true, batchIds: true, mallJoinedAt: true,
+             source: true,
+             // ⭐⭐ 2026-10-16（老板定：「这 9 列 PG 里居然没有…先把永康的传进 PG，同步器也要拉」）：
+             //   补齐 8 个原本没同步的字段（备注 remark 早就在）。⚠️ 云端字段名是【驼峰】，PG 列名是【下划线】，
+             //   对应关系见 pgsync.js；`region` 也要（现在 PG 的 region 列全空）。
+             region: true, salesman: true, mallLevel: true, mallSource: true, mallCategory: true,
+             lastOrderAt: true, lastBrowseAt: true })   // ⭐ 2026-10-07：source（'field' = 现场录入）—— 与 custMapPoints 同步
     .get().catch(silentCatch('adminapi·custSync', { data: [] }));
   const rows = r.data || [];
   const _aggS = await buildAggMaps(rows);   // ⭐ 2026-09-27：增量同步同样带上 6 列预聚合（口径与 custMapPoints 一致）
@@ -2800,7 +2815,16 @@ async function custSync(event) {
       nr: String(c.nameRaw || ''), ca: Number(c.createdAt) || 0, ct: String(c.customerType || ''),
       ph: String(c.phone || ''), rm: String(c.remark || ''), bi: biMap[c._id] || '',   // ⭐ 2026-10-10 指针表模式：批次归属从 batch_members 现算（见上）
       mj: String(c.mallJoinedAt || ''),
-      so: String(c.source || '')          // ⭐ 2026-10-07：客户来源（'field' = 现场录入）—— 与 custMapPoints 同口径
+      so: String(c.source || ''),         // ⭐ 2026-10-07：客户来源（'field' = 现场录入）—— 与 custMapPoints 同口径
+      // ⭐⭐ 2026-10-16（老板定「同步器也要拉」）：补齐 8 个原本没同步的字段。
+      //   短键 → 云端字段 → PG 列：
+      //     reg→region→region · sm→salesman→salesman · ml→mallLevel→mall_level ·
+      //     msrc→mallSource→mall_source · mcat→mallCategory→mall_category ·
+      //     clor→lastOrderAt→last_order_at · clbr→lastBrowseAt→last_browse_at · ph2→phone2→phone2
+      //   ⚠️ 必须与 custMapPoints 一致（同一套短键），并与 `admin/store.js` 的映射表、pgsync 的列名对上。
+      reg: String(c.region || ''), sm: String(c.salesman || ''),
+      ml: String(c.mallLevel || ''), msrc: String(c.mallSource || ''), mcat: String(c.mallCategory || ''),
+      clor: String(c.lastOrderAt || ''), clbr: String(c.lastBrowseAt || ''), ph2: String(c.phone2 || '')
     };
   }).map((p, idx) => mergeAgg(p, rows[idx]._id, rows[idx].mallCode, _aggS));
   return { ok: true, points: points, next: rows.length >= limit ? String(rows[rows.length - 1]._id) : null, maxUpdatedAt: maxU, got: rows.length };
