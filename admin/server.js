@@ -113,15 +113,18 @@ if (!cfg.appid || !cfg.appsecret || !cfg.envId) {
 let tokenCache = { token: '', expireAt: 0 };
 let tokenPending = null; // 并发去重：多个请求同时到达时只取一次 token
 
-async function getToken() {
-  if (tokenCache.token && Date.now() < tokenCache.expireAt) return tokenCache.token;
+// ⭐⭐ 2026-10-17（老板定「补上，以后不会再卡」）：加 `force` —— token 被别处顶掉时能【强制重取】。
+//   ⚠️ 原来只判"缓存过期才重取"，而"被别人顶掉"时缓存还没到期 → 一直拿坏 token（后台报 40001，
+//      要等到缓存自然过期（最多 2 小时）才恢复 —— 老板 2026-10-17 点「客户详情」报 40001 就是这个）。
+async function getToken(force) {
+  if (!force && tokenCache.token && Date.now() < tokenCache.expireAt) return tokenCache.token;
   if (tokenPending) return tokenPending;
   tokenPending = (async () => {
     // stable_token 接口：多实例/多次调用共享同一个有效 token，不会互相踢失效（2026-09-03 修 40001）
     const r = await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: false })
+      body: JSON.stringify({ grant_type: 'client_credential', appid: cfg.appid, secret: cfg.appsecret, force_refresh: !!force })
     });
     if (!r.ok) throw new Error('获取 access_token 失败：HTTP ' + r.status);
     const j = await r.json();
@@ -166,31 +169,51 @@ async function uploadToCloud(cloudPath, buf) {
   return j.file_id;
 }
 
+// ⭐⭐ 2026-10-17（老板定「补上，以后不会再卡」）：**token 失效必须自愈** —— 照 admin/tools/pgsync.js 那一套。
+//   背景（当天真实报障）：老板点「客户详情」弹
+//     「云函数调用失败：invalid credential, access_token is invalid or not latest …(40001)」。
+//   真因：`server.js` 把 token 缓存在内存（2 小时、提前 10 分钟刷），**被别处顶掉/失效时缓存还没到期**
+//     → 原来这里**直接抛错、不重取也不重试** → 后台一路 40001，**要等缓存自然过期（最多 2 小时）才恢复**。
+//   现在：token 类错误（40001/40014/42001/42007/42008，或 errmsg 含 invalid credential / access_token /
+//     not latest / expired）→ **清缓存 + 强制重取 + 自动重试一次**，一轮内自愈。
+//   （⚠️ pgsync 早就这么做，`server.js` 一直没补 —— 这就是"服务器数据在跑、后台却调不动"的原因。）
+const isTokenErr = (code, msg) => [40001, 40014, 42001, 42007, 42008].indexOf(Number(code)) >= 0 ||
+  /invalid credential|access_token|not latest|expired/i.test(String(msg || ''));
+
 async function callApi(body) {
   const t0 = Date.now();
   const action = (body && body.action) || '?';
   // 2026-09-24：body._cfn 可指定云函数名（默认 adminapi）—— 客户数据导入走独立的 importdata
   //（导入是重活，要独立超时预算）。只在本机后台用，不影响其它调用。
   const fnName = (body && body._cfn) || 'adminapi';
-  const token = await getToken();
-  // 官方格式：POST body 整体直接作为云函数入参（不要包裹 {data:...}）
-  const url = `https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=${token}&env=${encodeURIComponent(cfg.envId)}&name=${encodeURIComponent(fnName)}`;
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error('云函数调用失败：HTTP ' + r.status);
-  const j = await r.json();
-  if (j.errcode) throw new Error('云函数调用失败：' + j.errmsg + '(' + j.errcode + ')');
-  // 官方返回：resp_data 为字符串（云函数返回的 buffer）
-  let out = j.resp_data;
-  if (typeof out === 'string') {
-    try { out = JSON.parse(out); } catch (e) { /* 非 JSON 则原样透传 */ }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) tokenCache = { token: '', expireAt: 0 };   // ⭐ 先清缓存，再强制重取（第 2 次）
+    const token = await getToken(attempt > 0);                  // 第 2 次：force = true
+    // 官方格式：POST body 整体直接作为云函数入参（不要包裹 {data:...}）
+    const url = `https://api.weixin.qq.com/tcb/invokecloudfunction?access_token=${token}&env=${encodeURIComponent(cfg.envId)}&name=${encodeURIComponent(fnName)}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('云函数调用失败：HTTP ' + r.status);
+    const j = await r.json();
+    if (j.errcode) {
+      if (attempt === 0 && isTokenErr(j.errcode, j.errmsg)) {
+        console.warn('[api] token 失效（' + j.errcode + ' ' + j.errmsg + '）→ 强制重取后重试一次');
+        continue;                                               // ⭐ 自愈：换新 token 再试一次
+      }
+      throw new Error('云函数调用失败：' + j.errmsg + '(' + j.errcode + ')');
+    }
+    // 官方返回：resp_data 为字符串（云函数返回的 buffer）
+    let out = j.resp_data;
+    if (typeof out === 'string') {
+      try { out = JSON.parse(out); } catch (e) { /* 非 JSON 则原样透传 */ }
+    }
+    // 每次云函数调用打耗时日志（2026-09-09：老板报障重启后首屏 10 多秒，用日志定位慢的 action）
+    console.log(`[api] ${fnName}/${action} ${Date.now() - t0}ms`);
+    return JSON.stringify(out);
   }
-  // 每次云函数调用打耗时日志（2026-09-09：老板报障重启后首屏 10 多秒，用日志定位慢的 action）
-  console.log(`[api] ${fnName}/${action} ${Date.now() - t0}ms`);
-  return JSON.stringify(out);
 }
 
 // ===== xls/xlsx 解析（客户名单导入） =====
