@@ -8824,7 +8824,7 @@ function mpCands(row) {
         kind = 'chain'; score = 90;
         const pb = MP_BRANCH(pName);
         why = '🆔 编号相同 · 相距 ' + d + ' 米' +
-          (b1 && pb && b1 !== pb ? ' · 分店名「' + b1 + '」/「' + pb + '」' : '') + ' · 需确认';
+          (b1 && pb && b1 !== pb ? ' · 分店名「' + b1 + '」/「' + pb + '」' : '') + ' · 建议按连锁分店处理';
       } else {
         kind = 'unknown'; score = 85;
         why = '🆔 编号相同 · 有一方没坐标，无法判断距离';
@@ -8986,8 +8986,16 @@ function mpRender() {
           //   而是决定「本次导入这条」怎么处理 —— 按钮放在候选框里会让人误以为在改那家系统客户。
           //   → 候选框内**只留结论**（普通匹配仍保留「✓ 就是这家」），同编号的决策按钮放到**框外下方**。
           const isRel = (c.kind === 'sub' || c.kind === 'chain' || c.kind === 'unknown');
+          // ⭐⭐ 2026-10-18 老板定：**给出推荐**，推荐项正常显示、不推荐的那项灰度（仍可点，防误判）。
+          //   · ≤50 米 → 推荐「同一家（主副店）」；
+          //   · >50 米 → 推荐「连锁分店」（老板原话：相距 8000 多米，这怎么可能还是同一家）；
+          //   · 缺坐标无法判断 → 不推荐，两个都正常显示。
+          const recChain = (c.kind === 'chain');
+          const recSub = (c.kind === 'sub');
           const right = isRel
-            ? '<div style="font-size:11px;color:#B77400;flex:none;padding:0 6px;white-space:nowrap">待确认 ↓</div>'
+            ? '<div style="font-size:11px;color:' + (recChain ? '#C2561B' : recSub ? '#12A150' : '#B77400') +
+              ';flex:none;padding:0 6px;white-space:nowrap">' +
+              (recChain ? '推荐：连锁分店 ↓' : recSub ? '推荐：主副店 ↓' : '请选择 ↓') + '</div>'
             : '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button>';
           const row = '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
             '<div class="n">' + esc(c.name) + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
@@ -8996,14 +9004,19 @@ function mpRender() {
             '<div style="display:flex;flex:none;align-items:center">' + right + '</div></div>';
           if (!isRel) return row;
           // —— 框外决策条：明确写「针对本次导入这条」，与上面的系统客户区分开 ——
-          const distTxt = (c.dist != null) ? ('相距 ' + c.dist + ' 米') : '缺少坐标、无法算距离';
-          const relTxt = (c.kind === 'sub')
-            ? ('编号相同 · ' + distTxt + ' · 是同一家（老板/老板娘各注册）')
-            : ('编号相同 · ' + distTxt + ' · 需你确认是同一家还是连锁分店');
-          const btns = (c.kind === 'sub')
-            ? '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 同一家 → 合并为主副店</button>'
-            : '<button class="btn p" style="height:26px;font-size:12px" onclick="mpChainNew(\'' + k + '\',\'' + c.id + '\')">🏪 连锁分店 → 新建为独立门店</button>' +
-              '<button class="btn" style="height:26px;font-size:12px;margin-left:6px" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 同一家 → 合并为主副店</button>';
+          const distTxt = (c.dist != null) ? ('相距 ' + c.dist + ' 米') : '有一方没坐标、无法判断距离';
+          const relTxt = recSub
+            ? ('编号相同 · ' + distTxt + ' · 建议按同一家（主副店）处理')
+            : recChain
+              ? ('编号相同 · ' + distTxt + ' · 建议按连锁分店处理（同一家只在相距 ≤50 米时成立）')
+              : ('编号相同 · ' + distTxt + ' · 请你判断');
+          // 推荐项 = 橙色主按钮；不推荐项 = 灰度（**仍可点**，万一系统判断错，老板能改）
+          const GRAY = ';color:#A8B0BB;border-color:#E3E8EF;background:#F7F8FA';
+          const btnChain = '<button class="btn' + (recChain ? ' p' : '') + '" style="height:26px;font-size:12px' +
+            (recChain ? '' : GRAY) + '" onclick="mpChainNew(\'' + k + '\',\'' + c.id + '\')">🏪 连锁分店 → 新建为独立门店</button>';
+          const btnSub = '<button class="btn' + (recSub ? ' p' : '') + '" style="height:26px;font-size:12px' +
+            (recSub ? '' : GRAY) + ';margin-left:6px" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 同一家 → 合并为主副店</button>';
+          const btns = recSub ? (btnSub + btnChain) : (btnChain + btnSub);
           return row + '<div style="display:flex;align-items:center;gap:8px;margin:2px 0 8px;padding:7px 10px;border:1px dashed #E3C08A;border-radius:8px;background:#FFFBF3">' +
             '<div style="font-size:12px;color:#8A6D3B;flex:1;line-height:1.5">' +
               '这条导入记录「<b>' + esc(x.name || '') + '</b>」与上面「' + esc(c.name || '') + '」' + esc(relTxt) +
