@@ -1321,6 +1321,11 @@ tr.row-off td:not(.keep){opacity:.4}
                （批次卡那条老链路「批次 → 选客户 + 选业务员 → 建任务」完全不变，只是多一个建批次的入口） -->
           <button onclick="geoMakeBatch()" title="把已勾选的客户建成一个批次（建完后去「批次管理」的批次卡里派单）"
             style="height:26px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:var(--primary-deep);font-family:inherit;white-space:nowrap">📦 建立批次</button>
+          <!-- ⭐⭐ 2026-10-17 老板定：「选择了客户之后，上面按钮增加一个导出所选功能，将这些客户所有的字段全部整理好，输出到表格文件」
+               → 把**已勾选**的客户导出成 CSV（Excel 双击直接开）。
+               ⚠️ 数据只从**本地缓存**取（秒出、不碰云端）；⚠️ 没勾选时按钮置灰（见 updateGeoPicked）。 -->
+          <button id="geoExportBtn" onclick="geoExportPicked()" disabled title="把已勾选的客户导出成 CSV 表格（全部字段）"
+            style="height:26px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:var(--primary-deep);font-family:inherit;white-space:nowrap;opacity:.45">⬇ 导出所选</button>
           <!-- ⭐⭐ 2026-09-29 老板定：**删除 = 移入回收站**（软删，可恢复）
                老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」。
                ⚠️ 不再真删：只打标记；客户总数 / 地图都不算它，**订单金额照旧计入**；随时能在「🗑 回收站」恢复。 -->
@@ -9697,6 +9702,82 @@ function updateGeoPicked() {
   if (el) el.textContent = n ? ('已选 ' + n + ' 家') : '';
   const cl = $('geoPickedClear');               // 「已选 N 家」右边那个 ✕：有选中才显示
   if (cl) cl.style.display = n ? 'inline-block' : 'none';
+  // ⭐ 2026-10-17：没勾选时「⬇ 导出所选」置灰（免得点了不知道要导什么）
+  const ex = $('geoExportBtn');
+  if (ex) { ex.disabled = !n; ex.style.opacity = n ? '1' : '.45'; ex.style.cursor = n ? 'pointer' : 'not-allowed'; }
+}
+
+// ⭐⭐ 2026-10-17 老板定：「选择了客户之后，上面按钮增加一个导出所选功能，
+//   将这些客户所有的字段全部整理好，输出到表格文件」→ 导出成 CSV（Excel 双击直接开）。
+//   · 数据**只从本地缓存取**（`custLocal.points`，秒出、零云端调用）
+//   · 字段：本地缓存里有的**全部**都给（中文表头；时间戳转成 YYYY-MM-DD HH:mm；状态转人话）
+//   · ⚠️ 写文件**必须带 BOM** —— 不带 Excel 打开中文就是乱码（最容易踩的坑）
+const GEO_EXPORT_COLS = [
+  ['i', '客户id'], ['n', '店名'], ['nr', '店名原值'],
+  ['ph', '电话'], ['ph2', '手机2'],
+  ['c', '城市'], ['d', '区域'], ['b', '商圈'], ['ad', '地址'], ['reg', '区域原值'],
+  ['la', '纬度'], ['ln', '经度'], ['cs', '坐标来源'], ['cst', '坐标状态'],
+  ['mk', '商城Key'], ['mc', '客户编码'], ['ml', '商城等级'], ['msrc', '商城来源'],
+  ['mcat', '商城分类'], ['mj', '注册商城时间'],
+  ['sm', '签约业务员'], ['rm', '备注'], ['bi', '所属批次'],
+  ['ct', '客户线'], ['so', '来源'],
+  ['ca', '建档时间'], ['u', '最后修改'],
+  ['oc', '订单总数'], ['oa', '订单总额'], ['lo', '最近下单'],
+  ['vc', '拜访次数'], ['lv', '最近拜访'], ['vs', '全局态'], ['vt', '任务内状态'],
+  ['clor', '商城最近下单'], ['clbr', '商城最近浏览']
+];
+const GEO_VS = { free: '空闲', in_task: '任务中' };
+const GEO_VT = { pending: '待回访', ongoing: '拜访中', visited: '已回访' };
+function geoFmtTs(v) {
+  const n = Number(v) || 0;
+  if (!n) return '';
+  const d = new Date(n);
+  if (isNaN(d.getTime())) return String(v);
+  const p = x => String(x).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+async function geoExportPicked() {
+  const ids = Object.keys(geoPicked);
+  if (!ids.length) return;
+  try {
+    await ensureCustLocal();                                   // 缓存没好就等它
+    const pts = (custLocal && custLocal.points) || [];
+    if (!pts.length) { alert('本地数据还没准备好，请等几秒再试'); return; }
+    const want = {};
+    ids.forEach(id => { want[id] = 1; });
+    const rows = pts.filter(p => want[p.i]);
+    if (!rows.length) { alert('这些客户在本地数据里没找到（缓存可能刚过期，先点「刷新」再试）'); return; }
+    const cell = v => {
+      let s = (v === null || v === undefined) ? '' : String(v);
+      if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    const lines = [GEO_EXPORT_COLS.map(c => c[1]).join(',')];
+    rows.forEach(p => {
+      lines.push(GEO_EXPORT_COLS.map(function (c) {
+        const k = c[0];
+        let v = p[k];
+        if (k === 'ca' || k === 'u') return cell(geoFmtTs(v));
+        if (k === 'vs') return cell(GEO_VS[v] || v || '');
+        if (k === 'vt') return cell(GEO_VT[v] || v || '');
+        return cell(v);
+      }).join(','));
+    });
+    const d = new Date(), p2 = x => String(x).padStart(2, '0');
+    const name = '客户导出-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + '.csv';
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    if (typeof api === 'object' && api && typeof api.toast === 'function') api.toast('已导出 ' + rows.length + ' 家：' + name);
+    else alert('已导出 ' + rows.length + ' 家：' + name);
+  } catch (e) {
+    console.error('[geo] 导出所选失败', e);
+    alert('导出失败，请稍后再试');                              // ⚠️ 不把原始异常弹给用户
+  }
 }
 
 // ⭐ 2026-09-26 老板定：**客户管理页（原地域管理）= 建批次的入口** —— 勾选客户 → 建批次卡；
