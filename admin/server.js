@@ -652,6 +652,25 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ ok: false, msg: '服务器不可用（按设定：不回退云端）' }));
     }
   }
+  // ⭐⭐ 2026-10-17（C5）：**/syncNow 转发** —— 前端"导入 / 补完数据后让同步器立刻跑一轮"用的。
+  //   ⚠️ 原来 admin.html 里早就有 `fetch('/syncNow')`（`syncThenRefresh`），
+  //      但 **server.js 从来没转发过它** → 一直 404、被 `.catch(() => null)` 静默吞掉
+  //      → 那个"导完立刻同步"的功能**从未真正生效**（每次都得干等同步器 5 分钟一轮）。
+  //   ⚠️ pgapi 那边只写一个 `sync-now.flag` 文件（不拉数据、不阻塞）——
+  //      真正的同步动作仍在 pgsync 自己的循环里，这里只是"叫它别等了、马上跑"。
+  if (req.url.indexOf('/syncNow') === 0) {
+    try {
+      const target = String(cfg.pgApiUrl || '').replace(/\/+$/, '') + '/syncNow' +
+        (cfg.pgApiToken ? ('?token=' + encodeURIComponent(cfg.pgApiToken)) : '');
+      const r = await (await fetch(target, { method: 'POST' })).json();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify(r));
+    } catch (e) {
+      console.warn('[syncNow] 服务器不可用：' + (e && e.message));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, msg: '服务器不可用（按设定：不回退云端）' }));
+    }
+  }
   if (req.method === 'GET' && req.url.indexOf('/newshops') === 0) {
     try {
       const u0 = new URL(req.url, 'http://localhost');

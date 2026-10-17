@@ -2650,10 +2650,33 @@ async function vrLoadShop() {
   }).join('');
 }
 
+// ⭐⭐ 2026-10-17（C5）：**改完客户就踢一次同步** ——
+//   后台改完客户 → 云端的 updatedAt 变了 → 但同步器最多 5 分钟才跑一轮 → 老板得干等。
+//   这里：改客户**成功后**立刻 `POST /syncNow`（让同步器马上跑），再配合前端 15 秒保鲜轮询
+//   → 几秒就能看到结果（这正是老板 2026-10-15 说过的「导入后你要给到信息和结果给我」）。
+//   ⚠️ 只对"会改客户档案"的 action 踢（登录 / 列表 / 查询一律不踢，免得白给服务器加活）。
+//   ⚠️ 防抖 30 秒：批量改 100 家时只踢 1 次，不会踢 100 次。
+//   ⚠️ 踢失败完全无所谓（`.catch`）—— 同步器自己那 5 分钟一轮照样会跑，只是慢一点。
+const SYNC_KICK_ACTIONS = ['updateCustomerFields', 'updateCustomerCoords', 'updateCustomerRemark', 'setCustPhotos',
+  'applyMallMatch', 'applyMallPair', 'createMallCustomer', 'reviewCoordFix', 'reviewFieldReport',
+  'saveCustAudioText', 'deleteCustAudio', 'deleteCustomers', 'restoreCustomers', 'mergeCustomers',
+  'refreshFromMall', 'backfillMallCode', 'importCustomers'];
+let _syncKickAt = 0;
 async function api(action, extra = {}) {
   const body = { action, username: admin ? admin.username : $('lgUser').value, password: admin ? admin.pwd : $('lgPwd').value, ...extra };
   const r = await fetch('/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  return r.json();
+  const j = await r.json();
+  // ⭐ C5：改客户成功 → 踢一次同步（30 秒防抖；失败静默）
+  try {
+    if (j && j.ok && SYNC_KICK_ACTIONS.indexOf(action) >= 0) {
+      const _now = Date.now();
+      if (_now - _syncKickAt > 30000) {
+        _syncKickAt = _now;
+        fetch('/syncNow', { method: 'POST' }).catch(() => null);
+      }
+    }
+  } catch (e) { /* 静默：踢不动也不影响这次操作 */ }
+  return j;
 }
 
 async function doLogin() {
