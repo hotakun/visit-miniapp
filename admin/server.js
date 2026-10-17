@@ -350,7 +350,10 @@ function parseMallXls(b64) {
       if (typeof v === 'number') {
         // 日期序列号列 → 转日期；其他数字列转整数字符串（如手机号）
         if (['addedAt', 'lastOrderAt', 'lastBrowseAt'].includes(key)) { item[key] = serialToDate(v); return; }
-        v = String(Math.round(v));
+        // ⚠️ 2026-10-18 实测（「纬度」「经度」分成两列、单元格是数值型）：**坐标绝不能取整** ——
+        //   28.84325 → 28，纬度差 0.84° ≈ 偏 90 公里；经度 120.09 → 120 ≈ 偏 9 公里。
+        //   一列文本「28.9,120.1」走不到这里（字符串分支），所以老板那两份表没暴露这个问题。
+        if (key !== 'lat' && key !== 'lng') v = String(Math.round(v));
       }
       v = String(v).trim();
       if (!v) return;
