@@ -4629,6 +4629,124 @@ function mgSwap() {
 
 function mgClose() { const o = $('mgOvl'); if (o) o.style.display = 'none'; }
 
+// ══════════════════════════════════════════════════════════════════════════
+// ⭐⭐ 2026-10-17 老板定：客户管理列表点「未加」→ 上传商城表格 → 从文件里挑出这家对应哪一条
+//    → 弹合并预览 → 确认后立刻生效。
+//   老板口径：**只给列表 + 搜索，不做任何自动推荐/相似度排序**（他自己挑）。
+//   ⚠️ 那条通常**还没进云端 `mall_customers` 集合**（实测 3 个 key 只有 1 个在库里），
+//      所以调 `applyMallPair` 时**连同这一行数据一起传**（`mallRow`）—— 云函数里已支持。
+//   ⚠️ 合并规则与「商城待配对」完全一致：店名/电话/地址/地区/编号=商城优先；**坐标、商圈保留系统内的**。
+// ══════════════════════════════════════════════════════════════════════════
+let _mpoCustId = '', _mpoRows = [];
+
+function mallPairOpen(custId, custName) {
+  _mpoCustId = custId; _mpoRows = [];
+  $('mallPairWho').textContent = '｜系统内这家：' + (custName || custId);
+  $('mallPairQ').value = '';
+  $('mallPairMsg').textContent = '先选择文件';
+  $('mallPairList').innerHTML = '<div class="empty">① 点上面「📂 选择商城表格」　② 用搜索框找那一条　③ 点「✓ 就是这条」</div>';
+  const o = $('mallPairOvl'); if (o) o.style.display = 'flex';
+}
+
+function mallPairClose() { const o = $('mallPairOvl'); if (o) o.style.display = 'none'; }
+
+async function mallPairLoadFile(inp) {
+  const f = inp && inp.files && inp.files[0];
+  if (!f) return;
+  $('mallPairMsg').textContent = '正在解析…';
+  try {
+    const b64 = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => { const s = String(fr.result || ''); res(s.slice(s.indexOf(',') + 1)); };
+      fr.onerror = () => rej(new Error('读文件失败'));
+      fr.readAsDataURL(f);
+    });
+    const r = await fetch('/parseMallXls', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileBase64: b64 })
+    }).then(x => x.json());
+    if (!r || !r.ok) { $('mallPairMsg').textContent = '解析失败：' + ((r && r.msg) || '未知'); return; }
+    _mpoRows = (r.rows || []).filter(x => x && x.mallKey);
+    $('mallPairMsg').textContent = '文件共 ' + (r.total || 0) + ' 条 · 有系统Key的 ' + _mpoRows.length + ' 条';
+    mallPairRender();
+  } catch (e) {
+    $('mallPairMsg').textContent = '解析失败：' + ((e && e.message) || '未知');
+  }
+}
+
+function mallPairRender() {
+  const box = $('mallPairList'); if (!box) return;
+  const q = String($('mallPairQ').value || '').trim().toLowerCase();
+  const rows = q
+    ? _mpoRows.filter(x => (String(x.name || '') + ' ' + String(x.phone || '') + ' ' + String(x.mallCode || '') + ' ' + String(x.mallKey || '')).toLowerCase().indexOf(q) >= 0)
+    : _mpoRows;
+  if (!rows.length) { box.innerHTML = '<div class="empty">' + (_mpoRows.length ? '没搜到 —— 换个关键词试试' : '还没选文件') + '</div>'; return; }
+  box.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:var(--sub);font-weight:700;text-align:left">' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">店名</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">电话</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">编号</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">地址</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:112px"></th></tr></thead><tbody>' +
+    rows.map(x => {
+      const i = _mpoRows.indexOf(x);
+      return '<tr>' +
+        '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9"><b>' + esc(x.name || '') + '</b></td>' +
+        '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9">' + esc(x.phone || '—') + '</td>' +
+        '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9">' + esc(x.mallCode || '—') + '</td>' +
+        '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9;color:var(--sub);max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(x.address || '—') + '</td>' +
+        '<td style="padding:5px 8px;border-bottom:1px solid #F4F6F9"><button class="btn" style="height:24px;font-size:12px" onclick="mallPairChoose(' + i + ')">✓ 就是这条</button></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+async function mallPairChoose(i) {
+  const row = _mpoRows[i]; if (!row) return;
+  const custId = _mpoCustId;
+  let c = null;
+  try { const r = await api('getCustomerDetail', { customerId: custId }); c = r && r.customer; } catch (e) { /* 下面统一提示 */ }
+  if (!c) { alert('读不到这条客户档案，请刷新后重试'); return; }
+
+  const e1 = v => (esc(String(v || '')) || '<span style="color:#C3CAD4">（空）</span>');
+  const tbl = (label, mine, sys, res, why) => '<tr>' +
+    '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9;color:var(--sub);white-space:nowrap">' + label + '</td>' +
+    '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9">' + mine + '</td>' +
+    '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9">' + sys + '</td>' +
+    '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9"><b>' + res + '</b></td>' +
+    '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9;color:var(--sub)">' + why + '</td></tr>';
+  const mPhone = String(row.phone || ''), sPhone = String(c.phone || '');
+  const phoneRes = mPhone ? (esc(mPhone) + (sPhone && sPhone !== mPhone ? '<br>' + esc(sPhone) : '')) : e1(sPhone);
+  const lat = Number(c.lat) || 0, lng = Number(c.lng) || 0;
+  const html = '<div style="font-size:12.5px;color:var(--sub);margin-bottom:8px">确认要把这家并成商城那条？下面是合并后的结果（<b>坐标和商圈仍保留系统内的</b>）：</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:var(--sub);font-weight:700;text-align:left">' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:70px">字段</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">商城的</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">系统内的</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">合并结果</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:96px">依据</th></tr></thead><tbody>' +
+    tbl('店名', e1(row.name), e1(c.name), e1(row.name || c.name), '商城优先') +
+    tbl('电话', e1(mPhone), e1(sPhone), phoneRes, (mPhone && sPhone && mPhone !== sPhone) ? '不同→1、2 排' : '商城优先') +
+    tbl('地址', e1(row.address), e1(c.address), e1(row.address || c.address), '商城优先') +
+    tbl('地区', e1(row.region), e1(c.region), e1(row.region || c.region), '商城优先') +
+    tbl('编号', e1(row.mallCode), e1(c.mallCode), e1(row.mallCode || c.mallCode), '商城优先') +
+    tbl('经纬度', '（商城没有）', (lat && lng) ? (lat + ', ' + lng) : '（空）', (lat && lng) ? (lat + ', ' + lng) : '—', '用系统内的') +
+    tbl('商圈', '（商城没有）', e1(c.bizCircle), e1(c.bizCircle), '系统内的') +
+    tbl('标记', '—', '—', '已加入商城', '') +
+    '</tbody></table>';
+  if (!(await confirmBox('🛒 合并预览', html, '✅ 确认合并（立刻生效）'))) return;
+
+  try {
+    const r = await api('applyMallPair', { customerId: custId, mallKey: row.mallKey, mallRow: row });
+    if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '未知错误')); return; }
+    mallPairClose();
+    alert('✅ 已合并：' + (row.name || '') + '\n\n列表马上刷新。');
+    // ⚠️ 铁律：改完必须真的刷新（先作废本地快照、再重拉）
+    try { if (typeof invalidateCustLocal === 'function') invalidateCustLocal(); } catch (e) { /* 静默 */ }
+    if (typeof loadGeoPage === 'function') loadGeoPage();
+  } catch (e) {
+    alert('合并失败：' + ((e && e.message) || '未知错误'));
+  }
+}
+
 async function mgConfirm() {
   const m = _mg; if (!m) return;
   const keepId = (m.keep === 'A' ? m.A._id : m.B._id);
@@ -9594,7 +9712,11 @@ async function loadGeoPage() {
       + `<td class="no chk" style="text-align:center"><input type="checkbox" class="rowchk" data-id="${c._id}"${on} onclick="geoPick('${c._id}', this, event)"></td>`
       + `<td class="lft" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
       // ⭐ 2026-10-13 老板要：**「商城」格挪到「区域」前面**（与表头同序，别错位）
-      + `<td>${(c.mallCode || c.mallKey) ? '<span class="pill p-ok">已加</span>' : '<span class="pill p-bad">未加</span>'}</td>`
+      // ⭐⭐ 2026-10-17 老板定：**「未加」可点击** —— 上传商城表格 → 从文件里挑出这家对应哪一条 → 合并预览 → 生效。
+      //   「已加」不点（避免误操作把已配好的又改一遍）。
+      + `<td>${(c.mallCode || c.mallKey)
+        ? '<span class="pill p-ok">已加</span>'
+        : `<span class="pill p-bad" style="cursor:pointer" title="点这里：上传商城表格，从里面挑出这家对应哪一条（会先给你看合并预览）" onclick="mallPairOpen('${c._id}', '${esc(String(c.name || '').replace(/'/g, ''))}')">未加</span>`}</td>`
       + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.district || '—')}</td>`
       + `<td><span class="pill p-pu">${esc(c.bizCircle || '—')}</span></td>`
       + `<td>${c.visitState === 'in_task' ? '<span class="pill p-blue">任务中</span>' : '—'}</td>`
@@ -14128,6 +14250,30 @@ async function applyLocalMatch() {
          ⚠️ 老板定这个操作【不做备案】（「合就合了、没有退回的道理，是现场勘察确认过的」）；
            但"被并掉的那条"仍然只进回收站（软删，数据不丢）。
          内容全部由 JS（mgRender/mgConfirm）画进 #mgBody；容器固定 980px + 滚动（照"大列表一律弹窗+滚动"规矩）。 -->
+    <!-- ⭐⭐ 2026-10-17 老板定：客户管理列表里那个「未加」**可点击** ——
+         点它 → 上传一个商城表格（如 D:\订单表格\客户列表172.xls）→ 从文件里**挑出这家对应哪一条**
+         → 弹合并预览 → 确认后生效（写 mallKey/mallCode 等商城字段，坐标/商圈仍保留系统内的）。
+         ⚠️ 老板口径：**只给列表 + 搜索，不做任何自动推荐/相似度排序**（他自己挑）。
+         ⚠️ 列表走滚动（规矩：大列表一律弹窗 + 滚动）。 -->
+    <div class="ovl" id="mallPairOvl" style="display:none;z-index:10004" onclick="mallPairClose()">
+      <div class="modal" style="width:980px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px">
+          <b style="font-size:15px">🛒 从商城表格里挑出这家</b>
+          <span style="font-size:12.5px;color:var(--sub)" id="mallPairWho"></span>
+          <span style="flex:1"></span>
+          <button class="btn ghost" onclick="mallPairClose()">✕ 关闭</button>
+        </div>
+        <div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <label class="btn" style="height:28px;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center">
+            📂 选择商城表格（.xls / .xlsx）
+            <input type="file" id="mallPairFile" accept=".xls,.xlsx" style="display:none" onchange="mallPairLoadFile(this)">
+          </label>
+          <input id="mallPairQ" placeholder="搜店名 / 电话 / 编号" style="height:28px;width:260px" oninput="mallPairRender()">
+          <span id="mallPairMsg" style="font-size:12.5px;color:var(--sub)"></span>
+        </div>
+        <div id="mallPairList" style="flex:1;overflow-y:auto;padding:0 16px 14px"></div>
+      </div>
+    </div>
     <div class="ovl" id="mgOvl" style="display:none;z-index:10003" onclick="mgClose()">
       <div class="modal" style="width:980px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
         <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px">

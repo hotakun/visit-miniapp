@@ -4483,8 +4483,19 @@ async function applyMallPair(event) {
   const custRes = await db.collection('customers').doc(customerId).get().catch(() => null);
   const c = custRes && custRes.data;
   if (!c || c.deleted === true) return { ok: false, code: 'CUST_NOT_FOUND', msg: '系统内客户不存在' };
-  const mRes = await db.collection('mall_customers').where({ mallKey }).limit(1).get().catch(() => ({ data: [] }));
-  const m = (mRes.data || [])[0];
+  // ⭐⭐ 2026-10-17 老板定（客户管理列表点「未加」→ 临时上传商城表格 → 挑一条合并）：
+  //   **支持直接传 file 里那一行**（`event.mallRow`）——
+  //   因为那条**通常还没进 `mall_customers` 集合**（实测 3 个 key 只有 1 个在库里），
+  //   只按 mallKey 查库会直接报 MALL_NOT_FOUND。
+  //   ⚠️ 兼容：**没给 `mallRow` 时行为与原来完全一致**（仍按 mallKey 查库）—— 商城待配对那条路不受影响。
+  let m = null;
+  if (event && event.mallRow && typeof event.mallRow === 'object') {
+    m = Object.assign({}, event.mallRow);
+    m.mallKey = mallKey;            // 以参数里的 mallKey 为准（防前端传错行）
+  } else {
+    const mRes = await db.collection('mall_customers').where({ mallKey }).limit(1).get().catch(() => ({ data: [] }));
+    m = (mRes.data || [])[0];
+  }
   if (!m) return { ok: false, code: 'MALL_NOT_FOUND', msg: '商城库里找不到这条（可能已被清掉）' };
 
   // ① 商城侧字段（复用同一张表 + 同一个坐标硬拦 —— 见 MALL_FIELD_PAIRS / MALL_NO_TOUCH）
