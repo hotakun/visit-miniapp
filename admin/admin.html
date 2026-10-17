@@ -8982,18 +8982,33 @@ function mpRender() {
       (cands.length
         ? '<div style="font-size:12px;color:var(--sub);font-weight:700;margin:2px 0 7px">系统里的候选（同编号优先 · 已按距离 / 电话 / 店名分析）：</div>' +
         cands.map((c, ci) => {
-          // ⭐ 2026-10-18 老板定：同编号 → 主副店 / 连锁分店，**必须由老板选择确认**，不再直接给「就是这家」。
-          const acts = c.kind === 'sub'
-            ? '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 合并为主副店</button>'
-            : (c.kind === 'chain' || c.kind === 'unknown')
-              ? '<button class="btn p" style="height:26px;font-size:12px" onclick="mpChainNew(\'' + k + '\',\'' + c.id + '\')">🏪 新建为独立门店</button>' +
-                '<button class="btn" style="height:26px;font-size:12px;margin-left:5px" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 仍是同一家</button>'
-              : '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button>';
-          return '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
+          // ⭐⭐ 2026-10-18 老板指出：**「新建为独立门店 / 仍是同一家」不是操作上面那个系统客户**，
+          //   而是决定「本次导入这条」怎么处理 —— 按钮放在候选框里会让人误以为在改那家系统客户。
+          //   → 候选框内**只留结论**（普通匹配仍保留「✓ 就是这家」），同编号的决策按钮放到**框外下方**。
+          const isRel = (c.kind === 'sub' || c.kind === 'chain' || c.kind === 'unknown');
+          const right = isRel
+            ? '<div style="font-size:11px;color:#B77400;flex:none;padding:0 6px;white-space:nowrap">待确认 ↓</div>'
+            : '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button>';
+          const row = '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
             '<div class="n">' + esc(c.name) + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
             '<div class="ln">' + esc(c.region || '') + ' · ' + esc(c.address || '') + ' · ' + esc(c.phone || '') + '</div>' +
             '<div class="why">' + esc(c.why) + ' · ' + (c.lat ? '<span style="color:#12A150">✓ 有坐标</span>' : '<span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
-            '<div style="display:flex;flex:none;align-items:center">' + acts + '</div></div>';
+            '<div style="display:flex;flex:none;align-items:center">' + right + '</div></div>';
+          if (!isRel) return row;
+          // —— 框外决策条：明确写「针对本次导入这条」，与上面的系统客户区分开 ——
+          const distTxt = (c.dist != null) ? ('相距 ' + c.dist + ' 米') : '缺少坐标、无法算距离';
+          const relTxt = (c.kind === 'sub')
+            ? ('编号相同 · ' + distTxt + ' · 是同一家（老板/老板娘各注册）')
+            : ('编号相同 · ' + distTxt + ' · 需你确认是同一家还是连锁分店');
+          const btns = (c.kind === 'sub')
+            ? '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 同一家 → 合并为主副店</button>'
+            : '<button class="btn p" style="height:26px;font-size:12px" onclick="mpChainNew(\'' + k + '\',\'' + c.id + '\')">🏪 连锁分店 → 新建为独立门店</button>' +
+              '<button class="btn" style="height:26px;font-size:12px;margin-left:6px" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 同一家 → 合并为主副店</button>';
+          return row + '<div style="display:flex;align-items:center;gap:8px;margin:2px 0 8px;padding:7px 10px;border:1px dashed #E3C08A;border-radius:8px;background:#FFFBF3">' +
+            '<div style="font-size:12px;color:#8A6D3B;flex:1;line-height:1.5">' +
+              '这条导入记录「<b>' + esc(x.name || '') + '</b>」与上面「' + esc(c.name || '') + '」' + esc(relTxt) +
+              ' —— <b>决定这条导入记录怎么处理</b>：' +
+            '</div>' + btns + '</div>';
         }).join('')
         : '<div style="font-size:12px;color:#B77400;padding:6px 2px 8px">系统里没有<b>电话 / 店名 / 编号对得上</b>的客户 —— 见下面：</div>') +
       '<div class="mp-acts"><div class="t">都不对？四种办法任选：</div>' +
