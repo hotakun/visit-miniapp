@@ -614,7 +614,10 @@ async function submit(user, e, isBoss) {
   // ⭐ 2026-10-11：「闭店」「搬迁」拆成两项；且结果**可多选**（逗号串）→ 用"包含"判断
   const rSegs = String(result || '').split(',').map(s => s.trim());
   if (rSegs.includes('闭店') || rSegs.includes('搬迁')) {
-    await db.collection('customers').doc(customerId).update({ data: { reviewFlag: true } });
+    // ⚠️⚠️ 2026-10-17（C2 补）：**必须带 `updatedAt`** —— 同步器按 updatedAt 增量拉客户，
+    //   不写它就"认为这条没变"，这条 reviewFlag 永远同步不到 PG / 后台缓存。
+    //   （2026-10-17 全库扫描：39 个"改 customers"的写点里，**只有这一处漏**，其余 38 处都带了。）
+    await db.collection('customers').doc(customerId).update({ data: { reviewFlag: true, updatedAt: Date.now() } });
   }
 
   // 7. 任务流程档案留痕（2026-09-08 老板定：单次拜访提交也记录进后台流程档案）
