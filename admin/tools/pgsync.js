@@ -24,6 +24,8 @@ const MAP = [['id','i'],['name','n'],['name_raw','nr'],['code','mc'],['ctype','c
   //      lastOrderAt→clor · lastBrowseAt→clbr · phone2→ph2
   ['region','reg'],['salesman','sm'],['mall_level','ml'],['mall_source','msrc'],['mall_category','mcat'],
   ['last_order_at','clor'],['last_browse_at','clbr'],['phone2','ph2']];
+// ⭐ 2026-10-18：副店 / 连锁**不进 customers 表**（表属主是 postgres，juhuo_rw 改不了列），
+//   改为写独立副表 `customer_subs`（见下面 syncCustomers 的写入）。
 const COLS = MAP.map(x => x[0]);
 const UPSERT = 'INSERT INTO customers (' + COLS.join(',') + ') VALUES (' +
   COLS.map((_, i) => '$' + (i + 1)).join(',') + ') ON CONFLICT (id) DO UPDATE SET ' +
@@ -248,6 +250,15 @@ async function syncCustomers() {
     for (const p of list) {
       const vals = MAP.map(x => { const v = p[x[1]]; return v === undefined || v === null ? '' : v; });
       await (await conn()).query(UPSERT, vals);
+      // ⭐ 2026-10-18：主副店 / 连锁 → 独立副表（customers 表不归 juhuo_rw，加不了列）。
+      //   只写**有值**的（全库目前只有十来条）；绝大多数客户在这张表里没有行 → pgapi 的 JOIN 几乎零成本。
+      if (p.sub || p.ch) {
+        await (await conn()).query(
+          'INSERT INTO customer_subs (customer_id,sub_accounts,chain_names,updated_at) VALUES ($1,$2,$3,$4) ' +
+          'ON CONFLICT (customer_id) DO UPDATE SET sub_accounts=EXCLUDED.sub_accounts, ' +
+          'chain_names=EXCLUDED.chain_names, updated_at=EXCLUDED.updated_at',
+          [String(p.i || ''), String(p.sub || ''), String(p.ch || ''), Number(p.u) || Date.now()]);
+      }
       if (Number(p.u) > maxU) maxU = Number(p.u);
       got++;
     }

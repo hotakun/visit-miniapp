@@ -7437,6 +7437,13 @@ function cdRender() {
         //      品类 = 三级下拉（`data-cdfield="cat"` 是**虚拟字段**，保存时展开成 cat1 / cat2 / cat3）。
         tr2('区域', esc(dist), 'district', '商圈', esc(biz), 'bizCircle') +
         trW('品类', esc(cat), 'cat') +
+        // ⭐ 2026-10-18：副店 / 连锁（老板定：同编号一条档案 + 副店信息；连锁互标「同一老板」）
+        (d.subAccounts && d.subAccounts.length
+          ? trW('副店', d.subAccounts.map(x => esc(x.name || '') + (x.phone ? ' · ' + esc(x.phone) : '')).join('<br>'), '')
+          : '') +
+        (d.chains && d.chains.length
+          ? trW('连锁', '<span style="color:#B77400">同一老板：</span>' + d.chains.map(x => esc(x.name || '')).join('、'), '')
+          : '') +
         // ⭐ 2026-09-27 老板定：**排名单独一行**。
         //   原来把「🏆 榜单」塞在"品类"的格子里 —— 品类名一长，排名就被挤到第二行、断成两截。
         //   现在独立成整行（有排名才出，没有不出）。
@@ -8776,20 +8783,60 @@ function fieldTab(t) {
 let _mpRows = [], _mpTab = 'pending', _mpStat = {};
 const MP_NORM = s => String(s || '').replace(/[（(【\[].*?[)）】\]]/g, '').replace(/[\s，。、·—\-_/\\"'“”‘’':：]+/g, '');
 const MP_PK = s => String(s || '').replace(/\D/g, '').replace(/^0(?:10|2\d|[3-9]\d{2})/, '');
-// 候选：电话相同 100 分 / 店名一字不差 95 分（其余不列）—— 与「商城配对确认」同一套口径
-function mpCands(name, phone) {
+// 店名括弧里的分店标识（如「西城店」/「东城店」）—— 连锁判断的强信号
+const MP_BRANCH = s => { const m = String(s || '').match(/[（(]([^）)]*)[）)]/); return m ? m[1].trim() : ''; };
+// 两点距离（米）；任一缺坐标 → null
+function mpDistM(aLat, aLng, bLat, bLng) {
+  if (!aLat || !aLng || !bLat || !bLng) return null;
+  const R = 6371000, rad = d => d * Math.PI / 180;
+  const dl = rad(aLat - bLat), dn = rad(aLng - bLng);
+  const x = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dn / 2) * Math.sin(dn / 2);
+  return Math.round(2 * R * Math.asin(Math.min(1, Math.sqrt(x))));
+}
+// ⭐⭐ 2026-10-18 老板定（同编号的两种真相）：
+//   · **编号相同 + 相距 ≤50 米** = 同一家店（老板和老板娘分别注册）→ 主副店合并，只保留一条档案；
+//   · **编号相同 + 相距 >50 米** = **需人工确认**（很可能是同一个老板开的连锁分店，不是同一家）——
+//     界面必须把距离和括弧里的分店名摆出来，由老板选择「合并为主副店 / 新建为独立门店」。
+//   · 不同编号：保留原来的「电话相同 100 分 / 店名一字不差 95 分」。
+//   ⚠️ 绝不能只凭电话相同就判"就是这家" —— a331 童记北京烤鸭店(西城店)/(东城店)
+//      电话相同、编号相同，但相距 8.5 公里，是两家店（老板 2026-10-18 亲自指出）。
+function mpCands(row) {
+  const name = String((row && row.name) || ''), phone = String((row && row.phone) || '');
+  const code = String((row && row.mall_code) || '').trim().toLowerCase();
+  const lat = Number(row && row.lat) || 0, lng = Number(row && row.lng) || 0;
   const pts = (custLocal && custLocal.points) || [];
-  const nk = MP_NORM(name), pk = MP_PK(phone);
+  const nk = MP_NORM(name), pk = MP_PK(phone), b1 = MP_BRANCH(name);
   const out = [];
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i];
-    let sc = 0, why = '';
-    if (pk && pk.length >= 7 && MP_PK(p.ph) === pk) { sc = 100; why = '📞 电话相同 · 铁证'; }
-    else if (nk && MP_NORM(p.nr || p.n) === nk) { sc = 95; why = '店名一字不差'; }
-    if (sc) out.push({ id: p.i, name: p.nr || p.n, code: p.mc || '', region: p.rg || p.d || '', address: p.ad || '', phone: p.ph || '', lat: p.la || 0, score: sc, why: why });
+    const pName = p.nr || p.n;
+    const sameCode = !!(code && p.mc && String(p.mc).trim().toLowerCase() === code);
+    const samePhone = !!(pk && pk.length >= 7 && MP_PK(p.ph) === pk);
+    const sameName = !!(nk && MP_NORM(pName) === nk);
+    if (!sameCode && !samePhone && !sameName) continue;
+    const d = (lat && lng && p.la && p.ln) ? mpDistM(lat, lng, Number(p.la), Number(p.ln)) : null;
+    let kind = 'other', why = '', score = 0;
+    if (sameCode) {
+      if (d != null && d <= 50) {
+        kind = 'sub'; score = 98;
+        why = '🆔 编号相同 · 相距 ' + d + ' 米 · 同一家（老板/老板娘各注册）';
+      } else if (d != null) {
+        kind = 'chain'; score = 90;
+        const pb = MP_BRANCH(pName);
+        why = '🆔 编号相同 · 相距 ' + d + ' 米' +
+          (b1 && pb && b1 !== pb ? ' · 分店名「' + b1 + '」/「' + pb + '」' : '') + ' · 需确认';
+      } else {
+        kind = 'unknown'; score = 85;
+        why = '🆔 编号相同 · 有一方没坐标，无法判断距离';
+      }
+    } else if (samePhone) { kind = 'phone'; score = 100; why = '📞 电话相同 · 铁证'; }
+    else { kind = 'name'; score = 95; why = '店名一字不差'; }
+    out.push({ id: p.i, name: pName, code: p.mc || '', region: p.rg || p.d || '', address: p.ad || '',
+      phone: p.ph || '', lat: p.la || 0, lng: p.ln || 0, dist: d, kind: kind, score: score, why: why });
   }
-  out.sort((a, b) => b.score - a.score);
-  return out.slice(0, 5);
+  const ORD = { sub: 0, chain: 1, unknown: 2, phone: 3, name: 4, other: 5 };
+  out.sort((a, b) => (ORD[a.kind] - ORD[b.kind]) || (b.score - a.score));
+  return out.slice(0, 6);
 }
 async function mpLoad(force) {
   const box = $('mpList'), cnt = $('mpCount');
@@ -8930,16 +8977,25 @@ function mpRender() {
       const faded = (x.status === 'pushed' || x.status === 'skipped');
       return '<div class="mp-card done' + (faded ? ' faded' : '') + '">' + mkHead(right) + '</div>';
     }
-    const cands = mpCands(x.name, x.phone);
+    const cands = mpCands(x);
     return '<div class="mp-card">' + head + '<div class="mp-body">' +
       (cands.length
-        ? '<div style="font-size:12px;color:var(--sub);font-weight:700;margin:2px 0 7px">系统里的候选（按像的程度排）：</div>' +
-        cands.map((c, ci) => '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
-          '<div class="n">' + esc(c.name) + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
-          '<div class="ln">' + esc(c.region || '') + ' · ' + esc(c.address || '') + ' · ' + esc(c.phone || '') + '</div>' +
-          '<div class="why">' + esc(c.why) + ' · ' + c.score + ' 分 · ' + (c.lat ? '<span style="color:#12A150">✓ 有坐标</span>' : '<span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
-          '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button></div>').join('')
-        : '<div style="font-size:12px;color:#B77400;padding:6px 2px 8px">系统里没有<b>电话 / 店名对得上</b>的客户 —— 见下面：</div>') +
+        ? '<div style="font-size:12px;color:var(--sub);font-weight:700;margin:2px 0 7px">系统里的候选（同编号优先 · 已按距离 / 电话 / 店名分析）：</div>' +
+        cands.map((c, ci) => {
+          // ⭐ 2026-10-18 老板定：同编号 → 主副店 / 连锁分店，**必须由老板选择确认**，不再直接给「就是这家」。
+          const acts = c.kind === 'sub'
+            ? '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 合并为主副店</button>'
+            : (c.kind === 'chain' || c.kind === 'unknown')
+              ? '<button class="btn p" style="height:26px;font-size:12px" onclick="mpChainNew(\'' + k + '\',\'' + c.id + '\')">🏪 新建为独立门店</button>' +
+                '<button class="btn" style="height:26px;font-size:12px;margin-left:5px" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 仍是同一家</button>'
+              : '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button>';
+          return '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
+            '<div class="n">' + esc(c.name) + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
+            '<div class="ln">' + esc(c.region || '') + ' · ' + esc(c.address || '') + ' · ' + esc(c.phone || '') + '</div>' +
+            '<div class="why">' + esc(c.why) + ' · ' + (c.lat ? '<span style="color:#12A150">✓ 有坐标</span>' : '<span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
+            '<div style="display:flex;flex:none;align-items:center">' + acts + '</div></div>';
+        }).join('')
+        : '<div style="font-size:12px;color:#B77400;padding:6px 2px 8px">系统里没有<b>电话 / 店名 / 编号对得上</b>的客户 —— 见下面：</div>') +
       '<div class="mp-acts"><div class="t">都不对？四种办法任选：</div>' +
       '<button class="btn p" style="height:26px;font-size:12px" onclick="mpNewOpen(\'' + k + '\')">➕ 新建这条客户</button>' +
       '<button class="btn" style="height:26px;font-size:12px" onclick="mpGeoOpen(\'' + k + '\')">📍 输入经纬度</button>' +
@@ -8954,8 +9010,36 @@ function mpRender() {
       '</div></div>';
   }).join('');
 }
-async function mpConfirm(mallKey, customerId) {
-  const row = _mpRows.filter(x => x.mall_key === mallKey)[0] || {};
+// ⭐⭐ 2026-10-18 老板定：同编号 = 同一家店（老板/老板娘各注册）→ **主店 + 副店**，只保留一条档案。
+//   默认：系统里已有的那家 = 主店；本次导入的这条 = 副店（它本来就没有独立档案）。
+//   ⚠️ 只写副店信息，主店的店名/地址/坐标/商圈一个字不动（老板红线：坐标以现场为准）。
+async function mpSubMerge(mallKey, customerId) {
+  const row = (_mpRows || []).filter(x => x.mall_key === mallKey)[0] || {};
+  const p = ((custLocal && custLocal.points) || []).filter(x => x.i === customerId)[0] || {};
+  const mainName = p.nr || p.n || '（主店）';
+  const subName = row.name || '';
+  if (!confirm('合并为「主店 + 副店」\n\n主店：' + mainName + '\n副店：' + subName + '\n\n' +
+    '· 客户管理里只保留主店这一条档案；\n' +
+    '· 副店与主店同编号，订单会合并显示；\n' +
+    '· 搜索副店的店名 / 电话也能搜到主店。\n\n确定？')) return;
+  const r = await api('mergeMallSub', {
+    customerId: customerId, mallKey: mallKey,
+    row: { mallKey: mallKey, mallCode: row.mall_code || '', name: row.name || '', phone: row.phone || '',
+           address: row.address || '', lat: row.lat || 0, lng: row.lng || 0 }
+  });
+  if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '未知')); return; }
+  await mpMark(mallKey, 'paired', customerId, mainName);
+  // 就地更新本地缓存：搜索 / 详情立刻能命中副店信息（PG 那边 5 分钟内也会同步过去）
+  try {
+    const pt = ((custLocal && custLocal.points) || []).filter(x => x.i === customerId)[0];
+    if (pt) pt.sub = JSON.stringify(r.subAccounts || []);
+  } catch (e) { /* 静默 */ }
+  alert('✅ 已合并为主副店：' + mainName + '\n副店：' + subName);
+  await mpLoad(true);
+}
+// 连锁分店：打开「新建客户」表单，并把「另一家」带进去（建成后互标同一老板）
+function mpChainNew(mallKey, customerId) { mpNewOpen(mallKey, customerId); }
+async function mpConfirm(mallKey, customerId) {  const row = _mpRows.filter(x => x.mall_key === mallKey)[0] || {};
   // ⭐⭐⭐ 2026-10-13 老板：「我点击了就是这家，你怎么没有弹出信息对比框让我确认呢？万一错了怎么办？
   //   之前的弹窗就很好呀？那些代码拿过来直接用呀。」
   //   → 直接把「🛒 商城配对确认」里那套**合并预览表**（字段 / 商城的 / 系统内的 / 合并结果 / 依据）
@@ -9064,9 +9148,13 @@ async function mpPush() {
       if (x.status === 'created') {
         const lat = Number(x.lat || 0), lng = Number(x.lng || 0);
         if (lat && lng) {
+          // ⭐ 2026-10-18：连锁分店 —— 新建时把「另一家」的 id 带上，云函数会**双向**写 chainIds/chainNames。
+          let _chainWith = '';
+          if (x.picks) { try { const po = JSON.parse(x.picks); if (po && po.chainWith) _chainWith = String(po.chainWith); } catch (e) { /* 忽略 */ } }
           const r = await api('createMallCustomer', {
             mallKey: x.mall_key, name: x.name, phone: x.phone || '', address: x.address || '',
-            lat: lat, lng: lng, region: x.region || '', bizCircle: x.biz_circle || ''
+            lat: lat, lng: lng, region: x.region || '', bizCircle: x.biz_circle || '',
+            chainWith: _chainWith
           }).catch(() => null);
           good = !!(r && r.ok);
           if (good) {
@@ -9118,11 +9206,11 @@ function mpCreateHint() {
 //   → 就地展开表单：店名 / 电话 / 地址 / **经纬度必填**（没坐标 → 业务员永远到不了）/ 
 //   → 点「✅ 确认新建」**只记账**（status=created + 坐标存服务器），**云端一个字不动**；
 //     等顶部「✅ 确认并发送到云端」时才真正 createMallCustomer（建完即标「已加入商城」）。
-let _mpNewKey = '', _mpNewForm = null, _mpNewMsg = '';
-function mpNewOpen(key) {
-  if (!key) { _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = ''; mpRender(); return; }
+let _mpNewKey = '', _mpNewForm = null, _mpNewMsg = '', _mpNewChain = '';
+function mpNewOpen(key, chainWith) {
+  if (!key) { _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = ''; _mpNewChain = ''; mpRender(); return; }
   const row = _mpRows.filter(x => x.mall_key === key)[0] || {};
-  _mpNewKey = key; _mpNewMsg = '';
+  _mpNewKey = key; _mpNewMsg = ''; _mpNewChain = String(chainWith || '');
   // ⭐ 2026-10-18 老板定：**经纬度自动预填** —— 这条导入时就带坐标（或之前补过、灌进了 PG 池子），
   //   新建表单直接把它填上，老板不用回表格里翻一遍再粘。
   //   ⚠️ 只是预填，**仍然可改**（商城坐标是注册时填的地址，实际店址有偏差就手改）；
@@ -9135,6 +9223,11 @@ function mpNewPanel(key) {
   const f = _mpNewForm || {};
   return '<div style="margin-top:8px;padding:10px 12px;border:1px solid #DDE7F5;border-radius:9px;background:#FBFDFF">' +
     '<div style="font-size:12.5px;font-weight:800;margin-bottom:7px">➕ 新建这条客户（系统里没有 → 直接建，**建成即「已加入商城」**）</div>' +
+    (_mpNewChain ? (() => {
+      const m = ((custLocal && custLocal.points) || []).filter(p => p.i === _mpNewChain)[0] || {};
+      return '<div style="font-size:11.5px;color:#B77400;margin-bottom:5px">🏪 <b>连锁分店</b>：建成后会与「' +
+        esc(m.nr || m.n || '另一家') + '」互标「同一老板」</div>';
+    })() : '') +
     '<div style="font-size:12.5px;line-height:2.3">' +
     '<div><span style="color:#A8B0BB;display:inline-block;width:56px">店名</span><input id="mpnName" value="' + esc(f.name || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:250px"></div>' +
     '<div><span style="color:#A8B0BB;display:inline-block;width:56px">电话</span><input id="mpnPhone" value="' + esc(f.phone || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:190px"></div>' +
@@ -9159,8 +9252,10 @@ async function mpNewSave() {
   let la = m[0], ln = m[1];
   if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }
   // ⚠️ 只记账：状态 = created + 店名 + 坐标存到服务器那一行（云端一个字不动）
-  await mpMark(_mpNewKey, 'created', '', f.name, la, ln);
-  _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = '';
+  // ⭐ 2026-10-18：连锁分店把「另一家」的 id 一起记进这一行的 `picks`（PG 已有这一列），
+  //   点「确认并发送到云端」时再取出来传给 createMallCustomer → 两家互标「同一老板」。
+  await mpMark(_mpNewKey, 'created', '', f.name, la, ln, _mpNewChain ? JSON.stringify({ chainWith: _mpNewChain }) : '');
+  _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = ''; _mpNewChain = '';
   await mpLoad(true);
 }
 
@@ -9497,7 +9592,9 @@ function custLocalPage(f, mode) {
     if (f.bizCircle && p.b !== f.bizCircle) continue;
     if (mode && p.ct !== mode) continue;
     if (f.unbatched && p.bi) continue;
-    if (q && String(p.n || '').toLowerCase().indexOf(q) < 0 && String(p.mc || '').toLowerCase().indexOf(q) < 0) continue;
+    // ⭐ 2026-10-18：搜索也要命中**副店信息 / 连锁门店**（老板定：输入副店的电话或店名也能搜到主店）
+    if (q && String(p.n || '').toLowerCase().indexOf(q) < 0 && String(p.mc || '').toLowerCase().indexOf(q) < 0
+        && String(p.sub || '').toLowerCase().indexOf(q) < 0 && String(p.ch || '').toLowerCase().indexOf(q) < 0) continue;
     hit.push(p);
   }
   // ⭐ 2026-09-27 老板定：这几列「今后都要做排序」→ 这里先把排序引擎备好（预聚合后才可能按全库排序）。
@@ -9552,7 +9649,11 @@ function custLocalRow(p) {
     lastVisitAt: p.lv || '',               // 最近拜访
     orderCount: p.oc || 0,                 // 订单总数
     orderAmountSum: p.oa || 0,             // 订单总额
-    lastOrderAt: p.lo || ''                // 最近下单
+    lastOrderAt: p.lo || '',               // 最近下单
+    // ⭐ 2026-10-18：副店 / 连锁（老板定：同编号一条档案 + 副店信息挂在主店下）
+    //   `sub` 是 JSON 字符串（只在有副店时才解析），`ch` 是「另一家 | 另一家」的展示串。
+    subAccounts: (function () { try { return p.sub ? JSON.parse(p.sub) : []; } catch (e) { return []; } })(),
+    chains: p.ch ? String(p.ch).split(' | ') : []
   };
 }
 // ⭐ 2026-09-27 老板定：**4 个入口（手工建批 / 加客户到批次 / 商城比对 / 任务选客户）改读本地缓存**。
@@ -9662,7 +9763,9 @@ const CLOUD2KEY = {
   name: 'n', nameRaw: 'nr', lat: 'la', lng: 'ln', city: 'c', district: 'd', bizCircle: 'b',
   address: 'ad', coord_source: 'cs', coord_status: 'cst', mallCode: 'mc', mallKey: 'mk',
   mallJoinedAt: 'mj', customerType: 'ct', phone: 'ph', remark: 'rm', updatedAt: 'u',
-  createdAt: 'ca', source: 'so', lastOrderAt: 'lo'
+  createdAt: 'ca', source: 'so', lastOrderAt: 'lo',
+  // ⭐ 2026-10-18：新建客户回写缓存时，把副店/连锁一起带进去（否则要等 pgsync 那 5 分钟）
+  subAccounts: 'sub', chainNames: 'ch'
 };
 // 云端的一条客户（英文全称字段）→ 本地缓存的"点"（短键）；没有 id 就返回 null
 function cloudDocToPoint(doc, id) {
@@ -9986,7 +10089,8 @@ async function geoPickAllFiltered() {
       if (geoF.city && p.c !== geoF.city) continue;
       if (geoF.district && p.d !== geoF.district) continue;
       if (geoF.bizCircle && p.b !== geoF.bizCircle) continue;
-      if (q && String(p.n || '').toLowerCase().indexOf(q) < 0 && String(p.mc || '').toLowerCase().indexOf(q) < 0) continue;
+      if (q && String(p.n || '').toLowerCase().indexOf(q) < 0 && String(p.mc || '').toLowerCase().indexOf(q) < 0
+          && String(p.sub || '').toLowerCase().indexOf(q) < 0 && String(p.ch || '').toLowerCase().indexOf(q) < 0) continue;
       if (p.i) { geoPicked[p.i] = 1; n++; }
     }
     updateGeoPicked();

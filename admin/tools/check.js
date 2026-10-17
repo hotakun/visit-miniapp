@@ -712,6 +712,13 @@ function checkFieldLists() {
   if (i0 < 0 || i1 < 0) { fails.push('字段清单对账：store.js 里找不到 CUST_FIELDS / AGG_FIELDS（B 档的主表被删了？）'); return; }
   const storeCols = new Set();
   for (const m of storeSrc.slice(i0, i1).matchAll(/\['[a-z0-9]+',\s*'([a-z0-9_]+)'/g)) storeCols.add(m[1]);
+  // ⭐ 2026-10-18：AGG_FIELDS（oc/oa/lo/vc/lv/vs/vt）也是 store 要的 PG 列，
+  //   而它们在 pgapi 里是 `ag.order_count AS oc` 这种**别名**（上面新加的 AS 扫描会抓到）——
+  //   不把这边一起收进来，就会被误判成"pgapi 查了、store 没接"。
+  const i2 = storeSrc.indexOf('const ALL_FIELDS');
+  if (i2 > i1) {
+    for (const m of storeSrc.slice(i1, i2).matchAll(/\['[a-z0-9]+',\s*'([a-z0-9_]+)'/g)) storeCols.add(m[1]);
+  }
 
   // ② pgapi.js 的 COLS_C
   const pgSrc = rd('admin/tools/pgapi.js');
@@ -720,6 +727,14 @@ function checkFieldLists() {
   if (j0 < 0 || j1 < 0) { fails.push('字段清单对账：pgapi.js 里找不到 COLS_C / BI_JOIN'); return; }
   const pgCols = new Set();
   for (const m of pgSrc.slice(j0, j1).matchAll(/c\.([a-z0-9_]+)/g)) pgCols.add(m[1]);
+  // ⭐ 2026-10-18：`customer_subs`（副店/连锁）是**独立副表** JOIN 出来的，
+  //   写法是 `COALESCE(csub.sub_accounts,'') AS sub_accounts` —— 不在 COLS_C 的 `c.` 列里。
+  //   这里把 SELECT_CUST 里的 `AS xxx` 也收进 pgCols（否则会被误判成"store 要、pgapi 没查"）。
+  const s0 = pgSrc.indexOf('const SELECT_CUST');
+  if (s0 >= 0) {
+    const s1 = pgSrc.indexOf(';', s0);
+    for (const m of pgSrc.slice(s0, s1 > s0 ? s1 : s0 + 2000).matchAll(/\bAS\s+([a-z0-9_]+)/g)) pgCols.add(m[1]);
+  }
 
   // ③ 双向比（`batch_ids` 由 JOIN 现算，两边都不出现 → 显式排除，别误判）
   const NOT_IN_COLS_C = new Set(['batch_ids']);   // ⚠️ pgapi 里它是 `COALESCE(m.bids,'') AS batch_ids` 现算的

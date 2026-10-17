@@ -1427,7 +1427,9 @@ async function detail(salesmanId, taskId, isBoss) {
       //   但白名单漏了它们 → 返回给前端时永远是 `undefined`（现在界面不显示它们，属脏数据）。
       //   补进来，免得以后谁在卡片上加了「最近下单 / 商城等级」却查不出为什么是空的。
       contactName: true, mallAddedAt: true, lastOrderAt: true,
-      lastBrowseAt: true, mallSalesman: true, mallLevel: true
+      lastBrowseAt: true, mallSalesman: true, mallLevel: true,
+      // ⭐ 2026-10-18：副店 / 连锁（老板定：同编号一条档案 + 副店信息；连锁互标同一老板）
+      subAccounts: true, chainIds: true, chainNames: true
     }),
     lastVisitMap(taskId, ids),
     ids.length ? db.collection('visits')
@@ -1465,6 +1467,9 @@ async function detail(salesmanId, taskId, isBoss) {
       lastBrowseAt: c.lastBrowseAt,
       mallSalesman: c.mallSalesman,
       mallLevel: c.mallLevel,
+      // ⭐ 2026-10-18：副店 / 连锁（手机端详情页展示；搜索互通在后台本地缓存侧）
+      subAccounts: Array.isArray(c.subAccounts) ? c.subAccounts : [],
+      chainNames: Array.isArray(c.chainNames) ? c.chainNames : [],
       remark: c.remark,
       coordFixPending: !!fixSet[c._id],
       visitedToday: !!last,
@@ -2442,7 +2447,9 @@ async function custDetail(salesmanId, event, isBoss) {
         //   ⚠️ 别删：删了手机端就再也听不到建档时录的音（后台读的是同一份字段，不受此处影响）。
         'audios',
         // ⭐ 2026-09-28 晚：现场录入的「待商城建档」标记（手机端据此显示「⏳ 待商城建档」淡色胶囊）
-        'mallPending'];
+        'mallPending',
+        // ⭐ 2026-10-18：副店 / 连锁（老板定：同编号一条档案 + 副店信息；连锁互标同一老板）
+        'subAccounts', 'chainNames'];
       const o = {};
       KEEP.forEach(k => { if (c[k] !== undefined) o[k] = c[k]; });
       // ⭐ 2026-10-07 老板报障：**「最近下单」以实际订单为准**（与 adminapi.listCustomers 同口径）——

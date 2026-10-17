@@ -251,12 +251,23 @@ function buildD(res, photoUrls, recUrls) {
     //   （老板报的正是这条："后台能看到大中小类，手机上却看不到"）。与招牌菜同一路数：平台 + 现场合并显示。
     cat: uniqueJoin(p.cat1 || c.cat1, p.cat2 || c.cat2, p.cat3 || c.cat3),
     rank: esc(p.rank),
-    mallRows: [
-      ['注册商城时间', mdCn(c.mallJoinedAt) || '—'],   // ⭐ 2026-10-12：原来直接显示原值 → 时间戳就成"一串数字"
-      ['签约业务员', esc(c.salesman) || '—'],
-      ['最近下单', esc(c.lastOrderAt) ? (mdCn(c.lastOrderAt) + (daysAgo(c.lastOrderAt) ? '（' + daysAgo(c.lastOrderAt) + '）' : '')) : '—'],
-      ['最近浏览商城', esc(c.lastBrowseAt) ? (mdCn(c.lastBrowseAt) + (daysAgo(c.lastBrowseAt) ? '（' + daysAgo(c.lastBrowseAt) + '）' : '')) : '—']
-    ],
+    mallRows: (function () {
+      const rows = [
+        ['注册商城时间', mdCn(c.mallJoinedAt) || '—'],   // ⭐ 2026-10-12：原来直接显示原值 → 时间戳就成"一串数字"
+        ['签约业务员', esc(c.salesman) || '—'],
+        ['最近下单', esc(c.lastOrderAt) ? (mdCn(c.lastOrderAt) + (daysAgo(c.lastOrderAt) ? '（' + daysAgo(c.lastOrderAt) + '）' : '')) : '—'],
+        ['最近浏览商城', esc(c.lastBrowseAt) ? (mdCn(c.lastBrowseAt) + (daysAgo(c.lastBrowseAt) ? '（' + daysAgo(c.lastBrowseAt) + '）' : '')) : '—']
+      ];
+      // ⭐ 2026-10-18：副店 / 连锁（老板定：同编号一条档案 + 副店信息；连锁互标「同一老板」）
+      //   ⚠️ 只有真的有才追加 —— 绝大多数客户没有这两项，不多占一行。
+      const subs = Array.isArray(c.subAccounts) ? c.subAccounts : [];
+      if (subs.length) {
+        rows.push(['副店', subs.map(x => esc(x.name || '') + (x.phone ? ' · ' + esc(x.phone) : '')).join('、')]);
+      }
+      const chains = Array.isArray(c.chainNames) ? c.chainNames : [];
+      if (chains.length) rows.push(['连锁', '同一老板：' + chains.map(x => esc(x)).join('、')]);
+      return rows;
+    })(),
     // ⭐ 2026-09-27：商城信息卡头小字（原 wxml 里写死「最近购买 8月24日」）——
     //   最近购买 → 没有则 最近浏览 → 再没有 注册
     // ⭐ 2026-09-28 晚老板定：**未加入商城就留空**（原来写「未加入商城」）——

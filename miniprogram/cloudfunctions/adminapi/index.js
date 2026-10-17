@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'exportOrdersForSync', 'exportOrderItemsForSync', 'applyMallPair', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'mergeCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'exportOrdersForSync', 'exportOrderItemsForSync', 'applyMallPair', 'mergeMallSub', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'mergeCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -788,6 +788,7 @@ exports.main = async (event) => {
     if (action === 'exportOrdersForSync') return await exportOrdersForSync(event);       // ⭐ 2026-10-15：订单导出（给 pgsync → PG orders）
     if (action === 'exportOrderItemsForSync') return await exportOrderItemsForSync(event); // ⭐ 2026-10-15：订单明细导出（给 pgsync → PG order_items）
     if (action === 'applyMallPair') return await applyMallPair(event);
+    if (action === 'mergeMallSub') return await mergeMallSub(event);         // ⭐ 2026-10-18：同编号 → 副店挂到主店（不新建客户）
     if (action === 'fixDupCustomers') return await fixDupCustomers(event);              // ⭐ 2026-10-11：商城**人工配对**的合并（「🛒 商城配对确认」页用）
     if (action === 'reassignVisit') return await reassignVisit(event);                  // ⭐ 2026-10-12：把拜访记录挪到正确的客户名下（串档修复；只改归属、留备案）
     if (action === 'mergeCustomers') return await mergeCustomers(event);              // ⭐⭐ 2026-10-15：合并两条重复客户（逐字段可选；**不做备案**；source 只软删、可恢复）
@@ -906,9 +907,25 @@ async function getCustomerDetail(event) {
     salesmanName: f.salesmanName || '', createdAt: f.createdAt || 0
   }));
 
+  // —— ⑥ ⭐ 2026-10-18：主副店 / 连锁（老板定：同编号一条档案 + 副店信息；连锁互标）——
+  const subAccounts = Array.isArray(c.subAccounts) ? c.subAccounts : [];
+  let chains = [];
+  const chainIds = (Array.isArray(c.chainIds) ? c.chainIds : []).filter(Boolean).slice(0, 20);
+  if (chainIds.length) {
+    const cr = await db.collection('customers').where({ _id: _.in(chainIds) })
+      .field({ name: true, mallCode: true, address: true, phone: true, lat: true, lng: true, deleted: true })
+      .limit(20).get().catch(silentCatch('adminapi·chains', { data: [] }));
+    chains = (cr.data || []).filter(x => x && x.deleted !== true).map(x => ({
+      _id: x._id, name: x.name || '', mallCode: x.mallCode || '', address: x.address || '',
+      phone: x.phone || '', lat: Number(x.lat) || 0, lng: Number(x.lng) || 0
+    }));
+  }
+
   return {
     ok: true,
     customer: c,
+    subAccounts: subAccounts,
+    chains: chains,
     orders: orders.slice(0, 20).map(o => ({
       orderNo: o.orderNo, orderedAt: o.orderedAt, actualAmount: o.actualAmount,
       orderStatus: o.orderStatus, payMethod: o.payMethod, lines: linesOf[o.orderNo] || 0
@@ -2711,7 +2728,9 @@ async function custMapPoints(event) {
              // ⭐⭐ 2026-10-16（老板定：「这 9 列 PG 里居然没有…同步器也要拉」）：补齐 8 个原本没同步的字段
              //   （与 custSync 保持同一套；⚠️ 云端驼峰 → PG 下划线的对应见 pgsync.js）
              region: true, salesman: true, mallLevel: true, mallSource: true, mallCategory: true,
-             lastOrderAt: true, lastBrowseAt: true, phone2: true })
+             lastOrderAt: true, lastBrowseAt: true, phone2: true,
+             // ⭐ 2026-10-18：主副店 / 连锁（后台缓存要带上，搜索与详情都读它）
+             subAccounts: true, chainIds: true, chainNames: true })
     .get().catch(silentCatch('adminapi·custMapPoints', { data: [] }));
   const rows = r.data || [];
   const _agg = await buildAggMaps(rows);   // 6 列预聚合（与 custPageAgg 同口径）
@@ -2745,7 +2764,16 @@ async function custMapPoints(event) {
     //      漏一处 = "不报错的静默不生效"（store.js 那个坑就是这么来的）。
     reg: String(c.region || ''), sm: String(c.salesman || ''),
     ml: String(c.mallLevel || ''), msrc: String(c.mallSource || ''), mcat: String(c.mallCategory || ''),
-    clor: String(c.lastOrderAt || ''), clbr: String(c.lastBrowseAt || ''), ph2: String(c.phone2 || '')
+    clor: String(c.lastOrderAt || ''), clbr: String(c.lastBrowseAt || ''), ph2: String(c.phone2 || ''),
+    // ⭐ 2026-10-18：副店 / 连锁（JSON 字符串；绝大多数为空 → 不占体积）
+    sub: (Array.isArray(c.subAccounts) && c.subAccounts.length)
+      ? JSON.stringify(c.subAccounts.map(x => ({
+          n: String(x.name || ''), p: String(x.phone || ''), a: String(x.address || ''),
+          c: String(x.mallCode || ''), k: String(x.mallKey || ''),
+          la: Number(x.lat) || 0, ln: Number(x.lng) || 0
+        })))
+      : '',
+    ch: (Array.isArray(c.chainNames) && c.chainNames.length) ? c.chainNames.map(String).join(' | ') : ''
   })).map((p, idx) => mergeAgg(p, rows[idx]._id, rows[idx].mallCode, _agg));   // 6 列预聚合
   return { ok: true, points: points, next: rows.length >= limit ? String(rows[rows.length - 1]._id) : null, got: rows.length };
 }
@@ -2779,7 +2807,7 @@ async function custSync(event) {
              //   补齐 8 个原本没同步的字段（备注 remark 早就在）。⚠️ 云端字段名是【驼峰】，PG 列名是【下划线】，
              //   对应关系见 pgsync.js；`region` 也要（现在 PG 的 region 列全空）。
              region: true, salesman: true, mallLevel: true, mallSource: true, mallCategory: true,
-             lastOrderAt: true, lastBrowseAt: true })   // ⭐ 2026-10-07：source（'field' = 现场录入）—— 与 custMapPoints 同步
+             lastOrderAt: true, lastBrowseAt: true, subAccounts: true, chainIds: true, chainNames: true })   // ⭐ 2026-10-07：source（'field' = 现场录入）—— 与 custMapPoints 同步
     .get().catch(silentCatch('adminapi·custSync', { data: [] }));
   const rows = r.data || [];
   const _aggS = await buildAggMaps(rows);   // ⭐ 2026-09-27：增量同步同样带上 6 列预聚合（口径与 custMapPoints 一致）
@@ -2824,7 +2852,15 @@ async function custSync(event) {
       //   ⚠️ 必须与 custMapPoints 一致（同一套短键），并与 `admin/store.js` 的映射表、pgsync 的列名对上。
       reg: String(c.region || ''), sm: String(c.salesman || ''),
       ml: String(c.mallLevel || ''), msrc: String(c.mallSource || ''), mcat: String(c.mallCategory || ''),
-      clor: String(c.lastOrderAt || ''), clbr: String(c.lastBrowseAt || ''), ph2: String(c.phone2 || '')
+      clor: String(c.lastOrderAt || ''), clbr: String(c.lastBrowseAt || ''), ph2: String(c.phone2 || ''),
+      sub: (Array.isArray(c.subAccounts) && c.subAccounts.length)
+        ? JSON.stringify(c.subAccounts.map(x => ({
+            n: String(x.name || ''), p: String(x.phone || ''), a: String(x.address || ''),
+            c: String(x.mallCode || ''), k: String(x.mallKey || ''),
+            la: Number(x.lat) || 0, ln: Number(x.lng) || 0
+          })))
+        : '',
+      ch: (Array.isArray(c.chainNames) && c.chainNames.length) ? c.chainNames.map(String).join(' | ') : ''
     };
   }).map((p, idx) => mergeAgg(p, rows[idx]._id, rows[idx].mallCode, _aggS));
   return { ok: true, points: points, next: rows.length >= limit ? String(rows[rows.length - 1]._id) : null, maxUpdatedAt: maxU, got: rows.length };
@@ -4055,6 +4091,30 @@ async function createMallCustomer(event) {
     if (m) Object.assign(doc, mallFieldsFrom(m), { mallMatchScore: 100, mallMatchedAt: now, mallPairedByHand: true });
   }
   const add = await db.collection('customers').add({ data: doc });
+  // ⭐⭐ 2026-10-18 老板定：**连锁分店**（同编号、相距较远）→ 新建独立客户，并**互标「连锁 · 同一老板」**。
+  //   `chainWith` = 老板在候选里确认的那一家（系统已有客户）的 id。
+  //   ⚠️ 只写 `chainIds` / `chainNames` 两个字段；两家的店名/地址/坐标/订单**一个字都不动**。
+  const chainWith = String(e2.chainWith || '');
+  if (chainWith) {
+    try {
+      const otherRes = await db.collection('customers').doc(chainWith).get().catch(() => null);
+      const other = otherRes && otherRes.data;
+      if (other && other.deleted !== true) {
+        const myName = String(doc.name || '').trim();
+        const otherName = String(other.name || '').trim();
+        doc.chainIds = [chainWith];
+        doc.chainNames = [otherName];
+  await db.collection('customers').doc(add._id).update({ data: { chainIds: doc.chainIds, chainNames: doc.chainNames, updatedAt: now } });
+        const oIds = (Array.isArray(other.chainIds) ? other.chainIds : []).filter(x => x && x !== add._id);
+        const oNames = (Array.isArray(other.chainNames) ? other.chainNames : []).filter(Boolean);
+        oIds.push(add._id);
+        oNames.push(myName);
+        await db.collection('customers').doc(chainWith).update({
+          data: { chainIds: oIds, chainNames: oNames, updatedAt: now }
+        });
+      }
+    } catch (e) { console.error('[createMallCustomer] 连锁互标失败（不影响建店）', e); }
+  }
   // 发"客户有变动"信号 → 后台本地缓存 15 秒内自动刷（与建店同源，失败不影响建店）
   try {
     const dr = await db.collection('settings').where({ key: 'custDirtyAt' }).limit(1).get();
@@ -4570,6 +4630,63 @@ async function applyMallPair(event) {
   //   **把刚写进客户档案的字段回传给后台前端** → 前端拿它就地更新本地缓存那一行（别让后台等 pgsync 的 5 分钟）。
   //   ⚠️ 回传的是**云端字段名**（name / phone / mallKey …），前端用一张映射表转成缓存的短键。
   return { ok: true, customerId: customerId, mallKey: mallKey, fields: data };
+}
+
+// ⭐⭐ 2026-10-18 老板定：**同一编号 = 同一家店**（老板/老板娘分别注册）→
+//   「主店 + 副店」只保留**一条客户档案**：副店的名字/电话/地址挂到主档的 `subAccounts`。
+//   · 订单：`getCustomerDetail` 按 `mallCode` 查 → 同编号天然合并，副店订单自动并进主店；
+//   · 搜索：后台本地搜索同时匹配 `subAccounts` 里的店名/电话（custLocalPage 已加）。
+//   ⚠️ 只写 `subAccounts` 与 `updatedAt` —— **绝不动主店的名字/地址/坐标/商圈**
+//      （老板红线：坐标以现场为准；要改主店字段请走 applyMallPair / updateCustomerFields）。
+//   ⚠️ 编号不同一律拒绝：这里只处理「同编号」的主副店；不同编号请走 applyMallPair。
+async function mergeMallSub(event) {
+  const customerId = String((event && event.customerId) || '');
+  const mallKey = String((event && event.mallKey) || '');
+  if (!customerId || !mallKey) return { ok: false, code: 'BAD_ARG', msg: '缺少参数' };
+  const cRes = await db.collection('customers').doc(customerId).get().catch(() => null);
+  const c = cRes && cRes.data;
+  if (!c || c.deleted === true) return { ok: false, code: 'CUST_NOT_FOUND', msg: '主店不存在（可能已删除）' };
+  // 商城侧：优先用前端传过来的那一行（池子里的记录可能还没进 mall_customers），否则按 mallKey 查库
+  let m = null;
+  if (event.row && typeof event.row === 'object') {
+    m = Object.assign({}, event.row);
+    m.mallKey = mallKey;
+  } else {
+    const r = await db.collection('mall_customers').where({ mallKey }).limit(1).get().catch(() => ({ data: [] }));
+    m = (r.data || [])[0];
+  }
+  if (!m) return { ok: false, code: 'MALL_NOT_FOUND', msg: '商城库里找不到这条' };
+  const mainCode = String(c.mallCode || '').trim().toLowerCase();
+  const subCode = String(m.mallCode || '').trim().toLowerCase();
+  if (!mainCode) return { ok: false, code: 'NO_MAIN_CODE', msg: '主店没有客户编号，不能作为主店' };
+  if (subCode && mainCode !== subCode) return { ok: false, code: 'CODE_MISMATCH', msg: '编号不同，不能作为副店合并（请用「就是这家」）' };
+  const now = Date.now();
+  const sub = {
+    mallKey: mallKey,
+    mallCode: String(m.mallCode || '').trim(),
+    name: String(m.name || '').trim(),
+    phone: String(m.phone || '').trim(),
+    address: String(m.address || '').trim(),
+    lat: Number(m.lat) || 0, lng: Number(m.lng) || 0,
+    addedAt: normMallDate(m.addedAt),
+    mergedAt: now
+  };
+  const cur = (Array.isArray(c.subAccounts) ? c.subAccounts : []).slice();
+  const idx = cur.findIndex(x => x && String(x.mallKey || '') === mallKey);
+  if (idx >= 0) cur[idx] = Object.assign({}, cur[idx], sub);
+  else cur.push(sub);
+  // ⚠️ 必须写 updatedAt —— 增量同步（custSync）靠它把这次改动带给后台/PG。
+  await db.collection('customers').doc(customerId).update({ data: { subAccounts: cur, updatedAt: now } });
+  // 收尾「待确认认领」记录（同 applyMallPair：按 mallKey 收，不区分当时配的是谁）
+  try {
+    const cl = await db.collection('mall_claims').where({ mallKey, status: 'pending' }).limit(20).get();
+    for (const x of (cl.data || [])) {
+      await db.collection('mall_claims').doc(x._id).update({
+        data: { status: 'confirmed', resolvedAt: now, resolvedBy: (event._admin && event._admin.name) || '', byHand: true, bySub: true }
+      });
+    }
+  } catch (e) { console.error('[mergeMallSub] 收尾 claims 失败（不影响合并）', e); }
+  return { ok: true, customerId: customerId, subAccounts: cur };
 }
 
 async function resolveMallClaim(event) {

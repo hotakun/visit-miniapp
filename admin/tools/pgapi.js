@@ -26,17 +26,24 @@ const COLS_C = 'c.id,c.name,c.name_raw,c.code,c.ctype,c.source,c.phone,c.address
   'c.region,c.salesman,c.mall_level,c.mall_source,c.mall_category,' +
   'c.last_order_at,c.last_browse_at,c.phone2';
 const BI_JOIN = " LEFT JOIN (SELECT customer_id, string_agg(batch_id, ',' ORDER BY batch_id) AS bids FROM batch_members GROUP BY customer_id) m ON m.customer_id = c.id";
+// ⭐ 2026-10-18：主副店 / 连锁 —— 走**独立副表** `customer_subs`。
+//   ⚠️ `customers` / `orders` 的表属主是 postgres，`juhuo_rw` **没有 ALTER 权限**
+//      （实测报「必须是表 customers 的属主」）→ 新建 `customer_subs`（主键 customer_id），
+//      只存有副店 / 连锁的那几十条；绝大多数客户在这张表里没有行 → JOIN 几乎零成本。
+const SUBS_JOIN = ' LEFT JOIN customer_subs csub ON csub.customer_id = c.id';
 // ⭐ 2026-10-15（《订单本地方案》第 4 块）：客户聚合表（订单数/额/最近下单 + 拜访数/最近拜访/全局态/任务内状态）
 //   由同步器 `pgsync.recalcCustAgg()` 算好写进去；这里只 JOIN 读出来（只读账号也能读 —— 已 GRANT SELECT）。
 const AGG_JOIN = " LEFT JOIN cust_agg ag ON ag.id = c.id";
 const SELECT_CUST = 'SELECT ' + COLS_C + ", COALESCE(m.bids,'') AS batch_ids, " +
+  // ⭐ 2026-10-18：副店 / 连锁（独立副表；没有行的客户 → 两个空串）
+  "COALESCE(csub.sub_accounts,'') AS sub_accounts, COALESCE(csub.chain_names,'') AS chain_names, " +
   // ⭐⭐ 2026-10-15（《订单本地方案》第 4 块）：**把这 7 个聚合列一起回了** ——
   //   原来它们只有云端 `custPageAgg` 算得出来 → 前端每翻一页都要问云端；
   //   现在由同步器算好写进 PG 的 `cust_agg`，这里一次 JOIN 带出来，**彻底不问云端**。
   //   ⚠️ 短键名必须与 `store.js` / `admin.html` 读的**逐字一致**（oc/oa/lo/vc/lv/vs/vt），改一个就"改了看不到"。
   "ag.order_count AS oc, ag.order_amount_sum AS oa, ag.last_order_at AS lo, " +
   "ag.visit_count AS vc, ag.last_visit_at AS lv, ag.visit_state AS vs, ag.visit_status AS vt " +
-  'FROM customers c' + BI_JOIN + AGG_JOIN;
+  'FROM customers c' + BI_JOIN + AGG_JOIN + SUBS_JOIN;
 // 「任务中」客户集合的 SQL 片段（published/reviewing 且**未过期**；过期是实时算的，云端不改 status）
 const TASK_ALIVE = "SELECT DISTINCT cid FROM tasks, LATERAL jsonb_array_elements_text(tasks.customer_ids) AS cid " +
   "WHERE tasks.status IN ('published','reviewing') AND jsonb_typeof(tasks.customer_ids) = 'array' " +
