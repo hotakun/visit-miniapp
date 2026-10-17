@@ -4695,8 +4695,12 @@ function mallPickRender() {
     '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:200px">用哪边</th></tr></thead><tbody>';
   MP_OPT_FIELDS.forEach(function (f) {
     const mv = m[f.k], sv = s[f.k];
-    // 默认 = 现有规则：商城有值就用商城的；商城没值 → 用系统内的
-    const def = (mv !== '' && mv != null) ? 'mall' : 'sys';
+    // 默认值（老板 2026-10-17 定）：
+    //   · **「编号」一律默认「商城」** —— 编号以商城为准，不经他手就不该被改到系统内那一侧；
+    //   · 其余 4 个（店名/电话/地址/地区）：商城有值用商城的、只有商城没值才落到系统内（= 改造前的老规则）。
+    // ⚠️ "编号默认商城、但商城这次没给编号" 不会把系统内的编号抹掉 ——
+    //    云函数里 `mallFieldsFrom()` 的规则是"商城值为空 → 不覆盖"，所以实际效果是"保留系统内原值"。
+    const def = (f.k === 'mallCode') ? 'mall' : ((mv !== '' && mv != null) ? 'mall' : 'sys');
     h += '<tr>' +
       '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9;color:var(--sub)">' + f.label + '</td>' +
       '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9">' + e1(mv) + '</td>' +
