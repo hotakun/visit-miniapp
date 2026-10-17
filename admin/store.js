@@ -178,6 +178,10 @@ function status() {
     //   界面就一直显示旧的（正是"改完看不到"那一类）。`maxU` 是同步水位（最大的 updatedAt），
     //   内容一变它就会前进 → 配合 count 一起比，两种变化都能感知到。
     maxU: c ? (Number(c.maxU) || 0) : 0,
+    // ⭐⭐ 2026-10-17（C3）：**统计列（那 7 列）的更新时间** —— 只有 `refreshAgg` 会写它。
+    //   为什么要单独一个：补统计列时 syncedAt/maxU/count/version **全都不变**，
+    //   前端靠这四个判据察觉不到"统计已更新"（要人工刷新页面才看到）。
+    aggAt: c ? (Number(c.aggAt) || 0) : 0,
     fresh: isFreshToday(c),
     version: VERSION
   };
@@ -409,7 +413,12 @@ async function refreshAgg() {
       hit++;
     });
     // ⚠️ syncedAt / maxU 一律不动（它们表示"上次全量同步"与"增量水位"，补几列不该动它们）
-    write({ v: VERSION, syncedAt: c.syncedAt, maxU: c.maxU || 0, count: c.points.length, points: c.points });
+    // ⭐⭐ 2026-10-17（C3）：但**必须记一个 `aggAt`（统计列的更新时间）** ——
+    //   否则补完这 7 列后：syncedAt / maxU / count / version 四个判据全都不变
+    //   → 前端的保鲜轮询**完全察觉不到**"统计已经更新了"（要等人工刷新页面才看得到）。
+    //   ⚠️ 为什么不用 maxU 来当这个信号：**maxU 是客户增量同步的水位**，
+    //      把它推前会让增量同步"以为已经同步到那儿"，**反而漏掉中间的真实客户改动** —— 绝对不能碰。
+    write({ v: VERSION, syncedAt: c.syncedAt, maxU: c.maxU || 0, count: c.points.length, points: c.points, aggAt: Date.now() });
     console.log('[store] 轻量补字段完成：' + hit + ' 家补上那 7 列（共收到 ' + _rows.length + ' 条）');
     return { ok: true, hit: hit, got: _rows.length, count: c.points.length, from: 'pg-agg' };
   } catch (e) {

@@ -9080,6 +9080,7 @@ async function dupClean() {
 let _custKeepAlive = null;
 let _custSeenMaxU = null;   // ⭐ D06 前半：内容指纹（同步水位）基线；null = 还没记过
 let _custSeenVer = 0;       // ⭐⭐ 2026-10-17：**字段版本**基线（store.js 的 VERSION）—— 说明见下面 custKeepAlive
+let _custSeenAgg = 0;       // ⭐⭐ 2026-10-17（C3）：**统计列更新时间**基线（store.js 的 aggAt）
 function custKeepAlive() {
   if (_custKeepAlive) return;
   _custKeepAlive = setInterval(async () => {
@@ -9097,12 +9098,21 @@ function custKeepAlive() {
       //   条数不变、水位也可能不变 → 前端**永远不重读** → 界面一直用缺字段的旧快照。
       //   （`VERSION` 只管"服务端读文件时作废"，管不到"已经装进浏览器内存的那份"。）
       //   `/mapPoints/status` 早就回了 `version`，前端一直没用它 —— 这次补上。
+      // ⭐⭐ 2026-10-17（C3）：除了"条数 / 内容 / 字段版本"，**还要比"统计列更新时间"（aggAt）** ——
+      //   「🔄 更新地图数据」走的是 refreshAgg，它只补那 7 列统计（订单数/额、拜访数、状态…），
+      //   而 syncedAt / maxU / count / version **一个都不变** → 只比前三个的话，
+      //   **统计补完了界面还是旧的**（要人工刷新页面才看得到）。
+      //   ⚠️ 服务器侧刻意没有推进 maxU（那是客户增量同步的水位，推前会漏掉真实改动），
+      //      所以这里必须用独立的 aggAt。
       const v = Number((s && s.version) || 0);
-      if (_custSeenMaxU === null) { _custSeenMaxU = w; _custSeenVer = v; return; }
+      const ag = Number((s && s.aggAt) || 0);
+      if (_custSeenMaxU === null) { _custSeenMaxU = w; _custSeenVer = v; _custSeenAgg = ag; return; }
       const verChanged = !!(v && _custSeenVer && v !== _custSeenVer);
-      if (n === custLocal.count && w === _custSeenMaxU && !verChanged) return;   // 条数 / 内容 / 字段版本 都没变
+      const aggChanged = !!(ag && _custSeenAgg && ag !== _custSeenAgg);
+      if (n === custLocal.count && w === _custSeenMaxU && !verChanged && !aggChanged) return;   // 四个都没变
       if (verChanged) console.warn('[cust] 字段版本变了（' + _custSeenVer + ' → ' + v + '），作废本地快照重读');
-      _custSeenMaxU = w; _custSeenVer = v;
+      if (aggChanged && !verChanged) console.warn('[cust] 统计列更新了（aggAt 前进），就地重绘');
+      _custSeenMaxU = w; _custSeenVer = v; _custSeenAgg = ag;
       custLocal = null;                                       // 作废快照 → 下次取新的
       const vis = el => el && el.style && el.style.display !== 'none';
       if (vis(document.getElementById('page-geo')) && typeof loadGeoPage === 'function') loadGeoPage();
