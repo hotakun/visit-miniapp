@@ -8919,7 +8919,10 @@ function mpRender() {
       '<button class="btn p" style="height:26px;font-size:12px" onclick="mpNewOpen(\'' + k + '\')">➕ 新建这条客户</button>' +
       '<button class="btn" style="height:26px;font-size:12px" onclick="mpGeoOpen(\'' + k + '\')">📍 输入经纬度</button>' +
       '<button class="btn" style="height:26px;font-size:12px" onclick="mpSearchOpen(\'' + k + '\')">🔍 自己搜</button>' +
-      '<button class="btn" style="height:26px;font-size:12px" onclick="mpSkip(\'' + k + '\')">⏭ 暂时跳过</button></div>' +
+      '<button class="btn" style="height:26px;font-size:12px" onclick="mpSkip(\'' + k + '\')">⏭ 暂时跳过</button>' +
+      // ⭐ 2026-10-18 老板定：加「🗑 删除 —— 删除干净」（**从池子里彻底删掉**，区别于"暂时跳过"只是标记）
+      // ⚠️ 这里的循环变量是 `x`（不是 row）—— 写错会 ReferenceError 让整个列表渲染崩掉（已踩过一次）。
+      '<button class="btn" style="height:26px;font-size:12px;color:#C93A40;border-color:#F3C9CB" title="从池子里彻底删掉这条（不影响已合并的客户档案）" onclick="mpDelete(\'' + k + '\', \'' + esc(String(x.name || '').replace(/'/g, '')) + '\')">🗑 删除</button></div>' +
       (_mpGeoKey === k ? mpGeoPanel(k) : '') +
       (_mpSearchKey === k ? mpSearchPanel(k) : '') +
       (_mpNewKey === k ? mpNewPanel(k) : '') +
@@ -8976,6 +8979,28 @@ async function mpConfirm(mallKey, customerId) {
   await mpMark(mallKey, 'paired', customerId, cName || row.name || '', g[0], g[1], picks);
   _mpGeoKey = ''; _mpGeoRes = null;                       // 记完收起输入面板
   await mpLoad(true);                                     // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
+}
+// ⭐ 2026-10-18 老板定：「🗑 删除 —— 删除干净」
+//   把这行**从池子里彻底删掉**（`DELETE FROM mall_pending`），不是"暂时跳过"那种标记。
+//   ⚠️ 只删池子里的这一行，**绝不碰 customers** —— 客户档案一个字不动（弹窗里也这么写，免得他担心）。
+//   ⚠️ 二次确认：这是不可撤销的操作。
+async function mpDelete(mallKey, name) {
+  if (!confirm('从池子里彻底删掉这条？\n\n「' + (name || mallKey) + '」\n\n' +
+    '· 只删「商城待配对」池子里的这一条\n' +
+    '· **不会**动任何客户档案（已合并的客户照旧）\n' +
+    '· ⚠️ 删掉后不能撤销（要重新导入商城表才会再出现）')) return;
+  try {
+    const r = await fetch('/mallPending/delete?mallKey=' + encodeURIComponent(mallKey), { method: 'POST' })
+      .then(x => x.json()).catch(() => null);
+    if (r && r.ok && Number(r.deleted) > 0) {
+      // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
+      await mpLoad(true);
+    } else {
+      alert('删除失败：' + ((r && r.msg) || '服务器没返回成功') + '\n（可能需要把 pgapi 重传一次）');
+    }
+  } catch (e) {
+    alert('删除失败：' + ((e && e.message) || '未知错误'));
+  }
 }
 async function mpSkip(mallKey) {
   await mpMark(mallKey, 'skipped');

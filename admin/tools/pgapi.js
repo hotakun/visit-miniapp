@@ -328,6 +328,16 @@ const srv = http.createServer(async (req, res) => {
       const stat = {}; (c.rows || []).forEach(x => { stat[x.status] = x.n; });
       return out(res, 200, { ok: true, rows: r.rows || [], stat: stat, at: Date.now() });
     }
+    // ⭐ 2026-10-18 老板定：「商城待配对」卡片加「🗑 删除 —— 删除干净」。
+    //   把这行**从池子里彻底删掉**（区别于「⏭ 暂时跳过」只是标 status=skipped、还留在池子里）。
+    //   ⚠️ **只删 `mall_pending` 这一行，绝不碰 `customers`** —— 客户档案一个字不动。
+    //   ⚠️ 参数化 SQL，不拼串。
+    if (u.pathname === '/mallPending/delete' && req.method === 'POST') {
+      const k = String(u.searchParams.get('mallKey') || '');
+      if (!k) return out(res, 400, { ok: false, msg: '参数不对' });
+      const dr = await q('DELETE FROM mall_pending WHERE mall_key=$1', [k]);
+      return out(res, 200, { ok: true, deleted: (dr && dr.rowCount) || 0 });
+    }
     // 标记一条（配对 / 新建 / 跳过）—— ⚠️ **只动这一张表的五列**，绝不碰 customers
     if (u.pathname === '/mallPending/mark' && req.method === 'POST') {
       const k = String(u.searchParams.get('mallKey') || '');
