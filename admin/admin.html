@@ -8793,6 +8793,12 @@ function mpStat() { return { p: _mpStat.pending || 0, a: _mpStat.paired || 0, c:
 // ⚠️ PG 的 numeric 走 JSON 回来可能是**字符串**（如 "28.907732"）→ 一律先 Number() 再判，
 //    别写成 `x.lat && x.lng`（字符串 '0' 也算真值，反而更坑）。
 function mpHasCoord(x) { return !!(Number(x && x.lat) && Number(x && x.lng)); }
+// 坐标 → 「纬度,经度」文本（没有 → 空串）。📍 输入经纬度面板、➕ 新建客户表单**共用这一个口径**
+//   —— 两处都预填，别各写一遍格式（写岔了就会出现"面板对、新建错"）。
+function mpLLText(x) {
+  const la = Number(x && x.lat) || 0, ln = Number(x && x.lng) || 0;
+  return (la && ln) ? (la.toFixed(6) + ',' + ln.toFixed(6)) : '';
+}
 function mpMark(key, status, tid, tname, lat, lng, picks) {
   // ⭐ 2026-10-17：多传一个 `picks`（逐字段选择"用哪边"，JSON）——
   //   存在 PG 的 mall_pending.picks 里，这样"先梳理、最后统一发送"中间**刷新页面/换电脑都不丢**。
@@ -9098,7 +9104,11 @@ function mpNewOpen(key) {
   if (!key) { _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = ''; mpRender(); return; }
   const row = _mpRows.filter(x => x.mall_key === key)[0] || {};
   _mpNewKey = key; _mpNewMsg = '';
-  _mpNewForm = { name: row.name || '', phone: row.phone || '', address: row.address || '', ll: '' };
+  // ⭐ 2026-10-18 老板定：**经纬度自动预填** —— 这条导入时就带坐标（或之前补过、灌进了 PG 池子），
+  //   新建表单直接把它填上，老板不用回表格里翻一遍再粘。
+  //   ⚠️ 只是预填，**仍然可改**（商城坐标是注册时填的地址，实际店址有偏差就手改）；
+  //     表单里那行「🔴 必填」的提示保留 —— 没预填到（导入表没坐标）时还是得人补。
+  _mpNewForm = { name: row.name || '', phone: row.phone || '', address: row.address || '', ll: mpLLText(row) };
   _mpGeoKey = ''; _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null;
   mpRender();
 }
@@ -9144,11 +9154,11 @@ let _mpGeoKey = '', _mpGeoVal = '', _mpGeoRes = null, _mpSearchKey = '', _mpSear
 // ⭐ 2026-10-18：这条如果**导入时就带坐标**（或之前补过、灌进了 PG 池子），点「📍 输入经纬度」时
 //   **直接把坐标预填进输入框** —— 老板不用再回表格里翻一遍粘过来。
 //   ⚠️ 只是预填、**不自动搜**（面板里的「✓ 用这个坐标找附近」还是要按一下，避免一点开就刷出 20 条）。
+//   ⚠️ 格式统一走 `mpLLText()`（与「➕ 新建客户」表单同一口径）。
 function mpGeoOpen(key) {
   _mpGeoKey = key;
   const row = (_mpRows || []).filter(x => x.mall_key === key)[0] || {};
-  const la = Number(row.lat) || 0, ln = Number(row.lng) || 0;
-  _mpGeoVal = (la && ln) ? (la.toFixed(6) + ',' + ln.toFixed(6)) : '';
+  _mpGeoVal = mpLLText(row);
   _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null; mpRender();
 }
 function mpSearchOpen(key) { _mpSearchKey = key; _mpSearchVal = ''; _mpSearchRes = null; _mpGeoKey = ''; _mpGeoRes = null; mpRender(); }
