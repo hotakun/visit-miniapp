@@ -473,7 +473,10 @@ function checkCacheFields() {
 //   MALL_FIELD_PAIRS（商城字段 → 库里落点）+ STATIC_FIELDS（导入时写哪些）。
 //   ⚠️ 少一个字段 = **那条信息整条链路都传不到，而且不报错** —— 历史上 `mallCode` 就这么丢过，
 //      后果是「订单按 customerCode 匹配 → 没编号的店订单永远挂不上」。所以三处必须互相对得上。
-const MALL_HEADER_EXPECT = 14;   // server.js 表头别名的条数基线（2026-10-14 实测）
+const MALL_HEADER_EXPECT = 20;   // server.js 表头别名的条数基线（2026-10-18 实测：14 → 20）
+//   2026-10-18 新增 6 条 —— 老板定「导入文件今后有两种（带经纬度列 / 不带），要自动分辨并适应」：
+//   「经纬度」/「坐标」（一列 `28.907732,119.969215`，**纬度在前**）+「纬度」/「经度」/「纬度(lat)」/「经度(lng)」（分成两列）
+//   ⚠️ 坐标**不是**商城合并字段（见下面 MALL_IMPORT_ONLY）—— 表头别名多了不代表 MALL_FIELD_PAIRS 要跟着加。
 function checkMallFields() {
   const fnAbs = path.join(ROOT, 'miniprogram/cloudfunctions/adminapi/index.js');
   const srvAbs = path.join(ROOT, 'admin/server.js');
@@ -497,16 +500,28 @@ function checkMallFields() {
   const statics = sm ? [...sm[1].matchAll(/'([A-Za-z0-9_]+)'/g)].map(x => x[1]) : [];
 
   let bad = 0;
+  // ⭐ 2026-10-18（老板定「导入文件有带经纬度列 / 不带，要自动分辨」）：
+  //   `lat` / `lng` 是**只进商城库（`mall_customers`）**的字段，用途只有两个：
+  //     ① 灌进服务器的 `mall_pending` 池子（挑/合并时能看出这家带没带坐标）；
+  //     ② 「➕ 新建客户」时作为坐标（createMallCustomer —— 新店本来就要坐标，业务员才导航得到）。
+  //   ⚠️ 它们**绝不合并进已有客户档案**：坐标红线是「现场采的才作数」，由 `MALL_NO_TOUCH` 代码级硬拦。
+  //   → 所以它们**不该出现在 MALL_FIELD_PAIRS 里**，但出现在导入侧 STATIC_FIELDS 是**正常**的 → 这里放行。
+  const MALL_IMPORT_ONLY = ['lat', 'lng'];
   const notParsed = mallSide.filter(f => !headerVals.includes(f));
   if (notParsed.length) { bad++; fails.push(`商城字段：MALL_FIELD_PAIRS 里的商城侧字段，在 server.js 的表头映射里没有 → ${notParsed.join(', ')}\n   ⚠️ 这些字段**导不进来**（解析端根本不产出它们），而且不报错`); }
-  const noSource = statics.filter(f => !mallSide.includes(f));
+  const noSource = statics.filter(f => !mallSide.includes(f) && !MALL_IMPORT_ONLY.includes(f));
   if (noSource.length) { bad++; fails.push(`商城字段：导入侧的 STATIC_FIELDS 里有 MALL_FIELD_PAIRS 之外的字段 → ${noSource.join(', ')}\n   ⚠️ 写了也没有来源（补进 MALL_FIELD_PAIRS，或从这里删掉）`); }
+  // 反过来的护栏：坐标**不许**进 MALL_FIELD_PAIRS ——
+  //   一旦加进去，`mallFieldsFrom()` 就会拿商城坐标去盖客户坐标（只能靠 MALL_NO_TOUCH 兜着），
+  //   等于把「坐标以现场为准」从"结构上不可能"退化成"靠一道安全网挡着"。**别加。**
+  const coordInPairs = mallSide.filter(f => MALL_IMPORT_ONLY.includes(f));
+  if (coordInPairs.length) { bad++; fails.push(`商城字段：MALL_FIELD_PAIRS 里出现了坐标字段 → ${coordInPairs.join(', ')}\n   ⚠️ 坐标**只进商城库、绝不合并进客户档案**（现场采的才作数，老板 2026-09-29 定）—— 从这张表里删掉；\n      导入侧要写坐标，加进 check.js 的 MALL_IMPORT_ONLY 放行就够了`); }
   if (mallSide.includes('lastOrderAt')) { bad++; fails.push('商城字段：MALL_FIELD_PAIRS 里又出现了 `lastOrderAt` —— 2026-10-07 已移除（商城快照会盖掉 orders 表的真实日期），**别再加回来**'); }
   if (headerVals.length && headerVals.length !== MALL_HEADER_EXPECT) warns.push(`商城字段：server.js 的表头别名从基线 ${MALL_HEADER_EXPECT} 条变成了 ${headerVals.length} 条（若确实改了商城导出表头，记得同步 MALL_FIELD_PAIRS 与导入侧）`);
 
   if (!bad) {
-    okFiles.push(`  [mall]  商城字段链路对账通过（商城侧 ${mallSide.length} 项 ↔ 表头映射 ${headerVals.length} 条 ↔ 导入侧 ${statics.length} 项）`);
-    console.log(`  ✔ 商城字段链路：商城侧 ${mallSide.length} 项 · 表头映射 ${headerVals.length} 条 · 导入侧 ${statics.length} 项 —— 三处对得上`);
+    okFiles.push(`  [mall]  商城字段链路对账通过（商城侧 ${mallSide.length} 项 ↔ 表头映射 ${headerVals.length} 条 ↔ 导入侧 ${statics.length} 项，含导入专属 ${MALL_IMPORT_ONLY.join('/')}）`);
+    console.log(`  ✔ 商城字段链路：商城侧 ${mallSide.length} 项 · 表头映射 ${headerVals.length} 条 · 导入侧 ${statics.length} 项（其中导入专属 ${MALL_IMPORT_ONLY.join('/')} 不进客户档案）—— 三处对得上`);
   }
 }
 

@@ -200,13 +200,21 @@ async function syncMallPending() {
       after = r.last;
     }
     for (const x of all) {
+      // ⭐ 2026-10-18 老板定：导入文件今后有**两种**（带经纬度列 / 不带）。带坐标的要把 lat/lng 一起灌进 PG，
+      //   否则「商城待配对」里那条没坐标、筛选时用不上。
+      //   ⚠️ `COALESCE(EXCLUDED.lat, mall_pending.lat)` —— **新值空就保留旧值**：
+      //      · 重导一份"不带坐标"的表，不会把之前（或手工填）的坐标抹掉；
+      //      · 带坐标的才覆盖。
       await d.query(
-        'INSERT INTO mall_pending (mall_key,name,phone,address,region,mall_code,added_at,imported_at) ' +
-        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (mall_key) DO UPDATE SET ' +
+        'INSERT INTO mall_pending (mall_key,name,phone,address,region,mall_code,added_at,imported_at,lat,lng) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (mall_key) DO UPDATE SET ' +
         'name=EXCLUDED.name, phone=EXCLUDED.phone, address=EXCLUDED.address, region=EXCLUDED.region, ' +
-        'mall_code=EXCLUDED.mall_code, added_at=EXCLUDED.added_at',
+        'mall_code=EXCLUDED.mall_code, added_at=EXCLUDED.added_at, ' +
+        'lat=COALESCE(EXCLUDED.lat, mall_pending.lat), lng=COALESCE(EXCLUDED.lng, mall_pending.lng)',
         [String(x.k || ''), String(x.n || ''), String(x.p || ''), String(x.a || ''),
-         String(x.r || ''), String(x.c || ''), String(x.t || ''), Date.now()]);
+         String(x.r || ''), String(x.c || ''), String(x.t || ''), Date.now(),
+         (x.la != null && isFinite(Number(x.la))) ? Number(x.la) : null,
+         (x.ln != null && isFinite(Number(x.ln))) ? Number(x.ln) : null]);
     }
     if (all.length) console.log('[sync] mall_pending 灌/更新', all.length, '家（这批共', total, '家）');
   } catch (e) { console.error('[sync] mall_pending 同步失败（下轮再试）:', e.message); }

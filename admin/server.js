@@ -272,7 +272,12 @@ const MALL_HEADER_ALIAS = {
   '地区': 'region', '公司地址': 'address', '联系人联系手机': 'phone',
   '添加时间': 'addedAt', '最后下单': 'lastOrderAt', '最后浏览商城': 'lastBrowseAt',
   '客户标签': 'tags', '客户分类': 'category', '业务负责人': 'salesman',
-  '来源': 'source', '等级': 'level'
+  '来源': 'source', '等级': 'level',
+  // ⭐⭐ 2026-10-18 老板定：导入文件今后有**两种**（带经纬度列 / 不带），要**自动分辨并适应**。
+  //   · 「经纬度」一列（形如 `28.907732,119.969215` = **纬度,经度**，我们自己导出的就是这种）
+  //   · 也有表把纬度、经度**分成两列** → 两种都认。
+  //   ⚠️ 不带坐标的文件：这几列认不出来 → item 里 lat/lng 保持 null → 后续流程一律跳过（等于老行为）。
+  '经纬度': 'coord', '坐标': 'coord', '纬度': 'lat', '经度': 'lng', '纬度(lat)': 'lat', '经度(lng)': 'lng'
 };
 
 // Excel 日期序列号 → YYYY-MM-DD（1900 日期系统）
@@ -283,6 +288,24 @@ function serialToDate(v) {
   const ms = Math.round((n - 25569) * 86400 * 1000);
   const d = new Date(ms);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+// ⭐⭐ 2026-10-18 老板定：导入文件有**两种**（带经纬度列 / 不带），解析端要**自动适应**。
+//   把「28.907732,119.969215」这种一列值拆成 { lat, lng }。
+//   ⚠️ 两种写法都要吃：我们导出的格式是「**纬度,经度**」；但商城/腾讯地图习惯是「经度,纬度」。
+//      靠数值判断：**>90 的一定是经度**（纬度不可能超过 90）→ 两种都能正确归类。
+//   ⚠️ 解析不出来（空/只有一个数/超范围）→ 返回 null → 这条就没有坐标，后面流程一律跳过（= 老行为）。
+function parseLatLng(s) {
+  const parts = String(s == null ? '' : s).split(/[,，;；|]/).map(x => Number(String(x).trim()))
+    .filter(x => isFinite(x) && x !== 0);      // 0 不是有效坐标
+  if (parts.length < 2) return null;
+  const a = parts[0], b = parts[1];
+  let lat, lng;
+  if (Math.abs(a) <= 90 && Math.abs(b) > 90) { lat = a; lng = b; }        // 纬度,经度
+  else if (Math.abs(a) > 90 && Math.abs(b) <= 90) { lat = b; lng = a; }   // 经度,纬度
+  else { lat = a; lng = b; }                                             // 都在范围内 → 按「纬度,经度」（我们自己导出的格式）
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat: lat, lng: lng };
 }
 
 function parseMallXls(b64) {
@@ -297,6 +320,21 @@ function parseMallXls(b64) {
   }
   if (headIdx < 0) return { ok: false, msg: '未识别表头：需包含「客户名称」「公司地址」等列' };
   const head = rows[headIdx].map(h => String(h).trim());
+  // ⚠️ 2026-10-18 实测（老板那份 `未配对001-带经纬度.xlsx`）：**「经纬度」这一列的表头是空的**
+  //   （Excel 里加列时没填表头，或者被删掉了）→ 按表头名认不出来 → 坐标全丢。
+  //   ✅ 兜底：表头为空、且该列**前 5 个非空数据都形如「数字,数字」**（如 `28.84,120.09`）→ 当成经纬度列。
+  //   ⚠️ 门槛收紧到"必须是两个带小数点的数字、逗号分隔"，不会把普通文本列误判成坐标。
+  for (let ci = 0; ci < head.length; ci++) {
+    if (head[ci]) continue;                                  // 有表头就不猜
+    const vals = [];
+    for (let ri = headIdx + 1; ri < rows.length && vals.length < 5; ri++) {
+      const v = String((rows[ri] || [])[ci] == null ? '' : (rows[ri] || [])[ci]).trim();
+      if (v) vals.push(v);
+    }
+    if (vals.length < 3) continue;                            // 数据太少不敢猜
+    const isCoord = vals.every(v => /^-?\d{1,3}\.\d+\s*[,，]\s*-?\d{1,3}\.\d+$/.test(v));
+    if (isCoord) head[ci] = '经纬度';
+  }
   const cols = head.map(h => MALL_HEADER_ALIAS[h] || null);
   const out = [];
   for (let i = headIdx + 1; i < rows.length; i++) {
@@ -304,7 +342,7 @@ function parseMallXls(b64) {
     // ⚠️ 这 14 个字段 = 后端 MALL_FIELD_PAIRS 的**商城侧字段** —— 少一个，那条信息就整条链路都传不到。
     //   2026-09-29 补 `mallCode`：表头映射里本来就有它，但 item 里漏了 → **客户编号一直被丢掉**；
     //   而**订单是按 customerCode 匹配的** → 没编号的店，订单永远挂不上。
-    const item = { mallKey: '', mallCode: '', name: '', region: '', address: '', phone: '', addedAt: '', lastOrderAt: '', lastBrowseAt: '', tags: '', category: '', salesman: '', source: '', level: '' };
+    const item = { mallKey: '', mallCode: '', name: '', region: '', address: '', phone: '', addedAt: '', lastOrderAt: '', lastBrowseAt: '', tags: '', category: '', salesman: '', source: '', level: '', lat: null, lng: null };
     cols.forEach((key, ci) => {
       if (!key) return;
       let v = r[ci];
@@ -319,6 +357,14 @@ function parseMallXls(b64) {
       if (key === 'phone') {
         const nums = v.split(/[,，、/;；\s]+/).map(s => s.replace(/\.0+$/, '').trim()).filter(s => /^\d{6,12}$/.test(s));
         if (nums.length) item.phone = nums[0];
+      } else if (key === 'coord') {
+        // ⭐ 2026-10-18：「经纬度」一列（如 `28.907732,119.969215`）→ 拆成 lat/lng
+        const ll = parseLatLng(v);
+        if (ll) { item.lat = ll.lat; item.lng = ll.lng; }
+      } else if (key === 'lat' || key === 'lng') {
+        // 「纬度」「经度」各一列的情况 → 直接取数字（超出范围就丢）
+        const n = Number(v);
+        if (isFinite(n) && n !== 0 && Math.abs(n) <= (key === 'lat' ? 90 : 180)) item[key] = n;
       } else {
         item[key] = v;
       }

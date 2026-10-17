@@ -8789,6 +8789,10 @@ async function mpLoad(force) {
 }
 function mpTab(t) { _mpTab = t; mpRender(); }
 function mpStat() { return { p: _mpStat.pending || 0, a: _mpStat.paired || 0, c: _mpStat.created || 0, s: _mpStat.skipped || 0 }; }
+// 这一条池子里的记录**有没有坐标**（导入文件带经纬度列 → adminapi 存进商城库 → pgsync 灌进 PG）。
+// ⚠️ PG 的 numeric 走 JSON 回来可能是**字符串**（如 "28.907732"）→ 一律先 Number() 再判，
+//    别写成 `x.lat && x.lng`（字符串 '0' 也算真值，反而更坑）。
+function mpHasCoord(x) { return !!(Number(x && x.lat) && Number(x && x.lng)); }
 function mpMark(key, status, tid, tname, lat, lng, picks) {
   // ⭐ 2026-10-17：多传一个 `picks`（逐字段选择"用哪边"，JSON）——
   //   存在 PG 的 mall_pending.picks 里，这样"先梳理、最后统一发送"中间**刷新页面/换电脑都不丢**。
@@ -8817,15 +8821,6 @@ function mpRender() {
     '<div class="mp-bar"><i style="background:#12A150;width:' + (tot ? s.a / tot * 100 : 0) + '%"></i>' +
     '<i style="background:#2F80ED;width:' + (tot ? s.c / tot * 100 : 0) + '%"></i>' +
     '<i style="background:#C3CAD4;width:' + (tot ? s.s / tot * 100 : 0) + '%"></i></div>' +
-    '<div style="display:flex;align-items:center;gap:10px;margin-left:auto">' +
-    '<button class="btn p" id="mpPushBtn" onclick="mpPush()"' + (ready ? '' : ' disabled') +
-    ' style="height:30px;font-size:13px">✅ 确认并发送到云端' + (ready ? ('（' + ready + ' 条）') : '') + '</button>' +
-    '<span id="mpPushMsg" style="font-size:12.5px;color:var(--sub)">' +
-    (ready ? '梳完再发，云端一个字不动' : (failed ? '⚠️ 有 ' + failed + ' 条发送失败（红色，可重发）' : '先把「就是这家 / 新建」梳理好，再按左边发送')) +
-    '</span></div>';
-    '<div class="mp-bar"><i style="background:#12A150;width:' + (tot ? s.paired / tot * 100 : 0) + '%"></i>' +
-    '<i style="background:#2F80ED;width:' + (tot ? s.created / tot * 100 : 0) + '%"></i>' +
-    '<i style="background:#C3CAD4;width:' + (tot ? s.skipped / tot * 100 : 0) + '%"></i></div>' +
     '<div style="display:flex;align-items:center;gap:10px;margin-left:auto">' +
     '<button class="btn p" id="mpPushBtn" onclick="mpPush()"' + (ready ? '' : ' disabled') +
     ' style="height:30px;font-size:13px">✅ 确认并发送到云端' + (ready ? ('（' + ready + ' 条）') : '') + '</button>' +
@@ -8888,10 +8883,15 @@ function mpRender() {
     // 上半截（店名 + 地址/电话 + 右侧那一块）—— 右侧那块由调用方决定（未处理=胶囊；已处理=胶囊 + 撤销）
     // ⭐ 2026-10-13 老板定：「店名下面那行开头的『浙江省>金华市>永康市』区域信息**不用显示**，和后面的地址段重复了」
     //   → 去掉行首的 `x.region`，直接从**地址**开始（地址本身就是完整省市区+街道）。
-    const mkHead = (rightHtml) => '<div class="mp-hd"><div style="flex:1;min-width:0">' +
+    // ⭐ 2026-10-18：**待处理卡片多显示一个「✓ 有坐标 / ⚠ 没坐标」** ——
+    //   导入的表格可能带经纬度列（自动解析 → 商城库 → 服务器池子），老板要一眼看出这家的坐标在不在，
+    //   免得点到「➕ 新建」填一半才发现没坐标。**已处理卡片不显示**（那几行不参与决策，保持简洁）。
+    const mkHead = (rightHtml, withCoord) => '<div class="mp-hd"><div style="flex:1;min-width:0">' +
       '<div class="nm">' + esc(x.name || '(未填店名)') + tick + '</div>' +
-      '<div class="mt">' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') + '</div></div>' + rightHtml + '</div>';
-    const head = mkHead(tag);
+      '<div class="mt">' + esc(x.address || '') + ' · ' + esc(x.phone || '无电话') + (x.mall_code ? ' · 编号 ' + esc(x.mall_code) : '') +
+      (withCoord ? (' · ' + (mpHasCoord(x) ? '<span style="color:#12A150">✓ 有坐标</span>' : '<span style="color:#D64545">⚠ 没坐标</span>')) : '') +
+      '</div></div>' + rightHtml + '</div>';
+    const head = mkHead(tag, true);
     // ⭐⭐ 2026-10-13 老板定（已处理卡片三处调整，原话：「下面的『已跳过（先不处理）』去掉，撤销按钮放到卡片上半截
     //   『已发送』文字的下面，按钮和文字相应缩小一些」）：
     //   ① 下半截那行说明整行**去掉**（含 skipped 的「已跳过（先不处理）」）；
@@ -9141,7 +9141,16 @@ async function mpNewSave() {
 //   ② 🔍 自己搜：按 **店名 / 电话 / 编号** 在**本地全库**搜 → 列出来挑
 //   ⚠️ 都**只在本地算**（零请求）；挑中的那个坐标会**存回服务器那一行**（当"补充的经纬度信息"留档）。
 let _mpGeoKey = '', _mpGeoVal = '', _mpGeoRes = null, _mpSearchKey = '', _mpSearchVal = '', _mpSearchRes = null;
-function mpGeoOpen(key) { _mpGeoKey = key; _mpGeoVal = ''; _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null; mpRender(); }
+// ⭐ 2026-10-18：这条如果**导入时就带坐标**（或之前补过、灌进了 PG 池子），点「📍 输入经纬度」时
+//   **直接把坐标预填进输入框** —— 老板不用再回表格里翻一遍粘过来。
+//   ⚠️ 只是预填、**不自动搜**（面板里的「✓ 用这个坐标找附近」还是要按一下，避免一点开就刷出 20 条）。
+function mpGeoOpen(key) {
+  _mpGeoKey = key;
+  const row = (_mpRows || []).filter(x => x.mall_key === key)[0] || {};
+  const la = Number(row.lat) || 0, ln = Number(row.lng) || 0;
+  _mpGeoVal = (la && ln) ? (la.toFixed(6) + ',' + ln.toFixed(6)) : '';
+  _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null; mpRender();
+}
 function mpSearchOpen(key) { _mpSearchKey = key; _mpSearchVal = ''; _mpSearchRes = null; _mpGeoKey = ''; _mpGeoRes = null; mpRender(); }
 function mpGeoApply() {
   const v = String(($('mpGeoIn') || {}).value || '').trim();

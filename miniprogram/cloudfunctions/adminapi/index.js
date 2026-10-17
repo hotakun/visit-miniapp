@@ -3289,7 +3289,9 @@ async function importMallCustomers(event) {
   }
   // ⭐ 2026-09-29：**与 MALL_FIELD_PAIRS 对齐（14 项）** —— 补 mallCode。
   //   mallCode（客户编号）是**订单匹配的钥匙**（orders.customerCode），以前解析端和这里都漏了它。
-  const STATIC_FIELDS = ['mallCode', 'name', 'region', 'address', 'phone', 'tags', 'category', 'salesman', 'source', 'level'];
+  // ⭐ 2026-10-18：补 lat/lng —— 老板现在的导入文件可能**带经纬度列**（自动解析出来了），要一路存下去，
+  //   否则「商城待配对」里那条就没有坐标、筛选时用不上。⚠️ 不带坐标的文件 → 这两项是 null → 不算 changed（不影响老行为）。
+  const STATIC_FIELDS = ['mallCode', 'name', 'region', 'address', 'phone', 'tags', 'category', 'salesman', 'source', 'level', 'lat', 'lng'];
   // ⭐ 2026-10-12：记下"最近一次导入是哪一批"（= 这一批的 importBatch 值）。
   //   runMallMatch 靠它**只拉本批**（不拉全商城库）—— 否则必然 -601008（老板实测"导入中断"）。
   // ⭐⭐ 2026-10-12【最终定案】把"**这一次导入的完整名单**"记在 settings 里 ——
@@ -3319,6 +3321,9 @@ async function importMallCustomers(event) {
       addedAt: normMallDate(c.addedAt), lastOrderAt: normMallDate(c.lastOrderAt), lastBrowseAt: normMallDate(c.lastBrowseAt),
       tags: c.tags || '', category: c.category || '', salesman: c.salesman || '',
       source: c.source || '', level: c.level || '', updatedAt: now,
+      // ⭐ 2026-10-18：导入文件带经纬度列时，把坐标一并存下来（不带 → null，不写脏值）
+      lat: (c.lat != null && isFinite(Number(c.lat)) && Number(c.lat) !== 0) ? Number(c.lat) : null,
+      lng: (c.lng != null && isFinite(Number(c.lng)) && Number(c.lng) !== 0) ? Number(c.lng) : null,
       // ⭐ 2026-10-12：**打上"这是哪一次导入进来的"** —— runMallMatch 靠它认"本次导入的那几家"
       //   （老板：「你按照我导入的信息去匹配」）。同一批共用一个时间戳，取最大的就是最近一批。
       importBatch: now
@@ -4097,11 +4102,13 @@ async function exportMallPending(event) {
   for (let i = 0; i < page.length; i += 20) {
     const chunk = page.slice(i, i + 20);
     const r = await db.collection('mall_customers').where({ mallKey: _.in(chunk) })
-      .field({ mallKey: true, mallCode: true, name: true, phone: true, address: true, region: true, addedAt: true })
+      // ⭐ 2026-10-18：多取 lat/lng —— 导入文件带经纬度列时，同步器要把坐标一起灌进 PG 的 mall_pending
+      .field({ mallKey: true, mallCode: true, name: true, phone: true, address: true, region: true, addedAt: true, lat: true, lng: true })
       .limit(200).get().catch(() => ({ data: [] }));
     (r.data || []).forEach(m => out.push({
       k: m.mallKey, c: m.mallCode || '', n: m.name || '', p: m.phone || '',
-      a: m.address || '', r: m.region || '', t: m.addedAt || ''
+      a: m.address || '', r: m.region || '', t: m.addedAt || '',
+      la: (m.lat != null ? Number(m.lat) : null), ln: (m.lng != null ? Number(m.lng) : null)
     }));
   }
   const last = page[page.length - 1];
