@@ -750,6 +750,96 @@ function checkFieldLists() {
 }
 checkFieldLists();
 
+// ══════════════════════════════════════════════════════════════════════════════
+// (16) 「改客户必写 updatedAt」护栏（2026-10-17 C4 新增）
+//
+//   为什么要有这条：同步器**按 `customers.updatedAt` 增量拉数据** ——
+//   谁改了客户却没写 updatedAt，那条改动就**永远同步不到 PG / 后台缓存**，
+//   而且**不报错、不提示**（2026-10-17 真实案例：给客户打 reviewFlag 时漏写，
+//   visits/index.js:617，全库 39 个写点里唯一一处）。
+//
+//   判据分两种形态（与 _scratch/_audit_updatedat_v3.py 一致，实测校准过）：
+//     A 字面量：`update({ data: { ... } })`        → 这个对象字面量里必须有 updatedAt
+//     B 变量  ：`update({ data })` / `({ data: X })` → **X 在本函数体内**必须被赋过 updatedAt
+//                （覆盖三种写法：`X.updatedAt =`、`X = { ...updatedAt... }`、
+//                  `X = Object.assign(..., { updatedAt })`）
+//
+//   ⚠️ 前两版判据的教训（别退回去）：
+//      · 行级（往后看 N 行）→ 假报多（赋值在更前面）
+//      · 函数级（函数内任何地方有 updatedAt 就算有）→ 漏报（被同函数别处的 updatedAt 掩盖）
+// ══════════════════════════════════════════════════════════════════════════════
+function checkCustUpdatedAt() {
+  const FNS = ['adminapi', 'tasks', 'visits'];
+  const CALL = /collection\(\s*'customers'\s*\)[\s\S]{0,160}?\.(update|set)\s*\(\s*/g;
+  const FNHEAD = /^(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/gm;
+  let checked = 0;
+  const bad = [];
+
+  FNS.forEach(function (name) {
+    const abs = path.join(ROOT, 'miniprogram/cloudfunctions/' + name + '/index.js');
+    if (!fs.existsSync(abs)) { fails.push('改客户必写 updatedAt：缺 ' + name + '/index.js → 检查无法执行（按失败处理）'); return; }
+    const src = fs.readFileSync(abs, 'utf8');
+
+    // 顶层函数区间（用于找变量赋值的作用域）
+    const heads = [];
+    FNHEAD.lastIndex = 0;
+    let hm;
+    while ((hm = FNHEAD.exec(src)) !== null) heads.push({ at: hm.index, name: hm[1] });
+
+    CALL.lastIndex = 0;
+    let m;
+    while ((m = CALL.exec(src)) !== null) {
+      checked++;
+      const callPos = m.index;
+      // 该调用属于哪个函数
+      let fstart = 0, fname = '(顶层)', fend = src.length;
+      for (let i = 0; i < heads.length; i++) {
+        if (heads[i].at <= callPos) { fstart = heads[i].at; fname = heads[i].name; fend = (heads[i + 1] ? heads[i + 1].at : src.length); }
+      }
+      const fnBody = src.slice(fstart, fend);
+      const line = src.slice(0, callPos).split('\n').length;
+
+      // 取 update( 之后的第一个 { ... }（配平）
+      const braceAt = src.indexOf('{', m.index + m[0].length);
+      let obj = null;
+      if (braceAt >= 0 && braceAt - (m.index + m[0].length) <= 40) {
+        let depth = 0;
+        for (let j = braceAt; j < Math.min(src.length, braceAt + 4000); j++) {
+          if (src[j] === '{') depth++;
+          else if (src[j] === '}') { depth--; if (depth === 0) { obj = src.slice(braceAt, j + 1); break; } }
+        }
+      }
+      const code = src.slice(m.index, Math.min(src.length, m.index + 80)).replace(/\s+/g, ' ');
+      if (!obj) { bad.push({ name: name, fname: fname, line: line, why: '无法解析 update 的入参对象', code: code }); continue; }
+
+      // A) 字面量：对象里直接有 updatedAt
+      if (/\bupdatedAt\b/.test(obj)) continue;
+
+      // B) 变量形态：从对象里取变量名（data / data: X）
+      const vm = obj.match(/\bdata\s*(?::\s*([A-Za-z_][A-Za-z0-9_]*))?/);
+      const v = vm ? (vm[1] || 'data') : null;
+      if (!v) { bad.push({ name: name, fname: fname, line: line, why: '入参里找不到 data 变量', code: code }); continue; }
+      const ve = v.replace(/[$]/g, '\\$');
+      const hasAssign = new RegExp('\\b' + ve + '\\s*\\.\\s*updatedAt\\s*=').test(fnBody)                     // X.updatedAt =
+        || new RegExp('(const|let|var)\\s+' + ve + '\\s*=\\s*\\{[\\s\\S]{0,1500}?updatedAt').test(fnBody)        // X = { ...updatedAt... }
+        || new RegExp(ve + '\\s*=\\s*Object\\.assign\\([\\s\\S]{0,800}?updatedAt').test(fnBody)                  // X = Object.assign(...updatedAt)
+        || new RegExp('Object\\.assign\\(\\s*' + ve + '\\s*,[\\s\\S]{0,800}?updatedAt').test(fnBody);            // Object.assign(X, ...updatedAt)
+      if (!hasAssign) {
+        bad.push({ name: name, fname: fname, line: line, why: '变量 `' + v + '` 在本函数内没有 updatedAt', code: code });
+      }
+    }
+  });
+
+  if (bad.length) {
+    fails.push('改客户必写 updatedAt：下面这些写点没写 `updatedAt`，**那条改动永远同步不到 PG / 后台缓存**\n'
+      + bad.map(b => '   · [' + b.name + '] ' + b.fname + '() 第 ' + b.line + ' 行 —— ' + b.why + '\n     ' + b.code).join('\n')
+      + '\n   ⚠️ 改法：在 update 的 data 里加 `updatedAt: Date.now()`（同步器按它增量拉）');
+    return;
+  }
+  console.log('  ✔ 改客户必写 updatedAt：' + checked + ' 个写点全部带上了（缺了同步不过去）');
+}
+checkCustUpdatedAt();
+
 checkCustWriteActions();
 console.log('─'.repeat(64));
 
