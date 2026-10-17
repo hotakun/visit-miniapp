@@ -26,6 +26,92 @@ const VERSION = 7;              // ⭐ 2026-10-17：字段 +8（reg/sm/ml/msrc/m
 const PAGE_LIMIT = 1000;        // 每片 1000 条（云函数单次返回上限 100KB，1000 条约 100KB 内）
 const MAX_PAGES = 1000;         // 硬上限（100 万条），防死循环
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐ 2026-10-17（B 档整改）：**客户字段的唯一清单** —— 以后只改这一张表
+//
+//   以前这份清单要在【3 处】手工抄：
+//     ① 全量刷新的 M 表（/points）
+//     ② 增量同步的 M 表（/sync）
+//     ③ 写盘瘦身的 slim（漏一个就被筛掉）
+//   任一处漏写 = 那个字段**静默消失**、不报错。2026-10-17 老板报
+//   「导出里商城等级/来源/分类/签约业务员全空」，就是 ③ 漏了那 8 项。
+//
+//   现在：三处**全部由下面两张表生成**，别再手写字段清单（`check.js` 有对账盯着）。
+//   格式：[短键, PG列名, 缺省值, 中文名]
+//     · 'keep' = 原样保留（缺就缺、不补）
+//     · ''     = 缺了补空串
+//     · 0      = 缺了补 0
+// ══════════════════════════════════════════════════════════════════════════════
+const CUST_FIELDS = [
+  ['i',    'id',             'keep', '客户id'],
+  ['n',    'name',           'keep', '店名'],
+  ['la',   'lat',            'keep', '纬度'],
+  ['ln',   'lng',            'keep', '经度'],
+  ['c',    'city',           'keep', '城市'],
+  ['d',    'district',       'keep', '区域'],
+  ['b',    'biz_circle',     'keep', '商圈'],
+  ['nr',   'name_raw',       '',     '店名原值'],
+  ['ca',   'created_at',     0,      '建档时间'],
+  ['ct',   'ctype',          '',     '客户线'],
+  ['ph',   'phone',          '',     '电话'],
+  ['rm',   'remark',         '',     '备注'],
+  ['bi',   'batch_ids',      '',     '所属批次'],
+  ['mj',   'mall_joined_at', '',     '注册商城时间'],
+  ['ad',   'address',        '',     '地址'],
+  ['cs',   'coord_source',   '',     '坐标来源'],
+  ['cst',  'coord_status',   '',     '坐标状态'],
+  ['mc',   'code',           '',     '客户编号'],
+  ['mk',   'mall_key',       '',     '商城Key'],
+  ['u',    'updated_at',     0,      '最后修改'],
+  ['so',   'source',         '',     '来源'],
+  ['reg',  'region',         '',     '区域原值'],
+  ['sm',   'salesman',       '',     '签约业务员'],
+  ['ml',   'mall_level',     '',     '商城等级'],
+  ['msrc', 'mall_source',    '',     '商城来源'],
+  ['mcat', 'mall_category',  '',     '商城分类'],
+  ['clor', 'last_order_at',  '',     '商城最近下单'],
+  ['clbr', 'last_browse_at', '',     '商城最近浏览'],
+  ['ph2',  'phone2',         '',     '手机2']
+];
+// 只有 /points（全量）那条 SQL 会 JOIN 出这 7 列；/sync（增量）不返回 → 不进 M_SYNC
+//   ⚠️ 缺省值 'keep'：**故意不补** —— 缺就留空，让前端知道"这个值是不知道"，而不是"就是 0 单"
+//      （2026-10-15 D07 修正：补了默认值会让前端误判"已经有值"、不去云端补）
+const AGG_FIELDS = [
+  ['oc', 'oc', 'keep', '订单总数'],
+  ['oa', 'oa', 'keep', '订单总额'],
+  ['lo', 'lo', 'keep', '最近下单'],
+  ['vc', 'vc', 'keep', '拜访次数'],
+  ['lv', 'lv', 'keep', '最近拜访'],
+  ['vs', 'vs', 'keep', '全局态'],
+  ['vt', 'vt', 'keep', '任务内状态']
+];
+const ALL_FIELDS = CUST_FIELDS.concat(AGG_FIELDS);
+// ——— 以下三份**全部由上面两张表生成**，别处不要再手写字段清单 ———
+const M_POINTS = ALL_FIELDS.map(f => [f[0], f[1]]);      // /points 全量：[短键, PG列名]
+const M_SYNC = CUST_FIELDS.map(f => [f[0], f[1]]);       // /sync 增量（不含聚合）
+
+// PG 行 → 缓存短键（全量/增量共用；只差传进来的字段清单）
+function rowsToPoints(rows, map) {
+  return (rows || []).map(function (row) {
+    const o = {};
+    map.forEach(function (p) { const v = row[p[1]]; o[p[0]] = (v === null || v === undefined) ? '' : v; });
+    return o;
+  });
+}
+// 写盘前"瘦身"：按主表逐项取 + 按缺省值规则补（'keep' 的项缺就真的不写这个键）
+function slimPoints(points) {
+  return (points || []).map(function (p) {
+    const o = {};
+    ALL_FIELDS.forEach(function (f) {
+      const k = f[0], dv = f[2], v = p[k];
+      if (dv === 'keep') { if (v !== undefined) o[k] = v; }
+      else if (dv === 0) { o[k] = v || 0; }
+      else { o[k] = v || ''; }
+    });
+    return o;
+  });
+}
+
 let syncing = false;            // 是否正在拉取（前端显示进度用）
 // ⭐ 2026-09-27 老板定：预热时前端要能看到「已准备 3.8万/6万」→ progress 里带上 total。
 //   total 取「上一次缓存的条数」作参考（首次无缓存时为 0，前端就只显示已拉多少）。
@@ -180,24 +266,8 @@ async function refresh(callApi, cred) {
           //   漏了之后：pgapi 明明返回了、这里却被丢掉 → 缓存里没这个键 →
           //   前端 `custFillPageAgg` 以为"缺"就**回云端按页补**（白花钱、而且显示不出来）。
           //   **以后往 pgapi 的 SELECT 里加字段，必须同步加这张表**。
-          const M = [['i','id'],['n','name'],['nr','name_raw'],['la','lat'],['ln','lng'],['c','city'],['d','district'],
-            ['b','biz_circle'],['ad','address'],['cs','coord_source'],['cst','coord_status'],['mc','code'],['mk','mall_key'],
-            ['u','updated_at'],['ca','created_at'],['ct','ctype'],['ph','phone'],['rm','remark'],['bi','batch_ids'],
-            ['mj','mall_joined_at'],['so','source'],
-            // ⭐⭐ 2026-10-16（老板定「这 9 列 PG 里没有…同步器也要拉」）：补 8 项 ——
-            //   ⚠️ 方向是 **[短键, PG列名]**（与 pgsync.js 的 MAP **相反**）。
-            //   ⚠️ 与 pgapi.js 的 COLS_C、adminapi 的 custSync/custMapPoints 必须一一对应；
-            //      漏一项 = 该字段被**静默丢掉**（缓存里没这个键），前端就"看不到"。
-            ['reg','region'],['sm','salesman'],['ml','mall_level'],['msrc','mall_source'],['mcat','mall_category'],
-            ['clor','last_order_at'],['clbr','last_browse_at'],['ph2','phone2'],
-            // ⭐ 2026-10-15（《订单本地方案》第 5 块）：7 个聚合列 —— 来自 pgapi 的 cust_agg JOIN，
-            //   它的 SQL 别名本来就写成短名（oc/oa/lo/vc/lv/vs/vt），所以这里左右同名。
-            ['oc','oc'],['oa','oa'],['lo','lo'],['vc','vc'],['lv','lv'],['vs','vs'],['vt','vt']];
-          points = r.rows.map(row => {
-            const o = {};
-            M.forEach(function (p) { const v = row[p[1]]; o[p[0]] = (v === null || v === undefined) ? '' : v; });
-            return o;
-          });
+          // ⭐⭐ 2026-10-17（B 档）：字段清单已收进文件顶部的主表（M_POINTS），这里不再手写
+          points = rowsToPoints(r.rows, M_POINTS);
           console.log('[store] 从自己的服务器拿到 ' + points.length + ' 家（不走云开发）');
           progress.phase = '从服务器收到 ' + points.length + ' 家';
           fromPg = true;
@@ -256,36 +326,13 @@ async function refresh(callApi, cred) {
       }
     }
     // 只留列表层需要的字段（压体积；详情走 getCustomerDetail 实时拉）
-    // ⭐ 2026-09-27 M2a：扩到 12 项（含地址/坐标来源/坐标状态/编号/商城Key/updatedAt）——
-    //   客户管理页的表格要用；一条约 180 字节 → 5 万家 ≈ 9MB，仍可控。
-    const slim = points.map(p => ({
-      i: p.i, n: p.n, la: p.la, ln: p.ln, c: p.c, d: p.d, b: p.b,
-      ad: p.ad || '', cs: p.cs || '', cst: p.cst || '', mc: p.mc || '', mk: p.mk || '', u: p.u || 0,
-      // ⭐ M2b 新增 6 项（本地列表渲染用）
-      nr: p.nr || '', ca: p.ca || 0, ct: p.ct || '', ph: p.ph || '', rm: p.rm || '', bi: p.bi || '', mj: p.mj || '',
-      // ⭐ 2026-09-27 老板定：「列表这几列今后都要做排序」→ 聚合结果也要进缓存，否则本地排不了序。
-      //   ⚠️ 这里必须与云函数 custMapPoints/custSync 下发的字段**逐一对齐** —— 少写一个就会被"瘦身"筛掉，
-      //   表现为"云函数明明返回了、界面却拿不到"（本次踩过一次）。
-      // ⭐⭐ 2026-10-15 修（依《全项目审查》D07）：**这 7 个"聚合字段"不再补默认值** ——
-      //   订单数/订单额/最近下单/拜访数/最近拜访/拜访状态/状态文案，**只有云端的 custMapPoints / custSync 算得出来**；
-      //   而 `pgapi.js` 的 SELECT 只查 customers + 批次归属，**根本不返回它们**。
-      //   原来一律 `|| 0` / `|| 'free'` 补上，等于把"**不知道**"写成"**就是 0 单 / 没拜访过**" ——
-      //   前端 `custFillPageAgg` 见到 `oc !== undefined` 就**跳过按页补取**（见 admin.html），
-      //   于是"从 PG 刷新出来的那份缓存"里这几列**永远显示 0 / 未入任务**，排序和挑店也跟着错。
-      //   现在**缺就留空**（undefined → `JSON.stringify` 直接不写这个键），前端一看缺字段就会回云端按页补取（旧行为，正确）。
-      //   ⚠️ 只对"这几个只有云端算得出的字段"这么做；其余（名称/坐标/地址/编号…）照旧补空串或 0，不影响渲染。
-      oc: p.oc, oa: p.oa, lo: p.lo, vc: p.vc, lv: p.lv, vs: p.vs, vt: p.vt,
-      // ⭐ 2026-10-07 新增：客户来源（'field' = 手机端「加新店」现场录入的店）——
-      //   后台「🔎 比对认领」靠它把"现场录入 · 待商城建档"的店也纳入比对池（云端 runMallMatch 早就纳入了，前端此前漏了）
-      so: p.so || '',
-      // ⭐⭐ 2026-10-17 修（老板实测：导出里「商城等级/来源/分类/签约业务员」全空）：
-      //   **上面那句注释说的"少写一个就被瘦身筛掉"，这次真的又犯了** ——
-      //   这几列 `pgapi` / 云函数都下发了、增量同步也带了，但**全量刷新时被这份 `slim` 白名单筛掉**
-      //   → 写进磁盘缓存的就没有它们 → 前端读到的一直是缺失字段的快照（导出自然后是空的）。
-      //   ⚠️ 以后往「长名→短名」映射表（`M`）加字段，**必须同时加到这里**，否则"全量一跑就没了"。
-      reg: p.reg || '', sm: p.sm || '', ml: p.ml || '', msrc: p.msrc || '', mcat: p.mcat || '',
-      clor: p.clor || '', clbr: p.clbr || '', ph2: p.ph2 || ''
-    }));
+    // ⭐⭐ 2026-10-17（B 档）：**字段清单已收进文件顶部的主表**，这里只调用 slimPoints()。
+    //   以前这段是手写的 —— 每加一个字段都要记得在这里也加一遍，漏了就"全量一跑字段就没了"
+    //   （2026-10-17 老板报「导出里商城等级/来源/分类/签约业务员全空」正是漏在这里）。
+    //   ⚠️ 保留的旧口径（都在主表的"缺省值"列里表达）：普通字段缺了补 '' 或 0；
+    //      7 个聚合字段（oc/oa/lo/vc/lv/vs/vt）**故意不补** —— 缺就留空，
+    //      让前端知道"这个值是不知道"，而不是"就是 0 单"（2026-10-15 D07 修正）。
+    const slim = slimPoints(points);
     // ⭐ 2026-09-29【方案 C】记下"同步水位"maxU —— 增量同步（custSync 的 since）用它，
     //   比用本地时钟打点更可靠（本地时钟与云端不一定严丝合缝，会漏几秒）。
     let maxU = 0;
@@ -513,19 +560,8 @@ async function checkDirtyFromPg() {
   const t0 = Date.now();
   const sy = await (await fetch(base + '/sync' + tok + jl + 'since=' + encodeURIComponent(String(since)))).json();
   if (!sy || !sy.ok) return { ok: false, msg: '服务器拉增量失败' };
-  // pgapi 返回 PG 的 snake_case 列名 → 转成前端一直用的简写字段（与 /points 同一张映射表）
-  const M = [['i', 'id'], ['n', 'name'], ['nr', 'name_raw'], ['la', 'lat'], ['ln', 'lng'], ['c', 'city'], ['d', 'district'],
-    ['b', 'biz_circle'], ['ad', 'address'], ['cs', 'coord_source'], ['cst', 'coord_status'], ['mc', 'code'], ['mk', 'mall_key'],
-    ['u', 'updated_at'], ['ca', 'created_at'], ['ct', 'ctype'], ['ph', 'phone'], ['rm', 'remark'], ['bi', 'batch_ids'],
-    ['mj', 'mall_joined_at'], ['so', 'source'],
-    // ⭐⭐ 2026-10-16（老板定「这 9 列 PG 里没有…同步器也要拉」）：补 8 项（方向 [短键, PG列名]）
-    ['reg', 'region'], ['sm', 'salesman'], ['ml', 'mall_level'], ['msrc', 'mall_source'], ['mcat', 'mall_category'],
-    ['clor', 'last_order_at'], ['clbr', 'last_browse_at'], ['ph2', 'phone2']];
-  const got = (sy.rows || []).map(row => {
-    const o = {};
-    M.forEach(p => { const v = row[p[1]]; o[p[0]] = (v === null || v === undefined) ? '' : v; });
-    return o;
-  });
+  // ⭐⭐ 2026-10-17（B 档）：字段清单已收进文件顶部的主表（M_SYNC = 客户字段、不含聚合列）
+  const got = rowsToPoints(sy.rows, M_SYNC);
   // ③ 合并（与 syncIncremental 同一套：覆盖同 id / 其余保留 / 新增追加）
   const byId = {};
   got.forEach(p => { if (p && p.i) byId[p.i] = p; });
@@ -595,4 +631,8 @@ function startAutoRefresh(callApi, cred) {
     .catch(() => null);
 }
 
-module.exports = { read, write, status, refresh, refreshAgg, cancelRefresh, patch, unbatch, checkDirty, checkDirtyFromPg, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR };
+// ⭐ 2026-10-17（B 档）：多导出字段表与两个转换函数 ——
+//   用途：① 对账/验证脚本可以直接调**真代码**（而不是在脚本里另抄一份逻辑）；
+//         ② 以后写"导出客户"之类的功能，字段清单一处取（`CUST_FIELDS` 带中文名）。
+module.exports = { read, write, status, refresh, refreshAgg, cancelRefresh, patch, unbatch, checkDirty, checkDirtyFromPg, syncIncremental, startAutoRefresh, isFreshToday, FILE, CACHE_DIR,
+  CUST_FIELDS, AGG_FIELDS, ALL_FIELDS, M_POINTS, M_SYNC, rowsToPoints, slimPoints };

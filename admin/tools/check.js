@@ -675,6 +675,81 @@ checkCacheFields();
 checkMallFields();
 checkMallCodeRule();
 checkCustWriteWatch();
+// ══════════════════════════════════════════════════════════════════════════════
+// (15) 字段清单对账（2026-10-17 B 档新增）
+//   背景：同一个"客户字段清单"以前要在 4 处各写一遍（pgapi 的 COLS_C / store 的两份 M 表 /
+//         store 的 slim 瘦身 / 云函数两个白名单），**漏一处 = 那个字段静默消失、不报错**。
+//         2026-10-17 老板报「导出里商城等级/来源/分类/签约业务员全空」就是漏在 slim 那处。
+//   现在：store.js 已收敛成一张主表（CUST_FIELDS），这条检查负责"盯住其余几处"：
+//     ① pgapi 的 COLS_C（PG 查哪些列）—— 必须与主表的 PG 列名**一一对应**
+//     ② 云函数 custMapPoints / custSync 的字段白名单 —— 转成下划线后也应对得上（对不上只提醒）
+//   ⚠️ 已知例外（不算漏）：
+//     · `batch_ids` —— PG 侧由 `BI_JOIN`（batch_members 聚合）现算，不在 COLS_C 的列里
+//     · 云函数侧有些字段"只给小程序用、不进后台缓存" → 反向差异只提醒、不判失败
+// ══════════════════════════════════════════════════════════════════════════════
+function checkFieldLists() {
+  const rd = p => { const a = path.join(ROOT, p); return fs.existsSync(a) ? fs.readFileSync(a, 'utf8') : ''; };
+
+  // ① store.js 主表（CUST_FIELDS）里的 PG 列名
+  const storeSrc = rd('admin/store.js');
+  const i0 = storeSrc.indexOf('const CUST_FIELDS');
+  const i1 = storeSrc.indexOf('const AGG_FIELDS');
+  if (i0 < 0 || i1 < 0) { fails.push('字段清单对账：store.js 里找不到 CUST_FIELDS / AGG_FIELDS（B 档的主表被删了？）'); return; }
+  const storeCols = new Set();
+  for (const m of storeSrc.slice(i0, i1).matchAll(/\['[a-z0-9]+',\s*'([a-z0-9_]+)'/g)) storeCols.add(m[1]);
+
+  // ② pgapi.js 的 COLS_C
+  const pgSrc = rd('admin/tools/pgapi.js');
+  const j0 = pgSrc.indexOf('const COLS_C');
+  const j1 = pgSrc.indexOf('const BI_JOIN');
+  if (j0 < 0 || j1 < 0) { fails.push('字段清单对账：pgapi.js 里找不到 COLS_C / BI_JOIN'); return; }
+  const pgCols = new Set();
+  for (const m of pgSrc.slice(j0, j1).matchAll(/c\.([a-z0-9_]+)/g)) pgCols.add(m[1]);
+
+  // ③ 双向比（`batch_ids` 由 JOIN 现算，两边都不出现 → 显式排除，别误判）
+  const NOT_IN_COLS_C = new Set(['batch_ids']);   // ⚠️ pgapi 里它是 `COALESCE(m.bids,'') AS batch_ids` 现算的
+  const onlyPg = [...pgCols].filter(c => !storeCols.has(c));
+  const onlyStore = [...storeCols].filter(c => !pgCols.has(c) && !NOT_IN_COLS_C.has(c));
+  if (onlyPg.length) fails.push('字段清单对账：**pgapi 查了、但 store.js 主表没接**（这些列白查了）→ ' + onlyPg.join(', '));
+  if (onlyStore.length) fails.push('字段清单对账：**store.js 主表要、但 pgapi 没查**（这些字段会永远是空）→ ' + onlyStore.join(', '));
+
+  // ④ 云函数白名单（驼峰 → 下划线）对比：对不上只提醒（可能有"只给小程序用"或"名字不同"的字段）
+  const camel2snake = s => s.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
+  const apiSrc = rd('miniprogram/cloudfunctions/adminapi/index.js');
+  const wl = fn => {
+    const a = apiSrc.indexOf('async function ' + fn);
+    if (a < 0) return null;
+    const b = apiSrc.indexOf('\nasync function ', a + 10);
+    const seg = apiSrc.slice(a, b > 0 ? b : a + 9000);
+    const set = new Set();
+    for (const m of seg.matchAll(/\b([a-zA-Z][a-zA-Z0-9]*)\s*:\s*true\b/g)) set.add(camel2snake(m[1]));
+    return set;
+  };
+  const wlMp = wl('custMapPoints'), wlSy = wl('custSync');
+  if (!wlMp || !wlSy) {
+    warns.push('字段清单对账：没找到 custMapPoints / custSync 的白名单，跳过云函数侧比对');
+  } else {
+    // ⚠️ 这些是**已知的口径差异**（不算漏）：
+    //   · batch_ids/photos/plat/... = 云端不存或只在别处
+    //   · id → 云端叫 `_id`
+    //   · ctype → 云端叫 `customerType`
+    //   · coord_status → 云端叫 `coordStatus`
+    //   · code → 云端叫 `mallCode`（客户编号）
+    const EXTRA_CLOUD = new Set(['batch_ids', 'deleted', 'is_sub_account', 'main_account_id', 'sub_accounts',
+      'plat', 'photos', 'customer_type', 'id', 'ctype', 'coord_status', 'code']);
+    [['custMapPoints', wlMp], ['custSync', wlSy]].forEach(function (pair) {
+      const nm = pair[0], set = pair[1];
+      const miss = [...storeCols].filter(c => !EXTRA_CLOUD.has(c) && !set.has(c));
+      if (miss.length) warns.push(`字段清单对账：store.js 主表有、但 ${nm} 白名单里没有（云端若不发这几个字段，它们会一直是空）→ ` + miss.slice(0, 8).join(', ') + (miss.length > 8 ? ' …' : ''));
+    });
+  }
+
+  if (!onlyPg.length && !onlyStore.length) {
+    console.log('  ✔ 字段清单对账：主表 ' + storeCols.size + ' 列 · pgapi 查 ' + pgCols.size + ' 列 · 两边完全对得上');
+  }
+}
+checkFieldLists();
+
 checkCustWriteActions();
 console.log('─'.repeat(64));
 
@@ -687,5 +762,5 @@ if (fails.length) {
   console.log('');
   process.exit(1);
 }
-console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段 / 商城字段 / 剥编号 / 写类调用对账 / 客户变动信号对账）');
+console.log('✅ 全部通过（语法 / 内嵌 JS / JSON / WXML / 行尾 / 结果名 / ACTIONS 对账 / action 调用 / 页面路径 / 护栏 / 缓存字段 / 商城字段 / 剥编号 / 写类调用对账 / 字段清单对账 / 客户变动信号对账）');
 process.exit(0);
