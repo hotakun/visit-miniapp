@@ -4661,6 +4661,12 @@ async function mergeMallSub(event) {
   if (!mainCode) return { ok: false, code: 'NO_MAIN_CODE', msg: '主店没有客户编号，不能作为主店' };
   if (subCode && mainCode !== subCode) return { ok: false, code: 'CODE_MISMATCH', msg: '编号不同，不能作为副店合并（请用「就是这家」）' };
   const now = Date.now();
+  // ⭐⭐ 2026-10-18 老板定：合并为主副店时**由老板选择哪家是主店**。
+  //   · 'sys'（默认）= 系统里已有档案为主店，本次导入这条作为副店；
+  //   · 'mall' = 本次导入这条为主店：主档展示字段（店名/电话/地址/mallKey）换成商城值，
+  //     原系统档案的信息降为副店。**坐标 / 商圈 / 批次 / 拜访一律不动**（老板红线：坐标以现场为准）。
+  //   ⚠️ 两种选法都**不改 mallCode**（同编号），所以订单/明细始终按编号合并显示，与主副无关。
+  const mainSide = String((event && event.mainSide) || 'sys').toLowerCase() === 'mall' ? 'mall' : 'sys';
   const sub = {
     mallKey: mallKey,
     mallCode: String(m.mallCode || '').trim(),
@@ -4672,11 +4678,45 @@ async function mergeMallSub(event) {
     mergedAt: now
   };
   const cur = (Array.isArray(c.subAccounts) ? c.subAccounts : []).slice();
-  const idx = cur.findIndex(x => x && String(x.mallKey || '') === mallKey);
-  if (idx >= 0) cur[idx] = Object.assign({}, cur[idx], sub);
-  else cur.push(sub);
+  const fields = {};
+  if (mainSide === 'mall') {
+    const oldName = String(c.nameRaw || c.name || '').trim();
+    const oldSub = {
+      mallKey: String(c.mallKey || ''),
+      mallCode: String(c.mallCode || '').trim(),
+      name: oldName,
+      phone: String(c.phone || '').trim(),
+      address: String(c.address || '').trim(),
+      lat: Number(c.lat) || 0, lng: Number(c.lng) || 0,
+      addedAt: '', mergedAt: now, wasMain: true
+    };
+    if (oldName || oldSub.phone || oldSub.address) {
+      const i0 = cur.findIndex(x => x && (
+        (oldSub.mallKey && String(x.mallKey || '') === oldSub.mallKey) ||
+        (!oldSub.mallKey && String(x.name || '') === oldName && String(x.phone || '') === oldSub.phone)
+      ));
+      if (i0 >= 0) cur[i0] = Object.assign({}, cur[i0], oldSub);
+      else cur.push(oldSub);
+    }
+    // 导入这条现在是主店 → 从 subAccounts 里移除同 mallKey 的旧条目
+    const i1 = cur.findIndex(x => x && String(x.mallKey || '') === mallKey);
+    if (i1 >= 0) cur.splice(i1, 1);
+    fields.name = String(m.name || '').trim() || c.name;
+    fields.nameRaw = fields.name;
+    fields.phone = String(m.phone || '').trim() || c.phone;
+    fields.address = String(m.address || '').trim() || c.address;
+    fields.mallKey = mallKey;
+    // 原主店电话收入 phone2（两个都留，搜索/详情都能命中）
+    if (fields.phone && c.phone && String(c.phone).trim() !== fields.phone) fields.phone2 = String(c.phone).trim();
+  } else {
+    const idx = cur.findIndex(x => x && String(x.mallKey || '') === mallKey);
+    if (idx >= 0) cur[idx] = Object.assign({}, cur[idx], sub);
+    else cur.push(sub);
+  }
   // ⚠️ 必须写 updatedAt —— 增量同步（custSync）靠它把这次改动带给后台/PG。
-  await db.collection('customers').doc(customerId).update({ data: { subAccounts: cur, updatedAt: now } });
+  await db.collection('customers').doc(customerId).update({
+    data: Object.assign({}, fields, { subAccounts: cur, updatedAt: now })
+  });
   // 收尾「待确认认领」记录（同 applyMallPair：按 mallKey 收，不区分当时配的是谁）
   try {
     const cl = await db.collection('mall_claims').where({ mallKey, status: 'pending' }).limit(20).get();
@@ -4686,7 +4726,7 @@ async function mergeMallSub(event) {
       });
     }
   } catch (e) { console.error('[mergeMallSub] 收尾 claims 失败（不影响合并）', e); }
-  return { ok: true, customerId: customerId, subAccounts: cur };
+  return { ok: true, customerId: customerId, subAccounts: cur, mainSide: mainSide, fields: fields };
 }
 
 async function resolveMallClaim(event) {

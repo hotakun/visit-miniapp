@@ -757,7 +757,10 @@ const server = http.createServer(async (req, res) => {
 //   ④ changePayloadOf：这次"改了什么"（新值）
 const CHANGE_ACTIONS = {
   updateCustomerFields: 1, updateCustomerCoords: 1, fixDupCustomers: 1,
-  deleteCustomers: 1, restoreCustomers: 1, applyMallPair: 1, applyMallMatch: 1
+  deleteCustomers: 1, restoreCustomers: 1, applyMallPair: 1, applyMallMatch: 1,
+  // ⭐ 2026-10-18：主副合并会写 subAccounts；若老板选「导入这条为主店」还会改店名/电话/地址
+  //   → 必须留改前快照，可回退（老板红线：改店铺信息必须备案）。
+  mergeMallSub: 1
   // ⚠️ 2026-10-15 老板定：**mergeCustomers 不进这张表** ——
   //   原话「这个不要备案，也就是合并就合并了，没有退回的道理，这个情况肯定是我们勘察确实了的！」
   //   （合并前是现场确认过"就是同一家"的，不需要像改字段那样留改前快照。）
@@ -769,6 +772,7 @@ function changeIdsOf(act, p) {
   else if (act === 'fixDupCustomers') (p.rows || []).forEach(r => push(r && r.id));
   else if (act === 'deleteCustomers' || act === 'restoreCustomers') (p.ids || []).forEach(push);
   else if (act === 'applyMallPair') push(p.customerId);
+  else if (act === 'mergeMallSub') push(p.customerId);
   else if (act === 'applyMallMatch') (p.claims || []).forEach(c => push(c && c.customerId));
   // ⚠️ mergeCustomers 不在这里 —— 老板 2026-10-15 定：**合并不做备案**（现场勘察确认过，不退回）
   return ids;
@@ -780,6 +784,7 @@ function changePayloadOf(act, p) {
   if (act === 'deleteCustomers') return { ids: p.ids };
   if (act === 'restoreCustomers') return { ids: p.ids };
   if (act === 'applyMallPair') return { customerId: p.customerId, mallKey: p.mallKey };
+  if (act === 'mergeMallSub') return { customerId: p.customerId, mallKey: p.mallKey, mainSide: p.mainSide };
   if (act === 'applyMallMatch') return { claims: p.claims, pendings: p.pendings };
   return null;
 }

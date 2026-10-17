@@ -9041,28 +9041,84 @@ function mpRender() {
 // ⭐⭐ 2026-10-18 老板定：同编号 = 同一家店（老板/老板娘各注册）→ **主店 + 副店**，只保留一条档案。
 //   默认：系统里已有的那家 = 主店；本次导入的这条 = 副店（它本来就没有独立档案）。
 //   ⚠️ 只写副店信息，主店的店名/地址/坐标/商圈一个字不动（老板红线：坐标以现场为准）。
-async function mpSubMerge(mallKey, customerId) {
+// ⭐⭐ 2026-10-18 老板定：合并为主副店时，**由老板选择哪家是主店**。
+//   主店 = 客户管理里显示、拜访以此为准；另一家作为副店挂在主店下面。
+//   ⚠️ 两家同编号 → 订单与明细按编号自动合并显示（与选谁当主店无关）。
+function mpSubPick(mallKey, customerId) {
+  return new Promise(function (resolve) {
+    const row = (_mpRows || []).filter(x => x.mall_key === mallKey)[0] || {};
+    const p = ((custLocal && custLocal.points) || []).filter(x => x.i === customerId)[0] || {};
+    const sysName = p.nr || p.n || '（系统内这条）';
+    const mallName = row.name || '（本次导入这条）';
+    const opt = (val, title, sub, checked, note) =>
+      '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ' +
+        (checked ? '#F5A623' : '#E3E8EF') + ';border-radius:10px;margin-bottom:8px;cursor:pointer;background:' +
+        (checked ? '#FFFBF3' : '#fff') + '">' +
+        '<input type="radio" name="mpsubmain" value="' + val + '"' + (checked ? ' checked' : '') +
+          ' style="margin-top:3px;accent-color:#F5531C">' +
+        '<span style="flex:1"><b style="font-size:13px">' + title + '</b>' +
+        '<div style="font-size:11.5px;color:#7A8490;margin-top:2px">' + sub + '</div>' +
+        (note ? '<div style="font-size:11px;color:#B77400;margin-top:3px">' + note + '</div>' : '') +
+        '</span></label>';
+    const box = document.createElement('div');
+    box.id = 'mpSubPickOvl';
+    box.style.cssText = 'position:fixed;inset:0;background:rgba(20,25,35,.5);z-index:2147483000;display:flex;align-items:center;justify-content:center';
+    box.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px 16px;width:min(640px,94vw);max-height:88vh;overflow-y:auto">' +
+      '<div style="font-weight:800;font-size:14px;margin-bottom:4px">合并为主副店 —— 请选择哪家是<b>主店</b></div>' +
+      '<div style="font-size:11.5px;color:#7A8490;margin-bottom:10px;line-height:1.6">主店 = 客户管理里显示、拜访以此为准；另一家作为副店挂在主店下面。<br>' +
+        '两家编号相同，<b>以后导入的销售订单和明细订单会自动合并显示</b>。</div>' +
+      opt('sys', '系统内：' + esc(sysName), esc((p.ad || '') + (p.ph ? ' · ' + p.ph : '')), true,
+        '已有拜访记录 / 门店照片 / 批次归属') +
+      opt('mall', '本次导入：' + esc(mallName), esc((row.address || '') + (row.phone ? ' · ' + row.phone : '')), false,
+        '商城侧信息；坐标仍保留系统内的（以现场为准）') +
+      '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">' +
+      '<button class="btn ghost" id="mpspNo" style="height:32px;font-size:13px">取消</button>' +
+      '<button class="btn primary" id="mpspYes" style="height:32px;font-size:13px">✅ 确认合并</button></div></div>';
+    document.body.appendChild(box);
+    const done = function (v) {
+      const e0 = document.getElementById('mpSubPickOvl');
+      if (e0 && e0.parentNode) e0.parentNode.removeChild(e0);
+      resolve(v);
+    };
+    document.getElementById('mpspNo').onclick = function () { done(null); };
+    document.getElementById('mpspYes').onclick = function () {
+      const el = box.querySelector('input[name="mpsubmain"]:checked');
+      done(el ? el.value : 'sys');
+    };
+    box.addEventListener('click', function (e) { if (e.target === box) done(null); });
+  });
+}
+async function mpSubMerge(mallKey, customerId, mainSide) {
+  const side = mainSide || await mpSubPick(mallKey, customerId);
+  if (!side) return;
   const row = (_mpRows || []).filter(x => x.mall_key === mallKey)[0] || {};
   const p = ((custLocal && custLocal.points) || []).filter(x => x.i === customerId)[0] || {};
-  const mainName = p.nr || p.n || '（主店）';
-  const subName = row.name || '';
-  if (!confirm('合并为「主店 + 副店」\n\n主店：' + mainName + '\n副店：' + subName + '\n\n' +
-    '· 客户管理里只保留主店这一条档案；\n' +
-    '· 副店与主店同编号，订单会合并显示；\n' +
-    '· 搜索副店的店名 / 电话也能搜到主店。\n\n确定？')) return;
+  const sysName = p.nr || p.n || '（系统内）';
+  const mallName = row.name || '（本次导入）';
+  const mainName = (side === 'mall') ? mallName : sysName;
+  const subName = (side === 'mall') ? sysName : mallName;
   const r = await api('mergeMallSub', {
-    customerId: customerId, mallKey: mallKey,
+    customerId: customerId, mallKey: mallKey, mainSide: side,
     row: { mallKey: mallKey, mallCode: row.mall_code || '', name: row.name || '', phone: row.phone || '',
            address: row.address || '', lat: row.lat || 0, lng: row.lng || 0 }
   });
   if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '未知')); return; }
   await mpMark(mallKey, 'paired', customerId, mainName);
-  // 就地更新本地缓存：搜索 / 详情立刻能命中副店信息（PG 那边 5 分钟内也会同步过去）
+  // 就地更新本地缓存（搜索 / 详情立刻生效；PG 那边 5 分钟内同步过去）
   try {
     const pt = ((custLocal && custLocal.points) || []).filter(x => x.i === customerId)[0];
-    if (pt) pt.sub = JSON.stringify(r.subAccounts || []);
+    if (pt) {
+      pt.sub = JSON.stringify(r.subAccounts || []);
+      if (r.fields) {
+        if (r.fields.name) { pt.n = r.fields.name; pt.nr = r.fields.nameRaw || r.fields.name; }
+        if (r.fields.phone) pt.ph = r.fields.phone;
+        if (r.fields.address) pt.ad = r.fields.address;
+        if (r.fields.mallKey) pt.mk = r.fields.mallKey;
+        if (r.fields.phone2) pt.ph2 = r.fields.phone2;
+      }
+    }
   } catch (e) { /* 静默 */ }
-  alert('✅ 已合并为主副店：' + mainName + '\n副店：' + subName);
+  alert('✅ 已合并为主副店：' + mainName + '\n副店：' + subName + '\n\n两家的订单与明细按同编号自动合并显示。');
   await mpLoad(true);
 }
 // 连锁分店：打开「新建客户」表单，并把「另一家」带进去（建成后互标同一老板）
