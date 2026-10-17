@@ -215,8 +215,20 @@ function buildD(res, photoUrls, recUrls) {
 
   return {
     // 地址：老板 2026-09-25 定 —— **不显示省份和地级市**（浙江省金华市永康市… → 永康市…）
-    name: esc(c.name), addr: stripProvCity(c.address, c.region),
-    // ⭐ 2026-10-11 老板定：顶端卡片显示**客户编号**（有编号才显示；云端 custDetail 白名单里已带 mallCode）
+    // ⭐⭐ 2026-10-17 老板定：**店名要完整带编号**（如「c933 福建沙县小吃」）。
+    //   优先级：nameRaw（原值就是「编号 + 店名」）→ 没 nameRaw 就用 mallCode 拼 → 最后才用 name。
+    //   ⚠️ 配套：413 家客户的 name 已按 nameRaw 补回编号（备案 _scratch/店名加回编号-备案-*.json）；
+    //      这里是"万一还有漏的"兜底，保证显示永远带编号。
+    name: esc((function () {
+      const raw = String(c.nameRaw || '').trim();
+      if (raw) return raw;
+      const nm = String(c.name || '');
+      const code = String(c.mallCode || '').trim();
+      if (code && nm.indexOf(code) !== 0) return code + ' ' + nm;
+      return nm;
+    })()), addr: stripProvCity(c.address, c.region),
+    // ⭐ 2026-10-11 加、2026-10-17 起**不再显示**（编号已并进店名，wxml 里那行小标签已删）。
+    //   字段保留：万一以后别处还要单独用编号。
     code: esc(c.mallCode || ''),
     // ⭐ 2026-10-07 修：营业时间**平台优先、现场兜底** —— 平台写在 plat.hours，现场（「加新店」）写在顶层 hours。
     hours: flatHours(p.hours || c.hours),
