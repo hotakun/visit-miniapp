@@ -4650,6 +4650,97 @@ function mallPairOpen(custId, custName) {
 
 function mallPairClose() { const o = $('mallPairOvl'); if (o) o.style.display = 'none'; }
 
+// ══════════════════════════════════════════════════════════════════════════
+// ⭐⭐ 2026-10-17 老板定：**逐字段选择"用哪边"** —— 三处共用
+//   （商城待配对的「✓ 就是这家」、客户管理「未加」点开的合并预览，以及以后的别的合并入口）。
+//
+//   用法：const picks = await mallPickFields({ title, sub, mall:{...}, sys:{...} });
+//         picks = { name:'mall'|'sys', phone:…, address:…, region:…, mallCode:… }；取消返回 null。
+//
+//   ⚠️ **只有这 5 个字段能选** —— 因为只有它们"两边都可能有值"：
+//      · 经纬度、商圈：**红线**（现场采的坐标才是真到过那个点）→ 永远用系统内的，只显示不给选；
+//      · 等级/来源/分类/签约业务员/加入时间等：系统内本来没有对应值 → 一律写商城的，也不用选。
+//   ⚠️ 默认值 = **现有规则**（商城有值就用商城的），所以"什么都不改"= 与改造前完全一致。
+//   ⚠️ 电话：选了哪边只是**换顺序**，两个号都留（老板 2026-10-17 定）。
+// ══════════════════════════════════════════════════════════════════════════
+const MP_OPT_FIELDS = [
+  { k: 'name', label: '店名' },
+  { k: 'phone', label: '电话' },
+  { k: 'address', label: '地址' },
+  { k: 'region', label: '地区' },
+  { k: 'mallCode', label: '编号' }
+];
+let _mpfResolve = null, _mpfData = null;
+
+function mallPickFields(opts) {
+  return new Promise(function (resolve) {
+    _mpfResolve = resolve;
+    _mpfData = opts || {};
+    $('mallPickTitle').textContent = _mpfData.title || '🛒 合并预览';
+    $('mallPickSub').textContent = _mpfData.sub || '';
+    $('mallPickMsg').textContent = '每行选「用哪边」；不动就是默认（商城优先）';
+    mallPickRender();
+    const o = $('mallPickOvl'); if (o) o.style.display = 'flex';
+  });
+}
+
+function mallPickRender() {
+  const d = _mpfData; if (!d) return;
+  const e1 = v => (esc(String(v || '')) || '<span style="color:#C3CAD4">（空）</span>');
+  const m = d.mall || {}, s = d.sys || {};
+  let h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:var(--sub);font-weight:700;text-align:left">' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:70px">字段</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">商城的</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">系统内的</th>' +
+    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:200px">用哪边</th></tr></thead><tbody>';
+  MP_OPT_FIELDS.forEach(function (f) {
+    const mv = m[f.k], sv = s[f.k];
+    // 默认 = 现有规则：商城有值就用商城的；商城没值 → 用系统内的
+    const def = (mv !== '' && mv != null) ? 'mall' : 'sys';
+    h += '<tr>' +
+      '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9;color:var(--sub)">' + f.label + '</td>' +
+      '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9">' + e1(mv) + '</td>' +
+      '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9">' + e1(sv) + '</td>' +
+      '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9;white-space:nowrap">' +
+      '<label style="margin-right:12px"><input type="radio" name="mpf_' + f.k + '" value="mall"' + (def === 'mall' ? ' checked' : '') + '> 商城</label>' +
+      '<label><input type="radio" name="mpf_' + f.k + '" value="sys"' + (def === 'sys' ? ' checked' : '') + '> 系统内</label>' +
+      '</td></tr>';
+  });
+  // 不能选的两行 —— 明确标出"为什么不能选"，免得老板以为做了没生效
+  h += '<tr><td style="padding:6px 8px;color:var(--sub)">经纬度</td>' +
+    '<td style="padding:6px 8px;color:#C3CAD4">（商城没有）</td>' +
+    '<td style="padding:6px 8px">' + (esc(String(s.latText || '')) || '<span style="color:#C3CAD4">（空）</span>') + '</td>' +
+    '<td style="padding:6px 8px;color:var(--sub)">🔒 固定用系统内的</td></tr>' +
+    '<tr><td style="padding:6px 8px;color:var(--sub)">商圈</td>' +
+    '<td style="padding:6px 8px;color:#C3CAD4">（商城没有）</td>' +
+    '<td style="padding:6px 8px">' + e1(s.bizCircle) + '</td>' +
+    '<td style="padding:6px 8px;color:var(--sub)">🔒 固定用系统内的</td></tr>';
+  h += '</tbody></table>';
+  $('mallPickBody').innerHTML = h;
+}
+
+function mallPickCollect() {
+  const picks = {};
+  MP_OPT_FIELDS.forEach(function (f) {
+    const el = document.querySelector('input[name="mpf_' + f.k + '"]:checked');
+    picks[f.k] = (el && el.value === 'sys') ? 'sys' : 'mall';
+  });
+  return picks;
+}
+
+function mallPickConfirm() {
+  const picks = mallPickCollect();
+  const r = _mpfResolve; _mpfResolve = null;
+  const o = $('mallPickOvl'); if (o) o.style.display = 'none';
+  if (r) r(picks);
+}
+
+function mallPickCancel() {
+  const r = _mpfResolve; _mpfResolve = null;
+  const o = $('mallPickOvl'); if (o) o.style.display = 'none';
+  if (r) r(null);
+}
+
 async function mallPairLoadFile(inp) {
   const f = inp && inp.files && inp.files[0];
   if (!f) return;
@@ -4716,26 +4807,24 @@ async function mallPairChoose(i) {
   const mPhone = String(row.phone || ''), sPhone = String(c.phone || '');
   const phoneRes = mPhone ? (esc(mPhone) + (sPhone && sPhone !== mPhone ? '<br>' + esc(sPhone) : '')) : e1(sPhone);
   const lat = Number(c.lat) || 0, lng = Number(c.lng) || 0;
-  const html = '<div style="font-size:12.5px;color:var(--sub);margin-bottom:8px">确认要把这家并成商城那条？下面是合并后的结果（<b>坐标和商圈仍保留系统内的</b>）：</div>' +
-    '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:var(--sub);font-weight:700;text-align:left">' +
-    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:70px">字段</th>' +
-    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">商城的</th>' +
-    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">系统内的</th>' +
-    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">合并结果</th>' +
-    '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:96px">依据</th></tr></thead><tbody>' +
-    tbl('店名', e1(row.name), e1(c.name), e1(row.name || c.name), '商城优先') +
-    tbl('电话', e1(mPhone), e1(sPhone), phoneRes, (mPhone && sPhone && mPhone !== sPhone) ? '不同→1、2 排' : '商城优先') +
-    tbl('地址', e1(row.address), e1(c.address), e1(row.address || c.address), '商城优先') +
-    tbl('地区', e1(row.region), e1(c.region), e1(row.region || c.region), '商城优先') +
-    tbl('编号', e1(row.mallCode), e1(c.mallCode), e1(row.mallCode || c.mallCode), '商城优先') +
-    tbl('经纬度', '（商城没有）', (lat && lng) ? (lat + ', ' + lng) : '（空）', (lat && lng) ? (lat + ', ' + lng) : '—', '用系统内的') +
-    tbl('商圈', '（商城没有）', e1(c.bizCircle), e1(c.bizCircle), '系统内的') +
-    tbl('标记', '—', '—', '已加入商城', '') +
-    '</tbody></table>';
-  if (!(await confirmBox('🛒 合并预览', html, '✅ 确认合并（立刻生效）'))) return;
+  // ⭐⭐ 2026-10-17：**改成逐字段选择**（老板：每个字段能选采用哪边）。
+  //   弹的是通用弹窗 `mallPickFields`（与「商城待配对」共用同一套），默认值仍是"商城优先"。
+  const picks = await mallPickFields({
+    title: '🛒 合并预览',
+    sub: '确认要把这家并成商城那条？（不动就是默认：商城优先）',
+    mall: {
+      name: row.name, phone: mPhone, address: row.address,
+      region: row.region, mallCode: row.mallCode
+    },
+    sys: {
+      name: c.name, phone: sPhone, address: c.address, region: c.region,
+      mallCode: c.mallCode, latText: (lat && lng) ? (lat + ', ' + lng) : '', bizCircle: c.bizCircle
+    }
+  });
+  if (!picks) return;                      // 取消
 
   try {
-    const r = await api('applyMallPair', { customerId: custId, mallKey: row.mallKey, mallRow: row });
+    const r = await api('applyMallPair', { customerId: custId, mallKey: row.mallKey, mallRow: row, picks: picks });
     if (!r || !r.ok) { alert('合并失败：' + ((r && r.msg) || '未知错误')); return; }
     mallPairClose();
     alert('✅ 已合并：' + (row.name || '') + '\n\n列表马上刷新。');
@@ -8696,10 +8785,14 @@ async function mpLoad(force) {
 }
 function mpTab(t) { _mpTab = t; mpRender(); }
 function mpStat() { return { p: _mpStat.pending || 0, a: _mpStat.paired || 0, c: _mpStat.created || 0, s: _mpStat.skipped || 0 }; }
-function mpMark(key, status, tid, tname, lat, lng) {
+function mpMark(key, status, tid, tname, lat, lng, picks) {
+  // ⭐ 2026-10-17：多传一个 `picks`（逐字段选择"用哪边"，JSON）——
+  //   存在 PG 的 mall_pending.picks 里，这样"先梳理、最后统一发送"中间**刷新页面/换电脑都不丢**。
+  //   ⚠️ 不传 = 不动那一列（COALESCE 保原值），所以"只改状态"时不会把选择清空。
   return fetch('/mallPending/mark?mallKey=' + encodeURIComponent(key) + '&status=' + status +
     '&targetId=' + encodeURIComponent(tid || '') + '&targetName=' + encodeURIComponent(tname || '') +
-    (lat ? ('&lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng || '')) : ''),
+    (lat ? ('&lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng || '')) : '') +
+    (picks ? ('&picks=' + encodeURIComponent(JSON.stringify(picks))) : ''),
     { method: 'POST' }).then(r => r.json()).catch(() => null);
 }
 function mpRender() {
@@ -8852,36 +8945,31 @@ async function mpConfirm(mallKey, customerId) {
     try { const r = localBizSuggest(pts, cLat, cLng); if (r && r.suggest) { bizShow = esc(r.suggest); bizNote = '按坐标算（' + r.radius + ' 米内 ' + r.total + ' 家有商圈）'; } } catch (e) { }
   }
   if (!bizShow) { bizShow = '<span style="color:#B77400">两边都没有</span>'; bizNote = '可手工填'; }
-  const cell = 'padding:6px 10px;border-top:1px solid #EDF1F7';
-  const trow = function (k, m, s, fin, why, hl) {
-    return '<tr' + (hl ? ' style="background:#FBFFFC"' : '') + '>' +
-      '<td style="' + cell + ';color:#A8B0BB">' + k + '</td>' +
-      '<td style="' + cell + '">' + m + '</td>' +
-      '<td style="' + cell + ';color:#98A2AE">' + s + '</td>' +
-      '<td style="' + cell + ';font-weight:700;color:#0E7A3E">' + fin + '</td>' +
-      '<td style="' + cell + ';color:#98A2AE;font-size:11.5px">' + (why || '') + '</td></tr>';
-  };
-  const th = 'text-align:left;padding:6px 10px;background:#F8F9FB;font-size:11.5px;color:#68727E';
-  const html = '<div style="font-size:12.5px;margin-bottom:8px">确认「<b>' + esc(row.name || '') + '</b>」就是系统内的这家？下面是<b>合并后的结果</b>：</div>' +
-    '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
-    '<tr><th style="' + th + '">字段</th><th style="' + th + '">商城的</th><th style="' + th + '">系统内的</th><th style="' + th + '">合并结果</th><th style="' + th + '">依据</th></tr>' +
-    trow('店名', esc(row.name || '（空）'), esc(cName || '（空）'), esc(row.name || cName || ''), '商城优先') +
-    trow('电话', esc(mp2 || '（空）'), esc(sp || '（空）'), phoneShow, phoneNote, true) +
-    trow('地址', esc(row.address || '（空）'), esc(cAddr || '（空）'), esc(row.address || cAddr || ''), '商城优先') +
-    trow('地区', esc(row.region || '（空）'), esc(cRegion || '（空）'), esc(row.region || cRegion || ''), '商城优先') +
-    trow('编号', esc(row.mall_code || '（商城没给）'), esc(cCode || '（空）'), esc(row.mall_code || cCode || ''), '商城优先') +
-    trow('经纬度', '（商城没有）', cLat ? (cLat.toFixed(6) + ', ' + cLng.toFixed(6)) : '（系统也没）', cLat ? (cLat.toFixed(6) + ', ' + cLng.toFixed(6)) : '—', '<b>用系统内的</b>', true) +
-    trow('商圈', '（商城没有）', esc(cBiz || '（空）'), bizShow, bizNote, true) +
-    trow('标记', '—', '—', '已加入商城', '') +
-    '</table>';
-  if (!(await confirmBox('🛒 合并预览', html, '✅ 确认（先记账，不发云端）'))) return;
+  // ⭐⭐ 2026-10-17 老板定：「每个字段能选采用哪边」—— 用通用弹窗 `mallPickFields`
+  //   （与「未加」那边共用同一套；默认值仍是"商城优先"，不动 = 与改造前完全一致）。
+  //   ⚠️ 经纬度/商圈不给选（红线）；其余商城字段系统内没有对应值，一律写商城的。
+  const picks = await mallPickFields({
+    title: '🛒 合并预览',
+    sub: '确认「' + (row.name || '') + '」就是系统内的这家？（每行可选，不动就是默认：商城优先）',
+    mall: {
+      name: row.name, phone: mp2, address: row.address,
+      region: row.region, mallCode: row.mall_code
+    },
+    sys: {
+      name: cName, phone: sp, address: cAddr, region: cRegion, mallCode: cCode,
+      latText: (cLat && cLng) ? (cLat.toFixed(6) + ', ' + cLng.toFixed(6)) : '',
+      bizCircle: cBiz
+    }
+  });
+  if (!picks) return;                        // 老板取消
   // ⭐⭐⭐ 2026-10-13 老板拍板（重要改造）：**这一下只「记账」，云端一个字不动** ——
   //   老板原话：「我在确定了匹配的和新建的信息之后，这些信息暂时不发送到云端数据库…
   //   页面上方有个「确认并发送到云端」，就可以将已经匹配或者新建的信息传递到云端数据库」
   //   → 所以这里**不调 applyMallPair**，只在服务器上标记 status=paired + target_id/target_name +
   //     补的坐标；真正的合并由顶部「✅ 确认并发送到云端」一条条发。
   const g = String(_mpGeoVal || '').split(',');
-  await mpMark(mallKey, 'paired', customerId, cName || row.name || '', g[0], g[1]);
+  // ⚠️ 把老板的选择一起存进去（PG 的 mall_pending.picks）—— 发送时要用它决定每个字段取哪边
+  await mpMark(mallKey, 'paired', customerId, cName || row.name || '', g[0], g[1], picks);
   _mpGeoKey = ''; _mpGeoRes = null;                       // 记完收起输入面板
   await mpLoad(true);                                     // ⚠️ 铁律：改完必须真的刷新（先过后端、再重拉）
 }
@@ -8934,7 +9022,13 @@ async function mpPush() {
           }
         }
       } else {
-        const r = await api('applyMallPair', { customerId: x.target_id, mallKey: x.mall_key }).catch(() => null);
+        // ⭐ 2026-10-17：把"逐字段选择"一起发给云函数（存在 mall_pending.picks 里的 JSON 文本）
+        //   ⚠️ 解析失败就当没选 → 云函数按默认规则（商城优先）合并，行为与改造前一致。
+        let _picks = null;
+        if (x.picks) {
+          try { const po = JSON.parse(x.picks); if (po && typeof po === 'object' && !Array.isArray(po)) _picks = po; } catch (e) { /* 忽略 */ }
+        }
+        const r = await api('applyMallPair', { customerId: x.target_id, mallKey: x.mall_key, picks: _picks }).catch(() => null);
         good = !!(r && r.ok);
         if (good) {
           await mpMark(x.mall_key, 'pushed', x.target_id || '', x.target_name || '');
@@ -14250,7 +14344,26 @@ async function applyLocalMatch() {
          ⚠️ 老板定这个操作【不做备案】（「合就合了、没有退回的道理，是现场勘察确认过的」）；
            但"被并掉的那条"仍然只进回收站（软删，数据不丢）。
          内容全部由 JS（mgRender/mgConfirm）画进 #mgBody；容器固定 980px + 滚动（照"大列表一律弹窗+滚动"规矩）。 -->
-    <!-- ⭐⭐ 2026-10-17 老板定：客户管理列表里那个「未加」**可点击** ——
+    <!-- ⭐⭐ 2026-10-17 老板定：**逐字段选择"用哪边"**（合并预览用）——
+         左边=商城那条、右边=系统内这条；每行单选；电话是"两个都留、只换顺序"。
+         ⚠️ 经纬度/商圈**不给选**（红线：现场采的坐标才是真到过那个点）→ 只显示、标"固定用系统内的"。
+         三处共用：商城待配对的「✓ 就是这家」、客户管理「未加」点开的合并预览。 -->
+    <div class="ovl" id="mallPickOvl" style="display:none;z-index:10005" onclick="mallPickCancel()">
+      <div class="modal" style="width:980px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px">
+          <b style="font-size:15px" id="mallPickTitle">🛒 合并预览</b>
+          <span style="font-size:12.5px;color:var(--sub)" id="mallPickSub"></span>
+          <span style="flex:1"></span>
+          <button class="btn ghost" onclick="mallPickCancel()">✕ 关闭</button>
+        </div>
+        <div id="mallPickBody" style="flex:1;overflow-y:auto;padding:0 16px 10px"></div>
+        <div style="padding:10px 16px 14px;text-align:right;border-top:1px solid #EEF1F6">
+          <span id="mallPickMsg" style="float:left;font-size:12.5px;color:var(--sub);line-height:30px"></span>
+          <button class="btn ghost" onclick="mallPickCancel()">取消</button>
+          <button class="btn" id="mallPickOk" style="margin-left:8px" onclick="mallPickConfirm()">✅ 确认</button>
+        </div>
+      </div>
+    </div>
          点它 → 上传一个商城表格（如 D:\订单表格\客户列表172.xls）→ 从文件里**挑出这家对应哪一条**
          → 弹合并预览 → 确认后生效（写 mallKey/mallCode 等商城字段，坐标/商圈仍保留系统内的）。
          ⚠️ 老板口径：**只给列表 + 搜索，不做任何自动推荐/相似度排序**（他自己挑）。

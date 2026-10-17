@@ -4506,15 +4506,36 @@ async function applyMallPair(event) {
     mallPairedByHand: true      // ⭐ 标记：这条是**人工配对**的（区别于旧的自动认领）
   });
 
-  // ② ⭐ 电话规则（老板 2026-10-11）
+  // ⭐⭐ 2026-10-17 老板定：**逐字段选择"用哪边"**（picks，来自合并预览里每行的左/右单选）。
+  //   · 只有 5 个字段可选：`name` / `phone` / `address` / `region` / `mallCode`
+  //     —— 其余商城字段（等级/来源/分类/业务员/标签/加入时间…）系统内本来没有对应值，**一律写商城的**。
+  //   · **`picks` 缺失 / 非法 → 全部按默认（商城优先）**，行为与改造前**完全一致**（向后兼容）。
+  //   · ⚠️ **坐标、商圈永远用系统内的** —— 那条红线在 `mallFieldsFrom()` 里代码级硬拦，`picks` 也改不动。
+  //   · ⚠️ 店名的 `name` 与 `nameRaw` **必须一起动/一起不动**（铁律：只改一个会出现"详情页新名、列表旧名"）。
+  const picks = (event && event.picks && typeof event.picks === 'object' && !Array.isArray(event.picks))
+    ? event.picks : {};
+  const useSys = k => picks[k] === 'sys';        // 'sys' = 用系统内的；其它一律 = 用商城的
+  if (useSys('name')) { delete data.name; delete data.nameRaw; }
+  if (useSys('address')) { delete data.address; }
+  if (useSys('region')) { delete data.region; }
+  if (useSys('mallCode')) { delete data.mallCode; }
+
+  // ② 电话（老板 2026-10-17 定：**两个都留、只换顺序**，不丢任何一个）
   const mallPhone = String(m.phone || m.contactPhone || '').trim();
   const sysPhone = String(c.phone || '').trim();
-  if (mallPhone) {
-    data.phone = mallPhone;                                            // 商城优先
-    if (sysPhone && sysPhone !== mallPhone) data.phone2 = sysPhone;    // 不同 → 系统的排 2
-    if (sysPhone && sysPhone === mallPhone) data.phone2 = '';          // 相同 → 只留一个
-    // ⚠️ 系统原有的 phone2（第 3 个电话）**不保留** —— 老板："加起来有三个不同电话，就保留商城和系统第一个电话号码"
+  if (mallPhone && sysPhone && mallPhone !== sysPhone) {
+    const preferMall = !useSys('phone');
+    data.phone = preferMall ? mallPhone : sysPhone;
+    data.phone2 = preferMall ? sysPhone : mallPhone;
+  } else if (mallPhone) {
+    data.phone = mallPhone;
+    data.phone2 = '';                                 // 只有一个号 → 不留第二
+  } else {
+    // 商城没给电话 → 系统内原值**一个字都别动**（别把它抹成空）
+    delete data.phone;
+    delete data.phone2;
   }
+  // 注：系统原有的 phone2（第 3 个电话）不保留 —— 老板："加起来有三个不同电话，就保留商城和系统第一个电话号码"
 
   // ③ 标记「已加入商城」
   data.customerType = 'mall';

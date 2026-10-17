@@ -319,7 +319,8 @@ const srv = http.createServer(async (req, res) => {
     if (u.pathname === '/mallPending') {
       const st = String(u.searchParams.get('status') || '');
       // ⭐ 2026-10-13：多回 lat/lng —— 后台「新建」时补的坐标要能读回来（点「发送到云端」时用它建客户）
-      const cols = 'mall_key,name,phone,address,region,mall_code,added_at,status,target_id,target_name,handled_by,handled_at,imported_at,lat,lng';
+      // ⭐ 2026-10-17：多回 **picks**（逐字段选择"用哪边"，JSON 字符串；空 = 按默认规则合并）
+      const cols = 'mall_key,name,phone,address,region,mall_code,added_at,status,target_id,target_name,handled_by,handled_at,imported_at,lat,lng,picks';
       const r = st
         ? await q('SELECT ' + cols + ' FROM mall_pending WHERE status = $1 ORDER BY mall_key LIMIT 1000', [st])
         : await q('SELECT ' + cols + " FROM mall_pending ORDER BY (status = 'pending') DESC, mall_key LIMIT 2000");
@@ -339,10 +340,23 @@ const srv = http.createServer(async (req, res) => {
       // ⭐ 2026-10-13 老板：「输入的经纬度，是对导入的客户补充经纬度信息」→ 顺手把坐标也存进这一行
       const la = Number(u.searchParams.get('lat') || 0) || null;
       const ln = Number(u.searchParams.get('lng') || 0) || null;
+      // ⭐⭐ 2026-10-17 老板定：**逐字段选择"用哪边"**（合并预览里每行左/右单选）——
+      //   存在这一行里（picks = JSON 字符串，如 `{"name":"sys","phone":"mall"}`），
+      //   这样"先梳理 → 最后统一发送"中间**刷新页面 / 换台电脑都不丢**。
+      //   ⚠️ 一律**参数化**（不拼 SQL）；且**必须是合法 JSON** 才入库，垃圾就当没给（前端会按默认规则合并）。
+      //   ⚠️ 传空 = **不动这一列**（COALESCE 保原值）—— 避免"只改状态却把选择清空"。
+      let picks = String(u.searchParams.get('picks') || '');
+      if (picks) {
+        try {
+          const po = JSON.parse(picks);
+          picks = (po && typeof po === 'object' && !Array.isArray(po)) ? JSON.stringify(po) : '';
+        } catch (e) { picks = ''; }
+      }
+      if (!picks) picks = null;
       await q('UPDATE mall_pending SET status=$1, target_id=$2, target_name=$3, handled_by=$4, handled_at=$5, ' +
-        'lat=COALESCE($7, lat), lng=COALESCE($8, lng) WHERE mall_key=$6',
+        'lat=COALESCE($7, lat), lng=COALESCE($8, lng), picks=COALESCE($9, picks) WHERE mall_key=$6',
         [s, String(u.searchParams.get('targetId') || ''), String(u.searchParams.get('targetName') || ''),
-         String(u.searchParams.get('by') || ''), Date.now(), k, la, ln]);
+         String(u.searchParams.get('by') || ''), Date.now(), k, la, ln, picks]);
       return out(res, 200, { ok: true });
     }
     if (u.pathname === '/newshops') {
