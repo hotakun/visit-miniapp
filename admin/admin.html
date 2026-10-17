@@ -8669,19 +8669,38 @@ async function loadLastMallImport() {
 //   · 写后回写（M3）：改完（备注/坐标/字段/删除/建批次）调 /mapPoints/patch，把改动同步进本地缓存文件
 let custLocal = null;          // { syncedAt, count, points: [...], err? } —— 一次会话读一次
 let custLocalLoading = null;   // 并发保护（同时多个调用只发一次请求）
+let _custLocalFailAt = 0;      // 上一次"空结果 / 失败"的时间（5 秒内不重复拉，避免预热期反复拉 89MB）
 async function ensureCustLocal(force) {
-  if (custLocal && !force) return custLocal;
+  // ⭐⭐ 2026-10-18 修（老板实测：📍「用这个坐标找附近」0 家、🔍「自己搜」0 家，而缓存里明明有 17.8 万条）：
+  //   原来只要 `custLocal` 非 null 就直接返回 —— **哪怕是空的**。一次"缓存预热中 / 网络抖一下"
+  //   就会把 `{count:0, points:[]}` 永久钉在内存里 → 之后整个会话都是 0 家，直到手动刷新页面。
+  //   现在：**只有真拿到数据才算命中**；空结果 / 失败**不写入**，下次调用自动重试（5 秒节流）。
+  if (custLocal && !force && (custLocal.points || []).length) return custLocal;
   if (custLocalLoading && !force) return custLocalLoading;
+  if (!force && _custLocalFailAt && Date.now() - _custLocalFailAt < 5000) {
+    return custLocal || { syncedAt: 0, count: 0, points: [] };
+  }
   custLocalLoading = (async () => {
     try {
       const r = await fetch('/mapPoints', { cache: 'no-store' }).then(x => x.json());
-      custLocal = { syncedAt: r.syncedAt || 0, count: r.count || (r.points || []).length, points: r.points || [], warming: !!r.warming, progress: r.progress || null };
+      const pts = r.points || [];
+      if (!pts.length) {
+        // 服务器正在预热 / 暂时没有数据 → **不缓存空结果**（下一次调用会重试）
+        _custLocalFailAt = Date.now();
+        return { syncedAt: r.syncedAt || 0, count: r.count || 0, points: [], warming: !!r.warming, progress: r.progress || null };
+      }
+      custLocal = { syncedAt: r.syncedAt || 0, count: r.count || pts.length, points: pts, warming: !!r.warming, progress: r.progress || null };
+      _custLocalFailAt = 0;
+      return custLocal;
     } catch (e) {
-      custLocal = { syncedAt: 0, count: 0, points: [], err: String((e && e.message) || e) };
+      _custLocalFailAt = Date.now();
+      // 已经有旧数据就继续用旧的（别因为一次失败把界面清空）
+      if (custLocal && (custLocal.points || []).length) return custLocal;
+      return { syncedAt: 0, count: 0, points: [], err: String((e && e.message) || e) };
+    } finally {
+      custLocalLoading = null;
+      custKeepAlive();                     // ⭐ 第一次取数后启动"保鲜"轮询（幂等，只启一次）
     }
-    custLocalLoading = null;
-    custKeepAlive();                       // ⭐ 第一次取数后启动"保鲜"轮询（幂等，只启一次）
-    return custLocal;
   })();
   return custLocalLoading;
 }
@@ -9162,13 +9181,17 @@ function mpGeoOpen(key) {
   _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null; mpRender();
 }
 function mpSearchOpen(key) { _mpSearchKey = key; _mpSearchVal = ''; _mpSearchRes = null; _mpGeoKey = ''; _mpGeoRes = null; mpRender(); }
-function mpGeoApply() {
+async function mpGeoApply() {
   const v = String(($('mpGeoIn') || {}).value || '').trim();
   const m = v.split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
   if (m.length < 2) { alert('请粘贴两个数字：纬度,经度\n例：28.961303,120.181189'); return; }
   let la = m[0], ln = m[1];
   if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }   // 兼容"经度,纬度"的顺序
   _mpGeoVal = la.toFixed(6) + ',' + ln.toFixed(6);
+  // ⭐ 2026-10-18：先确保本地全库真的在（缓存可能刚被作废 / 正在预热）——
+  //   别在空数组上算完再报"附近 0 家"，那会让人以为系统里真没有店。
+  const loc = await ensureCustLocal();
+  if (!(loc.points || []).length) { alert('本地客户缓存还没准备好（正在重试），稍等几秒再点一次。'); return; }
   _mpGeoRes = mpNearby(la, ln);
   mpRender();
 }
@@ -9188,10 +9211,13 @@ function mpNearby(lat, lng) {
   out.sort((a, b) => a.dist - b.dist);
   return out.slice(0, 20);
 }
-function mpSearchRun() {
+async function mpSearchRun() {
   const q = String(($('mpSearchIn') || {}).value || '').trim().toLowerCase();
   if (!q) { alert('输入 店名 / 电话 / 编号 的任意一段'); return; }
-  const pts = (custLocal && custLocal.points) || [];
+  // ⭐ 2026-10-18：同 mpGeoApply —— 先确保本地全库真的在，别在空数组上误报"没搜到"。
+  const loc = await ensureCustLocal();
+  if (!(loc.points || []).length) { alert('本地客户缓存还没准备好（正在重试），稍等几秒再点一次。'); return; }
+  const pts = loc.points;
   const qn = q.replace(/\D/g, '');
   const out = [];
   for (let i = 0; i < pts.length && out.length < 20; i++) {
@@ -9364,6 +9390,7 @@ let _custKeepAlive = null;
 let _custSeenMaxU = null;   // ⭐ D06 前半：内容指纹（同步水位）基线；null = 还没记过
 let _custSeenVer = 0;       // ⭐⭐ 2026-10-17：**字段版本**基线（store.js 的 VERSION）—— 说明见下面 custKeepAlive
 let _custSeenAgg = 0;       // ⭐⭐ 2026-10-17（C3）：**统计列更新时间**基线（store.js 的 aggAt）
+let _custAutoReloadAt = 0;  // ⭐ 2026-10-18：本地快照为空时"自动重取"的节流时间（30 秒一次）
 function custKeepAlive() {
   if (_custKeepAlive) return;
   _custKeepAlive = setInterval(async () => {
@@ -9371,7 +9398,22 @@ function custKeepAlive() {
       const s = await fetch('/mapPoints/status', { cache: 'no-store' }).then(x => x.json());
       const n = (s && s.count) || 0;
       const w = (s && Number(s.maxU)) || 0;
-      if (!custLocal || !n || !custLocal.count) return;
+      if (!n) return;                                  // 服务器也没有数据 → 没什么可补
+      // ⭐⭐ 2026-10-18 修（老板实测：📍 找附近 0 家、🔍 搜索 0 家，而缓存里有 17.8 万条）：
+      //   本地拿着一份**空快照**（一次预热 / 失败后被永久缓存）时，原来这里直接 return → **永远不会自愈**。
+      //   现在：服务器明明有 N 条 → 主动重取一次（30 秒节流），取到后若「商城待配对」正开着就就地重绘
+      //   （候选 / 找附近 / 自己搜 都靠这份数据）。老板不用刷新页面，最多等一个轮询周期。
+      if (!custLocal || !(custLocal.points || []).length || !custLocal.count) {
+        if (Date.now() - _custAutoReloadAt > 30000) {
+          _custAutoReloadAt = Date.now();
+          console.warn('[cust] 本地快照为空（服务器有 ' + n + ' 条）→ 自动重取');
+          await ensureCustLocal(true);
+          if (custLocal && custLocal.count) {
+            try { if (typeof mpLoad === 'function' && $('mpWrap') && $('mpWrap').style.display !== 'none') mpLoad(); } catch (e) { /* 静默 */ }
+          }
+        }
+        return;
+      }
       // ⭐⭐ 2026-10-15 修（依《全项目审查》D06 前半）：**不能只比条数** ——
       //   "改名 / 改坐标 / 改备注"这类变化**条数根本不变**，只比 count 就永远发现不了，界面一直显示旧的
       //   （正是"改完看不到"那一类，老板最反感）。现在连"内容指纹"（同步水位 `maxU`）一起比。
