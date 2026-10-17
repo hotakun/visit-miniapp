@@ -872,24 +872,53 @@ Page({
     if (this.cancelling) return;
     this.cancelling = true;
     wx.showLoading({ title: '取消中…', mask: true });
+    // ⚠️ 统一出口：不管成功/无需取消/失败，都要有办法离开这个页面
+    //   （2026-10-18 老板报障：业务员点了「确认取消」→ 弹「没有进行中的拜访，无需取消」→ **卡在拜访页出不去**）
+    const leave = (delay) => setTimeout(() => {
+      try { wx.navigateBack({ fail: () => { wx.reLaunch({ url: '/pages/home/home' }); } }); }
+      catch (e) { wx.reLaunch({ url: '/pages/home/home' }); }
+    }, delay || 600);
     try {
       const res = await api.call('visits', { action: 'cancel', taskId: this.data.c.taskId, customerId: this.data.c._id });
       wx.hideLoading();
       this.cancelling = false;
       this.setData({ cancelShow: false });
       if (res.ok) {
-        this.clearStart(); // 取消拜访：计时基准清除，下次进入重新计时
-        loc.beacon(); // 状态信标：拜访中→待回访（2026-09-08 老板定）
+        this.clearStart();        // 取消拜访：计时基准清除，下次进入重新计时
+        try { loc.beacon(); } catch (e) { /* 信标失败不影响取消 */ }
         api.toast('已取消本次拜访');
-        setTimeout(() => wx.navigateBack(), 900);
-      } else {
-        api.toast(res.msg || '取消失败');
+        leave(900);
+        return;
       }
+      // ⭐ 这两种"失败"其实**目的已经达到**（这条拜访本来就不存在/不属于他）→ 照样退回去，别把人困住
+      if (res.code === 'NO_ONGOING' || res.code === 'TASK_FORBIDDEN') {
+        this.clearStart();
+        try { loc.beacon(); } catch (e) { /* 静默 */ }
+        api.toast(res.code === 'NO_ONGOING' ? '已取消（本来就没有拜访中）' : '已退出');
+        leave(700);
+        return;
+      }
+      // 真失败（网络/未知）：**不一刀切地把人困死，也不静默退**
+      //   （静默退会让人以为取消了、其实记录还在 → 下一家会被"单开拦截"挡住）
+      wx.showModal({
+        title: '取消失败',
+        content: (res.msg || '未知原因') + '\n\n可以点「再试一次」重新取消；或直接退出页面（该客户可能仍显示「拜访中」）。',
+        confirmText: '退出页面',
+        cancelText: '再试一次',
+        success: (m) => { if (m.confirm) leave(0); }
+      });
     } catch (e) {
       wx.hideLoading();
       this.cancelling = false;
       this.setData({ cancelShow: false });
-      api.toast('取消失败，请重试');
+      // 网络异常同样给两条路，不只弹一句 toast
+      wx.showModal({
+        title: '网络异常',
+        content: '没能确认取消结果。\n可以点「再试一次」；或直接退出页面（该客户可能仍显示「拜访中」）。',
+        confirmText: '退出页面',
+        cancelText: '再试一次',
+        success: (m) => { if (m.confirm) leave(0); }
+      });
     }
   },
 
