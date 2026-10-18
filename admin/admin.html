@@ -4761,8 +4761,7 @@ function mallPickRender() {
   if (mallLat) {
     const defSys = !!sysLat;
     coordPick = '<label style="margin-right:12px"><input type="radio" name="mpf_lat" value="mall"' + (defSys ? '' : ' checked') + '> 商城</label>' +
-      '<label><input type="radio" name="mpf_lat" value="sys"' + (defSys ? ' checked' : '') + '> 系统内</label>' +
-      (sysLat ? '<span style="color:#98A2AE;margin-left:6px">选商城会覆盖系统坐标</span>' : '');
+      '<label><input type="radio" name="mpf_lat" value="sys"' + (defSys ? ' checked' : '') + '> 系统内</label>';
   } else {
     coordPick = '<span style="color:#98A2AE">（商城没有坐标，保留系统内的）</span>';
   }
