@@ -167,3 +167,55 @@
 .ov-t2{font-size:30rpx;font-weight:800;margin-top:6rpx;letter-spacing:.5rpx;line-height:1.5}
 .ov-hl{color:#FFB08A}
 .towner{font-size:24rpx;color:#66707A;font-weight:400}
+
+/* ===== ⭐ 2026-10-18 老板首页改版：可收放卡片 / 概览 / 任务筛选 / 业务员 / 动态 ===== */
+.card {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFE 100%);
+  border-radius: 36rpx; margin: 0 0 24rpx; overflow: hidden;
+  box-shadow: 0 0 0 1rpx rgba(23,30,44,.05), 0 2rpx 4rpx rgba(23,30,44,.05), 0 36rpx 68rpx -32rpx rgba(23,30,44,.26);
+}
+.card-h { display: flex; align-items: center; padding: 26rpx 30rpx; }
+.card-t { flex: 1; font-size: 29rpx; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 12rpx; }
+.dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 6rpx var(--primary-tint); }
+.dot.blue { background: var(--blue); box-shadow: 0 0 0 6rpx var(--blue-tint); }
+.dot.green { background: var(--green); box-shadow: 0 0 0 6rpx var(--green-tint); }
+.dot.gray { background: #8B95A4; box-shadow: 0 0 0 6rpx #F2F4F7; }
+.fold { width: 32rpx; text-align: center; font-size: 26rpx; color: #B9C1CB; font-weight: 700; line-height: 1; }
+.card-body { padding: 0 30rpx 28rpx; }
+.nums { display: flex; padding: 2rpx 0 8rpx; }
+.num { flex: 1; text-align: center; }
+.num-n { font-size: 44rpx; font-weight: 800; color: var(--ink); line-height: 1.15; }
+.num-s { font-size: 22rpx; font-weight: 600; color: var(--sub); }
+.num-l { font-size: 22rpx; color: var(--sub); font-weight: 600; margin-top: 8rpx; }
+.trend { margin-top: 22rpx; padding-top: 22rpx; border-top: 1rpx solid var(--line); }
+.trend-h { display: flex; justify-content: space-between; font-size: 23rpx; color: var(--sub); margin-bottom: 16rpx; }
+.bars { display: flex; align-items: flex-end; gap: 18rpx; height: 108rpx; }
+.bcol { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8rpx; }
+.bar { width: 100%; max-width: 44rpx; border-radius: 10rpx 10rpx 6rpx 6rpx; background: linear-gradient(180deg, #FFE3D5, #FFD0BC); }
+.bcol.on .bar { background: linear-gradient(180deg, #FFA067, #F5531C); box-shadow: 0 8rpx 20rpx -8rpx rgba(245,83,28,.5); }
+.bd { font-size: 19rpx; color: #B9C1CB; font-weight: 600; }
+.bcol.on .bd { color: var(--primary-deep); }
+.chips { display: flex; gap: 16rpx; margin-bottom: 22rpx; }
+.chip { padding: 10rpx 28rpx; border-radius: 999rpx; background: #F2F4F7; color: var(--sub); font-size: 23rpx; font-weight: 700; border: 1rpx solid transparent; }
+.chip.on { background: var(--primary-tint); color: var(--primary-deep); border-color: #FFD2BC; }
+.chip-n { font-size: 21rpx; opacity: .65; margin-left: 6rpx; }
+.task-card.expired::before { background: linear-gradient(160deg, #F7A8AC, #E5484D 60%, #C93A40); }
+.card-body .task-card { margin-bottom: 24rpx; }
+.card-body .task-card:last-child { margin-bottom: 0; }
+.t3 { font-size: 22rpx; color: #B97A0B; margin-top: 14rpx; font-weight: 600; position: relative; z-index: 1; }
+.card-empty { text-align: center; color: var(--sub); font-size: 24rpx; padding: 26rpx 0 10rpx; }
+.team-row { display: flex; align-items: center; gap: 22rpx; padding: 18rpx 0; border-bottom: 1rpx solid var(--line); }
+.team-row:last-child { border-bottom: 0; padding-bottom: 4rpx; }
+.ava { width: 68rpx; height: 68rpx; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 25rpx; font-weight: 800; color: var(--primary-deep); background: linear-gradient(145deg, #FFE7DA, #FFD2BC); box-shadow: inset 0 1rpx 0 rgba(255,255,255,.8), 0 4rpx 12rpx -4rpx rgba(245,83,28,.35); }
+.team-mid { flex: 1; min-width: 0; }
+.team-n { font-size: 27rpx; font-weight: 700; color: var(--ink); }
+.team-s { font-size: 22rpx; color: var(--sub); margin-top: 4rpx; }
+.team-v { font-size: 30rpx; font-weight: 800; color: var(--primary); }
+.team-v .unit { font-size: 21rpx; color: var(--sub); font-weight: 600; margin-left: 4rpx; }
+.online { font-size: 20rpx; color: var(--green); font-weight: 700; }
+.offline { font-size: 20rpx; color: #B9C1CB; font-weight: 700; }
+.ev { display: flex; gap: 20rpx; padding: 16rpx 0; border-bottom: 1rpx solid #F5F7FA; }
+.ev:last-child { border-bottom: 0; padding-bottom: 4rpx; }
+.ev .ei { width: 48rpx; height: 48rpx; border-radius: 16rpx; background: #F2F4F7; display: flex; align-items: center; justify-content: center; font-size: 22rpx; flex: none; }
+.ev .em { flex: 1; font-size: 24rpx; color: #4B5563; line-height: 1.5; }
+.ev .et { font-size: 20rpx; color: #B9C1CB; flex: none; }

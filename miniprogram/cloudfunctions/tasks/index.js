@@ -121,6 +121,8 @@ exports.main = async (event) => {
   if (action === 'ver') return await taskVer(salesmanId);   // ⭐ 2026-10-10 手机端心跳（只回一个戳）
   if (action === 'replanDay') return await replanDay(salesmanId, event, isBoss);
   if (action === 'bossBoard') return await bossBoard(salesmanId, isBoss);
+  if (action === 'bossGlance') return await bossGlance(salesmanId, isBoss);   // ⭐ 2026-10-18：老板首页概览/趋势/业务员动态
+  if (action === 'bossGeoCount') return await bossGeoCount(salesmanId, isBoss); // ⭐ 2026-10-18：老板首页「区域数量」（区县去重）
   if (action === 'bossWar') return await bossWar(isBoss);
   if (action === 'bossTrack') return await bossTrack(isBoss, event); // 老板手机端：业务员今日轨迹
   // 2026-09-25 新增（老板定：「客户详情页」改造成 A 演示稿那套 7 卡骨架，要能看真数据）：
@@ -977,7 +979,186 @@ async function bossBoard(salesmanId, isBoss) {
   });
   // 待审核任务数
   const revN = await db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }).count();
-  return { ok: true, stats: { todayDone, todayTotal, visited: visitedSum, total: totalSum, online, ongoing, review: revN.total }, tasks };
+  // ⭐ 2026-10-18 老板首页「任务进度」要有「已完成」：
+  //   `list()` 的老板条件只拉 published/reviewing，不含 done → 这里单独补最近 20 条已完成。
+  let doneTasks = [];
+  try {
+    const dr = await db.collection('tasks')
+      .where({ status: 'done', archivedAt: _.exists(false) })
+      .orderBy('createdAt', 'desc').limit(20).get();
+    const dRows = dr.data || [];
+    const dVis = {};
+    if (dRows.length) {
+      const dids = dRows.map(t => t._id);
+      let skip = 0;
+      const PAGE = 1000;
+      while (true) {
+        const r = await db.collection('visits')
+          .where({ taskId: _.in(dids), status: _.in(['normal', 'pending_review']) })
+          .field({ taskId: true, customerId: true }).skip(skip).limit(PAGE).get();
+        (r.data || []).forEach(v => { (dVis[v.taskId] = dVis[v.taskId] || new Set()).add(v.customerId); });
+        if ((r.data || []).length < PAGE) break;
+        skip += PAGE;
+        if (skip > 20000) break;
+      }
+    }
+    doneTasks = dRows.map(t => {
+      const total = (t.customerIds || []).length;
+      const visited = (dVis[t._id] || new Set()).size;
+      return {
+        _id: t._id, name: t.name, taskNo: t.taskNo || '', purpose: t.purpose,
+        deadline: t.deadline, plannedDays: t.plannedDays, status: 'done', expired: false,
+        total, visited, percent: total ? Math.round(visited / total * 100) : 0,
+        todayTotal: 0, todayDone: 0, hasOngoing: false,
+        salesmanId: t.salesmanId || '', salesmanName: t.salesmanName || ''
+      };
+    });
+  } catch (e) { doneTasks = []; }
+  return { ok: true, stats: { todayDone, todayTotal, visited: visitedSum, total: totalSum, online, ongoing, review: revN.total }, tasks, doneTasks };
+}
+
+// ⭐⭐ 2026-10-18 老板定：老板首页「今日概览 / 业务员动态 / 最近动态」的数据源。
+//   · 规模：客户总数 / 商城客户（mallKey 或 mallJoinedAt）/ 本周新店（近 7 天 source=field）
+//   · 今日：拜访家数、覆盖客户、近 7 天趋势
+//   · 业务员：在线/离线、今日拜访数（按今日拜访分组）
+//   · 最近动态：今日拜访 + 今日新建店
+//   ⚠️ 「区域数量」不在这里 —— 由前端并行调 adminapi.custGeoOptions 取（区县去重），
+//      避免在首页主接口里跑 17.8 万条的聚合拖慢其他数据。
+async function bossGlance(salesmanId, isBoss) {
+  if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
+  const today = todayStr();
+  const base = new Date(today + 'T00:00:00+08:00').getTime();
+  const dayStr = ts => new Date(ts + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  const days = [];
+  for (let i = 6; i >= 0; i--) days.push(dayStr(base - i * 86400000));
+
+  // ① 规模（三个 count，都是轻查询）
+  const [ct, mt, ns] = await Promise.all([
+    db.collection('customers').where({ deleted: _.neq(true) }).count().catch(() => ({ total: 0 })),
+    db.collection('customers').where(_.and([
+      { deleted: _.neq(true) },
+      _.or([{ mallKey: _.exists(true) }, { mallJoinedAt: _.exists(true) }])
+    ])).count().catch(() => ({ total: 0 })),
+    db.collection('customers').where(_.and([
+      { deleted: _.neq(true) }, { source: 'field' }, { createdAt: _.gte(base - 6 * 86400000) }
+    ])).count().catch(() => ({ total: 0 }))
+  ]);
+
+  // ② 近 7 天拜访（分页拉全，通常 1 页）
+  let rows = [];
+  try {
+    let skip = 0;
+    const PAGE = 1000;
+    while (true) {
+      const r = await db.collection('visits')
+        .where({ visitedAt: _.in(days), status: _.in(['normal', 'pending_review']) })
+        .field({ visitedAt: true, salesmanId: true, customerId: true, result: true, startedAt: true, finishedAt: true })
+        .skip(skip).limit(PAGE).get();
+      rows = rows.concat(r.data || []);
+      if ((r.data || []).length < PAGE) break;
+      skip += PAGE;
+      if (skip > 5000) break;
+    }
+  } catch (e) { rows = []; }
+  const todayRows = rows.filter(v => v.visitedAt === today);
+  const trend = days.map(d => rows.filter(v => v.visitedAt === d).length);
+  const todayCustomers = new Set(todayRows.map(v => v.customerId)).size;
+
+  // ③ 业务员动态
+  const [uRes, lRes] = await Promise.all([
+    db.collection('users').where(_.and([
+      { active: true, trial: _.neq(true) },
+      _.or([{ role: 'salesman' }, { alsoSalesman: true }])
+    ])).field({ name: true }).get().catch(() => ({ data: [] })),
+    db.collection('salesman_locations').where({ type: 'latest' }).get().catch(() => ({ data: [] }))
+  ]);
+  const lMap = {}, smById = {};
+  (lRes.data || []).forEach(l => { if (l.salesmanId) lMap[l.salesmanId] = l; });
+  (uRes.data || []).forEach(u => { smById[u._id] = u; });
+  const bySm = {};
+  todayRows.forEach(v => { if (v.salesmanId) bySm[v.salesmanId] = (bySm[v.salesmanId] || 0) + 1; });
+  const now = Date.now();
+  const salesmen = (uRes.data || []).map(u => {
+    const l = lMap[u._id] || {};
+    const ageMin = l.t ? Math.floor((now - Number(l.t)) / 60000) : 999;
+    return {
+      id: u._id, name: u.name || '', online: ageMin <= 10, ongoing: !!l.visitOngoing,
+      visits: bySm[u._id] || 0, ageMin: ageMin, initial: String(u.name || '').slice(0, 1)
+    };
+  }).sort((a, b) => (b.visits - a.visits) || ((a.online === b.online) ? 0 : (a.online ? -1 : 1)));
+
+  // ④ 最近动态：今日拜访最近 8 条 + 今日新建店 3 条
+  const recent = todayRows.slice()
+    .sort((a, b) => (Number(b.finishedAt || b.startedAt || 0)) - (Number(a.finishedAt || a.startedAt || 0)))
+    .slice(0, 8);
+  const cids = [...new Set(recent.map(v => v.customerId).filter(Boolean))];
+  const cmap = {};
+  if (cids.length) {
+    const cr = await db.collection('customers').where({ _id: _.in(cids) })
+      .field({ name: true, nameRaw: true }).get().catch(() => ({ data: [] }));
+    (cr.data || []).forEach(c => { cmap[c._id] = c; });
+  }
+  const events = recent.map(v => {
+    const c = cmap[v.customerId] || {};
+    const sm = smById[v.salesmanId] || {};
+    return {
+      type: 'visit', at: Number(v.finishedAt || v.startedAt || 0),
+      salesmanName: sm.name || '', customerName: c.nameRaw || c.name || '客户', result: v.result || ''
+    };
+  });
+  const nsRes = await db.collection('customers')
+    .where(_.and([{ deleted: _.neq(true) }, { source: 'field' }, { createdAt: _.gte(base) }]))
+    .orderBy('createdAt', 'desc').limit(3).get().catch(() => ({ data: [] }));
+  (nsRes.data || []).forEach(c => events.push({
+    type: 'newShop', at: Number(c.createdAt) || 0,
+    salesmanName: c.createdByName || '', customerName: c.nameRaw || c.name || '新店', result: ''
+  }));
+  events.sort((a, b) => (b.at || 0) - (a.at || 0));
+
+  return {
+    ok: true,
+    customerTotal: ct.total || 0,
+    mallTotal: mt.total || 0,
+    newShops7d: ns.total || 0,
+    todayVisits: todayRows.length,
+    todayCustomers: todayCustomers,
+    trend: trend, days: days,
+    salesmen: salesmen,
+    events: events.slice(0, 10)
+  };
+}
+
+// ⭐⭐ 2026-10-18 老板定：「区域数量」按**区县（district）去重**。
+//   ⚠️ 这是全库 17.8 万条的聚合，单独一个 action、且结果**按天缓存**到 settings ——
+//      慢/失败只影响这一格，不拖垮首页其他数据。
+async function bossGeoCount(salesmanId, isBoss) {
+  if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
+  const today = todayStr();
+  const key = 'bossGeoCountCache';
+  try {
+    const s = await db.collection('settings').where({ key: key }).limit(1).get();
+    const v = s.data && s.data[0] && s.data[0].value;
+    if (v && v.day === today && typeof v.count === 'number') return { ok: true, count: v.count, cached: true };
+  } catch (e) { /* 缓存读失败就重算 */ }
+  let count = 0;
+  try {
+    const r = await db.collection('customers').aggregate()
+      // ⚠️ 聚合 .match() 不认 `_.neq()`，必须用原生 `$ne`（项目既有坑）
+      .match({ deleted: { $ne: true } })
+      .group({ _id: '$district' })
+      .limit(20000)
+      .end();
+    count = (r.list || []).filter(x => x && x._id != null && String(x._id).trim()).length;
+  } catch (e) { count = 0; }
+  try {
+    const s0 = await db.collection('settings').where({ key: key }).limit(1).get();
+    if (s0.data && s0.data.length) {
+      await db.collection('settings').doc(s0.data[0]._id).update({ data: { value: { day: today, count: count }, updatedAt: Date.now() } });
+    } else {
+      await db.collection('settings').add({ data: { key: key, value: { day: today, count: count }, updatedAt: Date.now() } });
+    }
+  } catch (e) { /* 缓存写失败不影响本次返回 */ }
+  return { ok: true, count: count, cached: false };
 }
 
 // 战况地图数据：业务员位置点（三态口径）+ 今日动态流（开始/提交拜访）

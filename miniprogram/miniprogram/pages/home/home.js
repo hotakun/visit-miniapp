@@ -227,7 +227,12 @@ Page({
   onShareAppMessage() {
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', bossNewShops: 0, welShow: false },
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', bossNewShops: 0, welShow: false,
+    // ⭐ 2026-10-18 老板首页改版
+    bossGlance: null, bossGeoCount: 0, bossCustomerText: '', bossMallText: '', bossNewShops7d: 0,
+    bossTaskFilter: 'going', bossCounts: { going: 0, expired: 0, done: 0 },
+    trendBars: [], bossSalesmen: [], bossEvents: [],
+    fold: { overview: false, tasks: false, team: false, events: false } },
   // ⭐⭐ 2026-10-10 老板定：**任务心跳回调**（`app.js` 每 15 秒问一次云端"变了没"，变了才叫到这里）
   //   场景：后台派了新任务 / 把任务结束了 / 延期撤回 —— 首页几秒内自己刷新，业务员不用手动下拉。
   //   ⚠️ 只做一次轻刷新、**不弹任何提示** —— 免得打扰正在干活的人。
@@ -515,14 +520,16 @@ Page({
   // ⭐ 2026-10-15 老板定「进首页先用缓存、别每次全量拉」：抽一个**只做"数据 → 界面"**的函数
   //   （不联网），让"云端数据"与"本地缓存"共用同一套渲染 —— 与 task.js 的 _renderDetail 同一做法。
   //   ⚠️ 字段名与原来的逐字一致（todayTotal/todayLeft 这些是历史遗留名，别顺手改）。
-  _applyHomeTasks(rawTasks, boss) {
+  _applyHomeTasks(rawTasks, boss, doneTasks) {
     const fmtDeadline = s => {
       const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
       return m ? `${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日` : (s || '—');
     };
     if (boss) {
-      const tasks = (rawTasks || []).map(t => ({ ...t, deadline: fmtDeadline(t.deadline) }));
-      this.setData({ tasks, showTasks: tasks });
+      // ⭐ 2026-10-18：老板首页「任务进度」= 进行中 + 已过期 + 已完成（doneTasks 单独由 bossBoard 补）
+      const fmt = t => ({ ...t, deadlineRaw: t.deadline, deadline: fmtDeadline(t.deadline), soon: this._isSoon(t) });
+      this._allBossTasks = (rawTasks || []).map(fmt).concat((doneTasks || []).map(fmt));
+      this._applyBossTasks();
       return;
     }
     // deadlineRaw 保留云端原值（下面按它挑"最近要截止"的任务：格式化后的"10月20日"没法比大小）
@@ -543,6 +550,110 @@ Page({
     else if (tasks.length) cardMode = 'allDone';
     this.setData({ todayTotal: total, todayDone: done, todayLeft: left, todayPct: pct, cardMode, heroDeadline });
     if (cardMode === 'today') this.drawRing();
+  },
+  // ===== ⭐ 2026-10-18 老板首页改版（今日概览 / 任务进度 / 业务员动态 / 最近动态） =====
+  _todayStr() {
+    const d = new Date(Date.now() + 8 * 3600 * 1000);
+    return d.toISOString().slice(0, 10);
+  },
+  _isSoon(t) {
+    if (!t || t.status === 'done' || t.expired || !t.deadlineRaw) return false;
+    const m = String(t.deadlineRaw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const n = this._todayStr().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m || !n) return false;
+    const d1 = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    const d0 = Date.UTC(+n[1], +n[2] - 1, +n[3]);
+    const diff = Math.round((d1 - d0) / 86400000);
+    return diff >= 0 && diff <= 2;
+  },
+  _applyBossTasks() {
+    const all = this._allBossTasks || [];
+    const f = this.data.bossTaskFilter || 'going';
+    const isDone = t => t.status === 'done';
+    const isExpired = t => !isDone(t) && !!t.expired;
+    const isGoing = t => !isDone(t) && !t.expired;
+    const counts = {
+      going: all.filter(isGoing).length,
+      expired: all.filter(isExpired).length,
+      done: all.filter(isDone).length
+    };
+    let show = all.filter(t => f === 'done' ? isDone(t) : (f === 'expired' ? isExpired(t) : isGoing(t)));
+    // 排序：进行中按截止日近→远；已过期 / 已完成按截止日远→近（越新越靠前）
+    const dk = t => String(t.deadlineRaw || '9999-99-99');
+    show = show.slice().sort((a, b) => (f === 'going')
+      ? dk(a).localeCompare(dk(b))
+      : dk(b).localeCompare(dk(a)));
+    this.setData({ tasks: all, showTasks: show, bossCounts: counts });
+  },
+  pickBossTaskFilter(e) {
+    const f = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.f) || 'going';
+    this.setData({ bossTaskFilter: f });
+    this._applyBossTasks();
+  },
+  toggleFold(e) {
+    const k = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.k) || '';
+    if (!k) return;
+    this.setData({ ['fold.' + k]: !this.data.fold[k] });
+  },
+  _applyBossGlance(g) {
+    if (!g || !g.ok) return;
+    const fmtW = n => {
+      n = Number(n) || 0;
+      return n >= 10000 ? ((n / 10000).toFixed(1).replace(/\.0$/, '') + '万') : String(n);
+    };
+    const fmtK = n => String(Number(n) || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const week = ['日', '一', '二', '三', '四', '五', '六'];
+    const trend = g.trend || [], days = g.days || [];
+    const max = Math.max.apply(null, trend.concat([1]));
+    const trendBars = trend.map((v, i) => {
+      let label = '';
+      try { label = week[new Date(days[i] + 'T00:00:00+08:00').getDay()] || ''; } catch (e) { label = ''; }
+      return { d: days[i] || i, h: Math.max(8, Math.round((Number(v) || 0) / max * 100)), on: i === trend.length - 1, label: label };
+    });
+    const fmtTime = ts => {
+      const n = Number(ts) || 0;
+      if (!n) return '';
+      const d = new Date(n);
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    };
+    const bosses = (g.salesmen || []).map(s => ({
+      ...s,
+      statusText: s.ongoing ? '拜访中' : (s.online ? ('最近 ' + (s.ageMin || 0) + ' 分钟前上报') : '离线')
+    }));
+    const events = (g.events || []).map((e, i) => ({
+      i: i,
+      icon: e.type === 'newShop' ? '🏪' : (e.result ? '✅' : '▶'),
+      text: e.type === 'newShop'
+        ? (e.salesmanName + ' 新建店铺 ' + e.customerName)
+        : (e.salesmanName + ' 拜访 ' + e.customerName + (e.result ? '（' + e.result + '）' : '')),
+      time: fmtTime(e.at)
+    }));
+    this.setData({
+      bossGlance: g,
+      bossCustomerText: fmtW(g.customerTotal),
+      bossMallText: fmtK(g.mallTotal),
+      bossNewShops7d: Number(g.newShops7d) || 0,
+      trendBars: trendBars,
+      bossSalesmen: bosses,
+      bossEvents: events
+    });
+  },
+  async _loadBossExtra(force) {
+    const dc = require('../../utils/detailCache');
+    if (!force) {
+      const g = dc.get('bossGlance', 'boss');
+      if (g) this._applyBossGlance(g);
+      const gc = dc.get('bossGeo', 'boss');
+      if (typeof gc === 'number') this.setData({ bossGeoCount: gc });
+    }
+    try {
+      const [g, geo] = await Promise.all([
+        api.call('tasks', { action: 'bossGlance' }).catch(() => null),
+        api.call('tasks', { action: 'bossGeoCount' }).catch(() => null)
+      ]);
+      if (g && g.ok) { try { dc.set('bossGlance', 'boss', g); } catch (e) { } this._applyBossGlance(g); }
+      if (geo && geo.ok) { try { dc.set('bossGeo', 'boss', geo.count); } catch (e) { } this.setData({ bossGeoCount: Number(geo.count) || 0 }); }
+    } catch (e) { /* 静默：保留缓存 / 旧数据 */ }
   },
   // ⭐ 2026-10-15：老板首页的"新店数量"（本地优先、0 请求）——抽出来给"缓存渲染"复用，别写两遍
   _applyBossNewShops() {
@@ -581,15 +692,16 @@ Page({
     let same = false;
     try {
       same = JSON.stringify(strip(hit.tasks || [])) === JSON.stringify(strip(res.tasks || []))
+        && JSON.stringify(strip(hit.doneTasks || [])) === JSON.stringify(strip(res.doneTasks || []))
         && JSON.stringify(strip(hit.stats || null)) === JSON.stringify(strip(res.stats || null));
     } catch (e) { same = false; }
     if (same) return;
     try {
-      dc.set('homeTasks', key, boss ? { tasks: res.tasks || [], stats: res.stats || null } : { tasks: res.tasks || [] });
+      dc.set('homeTasks', key, boss ? { tasks: res.tasks || [], doneTasks: res.doneTasks || [], stats: res.stats || null } : { tasks: res.tasks || [] });
     } catch (e) { /* 静默：缓存写失败不影响这次显示 */ }
     try {
-      this._applyHomeTasks(res.tasks, boss);
-      if (boss) { this.setData({ bossStats: res.stats || null }); this._applyBossNewShops(); }
+      this._applyHomeTasks(res.tasks, boss, res.doneTasks);
+      if (boss) { this.setData({ bossStats: res.stats || null }); this._loadBossExtra(true); }
     } catch (e) { /* 静默：渲染失败保留原来那屏 */ }
   },
   // ⭐⭐ 2026-10-16 老板定：**补「下拉刷新」**（他在新店页看到"刷新 / 下拉"很有用，问能不能推广到别处）。
@@ -612,9 +724,9 @@ Page({
     if (!force) {
       const hit = _dc.get('homeTasks', _key);
       if (hit && hit.tasks && hit.tasks.length) {
-        this._applyHomeTasks(hit.tasks, _boss);
+        this._applyHomeTasks(hit.tasks, _boss, hit.doneTasks);
         // ⚠️ 老板模式的统计卡不在 `_applyHomeTasks` 里（它只做任务列表），这里补上
-        if (_boss) { this.setData({ bossStats: hit.stats || null }); this._applyBossNewShops(); }
+        if (_boss) { this.setData({ bossStats: hit.stats || null }); }
         this.setData({ loading: false });
         // ⭐⭐ 2026-10-14 老板定（与客户详情页同一套）：**缓存先渲染 → 后台静默更新**。
         //   ⚠️ 原来这里是直接 `return`（2 小时内不再问云端）→ 后果是
@@ -628,16 +740,17 @@ Page({
     try {
       // 老板模式（2026-09-09 §7.13）：bossBoard 一次返回统计+全量任务
       if (getApp().globalData.bossMode) {
+        // ⭐ 2026-10-18：概览/规模/业务员动态与任务列表**并行**拉，互不阻塞
+        this._loadBossExtra(force);
         const res = await api.call('tasks', { action: 'bossBoard' });
         if (res.ok) {
           // ⭐ 2026-10-15：**走与"缓存渲染"同一套**（`_applyHomeTasks`）—— 只留一处实现
-          this._applyHomeTasks(res.tasks, true);
+          this._applyHomeTasks(res.tasks, true, res.doneTasks);
           this.setData({ bossStats: res.stats || null });
           // ⭐ 2026-10-15：存一份本地（2 小时内再进首页就不必再拉一遍）
-          try { _dc.set('homeTasks', 'boss', { tasks: res.tasks || [], stats: res.stats || null }); } catch (e) { /* 静默 */ }
-          this._applyBossNewShops();
+          try { _dc.set('homeTasks', 'boss', { tasks: res.tasks || [], doneTasks: res.doneTasks || [], stats: res.stats || null }); } catch (e) { /* 静默 */ }
           if (!mapCache.get(mapCache.curMode())) prefetchMapData();   // ⭐ 只在本地没有"今天的"地图缓存时才预取（原来无条件 = 每次进首页白拉一次）
-          // （「新店数量」与「地图预取」都已经在上面用 `_applyBossNewShops()` / 条件预取做掉了，这里不再重复）
+          // （「本周新店」由 bossGlance.newShops7d 提供，不再单独调 listNewShops；地图预取仍按条件做）
         } else {
           api.toast(res.msg || '加载失败');
         }

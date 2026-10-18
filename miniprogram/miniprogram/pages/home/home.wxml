@@ -35,11 +35,10 @@
 
   <!-- 老板模式（2026-09-09 §7.13）：数字卡带 -->
   <view class="boss-stats" wx:if="{{bossMode}}">
-    <view class="bs"><view class="bs-n">{{bossStats.todayDone}}/{{bossStats.todayTotal}}</view><view class="bs-l">今日完成</view></view>
-    <view class="bs"><view class="bs-n c-blue">{{bossStats.ongoing}}</view><view class="bs-l">拜访中</view></view>
-    <view class="bs"><view class="bs-n c-orange">{{bossStats.online}}</view><view class="bs-l">在线</view></view>
-    <!-- ⭐⭐ 2026-10-12 老板定：第 4 格「待审核」改成「新店」+ **累计数量**；点它进「新店」列表页 -->
-    <view class="bs" bindtap="goNewShops"><view class="bs-n c-red">{{bossNewShops}}</view><view class="bs-l">新店</view></view>
+    <view class="bs"><view class="bs-n">{{bossCustomerText || '—'}}</view><view class="bs-l">客户总数</view></view>
+    <view class="bs"><view class="bs-n c-blue">{{bossGeoCount || '—'}}</view><view class="bs-l">区域数量</view></view>
+    <view class="bs"><view class="bs-n c-orange">{{bossMallText || '—'}}</view><view class="bs-l">商城客户</view></view>
+    <view class="bs" bindtap="goNewShops"><view class="bs-n c-red">{{bossNewShops7d}}</view><view class="bs-l">本周新店</view></view>
   </view>
 
   <!-- 今日总览条（2026-09-10 质感升级新增：数据取自已有 bossStats，无云端改动） -->
@@ -51,6 +50,92 @@
     </view>
   </view>
 
+
+  <!-- ===== ⭐ 2026-10-18 老板首页：今日概览 / 任务进度 / 业务员动态 / 最近动态（均可收放） ===== -->
+  <view class="card" wx:if="{{bossMode}}">
+    <view class="card-h" data-k="overview" bindtap="toggleFold">
+      <view class="card-t"><view class="dot"></view>今日概览</view>
+      <view class="fold">{{fold.overview ? '▸' : '▾'}}</view>
+    </view>
+    <view class="card-body" wx:if="{{!fold.overview}}">
+      <view class="nums">
+        <view class="num"><view class="num-n">{{bossStats.todayDone || 0}}<text class="num-s">/{{bossStats.todayTotal || 0}}</text></view><view class="num-l">今日完成</view></view>
+        <view class="num"><view class="num-n">{{bossStats.ongoing || 0}}</view><view class="num-l">拜访中</view></view>
+        <view class="num"><view class="num-n">{{bossStats.online || 0}}</view><view class="num-l">在线</view></view>
+        <view class="num"><view class="num-n">{{bossGlance.todayCustomers || 0}}</view><view class="num-l">覆盖客户</view></view>
+      </view>
+      <view class="trend">
+        <view class="trend-h"><text>近 7 天拜访</text><text>今日 {{bossGlance.todayVisits || 0}} 家</text></view>
+        <view class="bars">
+          <view class="bcol {{item.on ? 'on' : ''}}" wx:for="{{trendBars}}" wx:key="d">
+            <view class="bar" style="height:{{item.h}}%"></view>
+            <text class="bd">{{item.label}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{bossMode}}">
+    <view class="card-h" data-k="tasks" bindtap="toggleFold">
+      <view class="card-t"><view class="dot blue"></view>任务进度</view>
+      <view class="fold">{{fold.tasks ? '▸' : '▾'}}</view>
+    </view>
+    <view class="card-body" wx:if="{{!fold.tasks}}">
+      <view class="chips">
+        <view class="chip {{bossTaskFilter === 'going' ? 'on' : ''}}" data-f="going" bindtap="pickBossTaskFilter">进行中<text class="chip-n">{{bossCounts.going}}</text></view>
+        <view class="chip {{bossTaskFilter === 'expired' ? 'on' : ''}}" data-f="expired" bindtap="pickBossTaskFilter">已过期<text class="chip-n">{{bossCounts.expired}}</text></view>
+        <view class="chip {{bossTaskFilter === 'done' ? 'on' : ''}}" data-f="done" bindtap="pickBossTaskFilter">已完成<text class="chip-n">{{bossCounts.done}}</text></view>
+      </view>
+      <view class="task-card {{item.status === 'done' ? 'done' : (item.expired ? 'expired' : '')}}"
+            wx:for="{{showTasks}}" wx:key="_id" bindtap="goTask" data-id="{{item._id}}">
+        <view class="row1">
+          <view class="tname">{{item.name}}<text class="towner"> · {{item.salesmanName}}</text></view>
+          <view class="state {{item.status === 'done' ? 'done' : (item.expired ? 'expired' : (item.soon ? 'review' : 'going'))}}">{{item.status === 'done' ? '已完成' : (item.expired ? '已过期' : (item.soon ? '快到期' : '进行中'))}}</view>
+        </view>
+        <view class="row2">
+          <text>已拜访 {{item.visited}} / {{item.total}} 家</text>
+          <text>截止 {{item.deadline}}</text>
+        </view>
+        <view class="pbar"><view class="pfill" style="width:{{item.percent}}%"></view></view>
+        <view class="t3" wx:if="{{item.expired}}">⚠️ 已过期 · 还有 {{item.total - item.visited}} 家没跑完</view>
+      </view>
+      <view class="card-empty" wx:if="{{!showTasks.length}}">暂无{{bossTaskFilter === 'done' ? '已完成' : (bossTaskFilter === 'expired' ? '已过期' : '进行中')}}任务</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{bossMode}}">
+    <view class="card-h" data-k="team" bindtap="toggleFold">
+      <view class="card-t"><view class="dot green"></view>业务员动态</view>
+      <view class="fold">{{fold.team ? '▸' : '▾'}}</view>
+    </view>
+    <view class="card-body" wx:if="{{!fold.team}}">
+      <view class="team-row" wx:for="{{bossSalesmen}}" wx:key="id">
+        <view class="ava">{{item.initial || '·'}}</view>
+        <view class="team-mid">
+          <view class="team-n">{{item.name}} <text class="{{item.online ? 'online' : 'offline'}}">● {{item.online ? '在线' : '离线'}}</text></view>
+          <view class="team-s">{{item.statusText}}</view>
+        </view>
+        <view class="team-v">{{item.visits}}<text class="unit">家</text></view>
+      </view>
+      <view class="card-empty" wx:if="{{!bossSalesmen.length}}">暂无业务员数据</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{bossMode}}">
+    <view class="card-h" data-k="events" bindtap="toggleFold">
+      <view class="card-t"><view class="dot gray"></view>最近动态</view>
+      <view class="fold">{{fold.events ? '▸' : '▾'}}</view>
+    </view>
+    <view class="card-body" wx:if="{{!fold.events}}">
+      <view class="ev" wx:for="{{bossEvents}}" wx:key="i">
+        <view class="ei">{{item.icon}}</view>
+        <view class="em">{{item.text}}</view>
+        <view class="et">{{item.time}}</view>
+      </view>
+      <view class="card-empty" wx:if="{{!bossEvents.length}}">今天还没有动态</view>
+    </view>
+  </view>
 
   <view class="hero" wx:if="{{!bossMode}}">
     <view class="h1">{{dateText}}</view>
@@ -101,12 +186,12 @@
     </view>
   </view>
 
-  <view class="sec-t">
-    <view class="st-t">{{bossMode ? '全部任务' : '我的任务'}}</view>
-    <view class="st-more" bindtap="goAllTasks" wx:if="{{!bossMode}}">全部 ›</view>
+  <view class="sec-t" wx:if="{{!bossMode}}">
+    <view class="st-t">我的任务</view>
+    <view class="st-more" bindtap="goAllTasks">全部 ›</view>
   </view>
 
-  <view class="task-card {{item.status === 'done' ? 'done' : ''}} {{item.hasOngoing ? 'ongoing' : ''}}" wx:for="{{showTasks}}" wx:key="_id" bindtap="goTask" data-id="{{item._id}}">
+  <view class="task-card {{item.status === 'done' ? 'done' : ''}} {{item.hasOngoing ? 'ongoing' : ''}}" wx:if="{{!bossMode}}" wx:for="{{showTasks}}" wx:key="_id" bindtap="goTask" data-id="{{item._id}}">
     <view class="row1">
       <view class="tname">{{item.name}}<text class="towner" wx:if="{{bossMode}}"> · {{item.salesmanName}}</text></view>
       <view class="state {{item.status === 'done' ? 'done' : (item.status === 'reviewing' ? 'review' : (item.expired ? 'expired' : 'going'))}}"
@@ -119,7 +204,7 @@
     <view class="pbar"><view class="pfill" style="width:{{item.percent}}%;{{item.purpose === 'develop' ? 'background:linear-gradient(90deg,#5B9DFF,#2F80ED)' : ''}}"></view></view>
   </view>
 
-  <view class="empty" wx:if="{{!loading && !tasks.length}}">暂无任务，等管理员派发后即可看到</view>
+  <view class="empty" wx:if="{{!bossMode && !loading && !tasks.length}}">暂无任务，等管理员派发后即可看到</view>
   <view class="loading" wx:if="{{loading}}">加载中…</view>
 
   <!-- 底部 Tab 栏已迁移到自定义组件 custom-tab-bar（2026-09-10 老板拍板：tab 页常驻，切页不再重绘底部栏 → 消除白闪） -->
