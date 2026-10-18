@@ -858,16 +858,26 @@ async function getCustomerDetail(event) {
   const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
   if (!cDoc || !cDoc.data) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
   const c = cDoc.data;
-  const code = c.mallCode || '';
+  // ⭐ 2026-10-19 修（老板：c793 主副店订单没合并）：订单要按**主档编号 + 名称编号 + 副店编号**一起查。
+  //   合并时主档的 `mallCode` 可能被写成副店编号（如 c793 主档被写成 c838），只按 mallCode 查会漏掉主店订单。
+  const codes = [];
+  const _pushCode = x => { const s = String(x || '').trim().toLowerCase(); if (s && codes.indexOf(s) < 0) codes.push(s); };
+  _pushCode(c.mallCode);
+  _pushCode(mallCodeFromName(c.name));
+  (Array.isArray(c.subAccounts) ? c.subAccounts : []).forEach(s => {
+    _pushCode(s.mallCode);
+    _pushCode(mallCodeFromName(s.name));
+  });
+  const code = codes[0] || '';
 
   // —— ① 订单（按业务键 customerCode；同编号的主副两家都会命中）——
   let orders = [];
-  if (code) {
+  if (codes.length) {
     // ⚠️⚠️ 2026-09-25 修（老板报障：c490「订单总数」列显示 112 单，进详情却是"累计 50 单"）：
     //   原先这里 `.limit(50)` —— **只拉了 50 单**，于是"累计 N 单"和"金额合计"都被截断在 50。
     //   改成：**订单全部拉下来**（用 fetchAll 分页，只为真实计数与金额合计）；
     //   云端 orderBy 与分页不能同时用，所以拉回来后在内存里按日期倒序排。
-    orders = await fetchAll('orders', { customerCode: code }, {
+    orders = await fetchAll('orders', { customerCode: _.in(codes) }, {
       orderNo: true, orderedAt: true, actualAmount: true, orderStatus: true, payMethod: true
     }).catch(() => []);
     orders.sort((a, b) => String(b.orderedAt || '').localeCompare(String(a.orderedAt || '')));

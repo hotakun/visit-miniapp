@@ -2578,7 +2578,17 @@ async function custDetail(salesmanId, event, isBoss) {
   const cDoc = await db.collection('customers').doc(customerId).get().catch(() => null);
   if (!cDoc || !cDoc.data) return { ok: false, code: 'NOT_FOUND', msg: '客户不存在' };
   const c = cDoc.data;
-  const code = c.mallCode || '';
+  // ⭐ 2026-10-19 修（老板：主副店订单没合并）：主档编号 + 名称编号 + 副店编号一起查。
+  //   合并时主档的 `mallCode` 可能被写成副店编号（如 c793 主档被写成 c838），只按 mallCode 查会漏掉主店订单。
+  const codes = [];
+  const _pushCode = x => { const s = String(x || '').trim().toLowerCase(); if (s && codes.indexOf(s) < 0) codes.push(s); };
+  _pushCode(c.mallCode);
+  _pushCode(mallCodeFromName(c.name));
+  (Array.isArray(c.subAccounts) ? c.subAccounts : []).forEach(s => {
+    _pushCode(s.mallCode);
+    _pushCode(mallCodeFromName(s.name));
+  });
+  const code = codes[0] || '';
 
   // —— ① 订单：⭐ 2026-10-15 老板定「订单每天一次、看缓存」——**不再为了算合计把全部订单拉下来**：
   //   ① 界面只要**最近 10 单**（老板 2026-10-15 定：从 20 再收到 **10**）→ `orderBy(orderedAt desc).limit(10)`
@@ -2586,19 +2596,26 @@ async function custDetail(salesmanId, event, isBoss) {
   //   ② "累计 N 单 / 金额合计"改用**聚合**（只回两个数字、不拉数据）。
   let orders = [];
   let orderTotal = 0, orderAmountSum = 0;
-  if (code) {
+  if (codes.length) {
     orders = await db.collection('orders')
-      .where({ customerCode: code })
+      .where({ customerCode: _.in(codes) })
       .field({ orderNo: true, orderedAt: true, actualAmount: true, orderStatus: true, payMethod: true })
       .orderBy('orderedAt', 'desc').limit(ORDER_PREVIEW_N)
       .get().then(r => (r.data || [])).catch(silentCatch('tasks·custDetail·orders', []));
     try {
-      const agg = await db.collection('orders').aggregate()
-        .match({ customerCode: code })
-        .group({ _id: null, n: $.sum(1), amt: $.sum('$actualAmount') })
-        .end();
-      const row = (agg.list && agg.list[0]) || null;
-      if (row) { orderTotal = Number(row.n) || 0; orderAmountSum = Number(row.amt) || 0; }
+      if (codes.length === 1) {
+        const agg = await db.collection('orders').aggregate()
+          .match({ customerCode: codes[0] })
+          .group({ _id: null, n: $.sum(1), amt: $.sum('$actualAmount') })
+          .end();
+        const row = (agg.list && agg.list[0]) || null;
+        if (row) { orderTotal = Number(row.n) || 0; orderAmountSum = Number(row.amt) || 0; }
+      } else {
+        // 主副店多个编号：聚合 .match 对 _.in 支持不稳，直接分页拉金额字段（主副店订单量不大）
+        const all = await fetchAllPaged('orders', { customerCode: _.in(codes) }, { actualAmount: true });
+        orderTotal = all.length;
+        orderAmountSum = all.reduce((a, o) => a + (Number(o.actualAmount) || 0), 0);
+      }
     } catch (e) {
       // 聚合不可用 → 保守回落（至少把已拉的这 10 单算上，不让界面显示 0）
       orderTotal = orders.length;
@@ -2757,6 +2774,13 @@ async function custDetail(salesmanId, event, isBoss) {
     visits,
     remarks: rmk.slice(0, 30).map(r => ({ text: r.text || '', at: r.at || 0, by: r.by || '' }))
   };
+}
+
+// 从店名/客户单位里剥「客户编号」（订单按 customerCode 匹配；与 adminapi.mallCodeFromName 同口径）
+function mallCodeFromName(nm) {
+  const t = String(nm == null ? '' : nm).trim();
+  const m = t.match(/^([a-zA-Z]{1,3}\d{1,6})[\s　]+(.+)$/);
+  return m ? m[1].toLowerCase() : '';
 }
 
 // 分页拉全量（云开发单次 limit 上限 1000）

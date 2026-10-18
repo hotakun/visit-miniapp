@@ -10194,11 +10194,30 @@ async function custFillPageAgg(rows) {
   const _pts = (custLocal && custLocal.points) || [];
   let _anyMissing = false;
   for (let i = 0; i < _pts.length && i < 50; i++) {
-    if (_pts[i] && _pts[i].oc === undefined) { _anyMissing = true; break; }
+    // ⭐ 2026-10-19：有副店（sub）的行也要补一次 —— 订单要按主档 + 副店编号合并
+    if (_pts[i] && (_pts[i].oc === undefined || _pts[i].sub)) { _anyMissing = true; break; }
   }
   if (_pts.length && !_anyMissing) return;
   const ids = rows.map(r => r._id).filter(Boolean);
-  const codes = rows.map(r => r.mallCode).filter(Boolean);
+  // ⭐ 2026-10-19：主副店订单合并 —— 每个客户收集「主档编号 + 店名编号 + 副店编号」。
+  //   合并时主档 `mallCode` 可能被写成副店编号（如 c793 主档被写成 c838），只按 mallCode 查会漏主店订单。
+  const codes = [];
+  const _codeRe = /^([a-zA-Z]{1,3}\d{1,6})[\s　]+/;
+  rows.forEach(r => {
+    const set = [];
+    const push = x => { const s = String(x || '').trim().toLowerCase(); if (s && set.indexOf(s) < 0) set.push(s); };
+    push(r.mallCode);
+    const nm = String(r.name || '').trim();
+    const m = nm.match(_codeRe);
+    if (m) push(m[1]);
+    (Array.isArray(r.subAccounts) ? r.subAccounts : []).forEach(s => {
+      push(s.mallCode);
+      const sm = String(s.name || '').trim().match(_codeRe);
+      if (sm) push(sm[1]);
+    });
+    r._codes = set;
+    set.forEach(c => { if (codes.indexOf(c) < 0) codes.push(c); });
+  });
   let res = null;
   try { res = await api('custPageAgg', { ids: ids, codes: codes }); } catch (e) { res = null; }
   if (!res || !res.ok) return;
@@ -10210,9 +10229,16 @@ async function custFillPageAgg(rows) {
     r.visitCount = a.vc || 0;
     r.lastVisitAt = a.lv || '';
     r.coordFixPending = !!a.cf;
-    const o = byCode[r.mallCode] || {};
-    r.orderCount = o.oc || 0;
-    r.orderAmountSum = o.oa || 0;
+    const o = (r._codes || []).reduce((acc, c) => {
+      const x = byCode[c] || {};
+      acc.oc += Number(x.oc) || 0;
+      acc.oa += Number(x.oa) || 0;
+      const lo = String(x.lo || '');
+      if (lo > acc.lo) acc.lo = lo;
+      return acc;
+    }, { oc: 0, oa: 0, lo: '' });
+    r.orderCount = o.oc;
+    r.orderAmountSum = o.oa;
     if (o.lo) r.lastOrderAt = o.lo;
   });
 }
