@@ -10191,15 +10191,9 @@ async function custFillPageAgg(rows) {
   //   而"增量补过的行"又会有 —— 混在一起时只看第 0 行会**看运气**：
   //   第 0 行恰好是补过的那种，就会误以为"全都有"而跳过补取，列表照样显示 0。
   //   只要这批里还有缺的，就照旧回云端按页补（≤200 家一次，很便宜）。
-  const _pts = (custLocal && custLocal.points) || [];
-  let _anyMissing = false;
-  for (let i = 0; i < _pts.length && i < 50; i++) {
-    if (_pts[i] && _pts[i].oc === undefined) { _anyMissing = true; break; }
-  }
-  // ⭐ 2026-10-19：当前页有副店 → 必须补一次（订单要按主档 + 副店编号合并）。
-  //   ⚠️ 不能只看全库前 50 行：主副店可能不在前 50 行（c793 就是这样）。
-  const _needSub = rows.some(r => Array.isArray(r.subAccounts) && r.subAccounts.length);
-  if (_pts.length && !_anyMissing && !_needSub) return;
+  // ⭐ 2026-10-19 老板定（c352 详情有 3 单、列表却「—」）：
+  //   **列表的订单/拜访/任务列必须与详情页同源**（云端 orders/visits/tasks），
+  //   不能再依赖 PG 预聚合缓存（会和详情分裂）。每页 ≤200 家一次 custPageAgg，成本可控；失败保留缓存值。
   const ids = rows.map(r => r._id).filter(Boolean);
   // ⭐ 2026-10-19：主副店订单合并 —— 每个客户收集「主档编号 + 店名编号 + 副店编号」。
   //   合并时主档 `mallCode` 可能被写成副店编号（如 c793 主档被写成 c838），只按 mallCode 查会漏主店订单。
