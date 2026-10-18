@@ -4749,11 +4749,19 @@ function mallPickRender() {
       '<label><input type="radio" name="mpf_' + f.k + '" value="sys"' + (def === 'sys' ? ' checked' : '') + '> 系统内</label>' +
       '</td></tr>';
   });
-  // 不能选的两行 —— 明确标出"为什么不能选"，免得老板以为做了没生效
+  // ⭐ 2026-10-18 老板定：**商城有的客户也带经纬度** —— 这里不再写死「商城没有」：
+  //   · 商城有、系统内空 → 可选「用商城的」补坐标（默认商城）；
+  //   · 系统内有坐标 → **固定用系统内的**（红线：现场采的坐标绝不覆盖）。
+  const mallLat = String(m.latText || '').trim();
+  const sysLat = String(s.latText || '').trim();
+  const coordPick = (mallLat && !sysLat)
+    ? ('<label style="margin-right:12px"><input type="radio" name="mpf_lat" value="mall" checked> 商城</label>' +
+       '<label><input type="radio" name="mpf_lat" value="sys"> 系统内</label>')
+    : '🔒 固定用系统内的';
   h += '<tr><td style="padding:6px 8px;color:var(--sub)">经纬度</td>' +
-    '<td style="padding:6px 8px;color:#C3CAD4">（商城没有）</td>' +
-    '<td style="padding:6px 8px">' + (esc(String(s.latText || '')) || '<span style="color:#C3CAD4">（空）</span>') + '</td>' +
-    '<td style="padding:6px 8px;color:var(--sub)">🔒 固定用系统内的</td></tr>' +
+    '<td style="padding:6px 8px">' + (mallLat ? esc(mallLat) : '<span style="color:#C3CAD4">（商城没有）</span>') + '</td>' +
+    '<td style="padding:6px 8px">' + (sysLat ? esc(sysLat) : '<span style="color:#C3CAD4">（空）</span>') + '</td>' +
+    '<td style="padding:6px 8px;color:var(--sub)">' + coordPick + '</td></tr>' +
     '<tr><td style="padding:6px 8px;color:var(--sub)">商圈</td>' +
     '<td style="padding:6px 8px;color:#C3CAD4">（商城没有）</td>' +
     '<td style="padding:6px 8px">' + e1(s.bizCircle) + '</td>' +
@@ -4768,6 +4776,9 @@ function mallPickCollect() {
     const el = document.querySelector('input[name="mpf_' + f.k + '"]:checked');
     picks[f.k] = (el && el.value === 'sys') ? 'sys' : 'mall';
   });
+  // ⭐ 2026-10-18：经纬度只在「商城有、系统内空」时出现单选；选了系统内就不采用商城坐标。
+  const elLat = document.querySelector('input[name="mpf_lat"]:checked');
+  if (elLat) picks.lat = (elLat.value === 'sys') ? 'sys' : 'mall';
   return picks;
 }
 
@@ -9317,7 +9328,10 @@ async function mpConfirm(mallKey, customerId) {  const row = _mpRows.filter(x =>
     sub: '确认「' + (row.name || '') + '」就是系统内的这家？（每行可选，不动就是默认：商城优先）',
     mall: {
       name: row.name, phone: mp2, address: row.address,
-      region: row.region, mallCode: row.mall_code
+      region: row.region, mallCode: row.mall_code,
+      // ⭐ 2026-10-18 老板定：商城有的客户带经纬度 → 预览里显示出来（系统内空时可采用）
+      latText: (Number(row.lat) && Number(row.lng))
+        ? (Number(row.lat).toFixed(6) + ', ' + Number(row.lng).toFixed(6)) : ''
     },
     sys: {
       name: cName, phone: sp, address: cAddr, region: cRegion, mallCode: cCode,
