@@ -9066,10 +9066,17 @@ function mpMark(key, status, tid, tname, lat, lng, picks) {
   // ⭐ 2026-10-17：多传一个 `picks`（逐字段选择"用哪边"，JSON）——
   //   存在 PG 的 mall_pending.picks 里，这样"先梳理、最后统一发送"中间**刷新页面/换电脑都不丢**。
   //   ⚠️ 不传 = 不动那一列（COALESCE 保原值），所以"只改状态"时不会把选择清空。
+  // ⭐ 2026-10-18 修（老板「新建后客户详情看不到商圈/品类」）：
+  //   调用方可能传对象、也可能传 JSON 字符串 —— **这里统一成对象，只 stringify 一次**。
+  //   之前 mpNewSave 传了 JSON 字符串，这里又 stringify → 双重编码 → pgapi 解析失败 → 整列被当空值丢掉。
+  let _picks = picks;
+  if (typeof _picks === 'string') {
+    try { _picks = JSON.parse(_picks); } catch (e) { _picks = null; }
+  }
   return fetch('/mallPending/mark?mallKey=' + encodeURIComponent(key) + '&status=' + status +
     '&targetId=' + encodeURIComponent(tid || '') + '&targetName=' + encodeURIComponent(tname || '') +
     (lat ? ('&lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng || '')) : '') +
-    (picks ? ('&picks=' + encodeURIComponent(JSON.stringify(picks))) : ''),
+    (_picks ? ('&picks=' + encodeURIComponent(JSON.stringify(_picks))) : ''),
     { method: 'POST' }).then(r => r.json()).catch(() => null);
 }
 function mpRender() {
@@ -9706,10 +9713,10 @@ async function mpNewSave() {
   // ⚠️ 只记账：状态 = created + 店名 + 坐标存到服务器那一行（云端一个字不动）
   // ⭐ 2026-10-18：连锁分店把「另一家」的 id 一起记进这一行的 `picks`（PG 已有这一列），
   //   点「确认并发送到云端」时再取出来传给 createMallCustomer → 两家互标「同一老板」。
-  await mpMark(_mpNewKey, 'created', '', f.name, la, ln, JSON.stringify({
+  await mpMark(_mpNewKey, 'created', '', f.name, la, ln, {
     chainWith: _mpNewChain, district: f.region || '', region: f.regionText || '',
     bizCircle: f.bizCircle || '', cat1: f.cat1 || '', cat2: f.cat2 || '', cat3: f.cat3 || ''
-  }));
+  });
   _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = ''; _mpNewChain = '';
   await mpLoad(true);
 }
