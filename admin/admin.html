@@ -9048,10 +9048,29 @@ function mpSubPick(mallKey, customerId) {
   return new Promise(function (resolve) {
     const row = (_mpRows || []).filter(x => x.mall_key === mallKey)[0] || {};
     const p = ((custLocal && custLocal.points) || []).filter(x => x.i === customerId)[0] || {};
-    const sysName = p.nr || p.n || '（系统内这条）';
-    const mallName = row.name || '（本次导入这条）';
-    const opt = (val, title, sub, checked, note) =>
-      '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ' +
+    const SYS = {
+      name: p.nr || p.n || '', phone: p.ph || '', address: p.ad || '',
+      region: p.rg || p.reg || p.d || '', biz: p.b || '',
+      latlng: (p.la && p.ln) ? (p.la + ',' + p.ln) : ''
+    };
+    const MAL = {
+      name: row.name || '', phone: row.phone || '', address: row.address || '',
+      region: row.region || '', biz: '',
+      latlng: (row.lat && row.lng) ? (row.lat + ',' + row.lng) : ''
+    };
+    const FIELDS = [
+      { k: 'name', label: '店名' }, { k: 'phone', label: '电话' }, { k: 'address', label: '地址' },
+      { k: 'region', label: '区域' }, { k: 'biz', label: '商圈', fixed: true }, { k: 'latlng', label: '经纬度' }
+    ];
+    // 默认：店名/电话/地址/区域跟主店；商圈固定系统内；**经纬度默认系统内**（现场为准）
+    const defOf = function (k, mainSide) {
+      if (k === 'biz' || k === 'latlng') return 'sys';
+      const a = String(SYS[k] == null ? '' : SYS[k]).trim(), b = String(MAL[k] == null ? '' : MAL[k]).trim();
+      if (mainSide === 'mall') return b ? 'mall' : 'sys';
+      return a ? 'sys' : (b ? 'mall' : 'sys');
+    };
+    const opt = function (val, title, sub, checked, note) {
+      return '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ' +
         (checked ? '#F5A623' : '#E3E8EF') + ';border-radius:10px;margin-bottom:8px;cursor:pointer;background:' +
         (checked ? '#FFFBF3' : '#fff') + '">' +
         '<input type="radio" name="mpsubmain" value="' + val + '"' + (checked ? ' checked' : '') +
@@ -9060,37 +9079,83 @@ function mpSubPick(mallKey, customerId) {
         '<div style="font-size:11.5px;color:#7A8490;margin-top:2px">' + sub + '</div>' +
         (note ? '<div style="font-size:11px;color:#B77400;margin-top:3px">' + note + '</div>' : '') +
         '</span></label>';
+    };
+    const e1 = function (v) { return esc(String(v == null ? '' : v)) || '<span style="color:#C3CAD4">（空）</span>'; };
+    const render = function (mainSide) {
+      const rows = FIELDS.map(function (f) {
+        const d = defOf(f.k, mainSide);
+        const ctl = f.fixed
+          ? '<span style="color:#98A2AE">🔒 固定用系统内的</span>'
+          : '<label style="margin-right:12px"><input type="radio" name="mpsubf_' + f.k + '" value="sys"' +
+              (d === 'sys' ? ' checked' : '') + '> 系统内</label>' +
+            '<label><input type="radio" name="mpsubf_' + f.k + '" value="mall"' +
+              (d === 'mall' ? ' checked' : '') + '> 本次导入</label>';
+        return '<tr>' +
+          '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9;color:var(--sub);white-space:nowrap">' + f.label + '</td>' +
+          '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9">' + e1(SYS[f.k]) + '</td>' +
+          '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9">' + e1(MAL[f.k]) + '</td>' +
+          '<td style="padding:6px 8px;border-bottom:1px solid #F4F6F9;white-space:nowrap">' + ctl + '</td></tr>';
+      }).join('');
+      return '<div style="background:#fff;border-radius:14px;padding:14px 16px;width:min(780px,94vw);max-height:88vh;overflow-y:auto">' +
+        '<div style="font-weight:800;font-size:14px;margin-bottom:4px">合并为主副店 —— 选择主店和字段</div>' +
+        '<div style="font-size:11.5px;color:#7A8490;margin-bottom:10px;line-height:1.6">主店决定客户管理里的显示与拜访归属；下面每个字段都可以单独选「用哪边」。<br>' +
+          '<b style="color:#12A150">拜访记录、门店照片、录音、批次、订单会自动共用，不需要选择。</b><br>' +
+          '两家编号相同，以后导入的销售订单和明细订单会自动合并显示。</div>' +
+        opt('sys', '主店 · 系统内：' + esc(SYS.name || '（系统内这条）'),
+          esc((SYS.address || '') + (SYS.phone ? ' · ' + SYS.phone : '')), mainSide === 'sys',
+          '已有拜访记录 / 门店照片 / 批次归属') +
+        opt('mall', '主店 · 本次导入：' + esc(MAL.name || '（本次导入这条）'),
+          esc((MAL.address || '') + (MAL.phone ? ' · ' + MAL.phone : '')), mainSide === 'mall',
+          '商城侧信息') +
+        '<div style="font-size:12px;font-weight:700;margin:12px 0 4px">字段选用（默认按主店，可逐项改）</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="color:var(--sub);font-weight:700;text-align:left">' +
+          '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:70px">字段</th>' +
+          '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">系统内</th>' +
+          '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6">本次导入</th>' +
+          '<th style="padding:6px 8px;border-bottom:1px solid #EEF1F6;width:200px">用哪边</th></tr></thead><tbody>' +
+          rows + '</tbody></table>' +
+        '<div style="font-size:11px;color:#B77400;margin-top:6px">⚠️ 经纬度默认保留系统内的（以现场为准）；要换成导入的，请在上面选「本次导入」。</div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">' +
+          '<button class="btn ghost" id="mpspNo" style="height:32px;font-size:13px">取消</button>' +
+          '<button class="btn primary" id="mpspYes" style="height:32px;font-size:13px">✅ 确认合并</button></div></div>';
+    };
     const box = document.createElement('div');
     box.id = 'mpSubPickOvl';
     box.style.cssText = 'position:fixed;inset:0;background:rgba(20,25,35,.5);z-index:2147483000;display:flex;align-items:center;justify-content:center';
-    box.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px 16px;width:min(640px,94vw);max-height:88vh;overflow-y:auto">' +
-      '<div style="font-weight:800;font-size:14px;margin-bottom:4px">合并为主副店 —— 请选择哪家是<b>主店</b></div>' +
-      '<div style="font-size:11.5px;color:#7A8490;margin-bottom:10px;line-height:1.6">主店 = 客户管理里显示、拜访以此为准；另一家作为副店挂在主店下面。<br>' +
-        '两家编号相同，<b>以后导入的销售订单和明细订单会自动合并显示</b>。</div>' +
-      opt('sys', '系统内：' + esc(sysName), esc((p.ad || '') + (p.ph ? ' · ' + p.ph : '')), true,
-        '已有拜访记录 / 门店照片 / 批次归属') +
-      opt('mall', '本次导入：' + esc(mallName), esc((row.address || '') + (row.phone ? ' · ' + row.phone : '')), false,
-        '商城侧信息；坐标仍保留系统内的（以现场为准）') +
-      '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">' +
-      '<button class="btn ghost" id="mpspNo" style="height:32px;font-size:13px">取消</button>' +
-      '<button class="btn primary" id="mpspYes" style="height:32px;font-size:13px">✅ 确认合并</button></div></div>';
+    box.innerHTML = render('sys');
     document.body.appendChild(box);
     const done = function (v) {
       const e0 = document.getElementById('mpSubPickOvl');
       if (e0 && e0.parentNode) e0.parentNode.removeChild(e0);
       resolve(v);
     };
-    document.getElementById('mpspNo').onclick = function () { done(null); };
-    document.getElementById('mpspYes').onclick = function () {
-      const el = box.querySelector('input[name="mpsubmain"]:checked');
-      done(el ? el.value : 'sys');
-    };
-    box.addEventListener('click', function (e) { if (e.target === box) done(null); });
+    // 切主店 → 字段默认值跟着主店重算（老板仍可逐项改）
+    box.addEventListener('change', function (e) {
+      if (e.target && e.target.name === 'mpsubmain') box.innerHTML = render(e.target.value);
+    });
+    box.addEventListener('click', function (e) {
+      const t = e.target;
+      if (!t) return;
+      if (t.id === 'mpspNo') return done(null);
+      if (t.id === 'mpspYes') {
+        const mainEl = box.querySelector('input[name="mpsubmain"]:checked');
+        const mainSide = mainEl ? mainEl.value : 'sys';
+        const picks = {};
+        FIELDS.forEach(function (f) {
+          if (f.fixed) { picks[f.k] = 'sys'; return; }
+          const el = box.querySelector('input[name="mpsubf_' + f.k + '"]:checked');
+          picks[f.k] = el ? el.value : 'sys';
+        });
+        return done({ mainSide: mainSide, picks: picks });
+      }
+      if (t === box) done(null);
+    });
   });
 }
-async function mpSubMerge(mallKey, customerId, mainSide) {
-  const side = mainSide || await mpSubPick(mallKey, customerId);
-  if (!side) return;
+async function mpSubMerge(mallKey, customerId) {
+  const pick = await mpSubPick(mallKey, customerId);
+  if (!pick) return;
+  const side = pick.mainSide;
   const row = (_mpRows || []).filter(x => x.mall_key === mallKey)[0] || {};
   const p = ((custLocal && custLocal.points) || []).filter(x => x.i === customerId)[0] || {};
   const sysName = p.nr || p.n || '（系统内）';
@@ -9098,7 +9163,7 @@ async function mpSubMerge(mallKey, customerId, mainSide) {
   const mainName = (side === 'mall') ? mallName : sysName;
   const subName = (side === 'mall') ? sysName : mallName;
   const r = await api('mergeMallSub', {
-    customerId: customerId, mallKey: mallKey, mainSide: side,
+    customerId: customerId, mallKey: mallKey, mainSide: side, picks: pick.picks,
     row: { mallKey: mallKey, mallCode: row.mall_code || '', name: row.name || '', phone: row.phone || '',
            address: row.address || '', lat: row.lat || 0, lng: row.lng || 0 }
   });
@@ -9115,6 +9180,8 @@ async function mpSubMerge(mallKey, customerId, mainSide) {
         if (r.fields.address) pt.ad = r.fields.address;
         if (r.fields.mallKey) pt.mk = r.fields.mallKey;
         if (r.fields.phone2) pt.ph2 = r.fields.phone2;
+        if (r.fields.region) pt.reg = r.fields.region;
+        if (r.fields.lat) { pt.la = r.fields.lat; pt.ln = r.fields.lng; pt.cs = r.fields.coord_source || pt.cs; }
       }
     }
   } catch (e) { /* 静默 */ }

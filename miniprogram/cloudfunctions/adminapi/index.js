@@ -4679,6 +4679,13 @@ async function mergeMallSub(event) {
   };
   const cur = (Array.isArray(c.subAccounts) ? c.subAccounts : []).slice();
   const fields = {};
+  // ⭐⭐ 2026-10-18 老板定：像「配对合并」一样**逐字段挑选**（店名 / 电话 / 地址 / 区域 / 经纬度）。
+  //   · 拜访记录 / 门店照片 / 录音 / 批次 / 订单 = **自动共用**，不参与选择；
+  //   · 没传 picks（老调用）→ 按主店侧（向后兼容）；**经纬度默认不动**（老板红线：现场为准），
+  //     只有老板明确选「本次导入」时才覆盖。
+  const picks = (event && event.picks && typeof event.picks === 'object' && !Array.isArray(event.picks)) ? event.picks : {};
+  const pickOf = k => (picks[k] === 'mall' ? 'mall' : (picks[k] === 'sys' ? 'sys' : null));
+  // ① 副店记录 = **另一家**（主店选哪边，副店就记另一边；字段一律用那边的原始值）
   if (mainSide === 'mall') {
     const oldName = String(c.nameRaw || c.name || '').trim();
     const oldSub = {
@@ -4701,18 +4708,31 @@ async function mergeMallSub(event) {
     // 导入这条现在是主店 → 从 subAccounts 里移除同 mallKey 的旧条目
     const i1 = cur.findIndex(x => x && String(x.mallKey || '') === mallKey);
     if (i1 >= 0) cur.splice(i1, 1);
-    fields.name = String(m.name || '').trim() || c.name;
-    fields.nameRaw = fields.name;
-    fields.phone = String(m.phone || '').trim() || c.phone;
-    fields.address = String(m.address || '').trim() || c.address;
-    fields.mallKey = mallKey;
-    // 原主店电话收入 phone2（两个都留，搜索/详情都能命中）
-    if (fields.phone && c.phone && String(c.phone).trim() !== fields.phone) fields.phone2 = String(c.phone).trim();
   } else {
     const idx = cur.findIndex(x => x && String(x.mallKey || '') === mallKey);
     if (idx >= 0) cur[idx] = Object.assign({}, cur[idx], sub);
     else cur.push(sub);
   }
+  // ② 主档展示字段：逐字段按 picks；没给 → 按主店侧（坐标永远默认不动）
+  const useMallFor = k => { const p = pickOf(k); return p ? p === 'mall' : mainSide === 'mall'; };
+  if (useMallFor('name') && String(m.name || '').trim()) {
+    fields.name = String(m.name).trim();
+    fields.nameRaw = fields.name;          // ⚠️ 铁律：店名与 nameRaw 必须一起动
+  }
+  if (useMallFor('phone') && String(m.phone || '').trim()) {
+    fields.phone = String(m.phone).trim();
+    const oldPhone = String(c.phone || '').trim();
+    // 两个电话都留：另一个进 phone2（搜索 / 详情都能命中）
+    if (oldPhone && oldPhone !== fields.phone) fields.phone2 = oldPhone;
+  }
+  if (useMallFor('address') && String(m.address || '').trim()) fields.address = String(m.address).trim();
+  if (useMallFor('region') && String(m.region || '').trim()) fields.region = String(m.region).trim();
+  // ⭐ 老板明确选择「经纬度用本次导入的」时才会覆盖（默认不传 = 保持系统内）
+  if (pickOf('latlng') === 'mall' && Number(m.lat) && Number(m.lng)) {
+    fields.lat = Number(m.lat); fields.lng = Number(m.lng);
+    fields.coord_source = 'mall'; fields.coord_status = 'ok';
+  }
+  if (mainSide === 'mall') fields.mallKey = mallKey;
   // ⚠️ 必须写 updatedAt —— 增量同步（custSync）靠它把这次改动带给后台/PG。
   await db.collection('customers').doc(customerId).update({
     data: Object.assign({}, fields, { subAccounts: cur, updatedAt: now })
