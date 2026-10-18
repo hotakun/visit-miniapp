@@ -18,7 +18,6 @@ Page({
     selMan: null, warnCount: 0, updateText: '',
     refreshing: false, // ↻ 旋转动效（2026-09-09 修复：静默刷新也要视觉反馈）
     trackPolyline: [], trackOn: false, // 2026-09-09 老板定：今日轨迹（绿色折线，点地图空白清除）
-    tabIdx: 2, // 战况 tab 高亮
     mapScale: 12 // 地图缩放级别（2026-09-10 老板定：点 📍 放大到 14 级）
   },
   // 2026-09-10 已删除 onMapRegion（老板反馈"地图乱跳"）：任何 setData 到地图属性，地图都会按 data 里的中心重新定位，

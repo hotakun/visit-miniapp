@@ -227,7 +227,7 @@ Page({
   onShareAppMessage() {
     return require('../../utils/share').cfg(); // 统一出口（utils/share.js）：path 带当前登录用户 _id → 记录推荐人
   },
-  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', bossNewShops: 0, welShow: false,
+  data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', welShow: false,
     // ⭐ 2026-10-18 老板首页改版
     bossGlance: null, bossGeoCount: 24, bossCustomerText: '17.9万', bossMallText: '', bossNewShops7d: 0,
     bossTaskFilter: 'going', bossCounts: { going: 0, expired: 0, done: 0 },

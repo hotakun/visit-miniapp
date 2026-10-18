@@ -1792,7 +1792,6 @@ async function cleanExpiredTracks() {
 // 云端存 {version, adminHtml, ntMapJs}（settings 单文档）；云函数出入参 100KB 限制 → 90KB 分片。
 // 上传需鉴权（老板手动触发）；读取免鉴权（代码文件非敏感，文员 server 转发）。
 const DIST_CHUNK = 90000;
-const DIST_DOC = 'admin_dist';
 // ⭐ 2026-10-07 实测修的坑：原来 4 个文件**全挤在 settings.admin_dist 一个文档**里
 //   （adminHtml 788K + ntMapJs 39K + serverJs 39K + storeJs 9K ≈ **875KB**），
 //   逼近云开发**单文档 1MB 上限** → 写入被丢弃/截断 → 实测 server.js 存成了半截
@@ -1802,11 +1801,6 @@ const distDocOf = k => 'admin_dist_' + k;
 async function readDistKind(kind) {
   const r = await db.collection('settings').doc(distDocOf(kind)).get().catch(() => null);
   return (r && r.data && r.data.value) || null;   // { kind, content, version, updatedAt }
-}
-
-async function readDist() {
-  const r = await db.collection('settings').doc(DIST_DOC).get().catch(() => null);
-  return (r && r.data && r.data.value) || null;
 }
 
 async function uploadAdminDist(event) {
@@ -2011,9 +2005,6 @@ async function getTaskDoc(taskId) {
 // 旧 editLog/extendLog/reassignLog/withdrawLog 只读保留，getTask 时 mergeTaskLogs 合并成一条时间线
 function withLog(t, evt) {
   return [...(Array.isArray(t.logs) ? t.logs : []), evt];
-}
-function evtNow(admin, type, detail) {
-  return { at: Date.now(), by: (admin && admin.name) || '系统', role: 'admin', type, detail: detail || {} };
 }
 function mergeTaskLogs(t) {
   const out = [];
@@ -3300,22 +3291,6 @@ function normAddr(s) {
   let t = String(s || '');
   ['浙江省', '江苏省', '金华市', '永康市', '省', '市'].forEach(p => { t = t.replace(p, ''); });
   return t.replace(/[\s，。、·—\-_/]+/g, '');
-}
-function lcsLen(a, b) {
-  const n = a.length, m = b.length;
-  let prev = new Array(m + 1).fill(0);
-  for (let i = 1; i <= n; i++) {
-    const cur = new Array(m + 1).fill(0);
-    for (let j = 1; j <= m; j++) {
-      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
-    }
-    prev = cur;
-  }
-  return prev[m];
-}
-function dice(a, b) {
-  if (!a || !b) return 0;
-  return (2 * lcsLen(a, b)) / (a.length + b.length);
 }
 
 function matchMall(v, m, nameV, addrV, vPhones, nameM, addrM) {
