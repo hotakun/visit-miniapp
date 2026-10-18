@@ -4102,6 +4102,8 @@ async function createMallCustomer(event) {
     phone: String(e2.phone || ''), address: String(e2.address || ''),
     lat: lat, lng: lng,
     region: String(e2.region || ''), bizCircle: String(e2.bizCircle || ''),
+    // ⭐ 2026-10-18 老板定：后台「新建这条客户」自动检测的品类也写进档案（三级）
+    cat1: String(e2.cat1 || '').trim(), cat2: String(e2.cat2 || '').trim(), cat3: String(e2.cat3 || '').trim(),
     customerType: 'mall',            // 老板定：商城导入建的就是「已加入商城」
     mallPending: false,
     mallPendingDoneAt: now,

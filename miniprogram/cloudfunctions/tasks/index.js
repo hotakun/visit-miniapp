@@ -193,32 +193,38 @@ async function pullNear(lat, lng, d) {
 // 近邻加权投票 → { hit, area, bizCircle, cands:[{area,biz,w}] }
 //   ⚠️ 2026-09-28 晚起改成 **async**（数据在数据库里了）—— 调用处必须 await
 async function geoVote(lat, lng) {
-  // 范围先给 ±165 米（0.0015°），足够覆盖 100 米识别半径；拉满 1000 条就收缩范围重拉一次
-  let d = 0.0015;
-  let pts = await pullNear(lat, lng, d);
-  if (pts.length >= 1000) {
-    d = 0.0008;
-    pts = await pullNear(lat, lng, d);
+  // ⭐ 2026-10-18 老板定：100 米内参考店铺 <3 家 → 扩到 500 米再检测（与后台 localGeoVote 同一口径）。
+  for (const R of [100, 500]) {
+    // 粗筛范围多留 65 米余量；附近点太密（≥1000）就收缩一圈，避免一次拉太多
+    let d = (R + 65) / 111320;
+    let pts = await pullNear(lat, lng, d);
+    if (pts.length >= 1000) {
+      d = d / 2;
+      pts = await pullNear(lat, lng, d);
+    }
+    const areaW = {}, pairW = {};
+    let hit = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (!p || !p.lat || !p.lng) continue;        // ⚠️ 跳过空坐标（源数据里有）
+      const dd = haversine(lat, lng, p.lat, p.lng);
+      if (dd > R) continue;
+      hit++;
+      const w = 1 / Math.max(dd, 8);                // 8 米兜底：避免 d→0 时权重爆炸
+      if (p.area) areaW[p.area] = (areaW[p.area] || 0) + w;
+      if (p.biz) { const k = p.area + '|' + p.biz; pairW[k] = (pairW[k] || 0) + w; }
+    }
+    if (hit >= 3 || R === 500) {
+      const cands = Object.keys(pairW).map(k => {
+        const a = k.split('|');
+        return { area: a[0], biz: a[1], w: Math.round(pairW[k] * 100) / 100 };
+      }).sort((x, y) => y.w - x.w).slice(0, 3);
+      let area = '', best = 0;
+      Object.keys(areaW).forEach(k => { if (areaW[k] > best) { best = areaW[k]; area = k; } });
+      return { radius: R, hit, area, bizCircle: cands[0] ? cands[0].biz : '', cands };
+    }
   }
-  const areaW = {}, pairW = {};
-  let hit = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const p = pts[i];
-    if (!p || !p.lat || !p.lng) continue;        // ⚠️ 跳过空坐标（源数据里有）
-    const dd = haversine(lat, lng, p.lat, p.lng);
-    if (dd > BIZ_RADIUS) continue;
-    hit++;
-    const w = 1 / Math.max(dd, 8);                // 8 米兜底：避免 d→0 时权重爆炸
-    if (p.area) areaW[p.area] = (areaW[p.area] || 0) + w;
-    if (p.biz) { const k = p.area + '|' + p.biz; pairW[k] = (pairW[k] || 0) + w; }
-  }
-  const cands = Object.keys(pairW).map(k => {
-    const a = k.split('|');
-    return { area: a[0], biz: a[1], w: Math.round(pairW[k] * 100) / 100 };
-  }).sort((x, y) => y.w - x.w).slice(0, 3);
-  let area = '', best = 0;
-  Object.keys(areaW).forEach(k => { if (areaW[k] > best) { best = areaW[k]; area = k; } });
-  return { hit, area, bizCircle: cands[0] ? cands[0].biz : '', cands };
+  return { radius: 500, hit: 0, area: '', bizCircle: '', cands: [] };
 }
 
 function normName(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
@@ -486,7 +492,7 @@ async function newShopCheck(event) {
   //   新店页**没有任务**，拿不到任务上快照的这几个配置；从 settings 读，前端就不必写死（后台一改就跟着变）。
   const cfg = await loadSettings();
   return {
-    ok: true, hit: g.hit, area: g.area, bizCircle: g.bizCircle, cands: g.cands,
+    ok: true, hit: g.hit, area: g.area, bizCircle: g.bizCircle, radius: g.radius, cands: g.cands,
     block: dup.block, sameName: dup.sameName,
     suspect: dup.suspect || null,        // ⭐ 2026-09-29：疑似重复（店名高度相似 / 电话近似）—— 只预警、不拦
     dupErr: dup.err || '',               // ⚠️ 附近查询失败时带回原因（不再被吞成"附近没店"）

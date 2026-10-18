@@ -9503,10 +9503,15 @@ async function mpPush() {
           // ⭐ 2026-10-18：连锁分店 —— 新建时把「另一家」的 id 带上，云函数会**双向**写 chainIds/chainNames。
           let _chainWith = '';
           if (x.picks) { try { const po = JSON.parse(x.picks); if (po && po.chainWith) _chainWith = String(po.chainWith); } catch (e) { /* 忽略 */ } }
+          let _newPicks = {};
+          try { _newPicks = JSON.parse(x.picks || '{}') || {}; } catch (e) { _newPicks = {}; }
           const r = await api('createMallCustomer', {
             mallKey: x.mall_key, name: x.name, phone: x.phone || '', address: x.address || '',
-            lat: lat, lng: lng, region: x.region || '', bizCircle: x.biz_circle || '',
-            chainWith: _chainWith
+            lat: lat, lng: lng,
+            region: _newPicks.region || x.region || '',
+            bizCircle: _newPicks.bizCircle || x.biz_circle || '',
+            cat1: _newPicks.cat1 || '', cat2: _newPicks.cat2 || '', cat3: _newPicks.cat3 || '',
+            chainWith: _newPicks.chainWith || _chainWith
           }).catch(() => null);
           good = !!(r && r.ok);
           if (good) {
@@ -9574,9 +9579,76 @@ function mpNewOpen(key, chainWith) {
   //   新建表单直接把它填上，老板不用回表格里翻一遍再粘。
   //   ⚠️ 只是预填，**仍然可改**（商城坐标是注册时填的地址，实际店址有偏差就手改）；
   //     表单里那行「🔴 必填」的提示保留 —— 没预填到（导入表没坐标）时还是得人补。
-  _mpNewForm = { name: row.name || '', phone: row.phone || '', address: row.address || '', ll: mpLLText(row) };
+  _mpNewForm = {
+    name: row.name || '', phone: row.phone || '', address: row.address || '', ll: mpLLText(row),
+    region: '', bizCircle: '', cat1: '', cat2: '', cat3: '', radius: 0, detected: false
+  };
   _mpGeoKey = ''; _mpGeoRes = null; _mpSearchKey = ''; _mpSearchRes = null;
   mpRender();
+  // ⭐ 2026-10-18 老板定：**店名 + 经纬度齐全 → 打开表单就自动检测区域/商圈/品类**（本地缓存，0 请求）
+  mpNewAutoDetect();
+}
+// 新建客户表单的自动检测：区域/商圈用本地全库投票（100→500 米），品类用店名词表（与手机端同源）。
+//   ⚠️ 只填表单默认值，**保存前不落库**；老板可手改。
+async function mpNewAutoDetect() {
+  const f = _mpNewForm; if (!f) return;
+  const key = _mpNewKey;
+  const m = String(f.ll || '').split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
+  let area = '', biz = '', radius = 0;
+  if (m.length >= 2) {
+    let la = m[0], ln = m[1];
+    if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }
+    try {
+      const loc = await ensureCustLocal();
+      const r = localGeoVote((loc && loc.points) || [], la, ln);
+      if (r && r.hit) { area = r.area || ''; biz = r.bizCircle || ''; radius = r.radius || 0; }
+    } catch (e) { /* 检测失败就留空，手填 */ }
+  }
+  const cat = suggestCat(String(f.name || ''));
+  if (!_mpNewForm || _mpNewKey !== key) return;    // 异步回来时表单已关/换了一条
+  _mpNewForm.region = area; _mpNewForm.bizCircle = biz; _mpNewForm.radius = radius;
+  _mpNewForm.cat1 = cat ? cat.big : ''; _mpNewForm.cat2 = cat ? cat.mid : ''; _mpNewForm.cat3 = cat ? cat.small : '';
+  _mpNewForm.detected = true;
+  mpRender();
+}
+function mpNewDetectAgain() {
+  const f = _mpNewForm; if (!f) return;
+  f.name = String(($('mpnName') || {}).value || f.name || '').trim();
+  f.ll = String(($('mpnLL') || {}).value || f.ll || '').trim();
+  f.detected = false;
+  mpNewAutoDetect();
+}
+function mpnCatSel(id, arr, idx, onch) {
+  return '<select id="' + id + '" onchange="' + onch + '" style="' + CD_CATSEL_STYLE + '">' +
+    arr.map((v, i) => '<option value="' + i + '"' + (i === idx ? ' selected' : '') + '>' + esc(v) + '</option>').join('') +
+    '</select>';
+}
+function mpnCatCtl(f) {
+  const c1 = Object.keys(CAT_WORDS);
+  const i1 = Math.max(0, c1.indexOf(f.cat1 || ''));
+  const c2 = Object.keys(CAT_WORDS[c1[i1]] || {});
+  const i2 = Math.max(0, c2.indexOf(f.cat2 || ''));
+  const c3 = (CAT_WORDS[c1[i1]] || {})[c2[i2]] || [];
+  const i3 = Math.max(0, c3.indexOf(f.cat3 || ''));
+  return '<span style="display:inline-flex;gap:4px;align-items:center">' +
+    mpnCatSel('mpnCat1', c1, i1, 'mpnCatCol(0)') +
+    mpnCatSel('mpnCat2', c2, i2, 'mpnCatCol(1)') +
+    mpnCatSel('mpnCat3', c3, i3, 'mpnCatCol(2)') + '</span>';
+}
+function mpnCatCol(col) {
+  const s1 = $('mpnCat1'), s2 = $('mpnCat2'), s3 = $('mpnCat3');
+  if (!s1 || !s2 || !s3) return;
+  const c1 = Object.keys(CAT_WORDS), v1 = c1[Number(s1.value)] || '';
+  if (col === 0) {
+    const c2 = Object.keys(CAT_WORDS[v1] || {});
+    s2.innerHTML = c2.map((v, i) => '<option value="' + i + '">' + esc(v) + '</option>').join('');
+    const c3 = (CAT_WORDS[v1] || {})[c2[0]] || [];
+    s3.innerHTML = c3.map((v, i) => '<option value="' + i + '">' + esc(v) + '</option>').join('');
+  } else if (col === 1) {
+    const c2 = Object.keys(CAT_WORDS[v1] || {}), v2 = c2[Number(s2.value)] || '';
+    const c3 = (CAT_WORDS[v1] || {})[v2] || [];
+    s3.innerHTML = c3.map((v, i) => '<option value="' + i + '">' + esc(v) + '</option>').join('');
+  }
 }
 function mpNewPanel(key) {
   const f = _mpNewForm || {};
@@ -9594,6 +9666,17 @@ function mpNewPanel(key) {
     '<div><span style="color:#F5531C;font-weight:800;display:inline-block;width:56px">经纬度*</span>' +
     '<input id="mpnLL" placeholder="粘贴 纬度,经度（如 28.961303,120.181189）" value="' + esc(f.ll || '') + '" style="border:1px solid #F5531C;border-radius:7px;padding:3px 8px;width:250px"></div>' +
     '<div style="font-size:11.5px;color:#B77400;padding-left:56px">🔴 <b>必填</b> —— 没坐标 → 地图上没有点 → 业务员永远到不了这家</div>' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">区域</span>' +
+    '<input id="mpnRegion" value="' + esc(f.region || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:190px"></div>' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">商圈</span>' +
+    '<input id="mpnBiz" value="' + esc(f.bizCircle || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:250px"></div>' +
+    '<div><span style="color:#A8B0BB;display:inline-block;width:56px">品类</span>' + mpnCatCtl(f) + '</div>' +
+    '<div style="font-size:11.5px;color:' + (f.detected ? '#12A150' : '#B77400') + ';padding-left:56px">' +
+      (f.detected
+        ? ('✅ 自动检测：' + (f.region || '区域—') + ' / ' + (f.bizCircle || '商圈—') + (f.radius ? ('（' + f.radius + ' 米）') : '') + '，可手改')
+        : '⏳ 正在按店名/经纬度自动检测区域、商圈、品类…') +
+      '<button class="btn" style="height:22px;font-size:11px;margin-left:8px" onclick="mpNewDetectAgain()">🔍 重新检测</button>' +
+    '</div>' +
     '</div>' +
     '<div style="margin-top:9px"><button class="btn p" style="height:28px;font-size:12.5px" onclick="mpNewSave()">✅ 确认新建（先记账，不发云端）</button>' +
     '<button class="btn" style="height:28px;font-size:12.5px;margin-left:8px" onclick="mpNewOpen(\'\')">取消</button>' +
@@ -9605,6 +9688,15 @@ async function mpNewSave() {
   f.phone = String(($('mpnPhone') || {}).value || '').trim();
   f.address = String(($('mpnAddr') || {}).value || '').trim();
   f.ll = String(($('mpnLL') || {}).value || '').trim();
+  f.region = String(($('mpnRegion') || {}).value || '').trim();
+  f.bizCircle = String(($('mpnBiz') || {}).value || '').trim();
+  const _s1 = $('mpnCat1'), _s2 = $('mpnCat2'), _s3 = $('mpnCat3');
+  if (_s1 && _s2 && _s3) {
+    const _c1 = Object.keys(CAT_WORDS), _v1 = _c1[Number(_s1.value)] || '';
+    const _c2 = Object.keys(CAT_WORDS[_v1] || {}), _v2 = _c2[Number(_s2.value)] || '';
+    const _c3 = (CAT_WORDS[_v1] || {})[_v2] || [];
+    f.cat1 = _v1; f.cat2 = _v2; f.cat3 = _c3[Number(_s3.value)] || '';
+  }
   if (!f.name) { _mpNewMsg = '⚠️ 店名不能空'; mpRender(); return; }
   const m = f.ll.split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
   if (m.length < 2) { _mpNewMsg = '⚠️ 经纬度必填（格式：纬度,经度）'; mpRender(); return; }
@@ -9613,7 +9705,10 @@ async function mpNewSave() {
   // ⚠️ 只记账：状态 = created + 店名 + 坐标存到服务器那一行（云端一个字不动）
   // ⭐ 2026-10-18：连锁分店把「另一家」的 id 一起记进这一行的 `picks`（PG 已有这一列），
   //   点「确认并发送到云端」时再取出来传给 createMallCustomer → 两家互标「同一老板」。
-  await mpMark(_mpNewKey, 'created', '', f.name, la, ln, _mpNewChain ? JSON.stringify({ chainWith: _mpNewChain }) : '');
+  await mpMark(_mpNewKey, 'created', '', f.name, la, ln, JSON.stringify({
+    chainWith: _mpNewChain, region: f.region || '', bizCircle: f.bizCircle || '',
+    cat1: f.cat1 || '', cat2: f.cat2 || '', cat3: f.cat3 || ''
+  }));
   _mpNewKey = ''; _mpNewForm = null; _mpNewMsg = ''; _mpNewChain = '';
   await mpLoad(true);
 }
