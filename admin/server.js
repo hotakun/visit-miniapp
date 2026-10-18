@@ -413,7 +413,9 @@ async function ttsGetOrSynth(name, type) {
     ? `${name}提交了坐标报错，请及时审核。`
     : type === 'regReview'
       ? '有新的人员需要您审核。' // 2026-09-09 老板定：人员注册待审核男声提醒
-      : `${name}提交了任务审核，请及时处理。`;
+      : type === 'taskExtend'
+        ? `${name}申请任务延期，请及时处理。` // ⭐ 2026-10-18：业务员申请延期播报
+        : `${name}提交了任务审核，请及时处理。`;
   const file = crypto.createHash('md5').update(name + '_' + type).digest('hex') + '.mp3';
   const full = path.join(VOICE_DIR, file);
   // 缓存有效判定：文件存在且非 0 字节（合成失败可能留下空文件，必须重试）

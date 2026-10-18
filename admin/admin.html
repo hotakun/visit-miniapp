@@ -6564,6 +6564,9 @@ let nfUnread = 0;
 let nfAudioReady = false;
 let knownReviewing = new Set();
 let knownExpired = new Set();
+// ⭐ 2026-10-18：已播报过的「申请延期」指纹（taskId|申请时间）——
+//   同一任务重复申请（新时间）仍算新消息；首次同步只快照、不播报。
+let knownExtendReq = new Set();
 let nfFirstSync = true;
 
 document.addEventListener('click', () => { nfAudioReady = true; }, { once: true });
@@ -6586,6 +6589,31 @@ function playDing(file) {
 // 微软云希男声播报：每人一份 mp3 缓存（后台 /tts 接口首次合成后直接播本地文件；type=coordfix 为坐标报错文案）
 // 2026-09-09 老板定：times>1 连播（播完自动再播；人员注册提醒播两遍）
 // 2026-09-09 兜底：返回是否成功——文员机没装 edge-tts/server.js 旧版时男声失败，由调用方降级响铃
+// ⭐ 2026-10-18：edge-tts 接口偶尔不可用（实测微软返回 403，连原有 review 也失败）→
+//   用**浏览器自带中文语音**兜底，保证申请延期等提醒仍有声音。
+//   ⚠️ 文案必须与 `admin/server.js` 的 ttsGetOrSynth 保持一致（两处同步改）。
+function ttsTextOf(name, type) {
+  if (type === 'coordfix') return name + '提交了坐标报错，请及时审核。';
+  if (type === 'regReview') return '有新的人员需要您审核。';
+  if (type === 'taskExtend') return name + '申请任务延期，请及时处理。';
+  return name + '提交了任务审核，请及时处理。';
+}
+function speakFallback(text) {
+  try {
+    if (!('speechSynthesis' in window) || !text) return false;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = 1;
+    u.volume = 1;
+    const vs = speechSynthesis.getVoices() || [];
+    const zh = vs.find(v => /^zh[-_]CN/i.test(String(v.lang || ''))) ||
+      vs.find(v => /Chinese|Huihui|Kangkang|Yaoyao|Yunxi|Xiaoxiao/i.test(String(v.name || '')));
+    if (zh) u.voice = zh;
+    speechSynthesis.cancel();          // 别和上一条叠着播
+    speechSynthesis.speak(u);
+    return true;
+  } catch (e) { return false; }
+}
 async function playTts(name, type, times) {
   if (!name) return false;
   const n = Math.max(1, Number(times) || 1);
@@ -6609,7 +6637,8 @@ async function playTts(name, type, times) {
       return true;
     }
   } catch (e) { /* 铃声已提醒，语音失败静默 */ }
-  return false;
+  // ⭐ 2026-10-18：edge-tts 不可用（实测微软 403）→ 浏览器自带中文语音兜底
+  return speakFallback(ttsTextOf(name, type));
 }
 
 // 预热：登录后把全部业务员的语音悄悄合成缓存好（审核到达时零等待）
@@ -6618,10 +6647,17 @@ async function warmTts() {
     const res = await api('listSalesmen');
     if (!res.ok) return;
     (res.list || []).forEach(s => {
-      if (s.name) fetch('/tts', {
+      if (!s.name) return;
+      fetch('/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: s.name })
+      }).catch(() => {});
+      // ⭐ 2026-10-18：顺便预热「申请延期」语音（每人一条，首次收到就零等待）
+      fetch('/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: s.name, type: 'taskExtend' })
       }).catch(() => {});
     });
   } catch (e) { /* 静默 */ }
@@ -6656,7 +6692,9 @@ function sysNotify(title, item) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const body = item.ttsType === 'coordfix'
       ? `${item.tts}提交了坐标报错，请及时审核。`
-      : (item.tts ? `${item.tts}提交了任务审核，请及时处理。` : '请及时查看处理');
+      : item.ttsType === 'taskExtend'
+        ? `${item.tts}申请任务延期，请及时处理。`
+        : (item.tts ? `${item.tts}提交了任务审核，请及时处理。` : '请及时查看处理');
     const n = new Notification('聚火拜访 · ' + title, {
       body,
       icon: 'logo.png',
@@ -6702,9 +6740,12 @@ function clearNotifies() {
 function syncTaskAlerts(list) {
   const reviewing = list.filter(t => t.status === 'reviewing').map(t => t._id);
   const exp = list.filter(t => t.status === 'published' && t.deadline && String(t.deadline) <= todayStr()).map(t => t._id);
+  const ext = list.filter(t => t.status === 'published' && t.extendRequest && t.extendRequest.status === 'pending');
+  const extKeys = ext.map(t => t._id + '|' + ((t.extendRequest && t.extendRequest.at) || 0));
   if (nfFirstSync) {
     knownReviewing = new Set(reviewing);
     knownExpired = new Set(exp);
+    knownExtendReq = new Set(extKeys);
     nfFirstSync = false;
     return;
   }
@@ -6720,8 +6761,24 @@ function syncTaskAlerts(list) {
       if (t) pushNotify({ text: `「${t.name}」已过期，业务员无法拜访，等待处理`, act: `showDetail('${id}')`, actLabel: '去处理', imp: true, taskId: id }, true);
     }
   });
+  // ⭐ 2026-10-18 老板定：业务员申请延期 → 响铃 + 云希语音播报 + 浮窗；
+  //   点浮窗直接打开任务编辑的「延期」页。
+  ext.forEach(t => {
+    const er = t.extendRequest || {};
+    const key = t._id + '|' + (er.at || 0);
+    if (!knownExtendReq.has(key)) {
+      const who = er.byName || t.salesmanName || '业务员';
+      pushNotify({
+        text: `⏰ 申请延期：${who} · 「${t.name}」已过期，等待处理`,
+        act: `nav('tasks');openEditTask('${t._id}','extend')`,
+        actLabel: '去延期', imp: true, taskId: t._id,
+        tts: who, ttsType: 'taskExtend'
+      }, true);
+    }
+  });
   knownReviewing = new Set(reviewing);
   knownExpired = new Set(exp);
+  knownExtendReq = new Set(extKeys);
 }
 
 renderNotifies();
@@ -12098,6 +12155,7 @@ async function refreshMsgBadge(announce) {
       // 打开后台时**补播一条**（语音只报"最要紧的那一类"，总数看角标）
       if ((r.coord + r.field) > 0) playTts('管理员', 'coordfix', 1);
       else if (r.reg > 0) playTts('管理员', 'regReview', 1);
+      else if (r.extendReq > 0) playTts('业务员', 'taskExtend', 1);   // ⭐ 2026-10-18：有延期申请就播一条
     }
     return r;
   } catch (e) { return null; }

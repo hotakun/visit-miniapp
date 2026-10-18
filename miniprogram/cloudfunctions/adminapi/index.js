@@ -1171,6 +1171,8 @@ async function listTasks(event) {
       purpose: t.purpose, deadline: t.deadline, status: t.status,
       startDate: t.startDate || '', plannedDays: t.plannedDays || 1, createdAt: t.createdAt || null,
       finishReq: t.finishReq || null, finishedAt: t.finishedAt || null,
+      // ⭐ 2026-10-18：过期任务里的「申请延期」（后台轮询据此响铃 + 语音播报）
+      extendRequest: t.extendRequest || null,
       archivedAt: t.archivedAt || null, endedAt: (t.archivedAt || t.finishedAt || t.createdAt) || null,
       customerIds: cids, dayPlan,
       total, visited: countMap[t._id] || 0,
