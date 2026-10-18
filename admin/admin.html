@@ -10469,9 +10469,9 @@ async function loadGeoPage() {
       + `<td class="lft" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(c.name || '')}"><span style="cursor:pointer" onclick="openCustProfile('${c._id}')">${geoNameCell(c.name)}</span></td>`
       // ⭐ 2026-10-13 老板要：**「商城」格挪到「区域」前面**（与表头同序，别错位）
       // ⭐⭐ 2026-10-17 老板定：**「未加」可点击** —— 上传商城表格 → 从文件里挑出这家对应哪一条 → 合并预览 → 生效。
-      //   「已加」不点（避免误操作把已配好的又改一遍）。
+      // ⭐ 2026-10-19 老板定：**「已加」也跟「未加」一样可点** —— 主副店还要用这个入口重新挑一条合并/核对。
       + `<td>${(c.mallCode || c.mallKey)
-        ? '<span class="pill p-ok">已加</span>'
+        ? `<span class="pill p-ok" style="cursor:pointer" title="点这里：上传商城表格，从里面挑出这家对应哪一条（会先给你看合并预览）" onclick="mallPairOpen('${c._id}', '${esc(String(c.name || '').replace(/'/g, ''))}')">已加</span>`
         : `<span class="pill p-bad" style="cursor:pointer" title="点这里：上传商城表格，从里面挑出这家对应哪一条（会先给你看合并预览）" onclick="mallPairOpen('${c._id}', '${esc(String(c.name || '').replace(/'/g, ''))}')">未加</span>`}</td>`
       + `<td style="white-space:nowrap;color:var(--sub)">${esc(c.district || '—')}</td>`
       + `<td><span class="pill p-pu">${esc(c.bizCircle || '—')}</span></td>`
