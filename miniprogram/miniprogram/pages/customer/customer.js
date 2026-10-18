@@ -382,7 +382,6 @@ Page({
     //   ② 上一页塞进 storage 的 `curCustomer._id` —— **现有两个入口都走这条**：
     //      pages/task 和 pages/map 点客户时都会先 setStorageSync('curCustomer', 客户对象) 再跳过来。
     //      （那两处 navigateTo 不带 url 参数；这里兜底读 storage 更稳，也兼容将来新入口。）
-    const cc = wx.getStorageSync('curCustomer') || {};
     // ⚠️⚠️⚠️ 2026-10-12 老板严令「绝对绝对要避免再出现（串档）」—— **身份只认 URL，绝不从 storage 兜底**。
     //   以前是 `query.id || cc._id`：storage 里恰好留着"上一家"时，整页就认成上一家
     //   → 点「开始拜访」记录写到别人头上（当天连串几家的事故就是这么来的）。

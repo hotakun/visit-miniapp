@@ -515,6 +515,6 @@ Page({
       lat: Number(p.la) || 0, lng: Number(p.ln) || 0,
       taskId: "", freeTripId: this._tripId || ""
     });
-    wx.navigateTo({ url: '/pages/customer/customer?customerId=' + s.id });
+    wx.navigateTo({ url: '/pages/customer/customer?id=' + s.id + '&freeVisit=1' });
   }
 });
