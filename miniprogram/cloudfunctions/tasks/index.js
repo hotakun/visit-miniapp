@@ -1087,33 +1087,39 @@ async function bossGlance(salesmanId, isBoss) {
     };
   }).sort((a, b) => (b.visits - a.visits) || ((a.online === b.online) ? 0 : (a.online ? -1 : 1)));
 
-  // ④ 最近动态：今日拜访最近 8 条 + 今日新建店 3 条
-  const recent = todayRows.slice()
-    .sort((a, b) => (Number(b.finishedAt || b.startedAt || 0)) - (Number(a.finishedAt || a.startedAt || 0)))
-    .slice(0, 8);
-  const cids = [...new Set(recent.map(v => v.customerId).filter(Boolean))];
-  const cmap = {};
-  if (cids.length) {
-    const cr = await db.collection('customers').where({ _id: _.in(cids) })
+  // ④ 最近动态：**消息中心「滚动消息」同款** —— 开始拜访 / 拜访完毕（最近 6 条）
+  //   ⚠️ 上面的 rows 只含已完成拜访（normal/pending_review）→ 再查一次含 ongoing 的记录，
+  //      否则「开始拜访」会漏（滚动消息就是按 startedAt / finishedAt 各出一条）。
+  let tlRows = rows;
+  try {
+    const tr = await db.collection('visits')
+      .where({ visitedAt: _.in(days), startedAt: _.exists(true) })
+      .field({ startedAt: true, finishedAt: true, customerId: true, salesmanId: true, result: true })
+      .limit(300).get();
+    if ((tr.data || []).length) tlRows = tr.data;
+  } catch (e) { tlRows = rows; }
+  const timeline = [];
+  tlRows.forEach(v => {
+    if (v.startedAt) timeline.push({ type: 'start', at: Number(v.startedAt) || 0, customerId: v.customerId, salesmanId: v.salesmanId, result: '' });
+    if (v.finishedAt) timeline.push({ type: 'done', at: Number(v.finishedAt) || 0, customerId: v.customerId, salesmanId: v.salesmanId, result: v.result || '' });
+  });
+  timeline.sort((a, b) => (b.at || 0) - (a.at || 0));
+  const top = timeline.slice(0, 6);
+  const tcids = [...new Set(top.map(x => x.customerId).filter(Boolean))];
+  const tcmap = {};
+  if (tcids.length) {
+    const cr = await db.collection('customers').where({ _id: _.in(tcids) })
       .field({ name: true, nameRaw: true }).get().catch(() => ({ data: [] }));
-    (cr.data || []).forEach(c => { cmap[c._id] = c; });
+    (cr.data || []).forEach(c => { tcmap[c._id] = c; });
   }
-  const events = recent.map(v => {
-    const c = cmap[v.customerId] || {};
-    const sm = smById[v.salesmanId] || {};
+  const events = top.map(x => {
+    const c = tcmap[x.customerId] || {};
+    const sm = smById[x.salesmanId] || {};
     return {
-      type: 'visit', at: Number(v.finishedAt || v.startedAt || 0),
-      salesmanName: sm.name || '', customerName: c.nameRaw || c.name || '客户', result: v.result || ''
+      type: x.type, at: x.at, salesmanName: sm.name || '',
+      customerName: c.nameRaw || c.name || '客户', result: x.result || ''
     };
   });
-  const nsRes = await db.collection('customers')
-    .where(_.and([{ deleted: _.neq(true) }, { source: 'field' }, { createdAt: _.gte(base) }]))
-    .orderBy('createdAt', 'desc').limit(3).get().catch(() => ({ data: [] }));
-  (nsRes.data || []).forEach(c => events.push({
-    type: 'newShop', at: Number(c.createdAt) || 0,
-    salesmanName: c.createdByName || '', customerName: c.nameRaw || c.name || '新店', result: ''
-  }));
-  events.sort((a, b) => (b.at || 0) - (a.at || 0));
 
   return {
     ok: true,

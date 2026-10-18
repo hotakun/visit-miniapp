@@ -105,6 +105,21 @@
   </view>
 
   <view class="card" wx:if="{{bossMode}}">
+    <view class="card-h" data-k="events" bindtap="toggleFold">
+      <view class="card-t"><view class="dot gray"></view>最近动态</view>
+      <view class="fold">{{fold.events ? '▸' : '▾'}}</view>
+    </view>
+    <view class="card-body" wx:if="{{!fold.events}}">
+      <view class="ev" wx:for="{{bossEvents}}" wx:key="i">
+        <view class="ei">{{item.icon}}</view>
+        <view class="em">{{item.text}}</view>
+        <view class="et">{{item.time}}</view>
+      </view>
+      <view class="card-empty" wx:if="{{!bossEvents.length}}">今天还没有动态</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{bossMode}}">
     <view class="card-h" data-k="team" bindtap="toggleFold">
       <view class="card-t"><view class="dot green"></view>业务员动态</view>
       <view class="fold">{{fold.team ? '▸' : '▾'}}</view>
@@ -119,21 +134,6 @@
         <view class="team-v">{{item.visits}}<text class="unit">家</text></view>
       </view>
       <view class="card-empty" wx:if="{{!bossSalesmen.length}}">暂无业务员数据</view>
-    </view>
-  </view>
-
-  <view class="card" wx:if="{{bossMode}}">
-    <view class="card-h" data-k="events" bindtap="toggleFold">
-      <view class="card-t"><view class="dot gray"></view>最近动态</view>
-      <view class="fold">{{fold.events ? '▸' : '▾'}}</view>
-    </view>
-    <view class="card-body" wx:if="{{!fold.events}}">
-      <view class="ev" wx:for="{{bossEvents}}" wx:key="i">
-        <view class="ei">{{item.icon}}</view>
-        <view class="em">{{item.text}}</view>
-        <view class="et">{{item.time}}</view>
-      </view>
-      <view class="card-empty" wx:if="{{!bossEvents.length}}">今天还没有动态</view>
     </view>
   </view>
 

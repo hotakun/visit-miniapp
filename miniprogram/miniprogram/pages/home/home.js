@@ -232,7 +232,7 @@ Page({
     bossGlance: null, bossGeoCount: 0, bossCustomerText: '', bossMallText: '', bossNewShops7d: 0,
     bossTaskFilter: 'going', bossCounts: { going: 0, expired: 0, done: 0 },
     trendBars: [], bossSalesmen: [], bossEvents: [],
-    fold: { overview: false, tasks: false, team: false, events: false } },
+    fold: { overview: false, tasks: false, team: true, events: false } },
   // ⭐⭐ 2026-10-10 老板定：**任务心跳回调**（`app.js` 每 15 秒问一次云端"变了没"，变了才叫到这里）
   //   场景：后台派了新任务 / 把任务结束了 / 延期撤回 —— 首页几秒内自己刷新，业务员不用手动下拉。
   //   ⚠️ 只做一次轻刷新、**不弹任何提示** —— 免得打扰正在干活的人。
@@ -622,10 +622,8 @@ Page({
     }));
     const events = (g.events || []).map((e, i) => ({
       i: i,
-      icon: e.type === 'newShop' ? '🏪' : (e.result ? '✅' : '▶'),
-      text: e.type === 'newShop'
-        ? (e.salesmanName + ' 新建店铺 ' + e.customerName)
-        : (e.salesmanName + ' 拜访 ' + e.customerName + (e.result ? '（' + e.result + '）' : '')),
+      icon: e.type === 'done' ? '✅' : '▶',
+      text: e.salesmanName + (e.type === 'done' ? ' 拜访完毕 ' : ' 开始拜访 ') + e.customerName + (e.result ? '（' + e.result + '）' : ''),
       time: fmtTime(e.at)
     }));
     this.setData({
