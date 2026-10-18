@@ -1672,7 +1672,9 @@ async function newShopDays(event) {
   // ⭐ 2026-10-11 老板反馈「每日新店总是很慢」：原来这里只回计数，前端还要**按天各发一次请求**取明细
   //   → 7 天就是 7 次云调用。现在**明细一起回**（7 天的新店就几十家，一次返回很小），前端 1 次就够。
   const rows = await fetchAll('customers', _.and([{ createdAt: _.gte(from), source: 'field' }, NOT_DELETED]),
-    { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
+    // ⭐ 2026-10-18 修（老板：「这下面四家最近拜访结果是待定再谈，你怎么都写成加入商城，误导」）：
+    //   **判「是否加入商城」只看 mallKey / mallJoinedAt**（AGENTS 口径），不能拿 mallPending 反推。
+    { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallKey: true, mallJoinedAt: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
   const m = {}; days.forEach(d => { m[d] = { day: d, n: 0, pending: 0, rows: [] }; });
   (rows || []).forEach(c => {
     const d = new Date((Number(c.createdAt) || 0) + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -1681,6 +1683,7 @@ async function newShopDays(event) {
     m[d].rows.push({
       customerId: c._id, customerName: c.name || c.nameRaw || '', phone: c.phone || '',
       address: c.address || '', mallCode: c.mallCode || '', mallPending: !!c.mallPending,
+      joined: !!(c.mallKey || c.mallJoinedAt),   // ⭐ 已入商城的唯一判据
       byName: c.createdByName || '', at: Number(c.createdAt) || 0
     });
   });
@@ -1694,12 +1697,13 @@ async function newShopsByDay(event) {
   // ⚠️ 2026-10-11 修（老板报「没有前两天新加的店铺」）：`_.gte(x).and(_.lt(y))` 这种**链式**写法在 where 里不稳
   //   （症状：日期标题在、下面却列不出店）→ 拆成标准的 `_.and([...])` 多条件写法
   const rows = await fetchAll('customers', _.and([{ source: 'field' }, { createdAt: _.gte(t0) }, { createdAt: _.lt(t0 + 86400000) }, NOT_DELETED]),
-    { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
+    { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallKey: true, mallJoinedAt: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
   return {
     ok: true, day, total: (rows || []).length,
     rows: (rows || []).map(c => ({
       customerId: c._id, customerName: c.name || c.nameRaw || '', phone: c.phone || '',
       address: c.address || '', mallCode: c.mallCode || '', mallPending: !!c.mallPending,
+      joined: !!(c.mallKey || c.mallJoinedAt),   // ⭐ 已入商城的唯一判据
       byName: c.createdByName || '', at: Number(c.createdAt) || 0
     })).sort((a, b) => (b.at || 0) - (a.at || 0))
   };

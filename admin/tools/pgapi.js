@@ -299,11 +299,17 @@ const srv = http.createServer(async (req, res) => {
         const rows2 = await R(
           "SELECT to_char(to_timestamp(created_at/1000) AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') AS day," +
           ' id AS "customerId", COALESCE(name, name_raw, \'\') AS "customerName",' +
-          ' phone, address, code AS "mallCode", created_at AS "at"' +
+          ' phone, address, code AS "mallCode", created_at AS "at",' +
+          // ⭐ 2026-10-18：判「是否加入商城」只看这两列（PG 的 customers 表没有 mall_pending）
+          ' mall_key, mall_joined_at' +
           " FROM customers WHERE source = 'field' AND deleted IS NOT TRUE AND created_at >= $1" +
           ' ORDER BY created_at DESC', [fromMs]);
         const byDay = {};
-        (rows2 || []).forEach(x => { (byDay[x.day] = byDay[x.day] || []).push(x); });
+        (rows2 || []).forEach(x => {
+          x.joined = !!(x.mall_key || x.mall_joined_at);
+          delete x.mall_key; delete x.mall_joined_at;
+          (byDay[x.day] = byDay[x.day] || []).push(x);
+        });
         (list || []).forEach(d => { d.rows = byDay[d.day] || []; d.pending = 0; });
         return out(res, 200, { ok: true, from: 'pg', list: list });
       }

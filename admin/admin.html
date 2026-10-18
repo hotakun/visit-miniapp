@@ -2627,10 +2627,26 @@ window.vrOpenDay = async function (day) {
 async function vrLoadShop() {
   const box = $('vrShop');
   box.innerHTML = '<div class="loading">加载中…</div>';
-  const r = await vrPg('shop', '&days=7') || await api('newShopDays', { days: 7 }).catch(() => null);
+  // ⭐ 2026-10-18 修（老板：「这下面四家最近拜访结果是待定再谈，你怎么都写成加入商城，误导」）：
+  //   **云端优先** —— 只有云端 `newShopDays` 同时带回 mallKey / mallJoinedAt / mallPending（准确三态）；
+  //   PG 的 /visitrec?kind=shop 没有 mall_pending（主表加不了列），只能判「已入 / 未入」。
+  //   这个页面是点开才加载、一天最多几次，一次云端调用可接受。
+  const r = await api('newShopDays', { days: 7 }).then(x => (x && x.ok ? x : null)).catch(() => null)
+    || await vrPg('shop', '&days=7');
   if (!r || !r.ok) { box.innerHTML = '<div class="empty">加载失败，请稍后再试</div>'; return; }
   const days = r.list.filter(d => d.n > 0);
   if (!days.length) { box.innerHTML = '<div class="empty" style="padding:26px;text-align:center;color:#A8B0BB">近 7 天没有新加的店</div>'; return; }
+  // ⭐ 2026-10-18：即便云端还是旧版（没回 joined），也用**本地缓存**的 mk/mj 兜底判「已入商城」，
+  //   避免部署过渡期继续误报。缓存里没有这个 id 就当未入。
+  //   ⚠️ 必须先确保缓存就绪（否则 custLocal 为 null → 全部误判「未入商城」）。
+  try { await ensureCustLocal(); } catch (e) { /* 缓存没准备好就只靠云端 joined */ }
+  const _mkMap = (function () {
+    try {
+      const m = new Map();
+      ((custLocal && custLocal.points) || []).forEach(p => m.set(p.i, !!(p.mk || p.mj)));
+      return m;
+    } catch (e) { return new Map(); }
+  })();
   $('vrStat').textContent = '近 7 天 · 新增 ' + days.reduce((a, x) => a + x.n, 0) + ' 家';
   // ⚠️ 2026-10-11：明细**已随 newShopDays 一起返回**（原来这里按天各发一次请求 → 很慢）
   box.innerHTML = days.map(d => {
@@ -2644,7 +2660,12 @@ async function vrLoadShop() {
         '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
         vrCode(c.mallCode) + esc(c.customerName) +
         '<span style="color:#98A2AE;font-weight:500;margin-left:6px;font-size:12.5px">' + esc(c.address || '') + (c.phone ? ' · ' + esc(c.phone) : '') + '</span></span>' +
-        (c.mallPending ? '<span class="pill warn">待商城建档</span>' : '<span class="pill blue">已入商城</span>') +
+        // ⭐ 2026-10-18 修（老板：「这下面四家最近拜访结果是待定再谈，你怎么都写成加入商城，误导」）：
+        //   **只有 mallKey / mallJoinedAt 有值才算「已入商城」**（项目唯一判据）；
+        //   mallPending = 待商城建档；两者都没有 = 未入商城（现场录入、还没对上商城）。
+        (!!(c.joined || _mkMap.get(c.customerId)) ? '<span class="pill blue">已入商城</span>'
+          : c.mallPending ? '<span class="pill warn">待商城建档</span>'
+            : '<span class="pill" style="background:#F1F3F6;color:#7A8490">未入商城</span>') +
         '<span style="color:#98A2AE;font-size:12.5px;font-weight:600">' + esc(c.byName || '') + '</span>' +
         vrVisitBtn(c.customerId, '', '') + vrCustBtn(c.customerId) + '</div>').join('');
   }).join('');
