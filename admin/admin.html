@@ -9112,8 +9112,9 @@ function mpRender() {
             (recChain ? '' : GRAY) + '" onclick="mpChainNew(\'' + k + '\',\'' + c.id + '\')">🏪 连锁分店 → 新建为独立门店</button>';
           const btnSub = '<button class="btn' + (recSub ? ' p' : '') + '" style="height:26px;font-size:12px' +
             (recSub ? '' : GRAY) + ';margin-left:6px" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🏠 同一家 → 合并为主副店</button>';
-          const btns = recSub ? (btnSub + btnChain) : (btnChain + btnSub);
-          return row + '<div style="display:flex;align-items:center;gap:8px;margin:2px 0 8px;padding:7px 10px;border:1px dashed #E3C08A;border-radius:8px;background:#FFFBF3">' +
+          const btnPair = '<button class="btn" style="height:26px;font-size:12px;margin-left:6px" title="= 客户管理里的「就是这条」：把商城字段直接合并到这家系统客户，不建主副店" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">🔗 直接合并</button>';
+          const btns = (recSub ? (btnSub + btnChain) : (btnChain + btnSub)) + btnPair;
+          return row + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 8px;padding:7px 10px;border:1px dashed #E3C08A;border-radius:8px;background:#FFFBF3">' +
             '<div style="font-size:12px;color:#8A6D3B;flex:1;line-height:1.5">' +
               '这条导入记录「<b>' + esc(x.name || '') + '</b>」与上面「' + esc(c.name || '') + '」' + esc(relTxt) +
               ' —— <b>决定这条导入记录怎么处理</b>：' +
@@ -9417,7 +9418,14 @@ async function mpPush() {
         if (x.picks) {
           try { const po = JSON.parse(x.picks); if (po && typeof po === 'object' && !Array.isArray(po)) _picks = po; } catch (e) { /* 忽略 */ }
         }
-        const r = await api('applyMallPair', { customerId: x.target_id, mallKey: x.mall_key, picks: _picks }).catch(() => null);
+        // ⭐ 2026-10-18：带上导入行做兜底 —— 商城库里可能没有这条（导入行通常没进 mall_customers），
+        //   云函数会先查库、查不到再用这一行；不带就会 MALL_NOT_FOUND。
+        const _mallRow = {
+          mallKey: x.mall_key, mallCode: x.mall_code || '', name: x.name || '',
+          phone: x.phone || '', address: x.address || '',
+          lat: Number(x.lat) || 0, lng: Number(x.lng) || 0
+        };
+        const r = await api('applyMallPair', { customerId: x.target_id, mallKey: x.mall_key, mallRow: _mallRow, picks: _picks }).catch(() => null);
         good = !!(r && r.ok);
         if (good) {
           await mpMark(x.mall_key, 'pushed', x.target_id || '', x.target_name || '');

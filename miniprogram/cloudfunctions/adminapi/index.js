@@ -4588,13 +4588,16 @@ async function applyMallPair(event) {
   //   因为那条**通常还没进 `mall_customers` 集合**（实测 3 个 key 只有 1 个在库里），
   //   只按 mallKey 查库会直接报 MALL_NOT_FOUND。
   //   ⚠️ 兼容：**没给 `mallRow` 时行为与原来完全一致**（仍按 mallKey 查库）—— 商城待配对那条路不受影响。
+  // ⭐ 2026-10-18：**先查库、查不到再用传进来的导入行**。
+  //   原来「有 mallRow 就直接用 mallRow」会丢掉库里的等级/分类/业务员等字段；
+  //   而只查库又会对"还没进 mall_customers 的导入行"报 MALL_NOT_FOUND。
+  //   现在两边都兜住：库里有就用完整的，库里没有才用这一行。
   let m = null;
-  if (event && event.mallRow && typeof event.mallRow === 'object') {
+  const mRes = await db.collection('mall_customers').where({ mallKey }).limit(1).get().catch(() => ({ data: [] }));
+  m = (mRes.data || [])[0] || null;
+  if (!m && event && event.mallRow && typeof event.mallRow === 'object') {
     m = Object.assign({}, event.mallRow);
     m.mallKey = mallKey;            // 以参数里的 mallKey 为准（防前端传错行）
-  } else {
-    const mRes = await db.collection('mall_customers').where({ mallKey }).limit(1).get().catch(() => ({ data: [] }));
-    m = (mRes.data || [])[0];
   }
   if (!m) return { ok: false, code: 'MALL_NOT_FOUND', msg: '商城库里找不到这条（可能已被清掉）' };
 
