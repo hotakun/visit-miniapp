@@ -30,10 +30,6 @@ const ASR_SERVICE = 'asr';
 const ASR_VERSION = '2019-06-14';
 
 // ---------- 基础工具 ----------
-const todayStr = () => {
-  const d = new Date(Date.now() + 8 * 3600 * 1000);
-  return d.toISOString().slice(0, 10);
-};
 // 东八区当月 1 日 00:00 的时间戳（用量统计口径）
 const monthStartTs = () => {
   const cn = new Date(Date.now() + 8 * 3600 * 1000);

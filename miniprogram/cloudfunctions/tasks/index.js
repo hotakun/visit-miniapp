@@ -178,7 +178,6 @@ exports.main = async (event) => {
 // ⭐ 2026-09-28 晚改：识别数据从「云函数包内的 biz_index.json」改成**云端数据库集合 biz_index**
 //   —— ① 云函数包瘦身（部署不用再传 3.45MB）② 以后扩城市不受云函数 10MB 上传上限限制。
 //   数据由 `admin/tools/import_biz_index.js` 导入（69733 条；_id = b0、b1… 幂等可重跑）。
-const BIZ_RADIUS = 100;   // 识别半径（米）—— 留一验证的最佳值
 const DUP_RADIUS = 200;   // 防重复"附近"半径（米）—— 演示稿口径
 
 // 按 lat/lng 范围拉附近的点（走 biz_index 的 lat_lng 复合索引）
@@ -630,7 +629,6 @@ async function newShopSubmit(salesmanId, event) {
 //   ③ updateNewShop 改完**直接生效**（不设复核队列、不留痕；只允许改自己提交的）
 //   状态口径：**就用现成的 mallPending** —— true=待商城建档 / false=已对上商城（商城表导入时自动翻）
 // =====================================================================================
-const SHOP_PAGE_MAX = 50;
 
 async function myNewShops(salesmanId, event) {
   // ⭐⭐ 2026-10-15 老板定：「业务员端的『我新加的店』改成和老板端『新店』一样的卡片摆放」
