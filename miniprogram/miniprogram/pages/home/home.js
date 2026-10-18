@@ -653,27 +653,31 @@ Page({
       // ⭐ 老板 2026-10-18 定：客户总数固定 17.9万、区域数量固定 24（不再走云端统计，避免耗费）
       bossCustomerText: '17.9万',
       bossGeoCount: 24,
-      bossMallText: mall > 0 ? fmtK(mall + 5000) : '—',   // ⭐ 老板 2026-10-18 定：显示值 = 实际 + 5,000（仅展示口径）
-      bossNewShops7d: Number(sc.newShops7d) || 0
+      bossMallText: mall > 0 ? fmtK(mall + 5000) : '—'   // ⭐ 老板 2026-10-18 定：显示值 = 实际 + 5,000（仅展示口径）
     });
   },
   // ⭐ 2026-10-15：老板首页的"新店数量"（本地优先、0 请求）——抽出来给"缓存渲染"复用，别写两遍
+  // ⭐ 2026-10-18 老板反馈「本周新店显示 0」：
+  //   原来改成云端 bossScale.newShops7d，但 bossScale 里「商城客户」的全库 count 会拖慢/拖超时，
+  //   连 newShops7d 一起没返回。现在改为**用本地 newshopsCache 算近 7 天**（与 listNewShops 同口径、零额外调用）。
   _applyBossNewShops() {
+    const calc = shops => {
+      const from = Date.now() - 7 * 86400000;
+      const n = (shops || []).filter(x => Number((x && x.at) || 0) >= from).length;
+      this.setData({ bossNewShops7d: n });
+    };
     try {
       const _nc = wx.getStorageSync('newshopsCache');
-      if (_nc && _nc.shops && _nc.shops.length) {
-        this.setData({ bossNewShops: _nc.shops.length });
-      } else {
-        // ⚠️ 必须调 tasks（不是 adminapi！）：手机端只有微信身份，adminapi 要账号密码 → 一律 NO_AUTH
-        api.call('tasks', { action: 'listNewShops' }).then(ns => {
-          if (ns && ns.ok) {
-            const shops = ns.shops || [];
-            this.setData({ bossNewShops: shops.length });
-            try { wx.setStorageSync('newshopsCache', { shops: shops, maxAt: ns.maxAt || 0, syncedAt: Date.now() }); } catch (e) { }
-          }
-        }).catch(() => { /* 拿不到就显示 0，不影响别的 */ });
+      if (_nc && Array.isArray(_nc.shops) && _nc.shops.length) { calc(_nc.shops); return; }
+    } catch (e) { /* 读缓存失败就走云端 */ }
+    // 缓存还没有：拉一次全量（之后本地算，不再每次问云端）
+    api.call('tasks', { action: 'listNewShops' }).then(ns => {
+      if (ns && ns.ok) {
+        const shops = ns.shops || [];
+        try { wx.setStorageSync('newshopsCache', { shops: shops, maxAt: ns.maxAt || 0, syncedAt: Date.now() }); } catch (e) { }
+        calc(shops);
       }
-    } catch (e) { /* 读缓存失败就当没有 */ }
+    }).catch(() => { /* 拿不到就保留 0 */ });
   },
   // ⭐⭐ 2026-10-14 老板定：**首页任务卡也改成「缓存先渲染 → 后台静默更新」**（与客户详情页同一套思路）。
   //   为什么：原来命中缓存就直接 `return`（2 小时内不再问云端）→ 后果是
@@ -703,7 +707,7 @@ Page({
     } catch (e) { /* 静默：缓存写失败不影响这次显示 */ }
     try {
       this._applyHomeTasks(res.tasks, boss, res.doneTasks);
-      if (boss) { this.setData({ bossStats: res.stats || null }); this._loadBossExtra(true); }
+      if (boss) { this.setData({ bossStats: res.stats || null }); this._applyBossNewShops(); this._loadBossExtra(true); }
     } catch (e) { /* 静默：渲染失败保留原来那屏 */ }
   },
   // ⭐⭐ 2026-10-16 老板定：**补「下拉刷新」**（他在新店页看到"刷新 / 下拉"很有用，问能不能推广到别处）。
@@ -728,7 +732,7 @@ Page({
       if (hit && hit.tasks && hit.tasks.length) {
         this._applyHomeTasks(hit.tasks, _boss, hit.doneTasks);
         // ⚠️ 老板模式的统计卡不在 `_applyHomeTasks` 里（它只做任务列表），这里补上
-        if (_boss) { this.setData({ bossStats: hit.stats || null }); }
+        if (_boss) { this.setData({ bossStats: hit.stats || null }); this._applyBossNewShops(); }
         this.setData({ loading: false });
         // ⭐⭐ 2026-10-14 老板定（与客户详情页同一套）：**缓存先渲染 → 后台静默更新**。
         //   ⚠️ 原来这里是直接 `return`（2 小时内不再问云端）→ 后果是
@@ -751,6 +755,7 @@ Page({
           // ⭐ 2026-10-15：**走与"缓存渲染"同一套**（`_applyHomeTasks`）—— 只留一处实现
           this._applyHomeTasks(res.tasks, true, res.doneTasks);
           this.setData({ bossStats: res.stats || null });
+          this._applyBossNewShops();   // ⭐ 本周新店：本地缓存算，不依赖 bossScale
           // ⭐ 2026-10-15：存一份本地（2 小时内再进首页就不必再拉一遍）
           try { _dc.set('homeTasks', 'boss', { tasks: res.tasks || [], doneTasks: res.doneTasks || [], stats: res.stats || null }); } catch (e) { /* 静默 */ }
           if (!mapCache.get(mapCache.curMode())) prefetchMapData();   // ⭐ 只在本地没有"今天的"地图缓存时才预取（原来无条件 = 每次进首页白拉一次）

@@ -1150,22 +1150,17 @@ async function bossScale(salesmanId, isBoss) {
     if (v && v.day === today && typeof v.mallTotal === 'number') return Object.assign({ ok: true, cached: true }, v);
   } catch (e) { /* 缓存读失败就重算 */ }
 
-  const base = new Date(today + 'T00:00:00+08:00').getTime();
   // ⭐ 2026-10-18 老板定：客户总数固定显示 17.9万、区域数量固定显示 24（前端写死），
-  //   这里**不再查客户总数 count、也不再跑区县聚合** —— 只算「商城客户」和「本周新店」两项。
-  let mallTotal = 0, newShops7d = 0;
+  //   这里**不再查客户总数 count、也不再跑区县聚合** —— 只算「商城客户」一项。
+  //   「本周新店」改由手机端用本地 newshopsCache 计算（避免全库 count 拖垮接口、连累其他数字）。
+  let mallTotal = 0;
   try { mallTotal = (await db.collection('customers').where({ mallKey: _.exists(true) }).count()).total || 0; } catch (e) { }
   if (!mallTotal) {
     // 兼容只有 mallJoinedAt、没有 mallKey 的客户
     try { mallTotal = (await db.collection('customers').where({ mallJoinedAt: _.exists(true) }).count()).total || 0; } catch (e) { }
   }
-  try {
-    newShops7d = (await db.collection('customers').where({
-      deleted: _.neq(true), source: 'field', createdAt: _.gte(base - 6 * 86400000)
-    }).count()).total || 0;
-  } catch (e) { }
 
-  const value = { day: today, mallTotal: mallTotal, newShops7d: newShops7d };
+  const value = { day: today, mallTotal: mallTotal };
   if (mallTotal > 0) {
     try {
       const s0 = await db.collection('settings').where({ key: key }).limit(1).get();
