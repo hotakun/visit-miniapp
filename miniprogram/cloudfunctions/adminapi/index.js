@@ -4636,17 +4636,20 @@ async function applyMallPair(event) {
   if (useSys('region')) { delete data.region; }
   if (useSys('mallCode')) { delete data.mallCode; }
 
-  // ⭐ 2026-10-18 老板定：**商城有的客户带经纬度** —— 系统内没有坐标时采用商城坐标补上；
-  //   系统内已有坐标 → 绝不覆盖（现场采的坐标才是真的，项目红线）。
-  //   ⚠️ `mallFieldsFrom()` 的 `MALL_NO_TOUCH` 仍然硬拦"商城覆盖系统内"；
-  //      这里只在系统内 **lat/lng 都为空** 且预览选了「商城」时才补。
+  // ⭐ 2026-10-18 老板定：**经纬度也可以选「商城 / 系统内」**。
+  //   · 老板主动选「商城」→ 用商城坐标覆盖系统坐标（留 `coord_source='mall'` 备案）；
+  //   · 没选/选系统内 → 保留系统坐标；
+  //   · 系统内没有坐标 → 默认补商城坐标（向后兼容）。
   const _sysLat = Number(c.lat) || 0, _sysLng = Number(c.lng) || 0;
   const _mLat = Number(m.lat) || 0, _mLng = Number(m.lng) || 0;
-  if (!_sysLat && !_sysLng && _mLat && _mLng && picks.lat !== 'sys') {
-    data.lat = _mLat;
-    data.lng = _mLng;
-    data.coord_source = 'mall';
-    data.coord_status = 'ok';
+  if (_mLat && _mLng) {
+    const _useMallLat = picks.lat === 'mall';
+    if (_useMallLat || (!_sysLat && !_sysLng)) {
+      data.lat = _mLat;
+      data.lng = _mLng;
+      data.coord_source = 'mall';
+      data.coord_status = 'ok';
+    }
   }
 
   // ② 电话（老板 2026-10-17 定：**两个都留、只换顺序**，不丢任何一个）

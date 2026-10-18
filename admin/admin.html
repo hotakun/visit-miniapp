@@ -4751,13 +4751,21 @@ function mallPickRender() {
   });
   // ⭐ 2026-10-18 老板定：**商城有的客户也带经纬度** —— 这里不再写死「商城没有」：
   //   · 商城有、系统内空 → 可选「用商城的」补坐标（默认商城）；
-  //   · 系统内有坐标 → **固定用系统内的**（红线：现场采的坐标绝不覆盖）。
+  // ⭐ 2026-10-18 老板定：**经纬度也可以选「商城 / 系统内」**（与店名/电话/地址同口径）。
+  //   · 系统内有坐标 → 默认「系统内」（不主动覆盖现场采的坐标）；
+  //   · 系统内没有坐标 → 默认「商城」；
+  //   · 只有老板主动选「商城」才覆盖系统坐标，`picks.lat` 会留档。
   const mallLat = String(m.latText || '').trim();
   const sysLat = String(s.latText || '').trim();
-  const coordPick = (mallLat && !sysLat)
-    ? ('<label style="margin-right:12px"><input type="radio" name="mpf_lat" value="mall" checked> 商城</label>' +
-       '<label><input type="radio" name="mpf_lat" value="sys"> 系统内</label>')
-    : '🔒 固定用系统内的';
+  let coordPick;
+  if (mallLat) {
+    const defSys = !!sysLat;
+    coordPick = '<label style="margin-right:12px"><input type="radio" name="mpf_lat" value="mall"' + (defSys ? '' : ' checked') + '> 商城</label>' +
+      '<label><input type="radio" name="mpf_lat" value="sys"' + (defSys ? ' checked' : '') + '> 系统内</label>' +
+      (sysLat ? '<span style="color:#98A2AE;margin-left:6px">选商城会覆盖系统坐标</span>' : '');
+  } else {
+    coordPick = '<span style="color:#98A2AE">（商城没有坐标，保留系统内的）</span>';
+  }
   h += '<tr><td style="padding:6px 8px;color:var(--sub)">经纬度</td>' +
     '<td style="padding:6px 8px">' + (mallLat ? esc(mallLat) : '<span style="color:#C3CAD4">（商城没有）</span>') + '</td>' +
     '<td style="padding:6px 8px">' + (sysLat ? esc(sysLat) : '<span style="color:#C3CAD4">（空）</span>') + '</td>' +
@@ -15027,7 +15035,7 @@ async function applyLocalMatch() {
          内容全部由 JS（mgRender/mgConfirm）画进 #mgBody；容器固定 980px + 滚动（照"大列表一律弹窗+滚动"规矩）。 -->
     <!-- ⭐⭐ 2026-10-17 老板定：**逐字段选择"用哪边"**（合并预览用）——
          左边=商城那条、右边=系统内这条；每行单选；电话是"两个都留、只换顺序"。
-         ⚠️ 经纬度/商圈**不给选**（红线：现场采的坐标才是真到过那个点）→ 只显示、标"固定用系统内的"。
+         ⚠️ 商圈**不给选**（红线）；经纬度可选「商城 / 系统内」，默认系统内，选商城才覆盖。
          三处共用：商城待配对的「✓ 就是这家」、客户管理「未加」点开的合并预览。 -->
     <div class="ovl" id="mallPickOvl" style="display:none;z-index:10005" onclick="mallPickCancel()">
       <div class="modal" style="width:980px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
