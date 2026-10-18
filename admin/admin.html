@@ -12299,6 +12299,22 @@ function msgImpCard(it) {
       </div>
     </div>`;
   }
+  // ⭐ 2026-10-18：业务员申请延期（任务已过期）→ 点卡片进任务编辑页的「延期」
+  if (it.kind === 'taskExtend') {
+    return `<div class="card" style="padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="nav('tasks');openEditTask('${it.id}','extend')">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="pill" style="background:#FCEBEC;color:#C93A40;font-weight:700">⏰ 申请延期</span>
+        <b style="font-size:14.5px">${esc(it.taskName || it.taskNo || '')}</b>
+        <span style="margin-left:auto;color:var(--sub);font-size:12px">${t}</span>
+      </div>
+      <div class="sb-d" style="margin-top:6px">${who} 申请 · 任务已过期（截止 ${esc(it.deadline || '—')}）</div>
+      <div style="margin-top:8px">
+        <span style="display:inline-block;color:var(--primary);font-weight:700;font-size:13px;cursor:pointer;
+          transition:transform .15s,color .15s,text-shadow .15s"
+          onmouseover="this.style.transform='translateX(2px)';this.style.color='#D93E0E';this.style.textShadow='0 1px 2px rgba(245,83,28,.28)'"
+          onmouseout="this.style.transform='none';this.style.color='var(--primary)';this.style.textShadow='none'">点击卡片 → 打开任务编辑（延期）›</span>
+      </div></div>`;
+  }
   return `<div class="card" style="padding:14px 16px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span class="pill" style="background:#F5F7FA;font-weight:700">🧭 任务审核</span>

@@ -181,7 +181,7 @@ async function fieldList(event) {
 // 只要"未处理数"（轻量：铃铛 + 边栏角标轮询用；不做客户/业务员名映射，只数条数）
 async function msgCount() {
   const C = (q) => q.count().then(r => (r && r.total) || 0).catch(() => 0);
-  const [coord, field, reg, task, shopNew] = await Promise.all([
+  const [coord, field, reg, task, shopNew, extendReq] = await Promise.all([
     C(db.collection('coord_fix_requests').where({ status: 'pending', type: _.neq('field') })),  // 坐标修正
     C(db.collection('coord_fix_requests').where({ status: 'pending', type: 'field' })),         // 现场提报
     C(db.collection('registrations').where({ status: 'pending' })),                             // 注册审核
@@ -190,9 +190,11 @@ async function msgCount() {
     //   老板原话：「从建立新店开始到最后，不管滚动消息还是重点消息都没有任何通知，而且这个应该进重点消息里面。」
     //   判据 = mallPending:true（现场录入、商城侧还没有档案）→ **导入商城表对上后自动减**
     //   （转正逻辑见 runMallMatch / applyMallMatch：写 mallPending:false）
-    C(db.collection('customers').where(_.and([{ mallPending: true }, NOT_DELETED])))            // 现场新录的店（已删的不算）
+    C(db.collection('customers').where(_.and([{ mallPending: true }, NOT_DELETED]))),   // 现场新录的店（已删的不算）
+    // ⭐ 2026-10-18：过期任务里的「申请延期」
+    C(db.collection('tasks').where({ status: 'published', 'extendRequest.status': 'pending' }))
   ]);
-  return { ok: true, coord, field, reg, task, shopNew, total: coord + field + reg + task + shopNew };
+  return { ok: true, coord, field, reg, task, shopNew, extendReq: extendReq, total: coord + field + reg + task + shopNew + extendReq };
 }
 
 // 消息中心页面数据
@@ -206,14 +208,18 @@ async function msgCenter(event) {
 
   // ---------- ① 重点消息 ----------
   if (tab === 'imp') {
-    const [fRes, rRes, tRes, sRes] = await Promise.all([
+    const [fRes, rRes, tRes, sRes, eRes] = await Promise.all([
       db.collection('coord_fix_requests').where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(50).get(),
       db.collection('registrations').where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(30).get(),
       db.collection('tasks').where({ status: 'reviewing', archivedAt: _.exists(false) }).orderBy('createdAt', 'desc').limit(30).get(),
       // ⭐⭐ 2026-09-29【老板定：加新店要进重点消息】现场录入的店（mallPending:true）
       //   —— 老板报"从建立新店开始到最后，不管滚动消息还是重点消息都没有任何通知"。
       db.collection('customers').where(_.and([{ mallPending: true }, NOT_DELETED])).orderBy('createdAt', 'desc').limit(50).get()
-        .catch(silentCatch('adminapi·msgShopNew', { data: [] }))
+        .catch(silentCatch('adminapi·msgShopNew', { data: [] })),
+      // ⭐ 2026-10-18 老板定：业务员在手机上申请延期 → 进重点消息
+      db.collection('tasks').where({ status: 'published', 'extendRequest.status': 'pending' })
+        .orderBy('createdAt', 'desc').limit(30).get()
+        .catch(silentCatch('adminapi·msgExtend', { data: [] }))
     ]);
     const cids = [...new Set(fRes.data.map(f => f.customerId).filter(Boolean))];
     const uids = [...new Set([].concat(fRes.data.map(f => f.salesmanId), tRes.data.map(t => t.salesmanId)).filter(Boolean))];
@@ -263,6 +269,18 @@ async function msgCenter(event) {
       phone: s.phone || '',
       msg: '现场新建店铺，等商城建档'
     }));
+    // ⭐ 2026-10-18：任务过期 → 业务员申请延期（点卡片进任务编辑页做延期）
+    (eRes.data || []).forEach(t => {
+      const er = t.extendRequest || {};
+      if (er.status !== 'pending') return;
+      items.push({
+        kind: 'taskExtend', id: t._id, at: er.at || t.createdAt || 0,
+        taskNo: t.taskNo || '', taskName: t.name || '',
+        salesmanName: er.byName || (umap[t.salesmanId] ? umap[t.salesmanId].name : ''),
+        deadline: t.deadline || '',
+        msg: '任务已过期，申请延期'
+      });
+    });
     items.sort((a, b) => (b.at || 0) - (a.at || 0));
     return { ok: true, tab: 'imp', total: items.length, items };
   }
@@ -2069,7 +2087,8 @@ async function extendTask(event) {
   if (t.status !== 'published') return { ok: false, code: 'STATE', msg: '仅进行中的任务可延期' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(newDeadline || ''))) return { ok: false, code: 'BAD_ARG', msg: '请选择新截止日期' };
   const logs = withLog(t, { at: Date.now(), by: (event._admin && event._admin.name) || '系统', role: 'admin', type: 'extend', detail: { from: t.deadline || '', to: newDeadline } });
-  await db.collection('tasks').doc(taskId).update({ data: { deadline: newDeadline, logs } });
+  // ⭐ 2026-10-18：延期办完 → **清掉业务员的申请**（消息中心那条重点消息随之消失）
+  await db.collection('tasks').doc(taskId).update({ data: { deadline: newDeadline, logs, extendRequest: _.remove() } });
   // ⭐⭐ 2026-10-15 补（依《全项目审查》D02）：同 rescheduleTask —— **延期必须报变动信号**，
   //   否则 PG 里那条任务的截止日不更新，后台看到的还是旧截止日。
   await touchTaskDirty();

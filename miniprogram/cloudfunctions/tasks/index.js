@@ -110,6 +110,8 @@ exports.main = async (event) => {
 
   if (action === 'list') return await list(salesmanId, isBoss);
   if (action === 'detail') return await detail(salesmanId, taskId, isBoss);
+  // ⭐ 2026-10-18：任务过期 → 业务员申请延期（后台消息中心收到，点进去做延期）
+  if (action === 'requestExtend') return await requestExtend(salesmanId, meDoc, event, isBoss);
   // ⭐ 2026-10-15：**只回卡片状态**的轻接口（任务详情页刷新用它 —— 不查客户档案、不拉大字段）
   if (action === 'taskCardStatus') return await taskCardStatus(salesmanId, taskId, isBoss);
   if (action === 'mapData') return await mapData(salesmanId, taskId, isBoss); // 2026-09-09 提速 B：地图轻量接口
@@ -1406,6 +1408,37 @@ async function taskCardStatus(salesmanId, taskId, isBoss) {
   return { ok: true, at: Date.now(), states: states };
 }
 
+// ⭐⭐ 2026-10-18 老板定：任务过期后，业务员点「已过期，请联系管理员延期」→
+//   立即给后台消息中心发一条「申请延期」；管理员点消息 → 进任务编辑页做延期。
+//   ⚠️ 只写 `tasks.extendRequest`（不动 deadline/status）；管理员延期成功后 `extendTask` 会清掉它。
+//   ⚠️ 幂等：同一条任务重复点，只保留最新一条 pending（不产生重复消息）。
+async function requestExtend(salesmanId, meDoc, event, isBoss) {
+  const taskId = String((event && event.taskId) || '');
+  if (!taskId) return { ok: false, code: 'BAD_ARG', msg: '缺少任务' };
+  const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
+  const task = tRes && tRes.data;
+  if (!task) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
+  // 权限：只能申请自己的任务（老板模式不限；老板页面上没有这个按钮）
+  if (!isBoss && String(task.salesmanId || '') !== String(salesmanId || '')) {
+    return { ok: false, code: 'FORBIDDEN', msg: '只能申请自己的任务' };
+  }
+  if (task.status !== 'published') return { ok: false, code: 'STATE', msg: '只有进行中的任务可以申请延期' };
+  const today = todayStr();
+  if (!task.deadline || String(task.deadline) > today) return { ok: false, code: 'NOT_EXPIRED', msg: '任务还没到期，不需要申请延期' };
+  const cur = task.extendRequest || null;
+  if (cur && cur.status === 'pending') return { ok: true, already: true, at: cur.at || 0 };
+  const at = Date.now();
+  const req = {
+    status: 'pending',
+    at: at,
+    by: String(salesmanId || ''),
+    byName: String((meDoc && meDoc.name) || ''),
+    note: String((event && event.note) || '').slice(0, 200)
+  };
+  await db.collection('tasks').doc(taskId).update({ data: { extendRequest: req } });
+  return { ok: true, at: at };
+}
+
 async function detail(salesmanId, taskId, isBoss) {
   const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
   const t = tRes && tRes.data;
@@ -1499,6 +1532,8 @@ async function detail(salesmanId, taskId, isBoss) {
       dayPlan: t.dayPlan || [],
       status: t.status,
       expired: t.status === 'published' && t.deadline && String(t.deadline) <= todayStr(),
+      // ⭐ 2026-10-18：延期申请状态（已申请 → 手机端按钮显示「等待管理员处理」）
+      extendRequest: t.extendRequest || null,
       startDate: t.startDate || '',
       createdAt: t.createdAt || null,
       todayDay: dayIndexOf(t.startDate, t.createdAt),

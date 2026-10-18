@@ -313,6 +313,34 @@ Page({
     this.setData({ showCustomers, dayDone, dayVisited, ongoingDays, nextSeq: firstTodo ? firstTodo.seq : 0, allDone });
   },
   // 交任务（全部完成或提前交）：页内确认弹层；提前交与开关开启时进入审核中
+  // ⭐ 2026-10-18 老板定：任务过期 → 点按钮给后台发「申请延期」，
+  //   后台「消息中心 · 重点消息」立刻收到；点进去就是这条任务的编辑页（选新截止日）。
+  //   ⚠️ 幂等：已申请过就只提示，不重复写（云端也会判重）。
+  async requestExtend() {
+    const t = this.data.task || {};
+    if (t.extendRequest && t.extendRequest.status === 'pending') {
+      wx.showToast({ title: '已申请，请等待管理员处理', icon: 'none' });
+      return;
+    }
+    if (this._extending) return;
+    this._extending = true;
+    wx.showLoading({ title: '提交中…', mask: true });
+    try {
+      const r = await api.call('tasks', { action: 'requestExtend', taskId: this.taskId });
+      wx.hideLoading();
+      if (r && r.ok) {
+        this.setData({ 'task.extendRequest': { status: 'pending', at: r.at || Date.now() } });
+        wx.showToast({ title: r.already ? '已申请过，请等待' : '已通知管理员', icon: 'success' });
+      } else {
+        wx.showToast({ title: (r && r.msg) || '提交失败', icon: 'none' });
+      }
+    } catch (e) {
+      wx.hideLoading();
+      wx.showToast({ title: '提交失败，请重试', icon: 'none' });
+    } finally {
+      this._extending = false;
+    }
+  },
   finishTask() {
     console.log('[task] finishTask tapped');
     if (this.finishing) return;

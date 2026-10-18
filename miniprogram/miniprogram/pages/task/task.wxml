@@ -59,7 +59,12 @@
        ⚠️ js 里的 `openMap()` 变成零开销死代码（不再被调用），以后要恢复把它接回来即可。 -->
   <view class="foot" wx:if="{{task && !(task.status === 'published' && !task.expired && !allDone)}}">
     <view class="btn-primary" wx:if="{{task.status === 'published' && !task.expired && allDone}}" hover-class="btn-hover" bindtap="finishTask">🎉 全部完成 · 交任务</view>
-    <view class="btn-expired" wx:elif="{{task.expired}}">⏰ 已过期，请联系管理员延期</view>
+    <!-- ⭐ 2026-10-18 老板定：过期后点这里 → 立即给后台消息中心发「申请延期」。
+         已申请 → 变黄色「等待管理员处理」（重复点只提示，不再重复发）。 -->
+    <view class="{{task.extendRequest && task.extendRequest.status === 'pending' ? 'btn-wait' : 'btn-expired'}}"
+          wx:elif="{{task.expired}}" bindtap="requestExtend">
+      {{task.extendRequest && task.extendRequest.status === 'pending' ? '⏳ 已申请延期，等待管理员处理' : '⏰ 已过期，申请延期'}}
+    </view>
     <view class="btn-wait" wx:elif="{{task.status === 'reviewing'}}">⏳ 审核中，等待管理员确认…</view>
     <view class="btn-done" wx:else>任务已完成 🎉</view>
   </view>
