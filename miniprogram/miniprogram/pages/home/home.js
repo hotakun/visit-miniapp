@@ -629,7 +629,7 @@ Page({
     this.setData({
       bossGlance: g,
       bossCustomerText: fmtW(g.customerTotal),
-      bossMallText: fmtK(g.mallTotal),
+      bossMallText: (Number(g.mallTotal) || 0) > 0 ? fmtK((Number(g.mallTotal) || 0) + 5000) : '—',   // ⭐ 2026-10-18 老板定：显示值 = 实际 + 5,000（仅展示口径，不改真实统计）
       bossNewShops7d: Number(g.newShops7d) || 0,
       trendBars: trendBars,
       bossSalesmen: bosses,
