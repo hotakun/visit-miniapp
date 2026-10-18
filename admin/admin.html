@@ -10194,10 +10194,12 @@ async function custFillPageAgg(rows) {
   const _pts = (custLocal && custLocal.points) || [];
   let _anyMissing = false;
   for (let i = 0; i < _pts.length && i < 50; i++) {
-    // ⭐ 2026-10-19：有副店（sub）的行也要补一次 —— 订单要按主档 + 副店编号合并
-    if (_pts[i] && (_pts[i].oc === undefined || _pts[i].sub)) { _anyMissing = true; break; }
+    if (_pts[i] && _pts[i].oc === undefined) { _anyMissing = true; break; }
   }
-  if (_pts.length && !_anyMissing) return;
+  // ⭐ 2026-10-19：当前页有副店 → 必须补一次（订单要按主档 + 副店编号合并）。
+  //   ⚠️ 不能只看全库前 50 行：主副店可能不在前 50 行（c793 就是这样）。
+  const _needSub = rows.some(r => Array.isArray(r.subAccounts) && r.subAccounts.length);
+  if (_pts.length && !_anyMissing && !_needSub) return;
   const ids = rows.map(r => r._id).filter(Boolean);
   // ⭐ 2026-10-19：主副店订单合并 —— 每个客户收集「主档编号 + 店名编号 + 副店编号」。
   //   合并时主档 `mallCode` 可能被写成副店编号（如 c793 主档被写成 c838），只按 mallCode 查会漏主店订单。
