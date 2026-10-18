@@ -122,7 +122,8 @@ exports.main = async (event) => {
   if (action === 'replanDay') return await replanDay(salesmanId, event, isBoss);
   if (action === 'bossBoard') return await bossBoard(salesmanId, isBoss);
   if (action === 'bossGlance') return await bossGlance(salesmanId, isBoss);   // ⭐ 2026-10-18：老板首页概览/趋势/业务员动态
-  if (action === 'bossGeoCount') return await bossGeoCount(salesmanId, isBoss); // ⭐ 2026-10-18：老板首页「区域数量」（区县去重）
+  if (action === 'bossScale') return await bossScale(salesmanId, isBoss);     // ⭐ 2026-10-18：老板首页规模数字（客户/商城/新店/区县，当天缓存）
+  if (action === 'bossGeoCount') return await bossGeoCount(salesmanId, isBoss); // 兼容旧前端
   if (action === 'bossWar') return await bossWar(isBoss);
   if (action === 'bossTrack') return await bossTrack(isBoss, event); // 老板手机端：业务员今日轨迹
   // 2026-09-25 新增（老板定：「客户详情页」改造成 A 演示稿那套 7 卡骨架，要能看真数据）：
@@ -359,7 +360,7 @@ const NAME_SUSPECT = 0.72;
 
 // ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
 //   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
-const CODE_VER = '2026-10-10-2000';   // 2000=「更正信息」（custEditInfo 预填 + correctCustomer 直接生效+留痕）；0100=自由拜访（nearbyCustomers 分圈取最近500 + walkRoute 步行路线 + 自由拜访卡 CRUD + _logTrip + 集合自愈）；1100=selfCheck 支持 excludeId（后台防重复核用）；1001=加 alsoSalesman 声明（老板兼业务员）；2400=电话比较改用 phoneKey（去区号）；2350=修 .limit(50) 截断
+const CODE_VER = '2026-10-18-1230';   // 1230=老板首页改版（bossGlance/bossScale/bossGeoCount + 规模数字当天缓存，避免全库 count 拖垮概览）
 
 // ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
 //   入参（全可选）：{ lat, lng, name, phone, radius, excludeId }
@@ -1032,17 +1033,7 @@ async function bossGlance(salesmanId, isBoss) {
   const days = [];
   for (let i = 6; i >= 0; i--) days.push(dayStr(base - i * 86400000));
 
-  // ① 规模（三个 count，都是轻查询）
-  const [ct, mt, ns] = await Promise.all([
-    db.collection('customers').where({ deleted: _.neq(true) }).count().catch(() => ({ total: 0 })),
-    db.collection('customers').where(_.and([
-      { deleted: _.neq(true) },
-      _.or([{ mallKey: _.exists(true) }, { mallJoinedAt: _.exists(true) }])
-    ])).count().catch(() => ({ total: 0 })),
-    db.collection('customers').where(_.and([
-      { deleted: _.neq(true) }, { source: 'field' }, { createdAt: _.gte(base - 6 * 86400000) }
-    ])).count().catch(() => ({ total: 0 }))
-  ]);
+  // ① 规模数字已拆到 bossScale 独立接口（见下）—— 这里不再扫全库，避免拖垮今日数据
 
   // ② 近 7 天拜访（分页拉全，通常 1 页）
   let rows = [];
@@ -1066,10 +1057,10 @@ async function bossGlance(salesmanId, isBoss) {
 
   // ③ 业务员动态
   const [uRes, lRes] = await Promise.all([
-    db.collection('users').where(_.and([
-      { active: true, trial: _.neq(true) },
-      _.or([{ role: 'salesman' }, { alsoSalesman: true }])
-    ])).field({ name: true }).get().catch(() => ({ data: [] })),
+    // ⚠️ 不用 _.and/_.or 嵌套（减少兼容性风险）：先取 active 用户，内存里再过滤角色/实习。
+    db.collection('users').where({ active: true })
+      .field({ name: true, role: true, alsoSalesman: true, trial: true })
+      .get().catch(() => ({ data: [] })),
     db.collection('salesman_locations').where({ type: 'latest' }).get().catch(() => ({ data: [] }))
   ]);
   const lMap = {}, smById = {};
@@ -1078,7 +1069,9 @@ async function bossGlance(salesmanId, isBoss) {
   const bySm = {};
   todayRows.forEach(v => { if (v.salesmanId) bySm[v.salesmanId] = (bySm[v.salesmanId] || 0) + 1; });
   const now = Date.now();
-  const salesmen = (uRes.data || []).map(u => {
+  const salesmen = (uRes.data || []).filter(u =>
+    (u.role === 'salesman' || u.alsoSalesman === true) && u.trial !== true
+  ).map(u => {
     const l = lMap[u._id] || {};
     const ageMin = l.t ? Math.floor((now - Number(l.t)) / 60000) : 999;
     return {
@@ -1123,15 +1116,65 @@ async function bossGlance(salesmanId, isBoss) {
 
   return {
     ok: true,
-    customerTotal: ct.total || 0,
-    mallTotal: mt.total || 0,
-    newShops7d: ns.total || 0,
     todayVisits: todayRows.length,
     todayCustomers: todayCustomers,
     trend: trend, days: days,
     salesmen: salesmen,
-    events: events.slice(0, 10)
+    events: events.slice(0, 6)
   };
+}
+
+// ⭐⭐ 2026-10-18 老板首页「规模数字」独立接口：
+//   客户总数 / 商城客户 / 本周新店 / 区域数量（区县去重）。
+//   ⚠️ 为什么单独拆出来：这四项都要扫全库（17.8 万），和「今日概览/业务员/动态」混在一个云函数里
+//      很容易**超过 3 秒超时** → 整个 bossGlance 失败 → 首页数字全空（2026-10-18 老板实测「很多数字消失」）。
+//      拆开后：慢/失败只影响这四格；结果**按天缓存**到 settings，当天只算一次。
+async function bossScale(salesmanId, isBoss) {
+  if (!isBoss) return { ok: false, code: 'FORBIDDEN', msg: '仅老板可用' };
+  const today = todayStr();
+  const key = 'bossScaleCache';
+  try {
+    const s = await db.collection('settings').where({ key: key }).limit(1).get();
+    const v = s.data && s.data[0] && s.data[0].value;
+    if (v && v.day === today && typeof v.customerTotal === 'number') return Object.assign({ ok: true, cached: true }, v);
+  } catch (e) { /* 缓存读失败就重算 */ }
+
+  const base = new Date(today + 'T00:00:00+08:00').getTime();
+  let customerTotal = 0, mallTotal = 0, newShops7d = 0, districtCount = 0;
+  // 四个查询各自 catch：任何一项失败只影响自己，不拖垮其他三项
+  try { customerTotal = (await db.collection('customers').where({ deleted: _.neq(true) }).count()).total || 0; } catch (e) { }
+  try { mallTotal = (await db.collection('customers').where({ mallKey: _.exists(true) }).count()).total || 0; } catch (e) { }
+  if (!mallTotal) {
+    // 兼容只有 mallJoinedAt、没有 mallKey 的客户
+    try { mallTotal = (await db.collection('customers').where({ mallJoinedAt: _.exists(true) }).count()).total || 0; } catch (e) { }
+  }
+  try {
+    newShops7d = (await db.collection('customers').where({
+      deleted: _.neq(true), source: 'field', createdAt: _.gte(base - 6 * 86400000)
+    }).count()).total || 0;
+  } catch (e) { }
+  try {
+    const r = await db.collection('customers').aggregate()
+      .match({ deleted: { $ne: true } })
+      .group({ _id: '$district' })
+      .limit(20000)
+      .end();
+    districtCount = (r.list || []).filter(x => x && x._id != null && String(x._id).trim()).length;
+  } catch (e) { }
+
+  const value = { day: today, customerTotal: customerTotal, mallTotal: mallTotal, newShops7d: newShops7d, districtCount: districtCount };
+  // 只有客户总数真的查到了才缓存（避免把一次全失败的结果钉死一整天）
+  if (customerTotal > 0) {
+    try {
+      const s0 = await db.collection('settings').where({ key: key }).limit(1).get();
+      if (s0.data && s0.data.length) {
+        await db.collection('settings').doc(s0.data[0]._id).update({ data: { value: value, updatedAt: Date.now() } });
+      } else {
+        await db.collection('settings').add({ data: { key: key, value: value, updatedAt: Date.now() } });
+      }
+    } catch (e) { /* 缓存写失败不影响本次返回 */ }
+  }
+  return Object.assign({ ok: true, cached: false }, value);
 }
 
 // ⭐⭐ 2026-10-18 老板定：「区域数量」按**区县（district）去重**。

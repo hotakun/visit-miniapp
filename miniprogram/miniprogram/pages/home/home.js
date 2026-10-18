@@ -597,11 +597,6 @@ Page({
   },
   _applyBossGlance(g) {
     if (!g || !g.ok) return;
-    const fmtW = n => {
-      n = Number(n) || 0;
-      return n >= 10000 ? ((n / 10000).toFixed(1).replace(/\.0$/, '') + '万') : String(n);
-    };
-    const fmtK = n => String(Number(n) || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     const week = ['日', '一', '二', '三', '四', '五', '六'];
     const trend = g.trend || [], days = g.days || [];
     const max = Math.max.apply(null, trend.concat([1]));
@@ -628,9 +623,6 @@ Page({
     }));
     this.setData({
       bossGlance: g,
-      bossCustomerText: fmtW(g.customerTotal),
-      bossMallText: (Number(g.mallTotal) || 0) > 0 ? fmtK((Number(g.mallTotal) || 0) + 5000) : '—',   // ⭐ 2026-10-18 老板定：显示值 = 实际 + 5,000（仅展示口径，不改真实统计）
-      bossNewShops7d: Number(g.newShops7d) || 0,
       trendBars: trendBars,
       bossSalesmen: bosses,
       bossEvents: events
@@ -641,17 +633,32 @@ Page({
     if (!force) {
       const g = dc.get('bossGlance', 'boss');
       if (g) this._applyBossGlance(g);
-      const gc = dc.get('bossGeo', 'boss');
-      if (typeof gc === 'number') this.setData({ bossGeoCount: gc });
+      const sc = dc.get('bossScale', 'boss');
+      if (sc) this._applyBossScale(sc);
     }
     try {
-      const [g, geo] = await Promise.all([
+      const [g, sc] = await Promise.all([
         api.call('tasks', { action: 'bossGlance' }).catch(() => null),
-        api.call('tasks', { action: 'bossGeoCount' }).catch(() => null)
+        api.call('tasks', { action: 'bossScale' }).catch(() => null)
       ]);
       if (g && g.ok) { try { dc.set('bossGlance', 'boss', g); } catch (e) { } this._applyBossGlance(g); }
-      if (geo && geo.ok) { try { dc.set('bossGeo', 'boss', geo.count); } catch (e) { } this.setData({ bossGeoCount: Number(geo.count) || 0 }); }
+      if (sc && sc.ok) { try { dc.set('bossScale', 'boss', sc); } catch (e) { } this._applyBossScale(sc); }
     } catch (e) { /* 静默：保留缓存 / 旧数据 */ }
+  },
+  _applyBossScale(sc) {
+    if (!sc || !sc.ok) return;
+    const fmtW = n => {
+      n = Number(n) || 0;
+      return n >= 10000 ? ((n / 10000).toFixed(1).replace(/\.0$/, '') + '万') : String(n);
+    };
+    const fmtK = n => String(Number(n) || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const mall = Number(sc.mallTotal) || 0;
+    this.setData({
+      bossCustomerText: fmtW(sc.customerTotal),
+      bossMallText: mall > 0 ? fmtK(mall + 5000) : '—',   // ⭐ 老板 2026-10-18 定：显示值 = 实际 + 5,000（仅展示口径）
+      bossNewShops7d: Number(sc.newShops7d) || 0,
+      bossGeoCount: Number(sc.districtCount) || 0
+    });
   },
   // ⭐ 2026-10-15：老板首页的"新店数量"（本地优先、0 请求）——抽出来给"缓存渲染"复用，别写两遍
   _applyBossNewShops() {
@@ -748,7 +755,7 @@ Page({
           // ⭐ 2026-10-15：存一份本地（2 小时内再进首页就不必再拉一遍）
           try { _dc.set('homeTasks', 'boss', { tasks: res.tasks || [], doneTasks: res.doneTasks || [], stats: res.stats || null }); } catch (e) { /* 静默 */ }
           if (!mapCache.get(mapCache.curMode())) prefetchMapData();   // ⭐ 只在本地没有"今天的"地图缓存时才预取（原来无条件 = 每次进首页白拉一次）
-          // （「本周新店」由 bossGlance.newShops7d 提供，不再单独调 listNewShops；地图预取仍按条件做）
+          // （「本周新店」由 bossScale.newShops7d 提供，不再单独调 listNewShops；地图预取仍按条件做）
         } else {
           api.toast(res.msg || '加载失败');
         }
