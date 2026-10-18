@@ -534,7 +534,12 @@ Page({
     }
     // deadlineRaw 保留云端原值（下面按它挑"最近要截止"的任务：格式化后的"10月20日"没法比大小）
     const tasks = (rawTasks || []).map(t => ({ ...t, deadlineRaw: t.deadline, deadline: fmtDeadline(t.deadline) }));
-    this.setData({ tasks, showTasks: tasks.slice(0, 5) });
+    // ⭐ 2026-10-18 老板反馈「业务员首页只看到已完成、看不到进行中」：
+    //   `tasks.list` 是按 createdAt 倒序的，前 5 条可能被已完成任务占满。
+    //   业务员首页改为**进行中/审核中优先，已完成排最后**（组内仍按创建时间倒序）。
+    const _order = t => (t.status === 'done' ? 1 : 0);
+    const _show = tasks.slice().sort((a, b) => (_order(a) - _order(b)) || ((Number(b.createdAt) || 0) - (Number(a.createdAt) || 0)));
+    this.setData({ tasks, showTasks: _show.slice(0, 5) });
     if (tasks.some(t => t.status === 'reviewing')) getApp().startReviewWatcher();
     // ⭐ 2026-09-28 老板定：橙色大卡 = **同一个任务**（取"最新的进行中任务"）
     const active = tasks.filter(t => t.status !== 'done');
