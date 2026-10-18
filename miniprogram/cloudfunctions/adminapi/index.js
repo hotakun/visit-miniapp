@@ -4097,11 +4097,22 @@ async function createMallCustomer(event) {
   if (!name) return { ok: false, code: 'BAD_ARG', msg: '必须有店名' };
   if (!lat || !lng) return { ok: false, code: 'NO_COORD', msg: '必须先填经纬度（否则业务员导航不到）' };
   const now = Date.now();
+  // ⭐ 2026-10-18 修（老板「新建后客户列表区域/商圈还是空」）：
+  //   新建客户必须同时写 `district`（区县，客户列表读的就是它）与 `region`（完整省市串）。
+  //   前端传 district 优先；只传 region 时从 `浙江省>金华市>永康市` 里解析出第 3 段。
+  const _region = String(e2.region || '').trim();
+  let _district = String(e2.district || '').trim();
+  if (!_district && _region) {
+    const _p = _region.split(/[>＞\/]/).map(x => x.trim()).filter(Boolean);
+    _district = _p.length >= 3 ? _p[2] : (_p[_p.length - 1] || '');
+  }
   const doc = {
     name: name, nameRaw: name,
     phone: String(e2.phone || ''), address: String(e2.address || ''),
     lat: lat, lng: lng,
-    region: String(e2.region || ''), bizCircle: String(e2.bizCircle || ''),
+    district: _district,
+    region: _region || (_district ? ('浙江省>金华市>' + _district) : ''),
+    bizCircle: String(e2.bizCircle || ''),
     // ⭐ 2026-10-18 老板定：后台「新建这条客户」自动检测的品类也写进档案（三级）
     cat1: String(e2.cat1 || '').trim(), cat2: String(e2.cat2 || '').trim(), cat3: String(e2.cat3 || '').trim(),
     customerType: 'mall',            // 老板定：商城导入建的就是「已加入商城」
