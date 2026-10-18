@@ -647,17 +647,14 @@ Page({
   },
   _applyBossScale(sc) {
     if (!sc || !sc.ok) return;
-    const fmtW = n => {
-      n = Number(n) || 0;
-      return n >= 10000 ? ((n / 10000).toFixed(1).replace(/\.0$/, '') + '万') : String(n);
-    };
     const fmtK = n => String(Number(n) || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     const mall = Number(sc.mallTotal) || 0;
     this.setData({
-      bossCustomerText: fmtW(sc.customerTotal),
+      // ⭐ 老板 2026-10-18 定：客户总数固定 17.9万、区域数量固定 24（不再走云端统计，避免耗费）
+      bossCustomerText: '17.9万',
+      bossGeoCount: 24,
       bossMallText: mall > 0 ? fmtK(mall + 5000) : '—',   // ⭐ 老板 2026-10-18 定：显示值 = 实际 + 5,000（仅展示口径）
-      bossNewShops7d: Number(sc.newShops7d) || 0,
-      bossGeoCount: Number(sc.districtCount) || 0
+      bossNewShops7d: Number(sc.newShops7d) || 0
     });
   },
   // ⭐ 2026-10-15：老板首页的"新店数量"（本地优先、0 请求）——抽出来给"缓存渲染"复用，别写两遍

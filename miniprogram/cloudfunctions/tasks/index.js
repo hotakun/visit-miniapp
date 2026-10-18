@@ -360,7 +360,7 @@ const NAME_SUSPECT = 0.72;
 
 // ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
 //   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
-const CODE_VER = '2026-10-18-1230';   // 1230=老板首页改版（bossGlance/bossScale/bossGeoCount + 规模数字当天缓存，避免全库 count 拖垮概览）
+const CODE_VER = '2026-10-18-1300';   // 1300=老板首页改版（bossGlance/bossScale；客户总数/区域数量固定 17.9万/24，不再全库 count）
 
 // ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
 //   入参（全可选）：{ lat, lng, name, phone, radius, excludeId }
@@ -1136,13 +1136,13 @@ async function bossScale(salesmanId, isBoss) {
   try {
     const s = await db.collection('settings').where({ key: key }).limit(1).get();
     const v = s.data && s.data[0] && s.data[0].value;
-    if (v && v.day === today && typeof v.customerTotal === 'number') return Object.assign({ ok: true, cached: true }, v);
+    if (v && v.day === today && typeof v.mallTotal === 'number') return Object.assign({ ok: true, cached: true }, v);
   } catch (e) { /* 缓存读失败就重算 */ }
 
   const base = new Date(today + 'T00:00:00+08:00').getTime();
-  let customerTotal = 0, mallTotal = 0, newShops7d = 0, districtCount = 0;
-  // 四个查询各自 catch：任何一项失败只影响自己，不拖垮其他三项
-  try { customerTotal = (await db.collection('customers').where({ deleted: _.neq(true) }).count()).total || 0; } catch (e) { }
+  // ⭐ 2026-10-18 老板定：客户总数固定显示 17.9万、区域数量固定显示 24（前端写死），
+  //   这里**不再查客户总数 count、也不再跑区县聚合** —— 只算「商城客户」和「本周新店」两项。
+  let mallTotal = 0, newShops7d = 0;
   try { mallTotal = (await db.collection('customers').where({ mallKey: _.exists(true) }).count()).total || 0; } catch (e) { }
   if (!mallTotal) {
     // 兼容只有 mallJoinedAt、没有 mallKey 的客户
@@ -1153,18 +1153,9 @@ async function bossScale(salesmanId, isBoss) {
       deleted: _.neq(true), source: 'field', createdAt: _.gte(base - 6 * 86400000)
     }).count()).total || 0;
   } catch (e) { }
-  try {
-    const r = await db.collection('customers').aggregate()
-      .match({ deleted: { $ne: true } })
-      .group({ _id: '$district' })
-      .limit(20000)
-      .end();
-    districtCount = (r.list || []).filter(x => x && x._id != null && String(x._id).trim()).length;
-  } catch (e) { }
 
-  const value = { day: today, customerTotal: customerTotal, mallTotal: mallTotal, newShops7d: newShops7d, districtCount: districtCount };
-  // 只有客户总数真的查到了才缓存（避免把一次全失败的结果钉死一整天）
-  if (customerTotal > 0) {
+  const value = { day: today, mallTotal: mallTotal, newShops7d: newShops7d };
+  if (mallTotal > 0) {
     try {
       const s0 = await db.collection('settings').where({ key: key }).limit(1).get();
       if (s0.data && s0.data.length) {
