@@ -1349,7 +1349,7 @@ tr.row-off td:not(.keep){opacity:.4}
                **本地刷新**：表格数据全部来自本地缓存 `admin/cache/map-points.json`（连"订单总数/订单额/
                最近下单/全局态/任务状态/最近拜访"那几列也已在缓存里，见 `custFillPageAgg` 开头那句
                "本地已带 oc 字段就直接 return"）→ **点它一次云端调用都不发**。 -->
-          <button class="btn ghost" onclick="geoRefreshLocal()" title="按本地缓存重算并重画本页（不查云端、0 费用）"
+          <button class="btn ghost" onclick="geoRefreshLocal(this)" title="按本地缓存重算并重画本页（不查云端、0 费用）"
             style="height:26px;border:1px solid #D8DEE9;background:#fff;border-radius:7px;padding:0 10px;font-size:12.5px;cursor:pointer;color:#3C4654;font-family:inherit;white-space:nowrap">🔄 刷新本页（本地）</button>
         </div>
         <div class="tw">
@@ -10249,8 +10249,24 @@ async function custFillPageAgg(rows) {
 //   ✅ **0 次云端调用**：`loadGeoPage()` 的数据全部来自本地缓存（`admin/cache/map-points.json`）——
 //      连"订单总数 / 订单额 / 最近下单 / 全局态 / 任务状态 / 最近拜访"那几列也**已在缓存里**
 //      （见 `custFillPageAgg` 开头：本地已带 `oc` 字段就直接 `return`，不发请求）。
-function geoRefreshLocal() {
-  try { if (typeof loadGeoPage === 'function') loadGeoPage(); } catch (e) { /* 画失败不影响用 */ }
+async function geoRefreshLocal(btn) {
+  // ⭐ 2026-10-19 老板反馈「按了没任何反馈，不知道是不是真的刷新了」——
+  //   按钮文字改成「⏳ 刷新中…」→「✅ 已刷新（本地）」→ 1.2 秒后恢复；失败给「❌ 刷新失败」。
+  //   ⚠️ 这个按钮**只按本地缓存重画**（不查云端、0 费用）；数据没变化时列表本来就不会变，不是没刷新。
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 刷新中…'; }
+  try {
+    await new Promise(r => setTimeout(r, 30));       // 先让按钮文字渲染出来
+    if (typeof loadGeoPage === 'function') await loadGeoPage();
+    if (btn) {
+      btn.textContent = '✅ 已刷新（本地）';
+      setTimeout(() => { btn.textContent = '🔄 刷新本页（本地）'; btn.disabled = false; }, 1200);
+    }
+  } catch (e) {
+    if (btn) {
+      btn.textContent = '❌ 刷新失败';
+      setTimeout(() => { btn.textContent = '🔄 刷新本页（本地）'; btn.disabled = false; }, 1600);
+    }
+  }
 }
 
 // ⭐⭐ 2026-10-13 老板定（「发送到云端的同时，本地缓存中也应该放一份，这样才能在客户管理中马上看到」）：
