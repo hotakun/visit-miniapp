@@ -59,10 +59,10 @@
     </view>
     <view class="card-body" wx:if="{{!fold.overview}}">
       <view class="nums">
-        <view class="num"><view class="num-n">{{bossStats.todayDone || 0}}<text class="num-s">/{{bossStats.todayTotal || 0}}</text></view><view class="num-l">今日完成</view></view>
+        <view class="num"><view class="num-n">{{bossStats.todayVisits || 0}}<text class="num-s" wx:if="{{bossStats.todayTotal >= bossStats.todayVisits && bossStats.todayTotal > 0}}">/{{bossStats.todayTotal}}</text></view><view class="num-l">今日完成</view></view>
         <view class="num"><view class="num-n">{{bossStats.ongoing || 0}}</view><view class="num-l">拜访中</view></view>
         <view class="num"><view class="num-n">{{bossStats.online || 0}}</view><view class="num-l">在线</view></view>
-        <view class="num"><view class="num-n">{{bossGlance.todayCustomers || 0}}</view><view class="num-l">覆盖客户</view></view>
+        <view class="num"><view class="num-n">{{bossStats.todayCustomers || bossGlance.todayCustomers || 0}}</view><view class="num-l">覆盖客户</view></view>
       </view>
       <view class="trend">
         <view class="trend-h"><text>近 7 天拜访</text><text>今日 {{bossGlance.todayVisits || 0}} 家</text></view>

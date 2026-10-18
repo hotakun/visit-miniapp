@@ -1015,7 +1015,18 @@ async function bossBoard(salesmanId, isBoss) {
       };
     });
   } catch (e) { doneTasks = []; }
-  return { ok: true, stats: { todayDone, todayTotal, visited: visitedSum, total: totalSum, online, ongoing, review: revN.total }, tasks, doneTasks };
+  // ⭐ 2026-10-18 老板定：「今日完成」= **今天实际完成的拜访家数**，
+  //   不再依赖任务日计划（dayPlan 为空时原来会显示 0/0 —— 今天云端明明有 12 条完成拜访）。
+  let todayVisits = 0, todayCustomers = 0;
+  try {
+    const vr = await db.collection('visits')
+      .where({ visitedAt: todayStr(), status: _.in(['normal', 'pending_review']) })
+      .field({ customerId: true }).limit(1000).get();
+    const set = new Set((vr.data || []).map(v => v.customerId).filter(Boolean));
+    todayVisits = (vr.data || []).length;
+    todayCustomers = set.size;
+  } catch (e) { /* 静默：统计失败显示 0，不影响任务列表 */ }
+  return { ok: true, stats: { todayDone, todayTotal, todayVisits, todayCustomers, visited: visitedSum, total: totalSum, online, ongoing, review: revN.total }, tasks, doneTasks };
 }
 
 // ⭐⭐ 2026-10-18 老板定：老板首页「今日概览 / 业务员动态 / 最近动态」的数据源。
