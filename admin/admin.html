@@ -1722,11 +1722,11 @@ tr.row-off td:not(.keep){opacity:.4}
          每个页面**必须自己**声明 flex:1;min-height:0;overflow-y:auto（见本文件 CSS 区的铁律注释） -->
     <div id="page-visitrec" style="display:none;flex:1;min-height:0;overflow-y:auto;padding-bottom:6px">
       <div style="display:flex;align-items:flex-end;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px">
-        <div id="vrTabVisit" onclick="vrGo('visit')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid #F5531C;color:#F5531C">每日拜访</div>
-        <div id="vrTabShop" onclick="vrGo('shop')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;color:#68727E">每日新店</div>
-        <div id="vrStat" style="margin-left:auto;padding-bottom:12px;font-size:12.5px;color:var(--sub)"></div>
+        <div id="vrTabVisit" onclick="vrGo('visit')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid #F5531C;color:#F5531C;white-space:nowrap">每日拜访</div>
+        <div id="vrTabShop" onclick="vrGo('shop')" style="padding:8px 16px 12px;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;color:#68727E;white-space:nowrap">每日新店</div>
+        <div id="vrStat" style="margin-left:auto;padding-bottom:12px;font-size:12.5px;color:var(--sub);white-space:nowrap"></div>
         <!-- ⭐ 2026-10-11 老板定：加个**主动刷新**（那两页数据要重新拉时点它；每日新店原来很慢，已同时改成一次请求） -->
-        <div onclick="loadVisitRec()" title="重新拉一次" style="padding-bottom:12px;padding-left:12px;font-size:12.5px;font-weight:700;color:#F5531C;cursor:pointer">🔄 刷新</div>
+        <div onclick="loadVisitRec()" title="重新拉一次" style="padding-bottom:12px;padding-left:12px;font-size:12.5px;font-weight:700;color:#F5531C;cursor:pointer;white-space:nowrap">🔄 刷新</div>
       </div>
       <div id="vrPaneVisit">
         <div id="vrDates" class="card" style="padding:0"></div>
@@ -2529,7 +2529,7 @@ let taskCache = [];
 //   ⚠️ 两个按钮与客户管理列表一致；**没有拜访记录的行「拜访详情」置灰不可点**
 let vrTab = 'visit';
 function vrTabCss(on) {
-  return 'padding:8px 16px 12px;font-weight:700;font-size:13px;cursor:pointer;border-bottom:3px solid ' +
+  return 'padding:8px 16px 12px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;border-bottom:3px solid ' +
     (on ? '#F5531C;color:#F5531C' : 'transparent;color:#68727E');
 }
 function vrWeek(day) { const t = new Date(String(day) + 'T00:00:00+08:00'); return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][t.getDay()] || ''; }
@@ -2565,6 +2565,8 @@ window.vrGo = function (t) {
   $('vrPaneVisit').style.display = (t === 'visit') ? '' : 'none';
   $('vrPaneShop').style.display = (t === 'shop') ? '' : 'none';
   $('vrStat').textContent = '';
+  // ⭐ 2026-10-18 老板反馈「点每日新店空白」：原来只切标签、没触发加载（首次进页加载的是"每日拜访"）
+  loadVisitRec();
 };
 window.loadVisitRec = async function () { if (vrTab === 'visit') await vrLoadDays(); else await vrLoadShop(); };
 // ⭐ 2026-10-11 老板定：拜访记录两页**先读轻量服务器**（免费、秒出），拿不到才回退云开发。
@@ -2649,25 +2651,41 @@ async function vrLoadShop() {
   })();
   $('vrStat').textContent = '近 7 天 · 新增 ' + days.reduce((a, x) => a + x.n, 0) + ' 家';
   // ⚠️ 2026-10-11：明细**已随 newShopDays 一起返回**（原来这里按天各发一次请求 → 很慢）
+  // ⭐ 2026-10-18 老板定：后台「每日新店」按手机端新店页的卡片排版（照片 + 店名 + 地址 + 标签 + 状态）。
+  //   照片是云存储 fileID → 先批量换临时 URL（与拜访详情同一套 getTempFileURL）。
+  const _need = [];
+  days.forEach(d => (d.rows || []).forEach(c => { if (c.photo) _need.push(c.photo); }));
+  let _urls = {};
+  if (_need.length) {
+    const tr = await api('getTempFileURL', { fileIDs: [...new Set(_need)] }).catch(() => null);
+    if (tr && tr.ok) _urls = tr.urls || {};
+  }
+  const _pill = c => (!!(c.joined || _mkMap.get(c.customerId))
+    ? '<span class="pill blue">已入商城</span>'
+    : c.mallPending ? '<span class="pill warn">待商城建档</span>'
+      : '<span class="pill" style="background:#F1F3F6;color:#7A8490">未入商城</span>');
   box.innerHTML = days.map(d => {
     const rr = d.rows || [];
     return '<div style="padding:11px 16px;background:#FAFBFC;font-weight:800;font-size:13.5px;border-top:1px solid #F0F2F6">' +
       d.day + ' ' + vrWeek(d.day) + '<span style="color:#F5531C;margin-left:8px">新增 ' + d.n + ' 家</span>' +
       (d.pending ? '<span style="font-weight:600;color:#C2410C;font-size:12.5px;margin-left:8px">其中待商城建档 ' + d.pending + '</span>' : '') + '</div>' +
-      rr.map(c =>
-        // ⚠️ 2026-10-11 老板定：店名不加粗；顺带把这一页的行距/字号与「每日拜访」对齐（padding 12px 14px + 13px）
-        '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line);font-size:13px;font-weight:400">' +
-        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-        vrCode(c.mallCode) + esc(c.customerName) +
-        '<span style="color:#98A2AE;font-weight:500;margin-left:6px;font-size:12.5px">' + esc(c.address || '') + (c.phone ? ' · ' + esc(c.phone) : '') + '</span></span>' +
-        // ⭐ 2026-10-18 修（老板：「这下面四家最近拜访结果是待定再谈，你怎么都写成加入商城，误导」）：
-        //   **只有 mallKey / mallJoinedAt 有值才算「已入商城」**（项目唯一判据）；
-        //   mallPending = 待商城建档；两者都没有 = 未入商城（现场录入、还没对上商城）。
-        (!!(c.joined || _mkMap.get(c.customerId)) ? '<span class="pill blue">已入商城</span>'
-          : c.mallPending ? '<span class="pill warn">待商城建档</span>'
-            : '<span class="pill" style="background:#F1F3F6;color:#7A8490">未入商城</span>') +
-        '<span style="color:#98A2AE;font-size:12.5px;font-weight:600">' + esc(c.byName || '') + '</span>' +
-        vrVisitBtn(c.customerId, '', '') + vrCustBtn(c.customerId) + '</div>').join('');
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:10px;padding:12px 14px;border-top:1px solid var(--line)">' +
+      rr.map(c => {
+        const ph = c.photo && _urls[c.photo];
+        const initial = String(c.customerName || '店').slice(0, 1);
+        return '<div onclick="showCustDetail(\'' + c.customerId + '\')" style="display:flex;gap:10px;background:#fff;border:1px solid #EEF1F5;border-radius:12px;padding:10px;min-width:0;cursor:pointer;box-shadow:0 1px 2px rgba(23,30,44,.04)">' +
+          (ph
+            ? '<img src="' + esc(ph) + '" style="width:56px;height:56px;border-radius:9px;object-fit:cover;flex:none;background:#F0F2F6">'
+            : '<div style="width:56px;height:56px;border-radius:9px;flex:none;background:#F1F3F6;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#98A2AE">' + esc(initial) + '</div>') +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + vrCode(c.mallCode) + esc(c.customerName) + '</div>' +
+            '<div style="font-size:12px;color:#98A2AE;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.address || '（未填地址）') + (c.phone ? ' · ' + esc(c.phone) : '') + '</div>' +
+            '<div style="font-size:11.5px;color:#68727E;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+              esc(c.area || '') + (c.bizCircle ? ' · ' + esc(c.bizCircle) : '') + (c.byName ? ' · ' + esc(c.byName) + ' 录' : '') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-top:7px">' + _pill(c) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('') + '</div>';
   }).join('');
 }
 

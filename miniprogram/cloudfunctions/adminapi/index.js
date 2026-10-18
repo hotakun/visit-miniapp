@@ -1674,7 +1674,8 @@ async function newShopDays(event) {
   const rows = await fetchAll('customers', _.and([{ createdAt: _.gte(from), source: 'field' }, NOT_DELETED]),
     // ⭐ 2026-10-18 修（老板：「这下面四家最近拜访结果是待定再谈，你怎么都写成加入商城，误导」）：
     //   **判「是否加入商城」只看 mallKey / mallJoinedAt**（AGENTS 口径），不能拿 mallPending 反推。
-    { name: true, nameRaw: true, phone: true, address: true, mallCode: true, mallKey: true, mallJoinedAt: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
+    // ⭐ 2026-10-18 老板定：后台「每日新店」按手机端新店页的卡片排版 → 一并取照片/区域/商圈。
+    { name: true, nameRaw: true, phone: true, address: true, district: true, bizCircle: true, photos: true, mallCode: true, mallKey: true, mallJoinedAt: true, mallPending: true, createdByName: true, createdAt: true }).catch(() => []);
   const m = {}; days.forEach(d => { m[d] = { day: d, n: 0, pending: 0, rows: [] }; });
   (rows || []).forEach(c => {
     const d = new Date((Number(c.createdAt) || 0) + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -1684,7 +1685,14 @@ async function newShopDays(event) {
       customerId: c._id, customerName: c.name || c.nameRaw || '', phone: c.phone || '',
       address: c.address || '', mallCode: c.mallCode || '', mallPending: !!c.mallPending,
       joined: !!(c.mallKey || c.mallJoinedAt),   // ⭐ 已入商城的唯一判据
-      byName: c.createdByName || '', at: Number(c.createdAt) || 0
+      byName: c.createdByName || '', at: Number(c.createdAt) || 0,
+      area: c.district || '', bizCircle: c.bizCircle || '',
+      // 照片两种格式：字符串 / {fileID,thumbID} → 统一取缩略图（后台再换临时 URL）
+      photo: (function () {
+        const p = Array.isArray(c.photos) ? c.photos[0] : null;
+        if (!p) return '';
+        return (p && typeof p === 'object') ? (p.thumbID || p.fileID || '') : String(p || '');
+      })()
     });
   });
   days.forEach(d => m[d].rows.sort((a, b) => (b.at || 0) - (a.at || 0)));
