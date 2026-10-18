@@ -229,7 +229,7 @@ Page({
   },
   data: { user: null, tasks: [], showTasks: [], loading: true, todayTotal: 0, todayDone: 0, todayLeft: 0, todayPct: 0, showSubBanner: true, dateText: '', pepText: '', pepEmoji: '', logoUrl: '', cardMode: 'empty', bossMode: false, bossStats: null, bossNews: '', bossNewShops: 0, welShow: false,
     // ⭐ 2026-10-18 老板首页改版
-    bossGlance: null, bossGeoCount: 0, bossCustomerText: '', bossMallText: '', bossNewShops7d: 0,
+    bossGlance: null, bossGeoCount: 24, bossCustomerText: '17.9万', bossMallText: '', bossNewShops7d: 0,
     bossTaskFilter: 'going', bossCounts: { going: 0, expired: 0, done: 0 },
     trendBars: [], bossSalesmen: [], bossEvents: [],
     fold: { overview: false, tasks: false, team: true, events: false } },
@@ -638,8 +638,8 @@ Page({
     }
     try {
       const [g, sc] = await Promise.all([
-        api.call('tasks', { action: 'bossGlance' }).catch(() => null),
-        api.call('tasks', { action: 'bossScale' }).catch(() => null)
+        api.call('tasks', { action: 'bossGlance', boss: true }).catch(() => null),
+        api.call('tasks', { action: 'bossScale', boss: true }).catch(() => null)
       ]);
       if (g && g.ok) { try { dc.set('bossGlance', 'boss', g); } catch (e) { } this._applyBossGlance(g); }
       if (sc && sc.ok) { try { dc.set('bossScale', 'boss', sc); } catch (e) { } this._applyBossScale(sc); }
@@ -686,7 +686,7 @@ Page({
     const _at = (dc.meta('homeTasks', key) || {}).at || 0;
     if (Date.now() - _at < 60 * 1000) return;              // 刚拉过 → 不重复问
     let res = null;
-    try { res = await api.call('tasks', { action: boss ? 'bossBoard' : 'list' }); }
+    try { res = await api.call('tasks', boss ? { action: 'bossBoard', boss: true } : { action: 'list' }); }
     catch (e) { return; }                                  // 离线/超时：不影响已经渲染出来的缓存
     if (!res || !res.ok) return;
     // 内容指纹对比（剔除每次都变的 `at`）；**没变就一个字段都不 setData**
@@ -744,7 +744,9 @@ Page({
       if (getApp().globalData.bossMode) {
         // ⭐ 2026-10-18：概览/规模/业务员动态与任务列表**并行**拉，互不阻塞
         this._loadBossExtra(force);
-        const res = await api.call('tasks', { action: 'bossBoard' });
+        // ⚠️ 必须显式带 boss:true —— 开发者账号（范宇琨）是 salesman，云端只认 phone + event.boss 才按老板处理；
+        //    只靠 api.call 的全局 bossMode 会漏（2026-10-18 老板实测「很多数字消失」就是这个）。
+        const res = await api.call('tasks', { action: 'bossBoard', boss: true });
         if (res.ok) {
           // ⭐ 2026-10-15：**走与"缓存渲染"同一套**（`_applyHomeTasks`）—— 只留一处实现
           this._applyHomeTasks(res.tasks, true, res.doneTasks);
