@@ -720,7 +720,12 @@ Page({
       if (au.length) {
         let urls2 = [];
         try { const r2 = await wx.cloud.getTempFileURL({ fileList: au.map(a => a.fileID) }); urls2 = (r2.fileList || []).map(x => x.tempFileURL); } catch (e) { /* 同上 */ }
-        recs = au.map((a, i) => ({ id: 'er' + i, path: urls2[i] || '', ext: '.mp3', sec: Number(a.duration) || 0, text: a.text || '', transcribe: false, up: true, fileID: a.fileID, trStatus: 'done' }));
+        recs = au.map((a, i) => {
+          // ⚠️ 兼容旧数据存毫秒：单条录音上限 600 秒，>1000 视为毫秒
+          const raw = Number(a.duration) || 0;
+          const sec = raw > 1000 ? Math.round(raw / 1000) : raw;
+          return { id: 'er' + i, path: urls2[i] || '', ext: '.mp3', sec: sec, text: a.text || '', transcribe: false, up: true, fileID: a.fileID, trStatus: 'done' };
+        });
       }
       wx.hideLoading();
       this.setData({
@@ -731,6 +736,9 @@ Page({
       });
       this.t0 = 0;   // 编辑模式不计时
       this._refreshSlots();   // 摆好剩余空框（与已有照片呼应）
+      // ⭐ 2026-10-18 老板反馈「有录音却显示 0/6、合计 00:00」：
+      //   编辑模式加载完录音后漏了这一步 —— 只渲染了录音条，段数/合计还是初始值。
+      this._refreshRecMeta(recs);
     } catch (e) {
       wx.hideLoading();
       console.error('[visit] 编辑模式加载失败', e);

@@ -269,13 +269,13 @@
 
 /* ===================== 拜访历史里的现场证据（录音 / 转写 / 照片） ===================== */
 .hrec { display: flex; align-items: center; gap: 9px; margin-top: 9px; padding: 8px 10px; border-radius: 10px;
-  background: #FFF8F3; border: 1px solid #F7E4D8; }
+  background: #F1FBF4; border: 1px solid #D5EEDD; }
 .hplay { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #FF7A3D, var(--primary)); box-shadow: 0 3px 8px rgba(245,83,28,.3); }
-.hrec-t { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--primary-deep); }
-.hrec-bar { flex: 1; min-width: 0; height: 4px; border-radius: 99px; background: #F4E4DB; overflow: hidden; }
-.hrec-i { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #FFB08A, var(--primary)); }
+  background: linear-gradient(135deg, #4ADE80, #16A34A); box-shadow: 0 3px 8px rgba(22,163,74,.3); }
+.hrec-t { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: #1F7A43; }
+.hrec-bar { flex: 1; min-width: 0; height: 4px; border-radius: 99px; background: #D8EEDF; overflow: hidden; }
+.hrec-i { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #86EFAC, #16A34A); }
 .htrans { margin-top: 8px; padding: 9px 10px; border-radius: 10px; background: #FBFAF9; border: 1px dashed #E6E9EF; }
 .htrans-h { font-size: 11px; font-weight: 700; color: var(--primary-deep); margin-bottom: 4px; }
 .htrans-b { font-size: 12.5px; color: #4A5360; line-height: 1.65; }
