@@ -11,6 +11,7 @@
 //   ⚠️ 缓存键用 `myshopsCache`（**不能**用老板端的 `newshopsCache`，否则两边数据串了）。
 //   ⚠️ 改 newshops.js 的逻辑时，记得同步这里（老板要的就是"两边一样"）。
 const api = require('../../utils/api.js');
+const { dayCn } = require('../../utils/date');
 const app = getApp();
 const CACHE_KEY = 'myshopsCache';      // 本地缓存：{ shops: [...], maxAt, syncedAt }
 
@@ -168,12 +169,4 @@ Page({
 });
 
 // 时间戳 / 日期串 → '10月12日'（分组标题用；认不出来给"未填日期"）
-function dayCn(at) {
-  if (!at) return '(未填日期)';
-  const s = String(at).trim();
-  let d;
-  if (/^\d{10,}$/.test(s)) { const n = Number(s); d = new Date(n > 1e12 ? n : n * 1000); }
-  else d = new Date(s.replace(/-/g, '/'));
-  if (!d || isNaN(d.getTime())) return '(未填日期)';
-  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
-}
+

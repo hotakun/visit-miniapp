@@ -30,6 +30,7 @@
 //   ≤6 段、单条上限跟后台「拜访录音上限」档位走（180/300/600，**不写死**）、**合计 30 分钟硬封顶**、
 //   每段可勾「转文字」（走 transcribe 云函数的 fileIDs 分支，跟「记事」一样**不依赖 visitId**）。
 const api = require('../../utils/api');
+const { splitDishes } = require('../../utils/dish');
 const media = require('../../utils/media');
 const WORDS = require('../../utils/newshop_words');
 // ⭐ 自绘三级滚轮的行高（2026-10-02 老板定 34px）—— **必须与 newshop.wxss 里 .pk-i 的 height 一致**：
@@ -65,12 +66,7 @@ const STEP_NAMES = ['定位', '信息', '品类', '证据'];
 
 // 招牌菜：自由输入 → 数组。用「、，；,;」和换行拆开，去空白、去重
 //   （写进 customers.platManual.dishes，与「客户详情页 → 现场提报」同一个落点）
-function splitDishes(raw) {
-  return String(raw || '')
-    .split(/[、，,；;\n\r]+/)
-    .map(x => x.trim())
-    .filter((x, i, a) => x && a.indexOf(x) === i);
-}
+
 // 三个点位的图标：**三张同款、只有颜色不同**
 //   ⚠️ 2026-09-29 老板反馈「手机定位的蓝点太小、GPS 的点有点大」——根因是三张图参数不一致：
 //      蓝点原来沿用项目自带的 locdot.png（实心圆占比小 + 白边粗 + 有浅色底），同尺寸下显得小。

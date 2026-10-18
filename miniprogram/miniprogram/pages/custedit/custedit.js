@@ -4,6 +4,7 @@
 //   · 保存 = tasks.correctCustomer，**直接生效**（老板拍板）+ 留痕（customer_corrections）
 //   ⚠️ 入口 = 客户详情页店名卡里那块 44×44（原「快速记事」，2026-10-10 改为「更正信息」）
 const api = require('../../utils/api');
+const { splitDishes } = require('../../utils/dish');
 const WORDS = require('../../utils/newshop_words');
 
 // ⚠️ 与 pages/newshop/newshop.js 同源（复制而来）：改那边时记得同步这里
@@ -11,13 +12,6 @@ const AREA_LIST = ['永康市', '金东区', '婺城区', '武义县', '浦江�
 const HOUR_LIST = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0') + ':00');
 
 // 招牌菜：自由输入，「、，；」隔开 → 实时拆成数组（与 newshop 同款）
-function splitDishes(raw) {
-  return String(raw || '')
-    .split(/[、，,；;\n\r]+/)
-    .map(x => x.trim())
-    .filter((x, i, a) => x && a.indexOf(x) === i);
-}
-
 Page({
   data: {
     cid: '', busy: false,
