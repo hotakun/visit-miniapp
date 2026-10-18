@@ -7397,7 +7397,7 @@ async function cdGeoDetect() {
   try {
     const _catBox = document.querySelector('#custModal [data-cdfield="cat"]');
     _catCur = _catBox ? String(_catBox.dataset.raw || '').trim() : '';
-    if (_cat && _catBox && !_catCur) {
+    if (_cat && _catBox) {
       const s1 = $('cdCat1'), s2 = $('cdCat2'), s3 = $('cdCat3');
       if (s1 && s2 && s3) {
         const c1 = Object.keys(CAT_WORDS), i1 = c1.indexOf(_cat.big);
@@ -7420,7 +7420,7 @@ async function cdGeoDetect() {
   alert('📍 商圈检测完成（参考 ' + r.hit + ' 家 · 半径 ' + (r.radius || 100) + ' 米' +
     (r.radius === 500 ? '；100 米内不足 3 家，已扩到 500 米' : '') + '）\n\n' +
     '区域：' + (r.area || '—') + '\n商圈：' + (r.bizCircle || '—') + '\n' +
-    (_cat ? '\n品类建议：' + _cat.big + ' · ' + _cat.mid + ' · ' + _cat.small + (_catFilled ? '（已填入）' : (_catCur ? '（当前已有分类，未覆盖）' : '')) + '\n' : '') +
+    (_cat ? '\n品类建议：' + _cat.big + ' · ' + _cat.mid + ' · ' + _cat.small + (_catFilled ? (_catCur ? '（已覆盖原分类，可手改）' : '（已填入，可手改）') : '') + '\n' : '') +
     (candTxt ? '\n其他候选（按票数）：\n' + candTxt + '\n' : '') +
     '\n已填进上面的「区域 / 商圈 / 品类」—— 不对可以手改，确认无误点右上角「💾 保存」生效。');
 }
