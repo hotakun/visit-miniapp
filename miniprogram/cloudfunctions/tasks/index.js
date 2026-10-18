@@ -360,7 +360,7 @@ const NAME_SUSPECT = 0.72;
 
 // ⭐ 代码版本戳：**改这个云函数时顺手 +1**，用来判断"云端跑的是不是最新代码"
 //   （老板报"防重没反应"排查用：调 selfCheck 一看 ver 就知道有没有重传）
-const CODE_VER = '2026-10-18-1300';   // 1300=老板首页改版（bossGlance/bossScale；客户总数/区域数量固定 17.9万/24，不再全库 count）
+const CODE_VER = '2026-10-18-1400';   // 1400=老板首页数字收口（命中缓存也加载 bossGlance/bossScale；今日完成/覆盖客户按今日实际拜访）
 
 // ⭐⭐ 免鉴权自检（排查"防重检测没反应"专用；**只读，不写任何数据**）
 //   入参（全可选）：{ lat, lng, name, phone, radius, excludeId }

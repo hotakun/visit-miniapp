@@ -636,6 +636,10 @@ Page({
       const sc = dc.get('bossScale', 'boss');
       if (sc) this._applyBossScale(sc);
     }
+    // ⭐ 2026-10-18：60 秒节流 —— 连续进出首页不重复问云端（下拉刷新 force=true 绕过）。
+    //   原来这条只在「无 homeTasks 缓存」时才走，命中缓存就永远不拉 → 趋势/商城客户空。
+    if (!force && Date.now() - (this._bossExtraAt || 0) < 60000) return;
+    this._bossExtraAt = Date.now();
     try {
       const [g, sc] = await Promise.all([
         api.call('tasks', { action: 'bossGlance', boss: true }).catch(() => null),
@@ -732,7 +736,7 @@ Page({
       if (hit && hit.tasks && hit.tasks.length) {
         this._applyHomeTasks(hit.tasks, _boss, hit.doneTasks);
         // ⚠️ 老板模式的统计卡不在 `_applyHomeTasks` 里（它只做任务列表），这里补上
-        if (_boss) { this.setData({ bossStats: hit.stats || null }); this._applyBossNewShops(); }
+        if (_boss) { this.setData({ bossStats: hit.stats || null }); this._applyBossNewShops(); this._loadBossExtra(force); }
         this.setData({ loading: false });
         // ⭐⭐ 2026-10-14 老板定（与客户详情页同一套）：**缓存先渲染 → 后台静默更新**。
         //   ⚠️ 原来这里是直接 `return`（2 小时内不再问云端）→ 后果是
