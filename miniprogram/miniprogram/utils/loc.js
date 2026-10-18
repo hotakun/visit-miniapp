@@ -128,7 +128,7 @@ function calm(opts) {
   });
 }
 
-module.exports = { getCached, setCache, getOne, calm, startForeground, subscribe, latest, startBackground, stopBackground, beacon };
+module.exports = { getCached, setCache, getOne, calm, startForeground, subscribe, latest, startBackground, stopBackground, beacon, haversineM };
 
 // ================= 持续定位总线（2026-09-08 M1 定位升级） =================
 // 基于 wx.startLocationUpdate + wx.onLocationChange 的位置流；

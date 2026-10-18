@@ -232,7 +232,7 @@ Page({
         loc.setCache(r.latitude, r.longitude); // 全局缓存：提交拜访弹窗直接复用最近坐标
         const newMap = {};
         this.allCustomers.forEach(c => {
-          if (c.lat && c.lng) newMap[c._id] = Math.round(haversine(r.latitude, r.longitude, c.lat, c.lng));
+          if (c.lat && c.lng) newMap[c._id] = Math.round(loc.haversineM(r.latitude, r.longitude, c.lat, c.lng));
         });
         // 指纹对比：只 setData 距离文案发生变化的卡片（无变化零重绘）
         const list = this.data.showCustomers || [];
@@ -413,9 +413,3 @@ Page({
   }
 });
 
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371000, rad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}

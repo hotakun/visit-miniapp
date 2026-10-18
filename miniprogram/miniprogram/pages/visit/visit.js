@@ -112,7 +112,7 @@ Page({
     wx.getLocation({
       type: 'gcj02',
       success: (r) => {
-        const d = Math.round(haversine(r.latitude, r.longitude, Number(c.lat), Number(c.lng)));
+        const d = Math.round(loc.haversineM(r.latitude, r.longitude, Number(c.lat), Number(c.lng)));
         // ⚠️ 超过 1 公里就显示公里：真机实测出现过「距店 93078 米」这种（在外地测试时常见），读着费劲
         const txt = !isFinite(d) ? ''
           : (d >= 1000 ? ('距店 ' + (d / 1000).toFixed(d >= 10000 ? 0 : 1) + ' 公里') : ('距店 ' + d + ' 米'));
@@ -835,7 +835,7 @@ Page({
   // 距离文案：客户无坐标 → '—'
   fmtDist(lat, lng, c) {
     if (!lat || !lng || !c || !c.lat || !c.lng) return '—';
-    const d = haversine(lat, lng, c.lat, c.lng);
+    const d = loc.haversineM(lat, lng, c.lat, c.lng);
     return '距客户 ' + (d < 1000 ? Math.round(d) + ' 米' : (d / 1000).toFixed(1) + ' 公里');
   },
   // 距离行左侧图标：可多次点击 → 收敛精确定位；成功刷新距离+恢复图标；失败保持原显示 + 6 秒倒计时冷却
@@ -1074,9 +1074,3 @@ Page({
   }
 });
 
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371000, rad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}

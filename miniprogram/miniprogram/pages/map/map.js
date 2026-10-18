@@ -163,7 +163,7 @@ Page({
     const plan = (task && task.dayPlan || []).find(p => p.day === day);
     const route = plan && plan.route;
     const on = !!(route && Array.isArray(route.pts) && route.pts.length >= 2
-      && haversine(Number(route.pts[0][0]), Number(route.pts[0][1]), WH.lat, WH.lng) < 50);
+      && loc.haversineM(Number(route.pts[0][0]), Number(route.pts[0][1]), WH.lat, WH.lng) < 50);
     this.setData({ whStarOn: on });
   },
 
@@ -262,7 +262,7 @@ Page({
       starPt = { lat: WH.lat, lng: WH.lng };
     } else if (route && Array.isArray(route.pts) && route.pts.length >= 2) {
       const sp = route.pts[0];
-      if (sp && sp.length >= 2 && haversine(Number(sp[0]), Number(sp[1]), WH.lat, WH.lng) < 50) {
+      if (sp && sp.length >= 2 && loc.haversineM(Number(sp[0]), Number(sp[1]), WH.lat, WH.lng) < 50) {
         starPt = { lat: Number(sp[0]), lng: Number(sp[1]) };
       }
     }
@@ -297,7 +297,7 @@ Page({
   fmtDist(c) {
     const me = this._me;
     if (!me || !me.lat || !c.lat) return '';
-    const m = haversine(me.lat, me.lng, c.lat, c.lng); // haversine 返回米
+    const m = loc.haversineM(me.lat, me.lng, c.lat, c.lng); // haversine 返回米
     return m < 1000 ? Math.round(m) + ' 米' : (m / 1000).toFixed(1) + ' 公里';
   },
   fmtSelDist() {
@@ -501,9 +501,3 @@ Page({
   }
 });
 
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371000, rad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
