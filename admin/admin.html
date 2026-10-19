@@ -9219,15 +9219,15 @@ function mpRender() {
           //   · 缺坐标无法判断 → 不推荐，两个都正常显示。
           const recChain = (c.kind === 'chain');
           const recSub = (c.kind === 'sub');
-          // ⭐ 2026-10-19 老板定：**只有相距 ≤10 米才显示「合并为主副店」**（离远了根本不可能是同一家）
-          const canMerge = (c.dist != null && Number(c.dist) <= 10);
+          // ⭐ 2026-10-19 老板定：**只有相距 ≤30 米才显示「合并为主副店」**（离远了根本不可能是同一家）
+          const canMerge = (c.dist != null && Number(c.dist) <= 30);
           const right = isRel
             ? '<div style="font-size:11px;color:' + (recChain ? '#C2561B' : recSub ? '#12A150' : '#B77400') +
               ';flex:none;padding:0 6px;white-space:nowrap">' +
               (recChain ? '推荐：连锁分店 ↓' : recSub ? '推荐：主副店 ↓' : '请选择 ↓') + '</div>'
             : '<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex:none">' +
                 '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button>' +
-                (canMerge ? '<button class="btn ghost" style="height:22px;font-size:11px;padding:0 7px" title="相距 ≤10 米才显示；地址/坐标/店名接近但编号不同时，用这个合并为主副店" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🔗 合并为主副店</button>' : '') +
+                (canMerge ? '<button class="btn ghost" style="height:22px;font-size:11px;padding:0 7px" title="相距 ≤30 米才显示；地址/坐标/店名接近但编号不同时，用这个合并为主副店" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🔗 合并为主副店</button>' : '') +
               '</div>';
           const row = '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
             '<div class="n">' + esc(c.name) + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
@@ -9849,8 +9849,8 @@ function mpCandRow(key, c, extra) {
     '<div class="why">' + (extra || '') + (c.lat ? ' · <span style="color:#12A150">✓ 有坐标</span>' : ' · <span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
     '<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex:none">' +
       '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + key + '\',\'' + c.id + '\')">✓ 就是这家</button>' +
-      ((c.dist != null && Number(c.dist) <= 10)
-        ? '<button class="btn ghost" style="height:22px;font-size:11px;padding:0 7px" title="相距 ≤10 米才显示；地址/坐标/店名接近但编号不同时，用这个合并为主副店" onclick="mpSubMerge(\'' + key + '\',\'' + c.id + '\')">🔗 合并为主副店</button>'
+      ((c.dist != null && Number(c.dist) <= 30)
+        ? '<button class="btn ghost" style="height:22px;font-size:11px;padding:0 7px" title="相距 ≤30 米才显示；地址/坐标/店名接近但编号不同时，用这个合并为主副店" onclick="mpSubMerge(\'' + key + '\',\'' + c.id + '\')">🔗 合并为主副店</button>'
         : '') +
     '</div></div>';
 }
