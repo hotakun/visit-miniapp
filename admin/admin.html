@@ -9209,7 +9209,10 @@ function mpRender() {
             ? '<div style="font-size:11px;color:' + (recChain ? '#C2561B' : recSub ? '#12A150' : '#B77400') +
               ';flex:none;padding:0 6px;white-space:nowrap">' +
               (recChain ? '推荐：连锁分店 ↓' : recSub ? '推荐：主副店 ↓' : '请选择 ↓') + '</div>'
-            : '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button>';
+            : '<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex:none">' +
+                '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + k + '\',\'' + c.id + '\')">✓ 就是这家</button>' +
+                '<button class="btn ghost" style="height:22px;font-size:11px;padding:0 7px" title="地址/坐标/店名接近但编号不同时，用这个合并为主副店" onclick="mpSubMerge(\'' + k + '\',\'' + c.id + '\')">🔗 合并为主副店</button>' +
+              '</div>';
           const row = '<div class="mp-cand' + (ci === 0 ? ' first' : '') + '"><div class="mid">' +
             '<div class="n">' + esc(c.name) + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
             '<div class="ln">' + esc(c.region || '') + ' · ' + esc(c.address || '') + ' · ' + esc(c.phone || '') + '</div>' +
@@ -9314,7 +9317,7 @@ function mpSubPick(mallKey, customerId) {
         '<div style="font-weight:800;font-size:14px;margin-bottom:4px">合并为主副店 —— 选择主店和字段</div>' +
         '<div style="font-size:11.5px;color:#7A8490;margin-bottom:10px;line-height:1.6">主店决定客户管理里的显示与拜访归属；下面每个字段都可以单独选「用哪边」。<br>' +
           '<b style="color:#12A150">拜访记录、门店照片、录音、批次、订单会自动共用，不需要选择。</b><br>' +
-          '两家编号相同，以后导入的销售订单和明细订单会自动合并显示。</div>' +
+          '两家编号可能不同（同地址 / 同坐标 / 店名近似也可以合并），以后导入的销售订单和明细订单会按主副店自动合并显示。</div>' +
         opt('sys', '主店 · 系统内：' + esc(SYS.name || '（系统内这条）'),
           esc((SYS.address || '') + (SYS.phone ? ' · ' + SYS.phone : '')), mainSide === 'sys',
           '已有拜访记录 / 门店照片 / 批次归属') +
@@ -9378,6 +9381,7 @@ async function mpSubMerge(mallKey, customerId) {
   const subName = (side === 'mall') ? sysName : mallName;
   const r = await api('mergeMallSub', {
     customerId: customerId, mallKey: mallKey, mainSide: side, picks: pick.picks,
+    allowDiffCode: true,
     row: { mallKey: mallKey, mallCode: row.mall_code || '', name: row.name || '', phone: row.phone || '',
            address: row.address || '', lat: row.lat || 0, lng: row.lng || 0 }
   });
@@ -9399,7 +9403,7 @@ async function mpSubMerge(mallKey, customerId) {
       }
     }
   } catch (e) { /* 静默 */ }
-  alert('✅ 已合并为主副店：' + mainName + '\n副店：' + subName + '\n\n两家的订单与明细按同编号自动合并显示。');
+  alert('✅ 已合并为主副店：' + mainName + '\n副店：' + subName + '\n\n两家的订单与明细按主副店自动合并显示。');
   await mpLoad(true);
 }
 // 连锁分店：打开「新建客户」表单，并把「另一家」带进去（建成后互标同一老板）
@@ -9831,7 +9835,10 @@ function mpCandRow(key, c, extra) {
     '<div class="n">' + esc(c.name || '') + (c.code ? ' <em>' + esc(c.code) + '</em>' : '') + '</div>' +
     '<div class="ln">' + esc(c.region || '') + ' · ' + esc(c.address || '') + ' · ' + esc(c.phone || '') + '</div>' +
     '<div class="why">' + (extra || '') + (c.lat ? ' · <span style="color:#12A150">✓ 有坐标</span>' : ' · <span style="color:#D64545">⚠ 没坐标</span>') + '</div></div>' +
-    '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + key + '\',\'' + c.id + '\')">✓ 就是这家</button></div>';
+    '<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex:none">' +
+      '<button class="btn" style="height:26px;font-size:12px;color:#12A150;border-color:#BFE7CF" onclick="mpConfirm(\'' + key + '\',\'' + c.id + '\')">✓ 就是这家</button>' +
+      '<button class="btn ghost" style="height:22px;font-size:11px;padding:0 7px" title="地址/坐标/店名接近但编号不同时，用这个合并为主副店" onclick="mpSubMerge(\'' + key + '\',\'' + c.id + '\')">🔗 合并为主副店</button>' +
+    '</div></div>';
 }
 function loadNewShops() {
   const cnt = $('nsCount');

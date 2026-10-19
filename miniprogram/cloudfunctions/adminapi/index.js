@@ -4709,7 +4709,10 @@ async function mergeMallSub(event) {
   const mainCode = String(c.mallCode || '').trim().toLowerCase();
   const subCode = String(m.mallCode || '').trim().toLowerCase();
   if (!mainCode) return { ok: false, code: 'NO_MAIN_CODE', msg: '主店没有客户编号，不能作为主店' };
-  if (subCode && mainCode !== subCode) return { ok: false, code: 'CODE_MISMATCH', msg: '编号不同，不能作为副店合并（请用「就是这家」）' };
+  // ⭐ 2026-10-19 老板定：地址/经纬度相同、店名近似但**编号不同**也可以合并为主副店（如 c737 ↔ a383）。
+  //   前端在候选行点「合并为主副店」时传 allowDiffCode=true；默认仍拦（老入口行为不变）。
+  const allowDiffCode = !!(event && event.allowDiffCode);
+  if (subCode && mainCode !== subCode && !allowDiffCode) return { ok: false, code: 'CODE_MISMATCH', msg: '编号不同，不能作为副店合并（请用「就是这家」）' };
   const now = Date.now();
   // ⭐⭐ 2026-10-18 老板定：合并为主副店时**由老板选择哪家是主店**。
   //   · 'sys'（默认）= 系统里已有档案为主店，本次导入这条作为副店；
