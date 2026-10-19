@@ -290,21 +290,22 @@ function serialToDate(v) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
-// ⭐⭐ 2026-10-18 老板定：导入文件有**两种**（带经纬度列 / 不带），解析端要**自动适应**。
-//   把「28.907732,119.969215」这种一列值拆成 { lat, lng }。
-//   ⚠️ 两种写法都要吃：我们导出的格式是「**纬度,经度**」；但商城/腾讯地图习惯是「经度,纬度」。
-//      靠数值判断：**>90 的一定是经度**（纬度不可能超过 90）→ 两种都能正确归类。
-//   ⚠️ 解析不出来（空/只有一个数/超范围）→ 返回 null → 这条就没有坐标，后面流程一律跳过（= 老行为）。
+// ⭐⭐ 2026-10-19 老板定：中国经度 **73~135**、纬度 **4~53**，两段**完全不重叠**（纬度上限 53 < 经度下限 73）
+//   → 一个数落在哪个范围就一定是哪个，**不需要用 90 去猜**；「纬度,经度」「经度,纬度」两种顺序都能唯一对上。
+//   ⚠️ 留 0.5~1° 容差（曾母暗沙约 3.9°N、南海最南约 3.5°N）。
+//   ⚠️ 两个数都在同一段（如 28,30 都像纬度 / 120,110 都像经度）→ 无法判断，**不猜**，返回 null。
+const CN_LAT_MIN = 3.5, CN_LAT_MAX = 54, CN_LNG_MIN = 72, CN_LNG_MAX = 136;
+function isCnLat(v) { return Number.isFinite(v) && v >= CN_LAT_MIN && v <= CN_LAT_MAX; }
+function isCnLng(v) { return Number.isFinite(v) && v >= CN_LNG_MIN && v <= CN_LNG_MAX; }
 function parseLatLng(s) {
   const parts = String(s == null ? '' : s).split(/[,，;；|]/).map(x => Number(String(x).trim()))
     .filter(x => isFinite(x) && x !== 0);      // 0 不是有效坐标
   if (parts.length < 2) return null;
   const a = parts[0], b = parts[1];
   let lat, lng;
-  if (Math.abs(a) <= 90 && Math.abs(b) > 90) { lat = a; lng = b; }        // 纬度,经度
-  else if (Math.abs(a) > 90 && Math.abs(b) <= 90) { lat = b; lng = a; }   // 经度,纬度
-  else { lat = a; lng = b; }                                             // 都在范围内 → 按「纬度,经度」（我们自己导出的格式）
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (isCnLat(a) && isCnLng(b)) { lat = a; lng = b; }        // 纬度,经度
+  else if (isCnLng(a) && isCnLat(b)) { lat = b; lng = a; }   // 经度,纬度
+  else return null;                                          // 不在中国范围 / 两个同段 → 不猜
   return { lat: lat, lng: lng };
 }
 
@@ -365,13 +366,21 @@ function parseMallXls(b64) {
         const ll = parseLatLng(v);
         if (ll) { item.lat = ll.lat; item.lng = ll.lng; }
       } else if (key === 'lat' || key === 'lng') {
-        // 「纬度」「经度」各一列的情况 → 直接取数字（超出范围就丢）
+        // 「纬度」「经度」各一列 → 先取数字，行末再按中国范围判序/纠正（表头也可能写反）
         const n = Number(v);
-        if (isFinite(n) && n !== 0 && Math.abs(n) <= (key === 'lat' ? 90 : 180)) item[key] = n;
+        if (isFinite(n) && n !== 0) item[key] = n;
       } else {
         item[key] = v;
       }
     });
+    // ⭐ 2026-10-19 老板定：两列表头也可能写反 —— 按中国范围再判一次（纬度 4~53 / 经度 73~135）。
+    //   只保留能唯一对上的；对不上就置空（不猜，免得导到北极圈/海里）。
+    if (item.lat != null || item.lng != null) {
+      const a = item.lat, b = item.lng;
+      if (isCnLat(a) && isCnLng(b)) { /* 正常：纬度,经度 */ }
+      else if (isCnLng(a) && isCnLat(b)) { item.lat = b; item.lng = a; }
+      else { item.lat = null; item.lng = null; }
+    }
     if (item.name) out.push(item);
   }
   return { ok: true, headers: head, total: out.length, rows: out, preview: out.slice(0, 5) };

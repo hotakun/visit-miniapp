@@ -8567,7 +8567,7 @@ function cdGeoAsk() {
   const c = (cdCur && cdCur.customer) || {};
   const la = parseFloat(($('cdGeoLat') || {}).value), ln = parseFloat(($('cdGeoLng') || {}).value);
   if (!isFinite(la) || !isFinite(ln)) { cdGeoNoteSet('纬度 / 经度都要填数字（例：28.917784）', true); return; }
-  if (la < -90 || la > 90 || ln < -180 || ln > 180) { cdGeoNoteSet('坐标超出范围：纬度 -90 ~ 90、经度 -180 ~ 180', true); return; }
+  if (!isCnLat(la) || !isCnLng(ln)) { cdGeoNoteSet('坐标不在中国范围：纬度 4~53、经度 73~135（纬度在前、经度在后）', true); return; }
   if (c.lat != null && c.lng != null && Math.abs(la - Number(c.lat)) < 1e-9 && Math.abs(ln - Number(c.lng)) < 1e-9) return; // 没改动：静默
   cdGeoPending = { lat: la, lng: ln };
   $('cdGeoOld').textContent = (c.lat != null && c.lng != null) ? (Number(c.lat).toFixed(6) + ', ' + Number(c.lng).toFixed(6)) : '—';
@@ -9067,6 +9067,20 @@ function mpStat() { return { p: _mpStat.pending || 0, a: _mpStat.paired || 0, c:
 function mpHasCoord(x) { return !!(Number(x && x.lat) && Number(x && x.lng)); }
 // 坐标 → 「纬度,经度」文本（没有 → 空串）。📍 输入经纬度面板、➕ 新建客户表单**共用这一个口径**
 //   —— 两处都预填，别各写一遍格式（写岔了就会出现"面板对、新建错"）。
+// ⭐ 2026-10-19 老板定：中国经度 **73~135**、纬度 **4~53**，两段不重叠（纬度上限 53 < 经度下限 73）
+//   → 一个数落在哪个范围就一定是哪个，**不再用 90 猜**；「纬度,经度」「经度,纬度」两种顺序都能唯一对上。
+//   ⚠️ 两个数在同一段（28,30 / 120,110）→ 无法判断，不猜，返回 null。
+const CN_LAT_MIN = 3.5, CN_LAT_MAX = 54, CN_LNG_MIN = 72, CN_LNG_MAX = 136;
+function isCnLat(v) { return isFinite(v) && v >= CN_LAT_MIN && v <= CN_LAT_MAX; }
+function isCnLng(v) { return isFinite(v) && v >= CN_LNG_MIN && v <= CN_LNG_MAX; }
+function parseLLText(s) {
+  const m = String(s || '').split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
+  if (m.length < 2) return null;
+  const a = m[0], b = m[1];
+  if (isCnLat(a) && isCnLng(b)) return { lat: a, lng: b };
+  if (isCnLng(a) && isCnLat(b)) return { lat: b, lng: a };
+  return null;
+}
 function mpLLText(x) {
   const la = Number(x && x.lat) || 0, ln = Number(x && x.lng) || 0;
   return (la && ln) ? (la.toFixed(6) + ',' + ln.toFixed(6)) : '';
@@ -9616,14 +9630,12 @@ function mpNewOpen(key, chainWith) {
 async function mpNewAutoDetect() {
   const f = _mpNewForm; if (!f) return;
   const key = _mpNewKey;
-  const m = String(f.ll || '').split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
+  const ll = parseLLText(f.ll);
   let area = '', biz = '', radius = 0;
-  if (m.length >= 2) {
-    let la = m[0], ln = m[1];
-    if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }
+  if (ll) {
     try {
       const loc = await ensureCustLocal();
-      const r = localGeoVote((loc && loc.points) || [], la, ln);
+      const r = localGeoVote((loc && loc.points) || [], ll.lat, ll.lng);
       if (r && r.hit) { area = r.area || ''; biz = r.bizCircle || ''; radius = r.radius || 0; }
     } catch (e) { /* 检测失败就留空，手填 */ }
   }
@@ -9687,7 +9699,7 @@ function mpNewPanel(key) {
     '<div><span style="color:#A8B0BB;display:inline-block;width:56px">电话</span><input id="mpnPhone" value="' + esc(f.phone || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:190px"></div>' +
     '<div><span style="color:#A8B0BB;display:inline-block;width:56px">地址</span><input id="mpnAddr" value="' + esc(f.address || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:330px"></div>' +
     '<div><span style="color:#F5531C;font-weight:800;display:inline-block;width:56px">经纬度*</span>' +
-    '<input id="mpnLL" placeholder="粘贴 纬度,经度（如 28.961303,120.181189）" value="' + esc(f.ll || '') + '" style="border:1px solid #F5531C;border-radius:7px;padding:3px 8px;width:250px"></div>' +
+    '<input id="mpnLL" placeholder="纬度,经度 或 经度,纬度（如 28.961303,120.181189）" value="' + esc(f.ll || '') + '" style="border:1px solid #F5531C;border-radius:7px;padding:3px 8px;width:250px"></div>' +
     '<div style="font-size:11.5px;color:#B77400;padding-left:56px">🔴 <b>必填</b> —— 没坐标 → 地图上没有点 → 业务员永远到不了这家</div>' +
     '<div><span style="color:#A8B0BB;display:inline-block;width:56px">区域</span>' +
     '<input id="mpnRegion" value="' + esc(f.region || '') + '" style="border:1px solid #E3E8EF;border-radius:7px;padding:3px 8px;width:190px"></div>' +
@@ -9721,10 +9733,9 @@ async function mpNewSave() {
     f.cat1 = _v1; f.cat2 = _v2; f.cat3 = _c3[Number(_s3.value)] || '';
   }
   if (!f.name) { _mpNewMsg = '⚠️ 店名不能空'; mpRender(); return; }
-  const m = f.ll.split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
-  if (m.length < 2) { _mpNewMsg = '⚠️ 经纬度必填（格式：纬度,经度）'; mpRender(); return; }
-  let la = m[0], ln = m[1];
-  if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }
+  const ll = parseLLText(f.ll);
+  if (!ll) { _mpNewMsg = '⚠️ 经纬度必填（纬度 4~53、经度 73~135；写成「纬度,经度」或「经度,纬度」都可以）'; mpRender(); return; }
+  const la = ll.lat, ln = ll.lng;
   // ⚠️ 只记账：状态 = created + 店名 + 坐标存到服务器那一行（云端一个字不动）
   // ⭐ 2026-10-18：连锁分店把「另一家」的 id 一起记进这一行的 `picks`（PG 已有这一列），
   //   点「确认并发送到云端」时再取出来传给 createMallCustomer → 两家互标「同一老板」。
@@ -9755,10 +9766,9 @@ function mpGeoOpen(key) {
 function mpSearchOpen(key) { _mpSearchKey = key; _mpSearchVal = ''; _mpSearchRes = null; _mpGeoKey = ''; _mpGeoRes = null; mpRender(); }
 async function mpGeoApply() {
   const v = String(($('mpGeoIn') || {}).value || '').trim();
-  const m = v.split(/[,，\s;；]+/).map(Number).filter(x => !isNaN(x));
-  if (m.length < 2) { alert('请粘贴两个数字：纬度,经度\n例：28.961303,120.181189'); return; }
-  let la = m[0], ln = m[1];
-  if (Math.abs(la) > 90 && Math.abs(ln) <= 90) { const t = la; la = ln; ln = t; }   // 兼容"经度,纬度"的顺序
+  const ll = parseLLText(v);
+  if (!ll) { alert('这两个数不像中国范围内的经纬度。\n纬度 4~53、经度 73~135；两种顺序都可以（纬度,经度 或 经度,纬度）。\n例：28.961303,120.181189'); return; }
+  const la = ll.lat, ln = ll.lng;
   _mpGeoVal = la.toFixed(6) + ',' + ln.toFixed(6);
   // ⭐ 2026-10-18：先确保本地全库真的在（缓存可能刚被作废 / 正在预热）——
   //   别在空数组上算完再报"附近 0 家"，那会让人以为系统里真没有店。
@@ -9809,7 +9819,7 @@ function mpGeoPanel(key) {
   const res = _mpGeoRes;
   return '<div style="margin-top:8px;padding:9px 11px;border:1px solid #FBE0CF;border-radius:9px;background:#FFFDFB">' +
     '<div style="font-size:12.5px;font-weight:800;margin-bottom:6px">📍 输入经纬度（给这条补坐标，再找它周边的店）</div>' +
-    '<input id="mpGeoIn" value="' + esc(_mpGeoVal) + '" placeholder="粘贴 纬度,经度（如 28.961303,120.181189）" style="border:1px solid #E3E8EF;border-radius:7px;padding:4px 9px;width:280px;font-size:12.5px">' +
+    '<input id="mpGeoIn" value="' + esc(_mpGeoVal) + '" placeholder="纬度,经度 或 经度,纬度（如 28.961303,120.181189）" style="border:1px solid #E3E8EF;border-radius:7px;padding:4px 9px;width:280px;font-size:12.5px">' +
     '<button class="btn p" style="height:26px;font-size:12px;margin-left:6px" onclick="mpGeoApply()">✓ 用这个坐标找附近</button>' +
     '<button class="btn" style="height:26px;font-size:12px;margin-left:6px" onclick="mpGeoOpen(\'\')">收起</button>' +
     (res ? ('<div style="margin-top:8px;font-size:12px;color:var(--sub)">附近 500 米内找到 <b>' + res.length + '</b> 家：</div>' +
