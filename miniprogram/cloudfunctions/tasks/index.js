@@ -54,6 +54,31 @@ async function bumpUsage(n) {
   } catch (e) { /* 统计失败不影响业务 */ }
 }
 
+// ⭐ 2026-10-19 老板定：老板首页「商城客户」→ 搜索页；店名 / 客户编号 / 手机号 / 地址 都能搜。
+//   ⚠️ 只读；结果最多 30 条，点一条进客户详情（前端必须带 ?id=）。
+async function searchCust(event) {
+  const kw = String((event && event.kw) || '').trim();
+  if (!kw) return { ok: true, rows: [] };
+  if (kw.length > 40) return { ok: false, code: 'BAD_KW', msg: '关键词太长' };
+  const re = db.RegExp({ regexp: kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: 'i' });
+  const res = await db.collection('customers').where(_.and([
+    { deleted: _.neq(true) },
+    _.or([{ name: re }, { nameRaw: re }, { phone: re }, { phone2: re },
+           { address: re }, { mallCode: re }, { code: re }])
+  ])).limit(30).get().catch(silentCatch('tasks·searchCust', { data: [] }));
+  const rows = (res.data || []).map(c => ({
+    _id: c._id,
+    name: c.nameRaw || c.name || '(未填店名)',
+    phone: c.phone || c.phone2 || '',
+    address: c.address || '',
+    mallCode: c.mallCode || c.code || '',
+    district: c.district || '',
+    bizCircle: c.bizCircle || '',
+    mallJoinedAt: c.mallJoinedAt || ''
+  }));
+  return { ok: true, rows };
+}
+
 exports.main = async (event) => {
   bumpUsage(1); // 2026-09-11 批 3：用量计数（每次调用 +1，攒批落库）
   const { OPENID } = cloud.getWXContext();
@@ -130,6 +155,8 @@ exports.main = async (event) => {
   //   一次返回一家客户在详情页要显示的全部内容（档案 + 订单摘要 + 最近20单明细 + 备注 + 拜访历史）。
   //   权限：**登录的业务员即可读** —— 客户档案本来就全公司共享（大家都要上门拜访）；
   //   写入类动作不在本次范围（后续再开）。
+  // ⭐ 2026-10-19 老板首页「商城客户」搜索（店名 / 编号 / 手机号 / 地址）
+  if (action === 'searchCust') return await searchCust(event);
   if (action === 'custDetail') return await custDetail(salesmanId, event, isBoss);
   // ⭐ 2026-09-27 新增：业务员给客户档案补**门店照片**（详情页三个相框，点空框现场拍 → 云存储 → 写档案）
   //   权限：登录业务员即可写（照片全公司共享，现场拍本就该业务员做）

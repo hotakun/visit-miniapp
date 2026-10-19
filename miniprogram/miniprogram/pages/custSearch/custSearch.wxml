@@ -1,0 +1,21 @@
+<view class="wrap">
+  <view class="bar">
+    <input class="ipt" value="{{kw}}" placeholder="店名 / 编号 / 手机号 / 地址" confirm-type="search" bindinput="onInput" bindconfirm="onSearch" />
+    <view class="go" bindtap="onSearch">搜索</view>
+  </view>
+  <view class="hint">店名 · 客户编号 · 手机号 · 地址</view>
+
+  <view wx:if="{{loading}}" class="tip">搜索中…</view>
+  <view wx:elif="{{err}}" class="tip err">{{err}}</view>
+  <view wx:elif="{{searched && !rows.length}}" class="tip">没搜到</view>
+  <view wx:elif="{{rows.length}}" class="list">
+    <view wx:for="{{rows}}" wx:key="_id" class="row" data-id="{{item._id}}" bindtap="open">
+      <view class="r1">
+        <text class="n">{{item.name}}</text>
+        <text wx:if="{{item.mallCode}}" class="code">{{item.mallCode}}</text>
+      </view>
+      <view class="r2">{{item.phone || '—'}} · {{item.address || '—'}}</view>
+    </view>
+  </view>
+  <view wx:else class="tip">输入关键词开始搜索</view>
+</view>

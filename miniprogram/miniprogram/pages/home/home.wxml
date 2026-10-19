@@ -37,7 +37,7 @@
   <view class="boss-stats" wx:if="{{bossMode}}">
     <view class="bs"><view class="bs-n">{{bossCustomerText || '—'}}</view><view class="bs-l">客户总数</view></view>
     <view class="bs"><view class="bs-n c-blue">{{bossGeoCount || '—'}}</view><view class="bs-l">区域数量</view></view>
-    <view class="bs"><view class="bs-n c-orange">{{bossMallText || '—'}}</view><view class="bs-l">商城客户</view></view>
+    <view class="bs" bindtap="goCustSearch"><view class="bs-n c-orange">{{bossMallText || '—'}}</view><view class="bs-l">商城客户</view></view>
     <view class="bs" bindtap="goNewShops"><view class="bs-n c-red">{{bossNewShops7d}}</view><view class="bs-l">本周新店</view></view>
   </view>
 

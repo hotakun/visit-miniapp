@@ -806,6 +806,7 @@ Page({
   },
   // ⭐⭐ 2026-10-12 老板定：点数字卡第 4 格「新店」→ 新店列表页（搜索 + 三种排列，点卡片进客户详情）
   goNewShops() { wx.navigateTo({ url: '/pages/newshops/newshops' }); },
+  goCustSearch() { wx.navigateTo({ url: '/pages/custSearch/custSearch' }); },
   goTodayTask() {
     const t = this.data.tasks.find(x => x.status !== 'done') || this.data.tasks[0];
     if (!t) return;

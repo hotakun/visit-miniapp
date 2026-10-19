@@ -18,7 +18,8 @@
     "pages/freevisit/freevisit",
     "pages/freevisit/map",
     "pages/coordfix/coordfix",
-    "pages/custedit/custedit"],
+    "pages/custedit/custedit",
+    "pages/custSearch/custSearch"],
   "window": {
     "navigationBarBackgroundColor": "#F5531C",
     "navigationBarTitleText": "聚火拜访",
