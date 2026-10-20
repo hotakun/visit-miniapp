@@ -413,7 +413,9 @@ Page({
     const dc = require('../../utils/detailCache');
     const _force = !!this._forceReload;
     this._forceReload = false;
-    if (!_force) {
+    // 2026-10-20 老板定：未注册用户看不了详情；没有本地登录用户时不读缓存（缓存只给已登录用户）。
+    const _hasLocalUser = !!((getApp() && getApp().globalData && getApp().globalData.user) || wx.getStorageSync('user'));
+    if (!_force && _hasLocalUser) {
       const hit = dc.get('custDetail', id);
       if (hit && hit.res) {
         try {
@@ -435,7 +437,9 @@ Page({
       const res = await api.call('tasks', { action: 'custDetail', customerId: id });
       // 把云函数返回的**原始错误**带出来（光看"加载失败"没法排查）
       if (!res || !res.ok) {
-        throw new Error('云函数返回：' + ((res && (res.msg || res.code)) || JSON.stringify(res || null)));
+        const _err = new Error('云函数返回：' + ((res && (res.msg || res.code)) || JSON.stringify(res || null)));
+        _err.code = (res && res.code) || '';
+        throw _err;
       }
       this._cust = res.customer || {};              // 原始档案（白名单后的）
 
@@ -482,6 +486,11 @@ Page({
     } catch (e) {
       // 2026-09-25 修：错误**直接显示在页面上**（原来只用 toast，会被 hideLoading 盖掉 → 只看到"一直加载中"，没法排查）
       const msg = (e && (e.errMsg || e.message)) || String(e);
+      // 2026-10-20 老板定：未注册 / 未登录用户点客户详情链接 → 只显示乱码错误，不返回任何详情
+      if ((e && e.code === 'NO_AUTH') || /NO_AUTH|未登录/.test(msg)) {
+        this.setData({ loadErr: 'ERR_0x5F3A: ������ 0x8007005A' });
+        return;
+      }
       this.setData({ loadErr: msg });
       console.error('[客户详情] 加载失败：', e);
     }
