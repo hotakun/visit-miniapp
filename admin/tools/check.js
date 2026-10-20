@@ -70,7 +70,7 @@ const CRLF_FILES = new Set([
 const MIXED_FILES = new Set([]);
 
 // 跳过这些目录（不体检）
-const SKIP_DIRS = new Set(['MapDownloader-2.0', 'design-demo','node_modules', '.git', 'voices', 'voice', 'cache', 'build', 'output', 'WebView2', 'TMP', '_scratch', 'versions', 'data', '销售数据']);
+const SKIP_DIRS = new Set(['MapDownloader-2.0', 'design-demo','node_modules', '.git', 'voices', 'voice', 'cache', 'build', 'output', 'WebView2', 'WebView2Runtime', 'TMP', '_scratch', 'versions', 'data', '销售数据']);
 
 const fails = [];
 const warns = [];
