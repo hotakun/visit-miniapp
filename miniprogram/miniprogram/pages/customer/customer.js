@@ -821,6 +821,11 @@ Page({
     wx.stopPullDownRefresh();
   },
   onShow() {
+    // ⭐ 2026-10-20 老板定：从客户详情链接首次打开（页面栈只有 1 层）时，隐藏微信原生「返回首页」小房子；
+    //   正常从任务/地图等进入（栈 > 1）保持原样。
+    try {
+      if (typeof wx.hideHomeButton === 'function' && getCurrentPages().length <= 1) wx.hideHomeButton();
+    } catch (e) { /* 低版本/非微信环境忽略 */ }
     this._loadNotes();
     // ⭐ 2026-10-10：从「编辑拜访记录」回来 → 重拉详情（铁律：改完必须真的刷新）
     if (wx.getStorageSync('custNeedRefresh')) {
