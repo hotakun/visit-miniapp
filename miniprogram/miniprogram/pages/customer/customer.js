@@ -348,6 +348,7 @@ Page({
     // 2026-09-25 改造：**初始为空** —— 真数据在 onLoad 里从 custDetail 取回后 setData 填入。
     // （原来写死 `d: D` 会让页面打开瞬间闪一下示例数据；wxml 也加了 wx:if="{{d}}" 兜住）
     d: null,
+    isGuest: false,   // ⭐ 2026-10-20：店家分享链接（未注册）只读模式
     loadErr: '',   // 加载失败原因（2026-09-25 加：直接显示在页面上，别只弹一个会被盖掉的 toast）
     // 地图标记 / 路线：初始为空，onLoad 拿到真坐标后用 _mkMarkers() 生成
     //（客户 = 橙针 60% 透明 + 常显店名气泡；「我」= 蓝点，只有定位成功才加）
@@ -388,19 +389,28 @@ Page({
     //   现在：**URL 没带 id 就明确报错**（入口必须传），**宁可报错也不猜**。
     const id = (query && (query.id || query.customerId)) || '';
     this._cid = id;
+    // 2026-10-20 老板定：店家点分享链接（未注册）→ 免注册只读详情；已注册用户仍走完整功能。
+    const _app0 = getApp();
+    const _logged0 = !!(_app0 && _app0.globalData && _app0.globalData.user);
+    const _share0 = String((query && query.share) || '');
+    this._guest = !!_share0 && !_logged0;
+    this._shareToken = _share0 || '';
+    this.setData({ isGuest: this._guest });
     // ⭐⭐ 2026-10-12 老板定（兜底）：**进"别的"客户详情页 → 把上一家的「拜访中」强行结束**
     //   判据：手机里存的"当前客户"（storage.curCustomer._id）**不是这家** = 上一家没正常收尾（漏网之鱼）。
     //   ⚠️ 同一家（从拜访页返回）**不调** —— 否则会把正在进行的拜访自己结束掉。
-    try {
-      const ccPrev = wx.getStorageSync('curCustomer') || {};
-      if (ccPrev._id && ccPrev._id !== id) api.call('visits', { action: 'endMyOngoing' }).catch(() => { /* 静默 */ });
-    } catch (e) { /* 静默 */ }
+    if (!this._guest) {
+      try {
+        const ccPrev = wx.getStorageSync('curCustomer') || {};
+        if (ccPrev._id && ccPrev._id !== id) api.call('visits', { action: 'endMyOngoing' }).catch(() => { /* 静默 */ });
+      } catch (e) { /* 静默 */ }
+    }
     this._taskId = (query && query.taskId) || '';   // 任务 id 同样只从 URL 来（storage 里的可能是上一家的）
     // ⭐ 2026-10-07 老板定：「我新加的店」的按钮改成「客户详情」→ 从这里进来时带 freeVisit=1。
     //   ⚠️ 必须在这里**清掉 taskId**：goVisit() 是 Object.assign **接力 storage 里的 curCustomer**，
     //      而 storage 里可能还留着上次任务拜访的 taskId → 点「开始拜访」会变成"任务拜访"
     //      （云函数会去查任务、校验客户在不在任务里 → 报错 / 串数据）。
-    if (query && query.freeVisit === '1') {
+    if (!this._guest && query && query.freeVisit === '1') {
       const ccFv = wx.getStorageSync('curCustomer') || {};
       wx.setStorageSync('curCustomer', Object.assign({}, ccFv, { _id: id, taskId: '', freeVisit: true }));
       this._taskId = '';
@@ -413,11 +423,15 @@ Page({
     const dc = require('../../utils/detailCache');
     const _force = !!this._forceReload;
     this._forceReload = false;
-    if (!_force) {
+    if (!_force && !this._guest) {
       const hit = dc.get('custDetail', id);
       if (hit && hit.res) {
         try {
           this._renderCust(hit.res, hit.photoUrls || [], hit.recUrls || {});
+          if (hit.res.shareToken) this._shareToken = hit.res.shareToken;
+          else if (!this._shareToken) {
+            api.call('tasks', { action: 'shareToken', customerId: id }).then(r => { if (r && r.ok) this._shareToken = r.shareToken; }).catch(() => { /* 静默 */ });
+          }
           this._shareImgFrom(hit.res);                                   // 分享封面（本地文件，每次都要重新下）
           if (!hit.urlAt || Date.now() - hit.urlAt > 90 * 60 * 1000) this._refreshMediaUrls(hit.res, id);
           // ⭐⭐ 2026-10-14 老板定（依《手机端-详情页缓存与减负方案》B 条「**先渲染缓存 → 后台静默更新**」）：
@@ -432,7 +446,11 @@ Page({
       }
     }
     try {
-      const res = await api.call('tasks', { action: 'custDetail', customerId: id });
+      const _payload = this._guest
+        ? { action: 'publicCustDetail', customerId: id, share: this._shareToken }
+        : { action: 'custDetail', customerId: id };
+      const res = await api.call('tasks', _payload);
+      if (!this._guest && res && res.shareToken) this._shareToken = res.shareToken;
       // 把云函数返回的**原始错误**带出来（光看"加载失败"没法排查）
       if (!res || !res.ok) {
         throw new Error('云函数返回：' + ((res && (res.msg || res.code)) || JSON.stringify(res || null)));
@@ -477,7 +495,9 @@ Page({
       }
 
       // ⭐ 2026-10-15：拉回来的整块结果**存本地**（当天有效）—— 今天再进这家就不必再拉
-      try { dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt: Date.now() }); } catch (e) { /* 静默：缓存失败不影响显示 */ }
+      if (!this._guest) {
+        try { dc.set('custDetail', id, { res, photoUrls, recUrls, urlAt: Date.now() }); } catch (e) { /* 静默：缓存失败不影响显示 */ }
+      }
       this._renderCust(res, photoUrls, recUrls);
     } catch (e) {
       // 2026-09-25 修：错误**直接显示在页面上**（原来只用 toast，会被 hideLoading 盖掉 → 只看到"一直加载中"，没法排查）
@@ -1233,7 +1253,7 @@ Page({
     const cover = this._shareImg || '/images/share.png';
     return {
       title: '聚火拜访 · ' + (d.name || '客户详情'),
-      path: '/pages/customer/customer?id=' + this._cid,
+      path: '/pages/customer/customer?id=' + this._cid + (this._shareToken ? ('&share=' + encodeURIComponent(this._shareToken)) : ''),
       imageUrl: cover
     };
   },
@@ -1244,6 +1264,7 @@ Page({
   // 那会把 locCheck / locKeyRefresh / visitDurationLimit / recordingDurationLimit 等**任务级设置丢掉**，
   // 拜访页拿不到就不会做定位校验、录音档位也会退回默认值。
   goVisit() {
+    if (this._guest) return;   // 2026-10-20：店家分享链接只读，不执行拜访
     const d = this.data.d;
     const c = wx.getStorageSync('curCustomer') || {};
     // ⚠️⚠️ 2026-10-12 修【严重串档】老板报：「一家家往下跑，当前一家的拜访记录跑到上一家的拜访历史里去了」
