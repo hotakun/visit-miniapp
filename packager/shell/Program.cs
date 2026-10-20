@@ -255,6 +255,38 @@ public class ShellForm : Form
     }
 
     // 窗体阴影（2026-09-07 老板定：最简单稳定方案——CS_DROPSHADOW 让系统画淡阴影）
+    // 2026-10-21 老板要：无边框窗口也支持鼠标拖四边/四角缩放
+    private const int WM_NCHITTEST = 0x0084;
+    private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13;
+    private const int HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal && !isCustomMax)
+        {
+            int lp = m.LParam.ToInt32();
+            int sx = unchecked((short)(lp & 0xFFFF));
+            int sy = unchecked((short)((lp >> 16) & 0xFFFF));
+            Point pt = PointToClient(new Point(sx, sy));
+            int grip = Math.Max(6, (int)(6 * uiScale));
+            bool left = pt.X >= 0 && pt.X <= grip;
+            bool right = pt.X >= ClientSize.Width - grip && pt.X <= ClientSize.Width;
+            bool top = pt.Y >= 0 && pt.Y <= grip;
+            bool bottom = pt.Y >= ClientSize.Height - grip && pt.Y <= ClientSize.Height;
+            int hit = 0;
+            if (top && left) hit = HTTOPLEFT;
+            else if (top && right) hit = HTTOPRIGHT;
+            else if (bottom && left) hit = HTBOTTOMLEFT;
+            else if (bottom && right) hit = HTBOTTOMRIGHT;
+            else if (left) hit = HTLEFT;
+            else if (right) hit = HTRIGHT;
+            else if (top) hit = HTTOP;
+            else if (bottom) hit = HTBOTTOM;
+            if (hit != 0) { m.Result = (IntPtr)hit; return; }
+        }
+        base.WndProc(ref m);
+    }
+
     protected override CreateParams CreateParams
     {
         get
