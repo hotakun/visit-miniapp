@@ -2877,8 +2877,11 @@ function nav(p) {
   //    这是本文件的一个坑（`nav()` 靠这张表隐藏页面，没有"自动遍历 #page-*"的兜底）。
   // ⭐ 2026-09-26 老板定：**客户管理页（原名「地域管理」）的表格跟着窗口走** —— 放开 .main 的 max-width:1200px，
   //    其他页保持原样（1200px 上限）。窗口多宽，表格就铺多宽。
+  // ⭐ 2026-10-20 老板定：**战况监控的大地图也要跟着显示器/窗口自适应**（不同分辨率铺满可用宽度）
   const mainEl = document.querySelector('main.main');
-  if (mainEl) mainEl.style.maxWidth = (p === 'geo') ? 'none' : '';
+  if (mainEl) mainEl.style.maxWidth = (p === 'geo' || p === 'track') ? 'none' : '';
+  const topbarEl = document.querySelector('main.main .topbar');
+  if (topbarEl) topbarEl.style.width = (p === 'geo' || p === 'track') ? '100%' : '';
   const title = { tasks: '任务管理', customers: '批次管理', people: '人员管理', settings: '系统设置', track: '战况监控', import: '导入信息', geo: '客户管理', msg: '消息中心', field: '待商城建档', visitrec: '拜访记录' }[p] || '';   // 2026-09-26 老板定：两页签互换名字（原“地域管理”→“客户管理”、原“客户管理”→“批次管理”）
   if (title) { $('pageTitle').textContent = title; $('pageSub').textContent = p === 'track' ? '全业务员实时位置 · 当天轨迹' : (p === 'import' ? '客户 / 订单 / 明细 分批导入 · 数据管理' : (p === 'msg' ? '待处理的重点消息 · 业务员动态流水' : (p === 'field' ? '业务员现场录入 · 等商城表来对上' : (curMode === 'mall' ? '回访工作台' : '新客开发工作台')))); }
   // ⭐ 2026-09-28 晚 老板定：进入消息中心 → 实时拉数据（**不是"读过了就清零"**）
@@ -5142,6 +5145,15 @@ function nudgeTrackResize() {
   setTimeout(kick, 600);
   setTimeout(kick, 1500);
 }
+// ⭐ 2026-10-20 老板定：**多种显示器 / 窗口大小** → 战况地图自适应；
+//   窗口变化时让 TMap 重新测量容器（nudgeTrackResize 也是靠这个事件兜住"建图时宽高未就绪"）。
+let _trackResizeTimer = null;
+window.addEventListener('resize', function () {
+  clearTimeout(_trackResizeTimer);
+  _trackResizeTimer = setTimeout(function () {
+    try { if (trackMap && typeof trackMap.resize === 'function') trackMap.resize(); } catch (e) { /* 静默 */ }
+  }, 120);
+});
 
 // 地图 SDK 加载失败（2026-09-24 加固）：**不再把 trackLibLoaded 永久锁死**（原逻辑失败一次，本次会话就再也不重试），
 // 失败后 5 秒自动重试 —— 腾讯/网络偶发抽风时能自愈，不用重启壳
