@@ -262,9 +262,18 @@ public class ShellForm : Form
     private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13;
     private const int HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
 
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        if (WindowState == FormWindowState.Normal && !isCustomMax && (Width < 1900 || Height < 1000))
+        {
+            Size = new Size(Math.Max(Width, 1900), Math.Max(Height, 1000));
+        }
+    }
+
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal && !isCustomMax)
+        if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
         {
             int lp = m.LParam.ToInt32();
             int sx = unchecked((short)(lp & 0xFFFF));
@@ -284,7 +293,11 @@ public class ShellForm : Form
             else if (right) hit = HTRIGHT;
             else if (top) hit = HTTOP;
             else if (bottom) hit = HTBOTTOM;
-            if (hit != 0) { m.Result = (IntPtr)hit; return; }
+            if (hit != 0) {
+                if (isCustomMax) isCustomMax = false;   // 从自定义最大化开始拖边 → 退出最大化
+                m.Result = (IntPtr)hit;
+                return;
+            }
         }
         base.WndProc(ref m);
     }
