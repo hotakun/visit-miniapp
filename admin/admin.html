@@ -9046,8 +9046,8 @@ function mpCands(row) {
         kind = 'unknown'; score = 85;
         why = '🆔 编号相同 · 有一方没坐标，无法判断距离';
       }
-    } else if (samePhone) { kind = 'phone'; score = 100; why = '📞 电话相同 · 铁证'; }
-    else { kind = 'name'; score = 95; why = '店名一字不差'; }
+    } else if (samePhone) { kind = 'phone'; score = 100; why = '📞 电话相同 · 铁证' + (d != null ? ' · 相距 ' + d + ' 米' : ''); }
+    else { kind = 'name'; score = 95; why = '店名一字不差' + (d != null ? ' · 相距 ' + d + ' 米' : ''); }
     out.push({ id: p.i, name: pName, code: p.mc || '', region: p.rg || p.d || '', address: p.ad || '',
       phone: p.ph || '', lat: p.la || 0, lng: p.ln || 0, dist: d, kind: kind, score: score, why: why });
   }
