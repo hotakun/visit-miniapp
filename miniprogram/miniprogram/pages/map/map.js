@@ -331,9 +331,11 @@ Page({
   renderAll() {
     const task = this.task;
     const customers = this.customers || [];
+    const dayColors = this.data.dayColors || [];
     const markers = [];
     (task && task.dayPlan || []).forEach((plan, di) => {
-      const ci = (di % DAY_COLORS.length) + 1;
+      const gi = DAY_COLORS.indexOf(String(dayColors[di] || '').toUpperCase());
+      const ci = (gi >= 0 ? gi : di % DAY_COLORS.length) + 1;
       (plan.customerIds || []).forEach((id, i) => {
         const c = customers.find(x => x._id === id);
         if (!c || !c.lat || !c.lng) return;
