@@ -14,6 +14,7 @@ public class ShellForm : Form
 {
     private WebView2 wv;
     private Process nodeProc;
+    private string _userData;   // 2026-10-20：本次启动的 WebView2 用户数据目录（退出时按它清理）
     private Panel titleBar;
     private Rectangle savedBounds = Rectangle.Empty;
     private bool isCustomMax = false;
@@ -247,7 +248,9 @@ public class ShellForm : Form
         Resize += delegate { PositionTitleItems(); btnFloatClose.Location = new Point(ClientSize.Width - (int)(44 * uiScale), 0); };
         PositionTitleItems();      // 初始布局（品牌名/胶囊/图标位）
 
-        Load += ShellLoad;
+        // 2026-10-20：改为窗口 Shown 后再初始化 WebView2 —— Load 阶段在部分环境/multi-monitor 下
+        //   窗口句柄还没真正就绪，会报 0x80070578（无效的窗口句柄）。
+        Shown += ShellLoad;
         FormClosed += ShellClosed;
     }
 
@@ -384,8 +387,11 @@ public class ShellForm : Form
         try
         {
             Log("CREATE ENV start");
-            // 每实例独立的临时数据目录：旧实例残留进程不会锁新实例（防初始化挂起）
-            string userData = Path.Combine(Path.GetTempPath(), "JuHuoVisitWV", Process.GetCurrentProcess().Id.ToString());
+            // 2026-10-20 修：PID 会被系统复用；旧 PID 目录残留 WebView2 锁会导致 0x800700AA。
+            //   每次启动用 PID + ticks 的唯一目录，退出时按 _userData 清理。
+            this._userData = Path.Combine(Path.GetTempPath(), "JuHuoVisitWV",
+                Process.GetCurrentProcess().Id.ToString() + "_" + DateTime.Now.Ticks.ToString());
+            string userData = this._userData;
             // ⭐ 2026-10-20：优先用程序目录下自带的 Fixed Version WebView2 Runtime（admin/WebView2Runtime），
             //   绕开系统 Runtime 更新/占用导致的 0x800700AA；找不到就回退系统 Evergreen。
             string wvRuntime = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Runtime");
@@ -415,7 +421,14 @@ public class ShellForm : Form
                 env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userData, wvOpts);
             }
             Log("CREATE ENV ok, ensuring ...");
-            await wv.EnsureCoreWebView2Async(env);
+            Exception ensureErr = null;
+            try { await wv.EnsureCoreWebView2Async(env); }
+            catch (Exception ex2) { ensureErr = ex2; }
+            if (ensureErr != null) {
+                Log("ENSURE RETRY after: " + ensureErr.Message);
+                await System.Threading.Tasks.Task.Delay(1200);
+                await wv.EnsureCoreWebView2Async(env);
+            }
             Log("ENSURE ok");
             // 2026-09-08 文员反馈：禁用网页右键菜单（另存为/刷新等）与浏览器快捷键（F5/Ctrl+R 刷新回登录页）；
             // 页面内编辑类快捷键（Ctrl+C/V）不受影响，后台刷新走标题栏「刷新」图标（页内刷新数据，不掉登录）
@@ -561,8 +574,8 @@ public class ShellForm : Form
         try { if (wv != null) wv.Dispose(); } catch { } // 优雅释放 WebView2，避免残留进程
         try
         {
-            string userData = Path.Combine(Path.GetTempPath(), "JuHuoVisitWV", Process.GetCurrentProcess().Id.ToString());
-            if (Directory.Exists(userData)) Directory.Delete(userData, true);
+            if (!string.IsNullOrEmpty(this._userData) && Directory.Exists(this._userData))
+                Directory.Delete(this._userData, true);
         }
         catch { /* 子进程占用删不掉则留下，下次用新目录不冲突 */ }
         Application.Exit();
