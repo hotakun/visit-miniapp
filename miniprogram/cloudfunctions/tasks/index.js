@@ -7,19 +7,6 @@ const $ = db.command.aggregate;   // ⭐ 2026-10-15：聚合（算累计单数/�
 // ⭐ 2026-10-15 老板定：客户详情「购买记录」只展示/只拉**最近 10 单**（原 20 → 收到 10）。
 //   一处定义 —— 订单查询、明细查询、返回给前端的列表**都看它**，以后要改只改这一行。
 const ORDER_PREVIEW_N = 10;
-// ⭐ 2026-10-20 老板定：客户详情可分享给店家（未注册）只读；长期有效、可转发。
-//   令牌 = HMAC(客户 id)，只绑定这一家；公开接口必须带令牌，不能只靠 ?id=。
-const crypto = require('crypto');
-const SHARE_SECRET = process.env.SHARE_SECRET || 'juhuo-share-20261020-3f8c1a9e7b2d4f6a';
-function shareTokenOf(id) {
-  return crypto.createHmac('sha256', SHARE_SECRET).update(String(id)).digest('hex').slice(0, 32);
-}
-function verifyShare(id, token) {
-  const want = shareTokenOf(id);
-  const got = String(token || '');
-  if (got.length !== want.length) return false;
-  try { return crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got)); } catch (e) { return false; }
-}
 
 // ===== ⭐ 2026-09-29 新增：静默吞错的"可见化"（高危1 修复，勘察报告 §F1）=====
 //   背景：全项目曾有 22 处 `.catch(() => 默认值)` 既不打日志也不抛错 ——
@@ -105,9 +92,6 @@ exports.main = async (event) => {
   //   ⚠️ 刻意放在**鉴权之前** —— 排查时可能没有登录态；它**只读**、不写任何数据。
   if (action === 'selfCheck') return await selfCheck(event);
 
-  // ⭐ 2026-10-20 老板定：店家分享链接免注册只读详情（令牌校验，不走 users 鉴权）
-  if (action === 'publicCustDetail') return await publicCustDetail(event);
-
   const me = await db.collection('users').where({ openid: OPENID }).get();
   // 2026-09-28：同一 openid 可能**同时绑「实习(trial)」与正式账号**（开发者点「以游客身份进入」）。
   //   默认**正式优先**（原本直接取 data[0]，顺序不确定 —— 这里显式定序，消除随机）；
@@ -174,12 +158,6 @@ exports.main = async (event) => {
   // ⭐ 2026-10-19 老板首页「商城客户」搜索（店名 / 编号 / 手机号 / 地址）
   if (action === 'searchCust') return await searchCust(event);
   if (action === 'custDetail') return await custDetail(salesmanId, event, isBoss);
-  // ⭐ 2026-10-20：已登录用户打开详情时预取分享令牌（onShareAppMessage 必须同步返回）
-  if (action === 'shareToken') {
-    const cid = String((event && event.customerId) || '');
-    if (!cid) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
-    return { ok: true, shareToken: shareTokenOf(cid) };
-  }
   // ⭐ 2026-09-27 新增：业务员给客户档案补**门店照片**（详情页三个相框，点空框现场拍 → 云存储 → 写档案）
   //   权限：登录业务员即可写（照片全公司共享，现场拍本就该业务员做）
   if (action === 'saveCustPhoto') return await saveCustPhoto(salesmanId, event);
@@ -2621,40 +2599,6 @@ function haversine(lat1, lng1, lat2, lng2) {
 // 数据全部来自云端真数据。本函数一次给全，减少手机端来回请求。
 // 逻辑与 adminapi.getCustomerDetail 一致（后台那版已上线验证过），差别只在权限：
 // **登录的业务员即可读**（客户档案本来就全公司共享，大家都要上门拜访）。
-// ⭐ 2026-10-20 老板定：店家分享链接免注册只读详情。
-//   只回白名单数据：管理员备注、拜访录音/转写、待审核提报一律不返回；不写任何数据。
-async function publicCustDetail(event) {
-  const customerId = String((event && event.customerId) || '');
-  const share = String((event && event.share) || '');
-  if (!customerId || !verifyShare(customerId, share)) {
-    return { ok: false, code: 'BAD_SHARE', msg: '链接无效或已失效' };
-  }
-  const r = await custDetail('', { customerId: customerId }, false);
-  if (!r || !r.ok) return r;
-  const out = Object.assign({}, r);
-  out.remarks = [];             // 管理员备注：店家不能看
-  out.fieldReports = [];        // 待审核的现场提报：内部数据
-  if (out.customer) {
-    delete out.customer.remark;
-    delete out.customer.remarks;
-    delete out.customer.audios; // 加新店现场录音
-  }
-  if (Array.isArray(out.visits)) {
-    out.visits = out.visits.map(v => {
-      const x = Object.assign({}, v);
-      delete x.audios;          // 拜访录音
-      delete x.audio;
-      delete x.audioCount;
-      delete x.trText;          // 录音转文字
-      delete x.mine;            // 不显示编辑/删除
-      delete x.salesmanId;
-      return x;
-    });
-  }
-  delete out.shareToken;
-  return out;
-}
-
 async function custDetail(salesmanId, event, isBoss) {
   const customerId = (event && event.customerId) || '';
   if (!customerId) return { ok: false, code: 'BAD_ARG', msg: '缺少客户' };
@@ -2785,8 +2729,6 @@ async function custDetail(salesmanId, event, isBoss) {
 
   return {
     ok: true,
-    // ⭐ 2026-10-20：已登录用户打开详情时预取分享令牌（onShareAppMessage 必须同步返回）
-    shareToken: shareTokenOf(customerId),
     // 这家客户是否正在拜访中（前端据此把底部按钮变成蓝色「拜访中」）
     visitOngoing: visitOngoing,
     // ⭐ 2026-09-27：该客户**待审核的现场提报**（手机端据此显示"待审核"）

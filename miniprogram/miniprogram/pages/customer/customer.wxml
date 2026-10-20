@@ -63,17 +63,17 @@
            · 右「更正信息」：现场发现店名/老板换了 → 打开「加新店」第 2 步的同款表单
              （预填现有信息，选择性修改，保存直接生效；见 pages/custedit/ + tasks.correctCustomer）
            （老板当天先砍掉记事、又改回来：「更正信息按钮左边再放上快速记事的按钮」） -->
-      <view class="notebtn" wx:if="{{!isGuest}}" bindtap="goQuickNote">
+      <view class="notebtn" bindtap="goQuickNote">
         <text>快速</text><text>记事</text>
       </view>
-      <view class="notebtn" wx:if="{{!isGuest}}" bindtap="goCorrect">
+      <view class="notebtn" bindtap="goCorrect">
         <text>更正</text><text>信息</text>
       </view>
     </view>
 
     <!-- ⭐ 本机「我的记事 · N 条」（2026-09-28）：**真在本机记过事才出现** ——
          0 条时旁边就是「快速记事」，不重复占位（老板要简洁）；点它进列表只看这一家。 -->
-    <view class="noterow" wx:if="{{!isGuest && notesN > 0}}" bindtap="goNotes">
+    <view class="noterow" wx:if="{{notesN > 0}}" bindtap="goNotes">
       <text class="nr-ic">📝</text>
       <text class="nr-t">我的记事 · {{notesN}} 条</text>
       <text class="nr-go">查看 ›</text>
@@ -104,7 +104,7 @@
         <view class="shot3 {{d.photos[index] ? '' : 'empty'}}"
               wx:for="{{d.photos}}" wx:key="index"
               data-i="{{index}}" data-url="{{item}}"
-              bindtap="{{isGuest ? (d.photos[index] ? 'openPhoto' : 'noop') : (d.photos[index] ? 'openPhoto' : 'takePhoto')}}">
+              bindtap="{{d.photos[index] ? 'openPhoto' : 'takePhoto'}}">
           <image class="shot-img" wx:if="{{d.photos[index]}}" src="{{item}}" mode="aspectFill"></image>
           <block wx:else>
             <text class="cam3">📷</text><text class="t3">拍照</text>
@@ -114,7 +114,7 @@
       <!-- ⭐ 2026-10-03：「加新店」现场录的音（customers.audios）—— 业务员建店时录的，老板 / 同事也能听。
            样式直接复用拜访历史那套（.hrec/.hplay/.hrec-t/.hrec-bar，暖底圆角，视觉一致）；
            没有录音时 d.siteRec 为 null → 整块不出现（不留空位）。 -->
-      <view class="hrec" wx:if="{{!isGuest && d.siteRec}}">
+      <view class="hrec" wx:if="{{d.siteRec}}">
         <view class="hplay" bindtap="playSiteRec">{{d.siteRec.playing ? '❚❚' : '▶'}}</view>
         <text class="hrec-t">现场录音 {{d.siteRec.dur}}</text>
         <view class="hrec-bar"><view class="hrec-i" style="width:{{d.siteRec.pct}}%"></view></view>
@@ -187,7 +187,7 @@
       <view class="subsec">🍜 招牌菜</view>
       <view class="chips">
         <text class="chip" wx:for="{{d.dishes}}" wx:key="*this">{{item}}</text>
-        <view class="empty3" wx:if="{{!isGuest}}" bindtap="openAdd" data-kind="dish">
+        <view class="empty3" bindtap="openAdd" data-kind="dish">
           <text class="addtap">＋</text>
         </view>
       </view>
@@ -211,9 +211,9 @@
           <text class="flag {{item[1] ? 'y' : 'n'}}"
                 wx:for="{{d.flags}}" wx:key="*this"
                 data-name="{{item[0]}}" data-on="{{item[1]}}"
-                bindtap="{{isGuest ? 'noop' : 'openFlag'}}">{{item[0]}} {{item[1] ? '已开' : '未开'}}{{d.flagPending[item[0]] ? ' · 待审核' : ''}}</text>
+                bindtap="openFlag">{{item[0]}} {{item[1] ? '已开' : '未开'}}{{d.flagPending[item[0]] ? ' · 待审核' : ''}}</text>
         </view>
-        <view class="plusbar" wx:if="{{!isGuest}}" bindtap="openAdd" data-kind="fac">＋</view>
+        <view class="plusbar" bindtap="openAdd" data-kind="fac">＋</view>
       </view>
       <!-- ⭐ 2026-10-07 老板定：设施**收起时只露一行**，点这一行才展开/收起（有的店设施特别多，撑得整卡很长） -->
       <view class="facsec" wx:if="{{d.fac.length}}">
@@ -293,8 +293,8 @@
                超过 1 公里只提示"太远"、不弹窗（避免业务员白走一趟） -->
           <view class="mbtn walk" bindtap="onWalk">🚶 步行</view>
           <view class="mbtn" bindtap="onNav">🧭 导航</view>
-          <view class="mbtn warn" wx:if="{{!isGuest}}" bindtap="openFix">📍 报错</view>
-          <view class="mbtn warn ml" wx:if="{{!isGuest}}" bindtap="startFix">修正</view>
+          <view class="mbtn warn" bindtap="openFix">📍 报错</view>
+          <view class="mbtn warn ml" bindtap="startFix">修正</view>
         </block>
         <block wx:else>
           <view class="mbtn ml" bindtap="cancelFix">取消</view>
@@ -305,7 +305,7 @@
   </view>
 
   <!-- ===================== 📝 管理员备注 ===================== -->
-  <view class="card remark {{open.remark ? '' : 'collapsed'}}" wx:if="{{!isGuest}}">
+  <view class="card remark {{open.remark ? '' : 'collapsed'}}">
     <view class="ch" data-k="remark" bindtap="toggle">
       <text class="ci">📝</text><text class="t">管理员备注</text>
       <text class="sub">{{d.remarks.length ? (d.remarks.length + ' 条') : '暂无'}}</text>
@@ -350,13 +350,13 @@
         <view class="htxt samp" wx:if="{{item.samp}}">📦 样品：{{item.samp}}</view>
 
         <!-- ① 拜访录音（⭐ 2026-09-27：**真音频播放**；没有录音 → 这一块不出现） -->
-        <view class="hrec" wx:if="{{!isGuest && item.rec}}">
+        <view class="hrec" wx:if="{{item.rec}}">
           <view class="hplay" data-i="{{index}}" bindtap="playRec">{{item.rec.playing ? '❚❚' : '▶'}}</view>
           <text class="hrec-t">拜访录音 {{item.rec.dur}}</text>
           <view class="hrec-bar"><view class="hrec-i" style="width:{{item.rec.pct}}%"></view></view>
         </view>
         <!-- ② 录音转文字 -->
-        <view class="htrans" wx:if="{{!isGuest && item.rec && item.rec.txt}}">
+        <view class="htrans" wx:if="{{item.rec && item.rec.txt}}">
           <view class="htrans-h">🎙 录音转文字</view>
           <view class="htrans-b">{{item.rec.txt}}</view>
         </view>
@@ -378,7 +378,7 @@
         <!-- ⭐ 2026-10-10 老板定：「拜访记录」要能再次编辑 —— 自己记的这条，**右下角**给一个「✎ 编辑」
              （点它回拜访页的编辑模式；⚠️ catchtap 防冒泡，别把条目上的手势带出去） -->
         <!-- ⭐ 2026-10-11 老板定：自己的记录右下角给**两个操作** ——「✎ 编辑」（早前已加）+「🗑 删除」（本次新增） -->
-        <view class="hact" wx:if="{{!isGuest && item.mine}}">
+        <view class="hact" wx:if="{{item.mine}}">
           <text class="hedit" data-vid="{{item.vid}}" catchtap="editVisit">✎ 编辑</text>
           <text class="hdel" data-vid="{{item.vid}}" catchtap="delVisit">🗑 删除</text>
         </view>
@@ -389,7 +389,7 @@
   <!-- ===================== 开始拜访（⭐ 2026-10-07 老板定：从"底部悬浮"改成放在这里）=====================
        —— 原来它是 position:fixed 悬浮在屏幕底部；老板要求**放在「拜访历史」卡的下方**（跟着页面滚）。
        2026-09-25 的口径不变：这家**正在拜访中** → 按钮变**蓝色「拜访中」**（橙色 → 蓝色，文案同步改）。 -->
-  <view class="vbtn-wrap" wx:if="{{!isGuest}}">
+  <view class="vbtn-wrap">
     <view class="vbtn {{d.visiting ? 'vbtn-on' : ''}}" bindtap="goVisit">{{d.visiting ? '拜访中' : '开始拜访'}}</view>
   </view>
 
@@ -485,7 +485,7 @@
     <!-- ⭐ 2026-10-10 老板定：**门店照片**的大图里加「重拍 / 删除」（老板："最好还有重拍及删除按钮"）。
          ⚠️ 只有门店三格带 data-i（viewerIdx ≥ 0）才显示；拜访历史里的照片不带 → 仍只有「关闭」。
          ⚠️ 必须 catchtap（阻止冒泡）—— 否则点按钮会顺带触发整层的 closePhoto。 -->
-    <view class="viewer-btns" wx:if="{{!isGuest && viewerIdx >= 0}}">
+    <view class="viewer-btns" wx:if="{{viewerIdx >= 0}}">
       <view class="viewer-b" catchtap="retakePhoto">📷 重拍</view>
       <!-- ⭐⭐ 2026-10-12 老板定：「编辑只要裁剪功能就可以了」→ 微信自带编辑界面（wx.editImage，可裁剪/旋转）→ 覆盖同一格 -->
       <view class="viewer-b" catchtap="editPhoto">✂️ 编辑</view>
