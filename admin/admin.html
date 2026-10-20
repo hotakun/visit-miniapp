@@ -9046,7 +9046,15 @@ function mpCands(row) {
         kind = 'unknown'; score = 85;
         why = '🆔 编号相同 · 有一方没坐标，无法判断距离';
       }
-    } else if (samePhone) { kind = 'phone'; score = 100; why = '📞 电话相同 · 铁证' + (d != null ? ' · 相距 ' + d + ' 米' : ''); }
+    } else if (samePhone) {
+      if (d != null && d > 50) {
+        kind = 'chain'; score = 95;
+        why = '📞 电话相同 · 相距 ' + d + ' 米 · 可能是连锁分店';
+      } else {
+        kind = 'phone'; score = 100;
+        why = '📞 电话相同 · 铁证' + (d != null ? ' · 相距 ' + d + ' 米' : '');
+      }
+    }
     else { kind = 'name'; score = 95; why = '店名一字不差' + (d != null ? ' · 相距 ' + d + ' 米' : ''); }
     out.push({ id: p.i, name: pName, code: p.mc || '', region: p.rg || p.d || '', address: p.ad || '',
       phone: p.ph || '', lat: p.la || 0, lng: p.ln || 0, dist: d, kind: kind, score: score, why: why });
@@ -9249,10 +9257,10 @@ function mpRender() {
           // —— 框外决策条：明确写「针对本次导入这条」，与上面的系统客户区分开 ——
           const distTxt = (c.dist != null) ? ('相距 ' + c.dist + ' 米') : '有一方没坐标、无法判断距离';
           const relTxt = recSub
-            ? ('编号相同 · ' + distTxt + ' · 建议按同一家（主副店）处理')
+            ? ((c.kind === 'phone' ? '电话相同' : '编号相同') + ' · ' + distTxt + ' · 建议按同一家（主副店）处理')
             : recChain
-              ? ('编号相同 · ' + distTxt + ' · 建议按连锁分店处理（同一家只在相距 ≤50 米时成立）')
-              : ('编号相同 · ' + distTxt + ' · 请你判断');
+              ? ((c.kind === 'phone' ? '电话相同' : '编号相同') + ' · ' + distTxt + ' · 建议按连锁分店处理（同一家只在相距 ≤50 米时成立）')
+              : ((c.kind === 'phone' ? '电话相同' : '编号相同') + ' · ' + distTxt + ' · 请你判断');
           // 推荐项 = 橙色主按钮；不推荐项 = 灰度（**仍可点**，万一系统判断错，老板能改）
           const GRAY = ';color:#A8B0BB;border-color:#E3E8EF;background:#F7F8FA';
           const btnChain = '<button class="btn' + (recChain ? ' p' : '') + '" style="height:26px;font-size:12px' +
