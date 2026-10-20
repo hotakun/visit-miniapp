@@ -387,11 +387,15 @@ public class ShellForm : Form
         try
         {
             Log("CREATE ENV start");
-            // 2026-10-20 修：PID 会被系统复用；旧 PID 目录残留 WebView2 锁会导致 0x800700AA。
-            //   每次启动用 PID + ticks 的唯一目录，退出时按 _userData 清理。
-            this._userData = Path.Combine(Path.GetTempPath(), "JuHuoVisitWV",
+            // 2026-10-20 修：不用 %TEMP%（临时目录可能被清理/杀毒锁定），放 %LOCALAPPDATA%\JuHuoVisit\WV；
+            //   同时 PID_ticks 保证每次唯一，避免 PID 复用撞旧 WebView2 锁。
+            this._userData = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "JuHuoVisit", "WV",
                 Process.GetCurrentProcess().Id.ToString() + "_" + DateTime.Now.Ticks.ToString());
+            try { Directory.CreateDirectory(this._userData); } catch { }
             string userData = this._userData;
+            Log("WV USERDATA: " + userData);
             // ⭐ 2026-10-20：优先用程序目录下自带的 Fixed Version WebView2 Runtime（admin/WebView2Runtime），
             //   绕开系统 Runtime 更新/占用导致的 0x800700AA；找不到就回退系统 Evergreen。
             string wvRuntime = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Runtime");
@@ -405,8 +409,9 @@ public class ShellForm : Form
             //   **软件渲染（SwiftShader）**，表现为 TMap GL 地图"灰白 / 缺块 / 偶尔才出来"。
             //   实测网络（腾讯地图各域名 100~180ms / HTTP 200）与 SDK 都正常 → 问题在渲染侧。
             //   --ignore-gpu-blocklist：忽略显卡黑名单（对症）；--enable-gpu-rasterization：GPU 光栅化（更流畅）
-            var wvOpts = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
-                "--ignore-gpu-blocklist --enable-gpu-rasterization");
+            // 2026-10-20：先不用 GPU 参数（--ignore-gpu-blocklist/--enable-gpu-rasterization 在
+            //   新 Runtime 155 上可能让浏览器进程启动失败，表现为 0x800700AA）。
+            Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions wvOpts = null;
             Microsoft.Web.WebView2.Core.CoreWebView2Environment env = null;
             Exception fixedErr = null;
             if (wvBrowserDir != null) {
@@ -421,6 +426,7 @@ public class ShellForm : Form
                 env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userData, wvOpts);
             }
             Log("CREATE ENV ok, ensuring ...");
+            try { wv.CreateControl(); } catch { }   // 2026-10-20：确保控件句柄已创建，避免“无效的窗口句柄”
             Exception ensureErr = null;
             try { await wv.EnsureCoreWebView2Async(env); }
             catch (Exception ex2) { ensureErr = ex2; }
