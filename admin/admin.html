@@ -2406,7 +2406,7 @@ tr.row-off td:not(.keep){opacity:.4}
           <div id="etReschedHint" style="font-size:12px;color:var(--sub);margin-top:6px"></div>
         </div>
         <div id="etReassignBox" style="display:none;background:#EFF6FF;border:1px solid #C9E0FA;border-radius:10px;padding:10px 12px;margin-bottom:12px">
-          <label style="font-size:12.5px;font-weight:800">👤 新业务员（仅空闲业务员可选）</label>
+          <label style="font-size:12.5px;font-weight:800">👤 新业务员（有任务也可选）</label>
           <div style="display:flex;gap:8px;margin-top:6px">
             <select class="inp" id="etNewSalesman" style="flex:1"></select>
             <button class="btn primary" style="height:42px;padding:0 16px" onclick="confirmReassign()">确认改派</button>
@@ -4064,10 +4064,10 @@ async function loadEtSalesmen() {
   const sm = await api('listSalesmen');
   const curTask = (await api('getTask', { taskId: editTaskId })).task;
   const curId = curTask ? curTask.salesmanId : '';
-  const list = (sm.ok ? sm.salesmen : []).filter(s => s.active && !s.hasTask && s._id !== curId);
+  const list = (sm.ok ? sm.salesmen : []).filter(s => s.active && s._id !== curId);
   $('etNewSalesman').innerHTML = list.length
     ? list.map(s => `<option value="${s._id}">${esc(s.name)}（${esc(s.phone)}）</option>`).join('')
-    : '<option value="">暂无可改派的空闲业务员</option>';
+    : '<option value="">暂无可改派的业务员</option>';
 }
 
 async function saveEditTask() {
@@ -7127,17 +7127,14 @@ function wizPrev() { if (nwStep > 1) wizGo(nwStep - 1); }
 
 function cancelNew() { backToList(); }
 
-// 业务员自定义下拉（任务中者灰显+红字"任务中"，不可选）
+// 业务员自定义下拉（任务中者只标红字“任务中”，仍可选 —— 2026-10-20 老板定：一人可同时接多个任务）
 function renderSmanList() {
   const text = $('ntSalesmanText');
   text.textContent = nwSalesman ? `${nwSalesman.name}（${nwSalesman.phone}）` : '请选择业务员';
   text.classList.toggle('ph', !nwSalesman);
   $('ntSalesmanList').innerHTML = salesmanCache.map(s => {
-    if (s.hasTask) {
-      return `<div class="dd-item dis"><span class="nm">${esc(s.name)}（${esc(s.phone)}）</span><span class="busy">任务中</span></div>`;
-    }
     const sel = nwSalesman && nwSalesman._id === s._id;
-    return `<div class="dd-item ${sel ? 'on' : ''}" onclick="selectSman('${s._id}')"><span class="nm">${esc(s.name)}（${esc(s.phone)}）</span></div>`;
+    return `<div class="dd-item ${sel ? 'on' : ''}" onclick="selectSman('${s._id}')"><span class="nm">${esc(s.name)}（${esc(s.phone)}）</span>${s.hasTask ? '<span class="busy">任务中</span>' : ''}</div>`;
   }).join('') || '<div class="dd-item dis"><span class="nm">暂无业务员，请先在人员管理添加</span></div>';
 }
 
@@ -7149,7 +7146,7 @@ function toggleSmanList(e) {
 
 function selectSman(id) {
   const s = salesmanCache.find(x => x._id === id);
-  if (!s || s.hasTask) return;
+  if (!s) return;   // ⭐ 2026-10-20 老板定：任务中也可选（一人可同时接多个任务）
   nwSalesman = s;
   renderSmanList();
   $('ntSalesmanList').style.display = 'none';

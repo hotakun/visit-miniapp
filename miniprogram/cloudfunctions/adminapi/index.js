@@ -2122,8 +2122,7 @@ async function reassignTask(event) {
   const smRes = await db.collection('users').doc(newSalesmanId).get().catch(() => null);
   const sm = smRes && smRes.data;
   if (!sm || (sm.role !== 'salesman' && sm.alsoSalesman !== true) || sm.active === false) return { ok: false, code: 'BAD_SALESMAN', msg: '业务员不存在或已停用' };
-  const busy = await db.collection('tasks').where({ salesmanId: newSalesmanId, status: _.in(['published', 'reviewing']) }).count();
-  if (busy.total > 0) return { ok: false, code: 'HAS_TASK', msg: '该业务员已有进行中任务，不能接改派' };
+  // ⭐ 2026-10-20 老板定：一人可同时接多个任务 → 改派也不再拦“已有进行中任务”
   const logs = withLog(t, { at: Date.now(), by: (event._admin && event._admin.name) || '系统', role: 'admin', type: 'reassign', detail: { from: t.salesmanName || '', to: sm.name } });
   await db.collection('tasks').doc(taskId).update({
     data: { salesmanId: sm._id, salesmanName: sm.name, logs }
