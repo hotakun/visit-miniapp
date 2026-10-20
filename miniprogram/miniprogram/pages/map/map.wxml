@@ -31,14 +31,20 @@
   <block wx:if="{{!loading && !empty}}">
     <!-- 天页签（任务 ≤5 天=「第N页」胶囊；≥6 天整排变纯数字圆标整齐排列，2026-09-08 老板定）
          2026-09-25 老板定：文案由「第N天」改成「**第N页**」（天数卡叫"页"更贴合"一页一批客户"的读法） -->
-    <view class="daybar" wx:if="{{days.length > 1}}">
-      <view class="dtag {{days.length > 5 ? 'dot' : ''}} {{curDay === item ? 'on' : ''}}" wx:for="{{days}}" wx:key="*this"
-            bindtap="switchDay" data-d="{{item}}">{{days.length > 5 ? item : '第' + item + '页'}}</view>
+    <view class="daybar" wx:if="{{days.length}}">
+      <scroll-view class="days-scroll" scroll-x="{{true}}" enable-flex="{{true}}">
+        <view class="dtag {{showAll ? '' : (curDay === item ? 'on' : '')}}" wx:for="{{days}}" wx:key="*this"
+              bindtap="switchDay" data-d="{{item}}">{{item}}</view>
+      </scroll-view>
+      <view class="day-right">
+        <view class="dtag all {{showAll ? 'on' : ''}}" bindtap="toggleAll">全部</view>
+        <view class="task-switch" wx:if="{{activeTasks.length > 1}}" bindtap="pickTask">切换任务 ▾</view>
+      </view>
     </view>
 
     <!-- 下一家引导条（顺序引导：当天顺序中第一家未完成；右侧重排按钮=以我的位置重排）
          老板模式（2026-09-09 §7.13）：重排按钮位置变业务员下拉选择器，去掉重排功能 -->
-    <view class="nextbar" wx:if="{{nextCust || bossMode}}">
+    <view class="nextbar" wx:if="{{!showAll && (nextCust || bossMode)}}">
       <view class="ntxt" wx:if="{{nextCust}}" bindtap="openNext"><text class="nlab">👉 下一家</text><text class="nname">{{nextCust.name}}</text><text class="ndist" wx:if="{{nextDist}}">{{nextDist}}</text></view>
       <view class="nbtn" wx:if="{{canReplan && !bossMode}}" catchtap="replanDay">{{replanBusy ? '重排中…' : '重排'}}</view>
       <picker wx:if="{{bossMode}}" mode="selector" range="{{bossMen}}" range-key="label" bindchange="onBossMen">

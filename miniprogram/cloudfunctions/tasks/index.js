@@ -1827,23 +1827,25 @@ function todayStr() {
 // 裁剪：只带地图/拜访跳转字段，砍掉 enriched 全字段/坐标审核/6 次串行 settings（改并行辅助）
 async function mapData(salesmanId, taskId, isBoss) {
   const today = todayStr();
-  let tasksOut;
+  // 2026-10-20 老板定：一人可多任务 —— 地图页右上角要能切换；
+  //   范围 = 除「已完成 / 归档 / 草稿」外全部（含已过期），一次带回。
+  const activeWhere = { status: _.nin(['completed', 'archived', 'draft']) };
+  if (!isBoss) activeWhere.salesmanId = salesmanId;
+  const activeRes = await db.collection('tasks').where(activeWhere)
+    .orderBy('createdAt', 'desc').limit(50).get()
+    .catch(silentCatch('tasks·mapData·active', { data: [] }));
+  const tasksOut = activeRes.data.map(x => ({
+    _id: x._id, name: x.name, salesmanName: x.salesmanName || '', salesmanId: x.salesmanId || '',
+    status: x.status, dayColors: Array.isArray(x.dayColors) ? x.dayColors : []
+  }));
   let t = null;
   if (taskId) {
     const tRes = await db.collection('tasks').doc(taskId).get().catch(() => null);
     t = tRes && tRes.data;
     if (!t || (t.salesmanId !== salesmanId && !isBoss)) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
-  } else if (isBoss) {
-    const lRes = await db.collection('tasks').where({ status: _.in(['published', 'reviewing']) }).orderBy('createdAt', 'desc').limit(50).get();
-    tasksOut = lRes.data.map(x => ({
-      _id: x._id, name: x.name, salesmanName: x.salesmanName || '', salesmanId: x.salesmanId || '', status: x.status
-    }));
-    t = lRes.data[0] || null;
-    if (!t) return { ok: true, tasks: tasksOut, map: null };
   } else {
-    const lRes = await db.collection('tasks').where({ salesmanId, status: _.in(['published', 'reviewing']) }).orderBy('createdAt', 'desc').limit(10).get();
-    t = lRes.data[0] || null;
-    if (!t) return { ok: true, map: null };
+    t = activeRes.data[0] || null;
+    if (!t) return { ok: true, tasks: tasksOut, map: null };
   }
   const tid = t._id;
   const ids = t.customerIds || [];
@@ -1870,6 +1872,7 @@ async function mapData(salesmanId, taskId, isBoss) {
   const task = {
     _id: t._id, name: t.name, status: t.status, todayDay: dayIndexOf(t.startDate, t.createdAt),
     dayPlan: t.dayPlan || [],
+    dayColors: Array.isArray(t.dayColors) ? t.dayColors : [],   // 2026-10-20：每天颜色（地图「全部」按天着色）
     locCheck: { enabled: !!(cfgP.locCfg && cfgP.locCfg.enabled), threshold: Number((cfgP.locCfg && cfgP.locCfg.threshold) || 0) },
     locRefresh: cfgP.locRefresh, locKeyRefresh: cfgP.locKeyRefresh,
     recordingDurationLimit: cfgP.recordingDurationLimit, visitDurationLimit: cfgP.visitDurationLimit,

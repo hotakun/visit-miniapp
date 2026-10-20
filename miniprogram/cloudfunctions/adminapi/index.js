@@ -1938,6 +1938,12 @@ async function createTask(event) {
   const sm = salesRes.data;
 
   const days = Math.min(7, Math.max(1, parseInt(plannedDays, 10) || 1));
+  // 2026-10-20 老板定：建任务时按天配颜色；只允许固定色板，避免手机端没有对应圆标。
+  const DAY_COLORS = ['#F5531C', '#2F80ED', '#16A34A', '#7C3AED', '#EAB308', '#EC4899', '#06B6D4'];
+  const dayColors = Array.from({ length: days }, (_, i) => {
+    const v = Array.isArray(event.dayColors) ? String(event.dayColors[i] || '').toUpperCase() : '';
+    return DAY_COLORS.includes(v) ? v : DAY_COLORS[i % DAY_COLORS.length];
+  });
   // 开始日期 = 任务第 1 天（默认今天；表单默认明天）；截止日期 = 开始日期 + 天数（自动计算，忽略传入值）
   const start = startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate)) ? String(startDate) : todayStr();
   const deadlineCalc = addDays(start, days);
@@ -1978,6 +1984,7 @@ async function createTask(event) {
       status: isDraft ? 'draft' : 'published',
       plannedDays: days,
       dayPlan,
+      dayColors,
       purpose: purpose || 'activate',
       batchId: batchId || null,
       sentAt: isDraft ? null : Date.now(),

@@ -4,6 +4,8 @@ const mapCache = require('../../utils/mapCache');   // ⭐ 2026-10-14：地图�
 
 // 仓库坐标（2026-09-09 老板定：线路起点=仓库时显示小五角星标记）
 const WH = { lat: 28.970802, lng: 120.154526 };
+// 2026-10-20：每天一个颜色（与后台建任务色板、pins/pin_N_c1~c7.png 一一对应）
+const DAY_COLORS = ['#F5531C', '#2F80ED', '#16A34A', '#7C3AED', '#EAB308', '#EC4899', '#06B6D4'];
 
 // ===== 地图秒开缓存 =====
 // ⚠️ 2026-10-14（依审计报告）：实现**已抽到 `utils/mapCache.js` 一处定义** ——
@@ -22,6 +24,8 @@ Page({
   data: {
     loading: true, empty: '',
     task: null, days: [], curDay: 1, todayDay: 1,
+    // 2026-10-20 多人多任务：可切换任务 + 「全部」 + 每天颜色
+    activeTasks: [], showAll: false, dayColors: [],
     markers: [], polyline: [],
     centerLat: 28.970802, centerLng: 120.154526,
     nextCust: null, nextDist: '',
@@ -73,7 +77,7 @@ Page({
     const c = mapCache.get('boss');
     if (c && c.map) {
       const bossMen = (c.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
-      this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
+      this.setData({ bossMode: true, bossMen, curBossIdx: 0, activeTasks: c.tasks || [] });
       this.applyMapData(c.map);
     } else {
       this.setData({ loading: true });
@@ -83,7 +87,7 @@ Page({
       const _hit = mapCache.get('boss');
       if (_hit && _hit.map && (_hit.tasks || []).length) {
         const bossMen = (_hit.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
-        this.setData({ bossMode: true, bossMen, curBossIdx: 0, loading: false });
+        this.setData({ bossMode: true, bossMen, curBossIdx: 0, loading: false, activeTasks: _hit.tasks || [] });
         this.applyMapData(_hit.map);
         this._loaded = true;
         return;
@@ -95,7 +99,7 @@ Page({
       if (!res.ok) { this.setData({ loading: false, empty: res.msg || '加载失败' }); return; }
       mapCache.set(res, 'boss');
       const bossMen = (res.tasks || []).map(t => ({ name: t.salesmanName || '业务员', label: (t.salesmanName || '业务员') + ' · ' + t.name, salesmanId: t.salesmanId, taskId: t._id }));
-      this.setData({ bossMode: true, bossMen, curBossIdx: 0 });
+      this.setData({ bossMode: true, bossMen, curBossIdx: 0, activeTasks: res.tasks || [] });
       if (!bossMen.length) { this.setData({ loading: false, empty: '暂无进行中的任务' }); return; }
       this.applyMapData(res.map);
       // ⭐ 2026-10-14（依审计报告）：**真的拿到任务才标"已加载"**。
@@ -132,6 +136,7 @@ Page({
     if (!this._forceMapReload) {
       const _hit = mapCache.get(_mode);
       if (_hit && _hit.map) {
+        this.setData({ activeTasks: _hit.tasks || [] });
         this.applyMapData(_hit.map, keepDay);
         this._loaded = true;
         this.setData({ loading: false });
@@ -147,6 +152,7 @@ Page({
         return;
       }
       mapCache.set(res, taskId ? ('task:' + taskId) : 'task:self');
+      this.setData({ activeTasks: res.tasks || [] });
       this.applyMapData(res.map, keepDay);
       // ⭐ 2026-10-14：成功拿到任务才标"已加载"（同 loadBoss；"暂无任务"分支刻意不置，保持及时性）
       this._loaded = true;
@@ -187,7 +193,9 @@ Page({
     const cd = (keepDay && days.includes(keepDay)) ? keepDay : td;
     this.autoWhStarFrom(map, cd); // 自动检测仓库开关
     // 2026-09-10 修复：加载成功必须复位空态——否则一次失败后「天数标 + 下一家横幅」会被 empty 永久挡住（切页回来也不自愈，只有冷启动才恢复）
-    this.setData({ loading: false, empty: '', task: map.task, days, todayDay: td, curDay: cd });
+    this.setData({ loading: false, empty: '', task: map.task, days, todayDay: td, curDay: cd,
+      dayColors: (map.task && Array.isArray(map.task.dayColors)) ? map.task.dayColors : [],
+      showAll: false });
     this.renderDay();
     // 2026-09-10：撑满只在「首次拿到数据」时执行——tab 常驻后切页回来也会走到这里刷新数据，
     // 若每次都撑满会把用户刚拖到的位置重置（老板反馈"地图乱跳"）。手动刷新 ↻ 仍照旧撑满（见 refreshMap）
@@ -287,11 +295,66 @@ Page({
 
   switchDay(e) {
     const d = Number(e.currentTarget.dataset.d);
-    if (d === this.data.curDay) return;
-    this.setData({ curDay: d });
+    if (d === this.data.curDay && !this.data.showAll) return;
+    this.setData({ curDay: d, showAll: false });
     this.autoWhStarFrom(this.task, d); // 2026-09-09 老板定：切天自动检测仓库开关
     this.renderDay();
     this.fitAllCustomers(true); // 2026-09-09 老板定：切天数只撑满未拜访+拜访中（全部已拜访则撑满全部）
+  },
+
+  toggleAll() {
+    const next = !this.data.showAll;
+    this.setData({ showAll: next });
+    if (next) {
+      this.renderAll();
+    } else {
+      this.renderDay();
+      this.fitAllCustomers(true);
+    }
+  },
+
+  pickTask() {
+    const list = this.data.activeTasks || [];
+    if (list.length <= 1) return;
+    const show = list.slice(0, 6);
+    wx.showActionSheet({
+      itemList: show.map(t => (t.name || '任务') + (t.salesmanName ? ' · ' + t.salesmanName : '')),
+      success: r => {
+        const t = show[r.tapIndex];
+        if (!t || !t._id || (this.task && t._id === this.task._id)) return;
+        this.setData({ showAll: false });
+        this.loadTask(t._id);
+      }
+    });
+  },
+
+  renderAll() {
+    const task = this.task;
+    const customers = this.customers || [];
+    const markers = [];
+    (task && task.dayPlan || []).forEach((plan, di) => {
+      const ci = (di % DAY_COLORS.length) + 1;
+      (plan.customerIds || []).forEach((id, i) => {
+        const c = customers.find(x => x._id === id);
+        if (!c || !c.lat || !c.lng) return;
+        const n = Math.min(i + 1, 20);
+        markers.push({
+          id: 20000 + di * 100 + i,
+          custId: c._id,
+          latitude: c.lat,
+          longitude: c.lng,
+          iconPath: `/pages/map/pins/pin_${n}_c${ci}.png`,
+          width: 24, height: 24, anchor: { x: 0.5, y: 0.5 },
+          callout: {
+            content: c.name, color: '#333A44', fontSize: 12, borderRadius: 8, bgColor: '#FFFFFF', padding: 7,
+            display: 'BYCLICK'
+          }
+        });
+      });
+    });
+    // 老板定：「全部」只显示所有点位，不画路线、不显示下一家
+    this.setData({ markers, polyline: [], nextCust: null, nextDist: '', selCust: null, selDist: '', canReplan: false });
+    this.fitAllCustomers(false, true);
   },
 
   fmtDist(c) {
@@ -451,13 +514,24 @@ Page({
   },
   // 满屏撑满：视野缩放到当天客户点，四边留白避开横幅条/天页签/矮TAB/安全区/店名气泡（2026-09-09 老板定）
   // activeOnly=true（2026-09-09 老板定）：切换天数卡时只撑满「未拜访+拜访中」；若当天全部已拜访则撑满全部
-  fitAllCustomers(activeOnly) {
+  fitAllCustomers(activeOnly, allMode) {
     const task = this.task;
-    const curDay = this.data.curDay;
-    const plan = (task && task.dayPlan || []).find(p => p.day === curDay);
-    const ids = plan ? (plan.customerIds || []) : [];
-    let list = ids.map(id => (this.customers || []).find(c => c._id === id))
-      .filter(c => c && c.lat && c.lng);
+    let list = [];
+    if (allMode) {
+      const seen = {};
+      (task && task.dayPlan || []).forEach(p => (p.customerIds || []).forEach(id => {
+        if (seen[id]) return;
+        seen[id] = 1;
+        const c = (this.customers || []).find(x => x._id === id);
+        if (c && c.lat && c.lng) list.push(c);
+      }));
+    } else {
+      const curDay = this.data.curDay;
+      const plan = (task && task.dayPlan || []).find(p => p.day === curDay);
+      const ids = plan ? (plan.customerIds || []) : [];
+      list = ids.map(id => (this.customers || []).find(c => c._id === id))
+        .filter(c => c && c.lat && c.lng);
+    }
     if (activeOnly) {
       const act = list.filter(c => !c.visitedToday); // 未拜访 + 拜访中
       if (act.length) list = act; // 有未完成的 → 只撑满这些；全部已拜访 → 保留全部

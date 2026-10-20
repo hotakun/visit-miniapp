@@ -17,9 +17,13 @@
 .wh-switch.on { background: #FFF7E6; color: #B97A0B; font-weight: 700; opacity: 1; }
 
 /* 天页签 */
-.daybar { position: absolute; top: 14px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; z-index: 10; }
+.daybar { position: absolute; top: 14px; left: 14px; right: 14px; display: flex; align-items: center; gap: 8px; z-index: 10; }
+.days-scroll { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
+.days-scroll .dtag { display: inline-flex; margin-right: 8px; }
+.day-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .dtag { padding: 7px 16px; border-radius: 999px; background: rgba(255,255,255,.92); color: var(--sub); font-size: 13px; font-weight: 400; box-shadow: 0 2px 10px rgba(31,36,48,.14); }
 .dtag.on { background: var(--primary); color: #fff; }
+.task-switch { height: 34px; line-height: 34px; padding: 0 12px; border-radius: 999px; background: rgba(255,255,255,.92); color: var(--sub); font-size: 12px; font-weight: 600; box-shadow: 0 2px 10px rgba(31,36,48,.14); flex-shrink: 0; }
 /* 第 6 天起纯数字圆标（老板 2026-09-08 定） */
 .dtag.dot { width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; border-radius: 50%; }
 
