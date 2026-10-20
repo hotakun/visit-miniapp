@@ -386,6 +386,14 @@ public class ShellForm : Form
             Log("CREATE ENV start");
             // 每实例独立的临时数据目录：旧实例残留进程不会锁新实例（防初始化挂起）
             string userData = Path.Combine(Path.GetTempPath(), "JuHuoVisitWV", Process.GetCurrentProcess().Id.ToString());
+            // ⭐ 2026-10-20：优先用程序目录下自带的 Fixed Version WebView2 Runtime（admin/WebView2Runtime），
+            //   绕开系统 Runtime 更新/占用导致的 0x800700AA；找不到就回退系统 Evergreen。
+            string wvRuntime = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Runtime");
+            string wvBrowserDir = null;
+            try {
+                if (File.Exists(Path.Combine(wvRuntime, "msedgewebview2.exe"))) wvBrowserDir = wvRuntime;
+            } catch { }
+            Log("WV RUNTIME: " + (wvBrowserDir == null ? "(system)" : wvBrowserDir));
             // ⭐ 2026-09-27：给 WebView2 加 GPU 参数（修"地图 90% 灰白/缺块"）——
             //   原来第三个参数传 null（裸初始化）：一旦 WebView2 把本机显卡列入黑名单，就会降级成
             //   **软件渲染（SwiftShader）**，表现为 TMap GL 地图"灰白 / 缺块 / 偶尔才出来"。
@@ -393,8 +401,19 @@ public class ShellForm : Form
             //   --ignore-gpu-blocklist：忽略显卡黑名单（对症）；--enable-gpu-rasterization：GPU 光栅化（更流畅）
             var wvOpts = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions(
                 "--ignore-gpu-blocklist --enable-gpu-rasterization");
-            Microsoft.Web.WebView2.Core.CoreWebView2Environment env =
-                await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userData, wvOpts);
+            Microsoft.Web.WebView2.Core.CoreWebView2Environment env = null;
+            Exception fixedErr = null;
+            if (wvBrowserDir != null) {
+                try {
+                    env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(wvBrowserDir, userData, wvOpts);
+                } catch (Exception ex1) {
+                    fixedErr = ex1;
+                }
+            }
+            if (env == null) {
+                if (wvBrowserDir != null) Log("FIXED RUNTIME FAIL: " + (fixedErr == null ? "unknown" : fixedErr.Message));
+                env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userData, wvOpts);
+            }
             Log("CREATE ENV ok, ensuring ...");
             await wv.EnsureCoreWebView2Async(env);
             Log("ENSURE ok");

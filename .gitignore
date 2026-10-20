@@ -52,3 +52,6 @@ MapDownloader-2.0/
 admin/media/
 # 壳程序编译中间产物（重编译即重新生成，不是源码）
 *.new.exe
+
+# Fixed Version WebView2 Runtime（约 674MB，分发时单独带，不进仓库）
+admin/WebView2Runtime/
