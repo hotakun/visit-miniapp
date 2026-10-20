@@ -403,7 +403,9 @@ public class ShellForm : Form
             try {
                 if (File.Exists(Path.Combine(wvRuntime, "msedgewebview2.exe"))) wvBrowserDir = wvRuntime;
             } catch { }
-            Log("WV RUNTIME: " + (wvBrowserDir == null ? "(system)" : wvBrowserDir));
+            // 2026-10-20：固定运行时 155 在控制器阶段反复报 0x800700AA（CAB 解压/ACL 可能不完整），
+            //   先强制回系统 Evergreen；系统 Runtime 本身已装 155。
+            wvBrowserDir = null;
             // ⭐ 2026-09-27：给 WebView2 加 GPU 参数（修"地图 90% 灰白/缺块"）——
             //   原来第三个参数传 null（裸初始化）：一旦 WebView2 把本机显卡列入黑名单，就会降级成
             //   **软件渲染（SwiftShader）**，表现为 TMap GL 地图"灰白 / 缺块 / 偶尔才出来"。
@@ -426,7 +428,6 @@ public class ShellForm : Form
                 env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userData, wvOpts);
             }
             Log("CREATE ENV ok, ensuring ...");
-            try { wv.CreateControl(); } catch { }   // 2026-10-20：确保控件句柄已创建，避免“无效的窗口句柄”
             Exception ensureErr = null;
             try { await wv.EnsureCoreWebView2Async(env); }
             catch (Exception ex2) { ensureErr = ex2; }
