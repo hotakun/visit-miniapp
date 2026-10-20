@@ -5,7 +5,7 @@ const mapCache = require('../../utils/mapCache');   // ⭐ 2026-10-14：地图�
 // 仓库坐标（2026-09-09 老板定：线路起点=仓库时显示小五角星标记）
 const WH = { lat: 28.970802, lng: 120.154526 };
 // 2026-10-20：每天一个颜色（与后台建任务色板、pins/pin_N_c1~c7.png 一一对应）
-const DAY_COLORS = ['#F5531C', '#2F80ED', '#16A34A', '#7C3AED', '#EAB308', '#EC4899', '#06B6D4'];
+const DAY_COLORS = ['#F5531C', '#2F80ED', '#16A34A', '#7C3AED', '#EAB308', '#06B6D4', '#EC4899'];
 
 // ===== 地图秒开缓存 =====
 // ⚠️ 2026-10-14（依审计报告）：实现**已抽到 `utils/mapCache.js` 一处定义** ——
@@ -25,7 +25,7 @@ Page({
     loading: true, empty: '',
     task: null, days: [], curDay: 1, todayDay: 1,
     // 2026-10-20 多人多任务：可切换任务 + 「全部」 + 每天颜色
-    activeTasks: [], showAll: false, dayColors: [],
+    activeTasks: [], showAll: false,
     markers: [], polyline: [],
     centerLat: 28.970802, centerLng: 120.154526,
     nextCust: null, nextDist: '',
@@ -194,8 +194,7 @@ Page({
     this.autoWhStarFrom(map, cd); // 自动检测仓库开关
     // 2026-09-10 修复：加载成功必须复位空态——否则一次失败后「天数标 + 下一家横幅」会被 empty 永久挡住（切页回来也不自愈，只有冷启动才恢复）
     this.setData({ loading: false, empty: '', task: map.task, days, todayDay: td, curDay: cd,
-      dayColors: (map.task && Array.isArray(map.task.dayColors)) ? map.task.dayColors : [],
-      showAll: false });
+        showAll: false });
     this.renderDay();
     // 2026-09-10：撑满只在「首次拿到数据」时执行——tab 常驻后切页回来也会走到这里刷新数据，
     // 若每次都撑满会把用户刚拖到的位置重置（老板反馈"地图乱跳"）。手动刷新 ↻ 仍照旧撑满（见 refreshMap）
@@ -331,11 +330,9 @@ Page({
   renderAll() {
     const task = this.task;
     const customers = this.customers || [];
-    const dayColors = this.data.dayColors || [];
     const markers = [];
     (task && task.dayPlan || []).forEach((plan, di) => {
-      const gi = DAY_COLORS.indexOf(String(dayColors[di] || '').toUpperCase());
-      const ci = (gi >= 0 ? gi : di % DAY_COLORS.length) + 1;
+      const ci = (di % DAY_COLORS.length) + 1;
       (plan.customerIds || []).forEach((id, i) => {
         const c = customers.find(x => x._id === id);
         if (!c || !c.lat || !c.lng) return;

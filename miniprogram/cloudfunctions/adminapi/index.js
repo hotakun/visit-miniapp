@@ -1984,7 +1984,6 @@ async function createTask(event) {
       status: isDraft ? 'draft' : 'published',
       plannedDays: days,
       dayPlan,
-      dayColors,
       purpose: purpose || 'activate',
       batchId: batchId || null,
       sentAt: isDraft ? null : Date.now(),

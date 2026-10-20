@@ -1174,9 +1174,6 @@ tr.row-off td:not(.keep){opacity:.4}
                 <div class="ctab" onclick="pickDay(this)">5</div><div class="ctab" onclick="pickDay(this)">6</div><div class="ctab" onclick="pickDay(this)">7</div>
               </div>
             </div>
-            <div class="frow"><label>每天颜色（地图「全部」按天着色）</label>
-              <div id="ntDayColors" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
-            </div>
             <div class="frow"><label>开始日期 *（任务第 1 天，默认明天）</label><select class="inp" id="ntStartDate" onchange="recalcDeadline()"></select></div>
             <div class="frow"><label>截止日期（按天数自动计算）</label><input class="inp" id="ntDeadline" readonly style="background:#F6F7F9;color:#66707A"></div>
           </div>
@@ -7066,8 +7063,6 @@ async function showNewTask() {
   // 重置：天数=1、开始日=明天（下拉 30 天可选；截止日自动=开始+天数-1）
   document.querySelectorAll('#ntDays .ctab').forEach((t, i) => t.classList.toggle('on', i === 0));
   initTaskDays = 1;
-  nwDayColors = NT_DAY_COLORS.map(x => x.v);
-  renderNwDayColors();
   fillStartDates();
   recalcDeadline();
   // 腾讯地图 Key（后台可配，默认已内置）
@@ -7165,36 +7160,13 @@ document.addEventListener('click', () => {
 
 let mapKey = 'SQWBZ-K326U-MU3VH-GWUHA-HGNES-S7F2D';
 
-// 2026-10-20 老板定：建任务时按天配色；色板与手机端 pins/pin_N_c1~c7.png 一致
-const NT_DAY_COLORS = [
-  { v: '#F5531C', n: '橙' }, { v: '#2F80ED', n: '蓝' }, { v: '#16A34A', n: '绿' },
-  { v: '#7C3AED', n: '紫' }, { v: '#EAB308', n: '黄' }, { v: '#EC4899', n: '粉' }, { v: '#06B6D4', n: '青' }
-];
-let nwDayColors = NT_DAY_COLORS.map(x => x.v);
-function renderNwDayColors() {
-  const box = $('ntDayColors');
-  if (!box) return;
-  const days = document.querySelectorAll('#ntDays .ctab.on').length || 1;
-  box.innerHTML = Array.from({ length: days }, (_, i) => {
-    const cur = nwDayColors[i] || NT_DAY_COLORS[i % NT_DAY_COLORS.length].v;
-    nwDayColors[i] = cur;
-    const opts = NT_DAY_COLORS.map(c => `<option value="${c.v}" ${c.v === cur ? 'selected' : ''}>${c.n}</option>`).join('');
-    return `<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#4A5360">第${i + 1}天` +
-      `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${cur};border:1px solid #fff;box-shadow:0 0 0 1px #E3E8EF"></span>` +
-      `<select onchange="pickNwColor(${i + 1},this.value)" style="height:26px;border:1px solid #E3E8EF;border-radius:6px;padding:0 4px;font-size:12px">${opts}</select></label>`;
-  }).join('');
-}
-function pickNwColor(day, val) {
-  nwDayColors[day - 1] = val;
-  renderNwDayColors();
-}
+
 
 function pickDay(el) {
   document.querySelectorAll('#ntDays .ctab').forEach(t => t.classList.remove('on'));
   el.classList.add('on');
   // 点天数 → 截止日随开始日期+天数联动
   recalcDeadline();
-  renderNwDayColors();
 }
 
 // 开始日期下拉：明天起 30 天可选（显示中文日期+星期）
@@ -7272,7 +7244,6 @@ async function createTask(publish) {
       deadline: $('ntDeadline').value.trim(),
       plannedDays: days,
       purpose,
-      dayColors: nwDayColors.slice(0, days),
       status: publish ? 'published' : 'draft',
       dayGroups,
       dayRoutes,
