@@ -35,8 +35,6 @@ public class ShellForm : Form
     {
         Text = "聚火拜访 · 管理后台";
         FormBorderStyle = FormBorderStyle.None;
-        // 2026-10-21 老板定：最小尺寸 1900×1000（鼠标拖边时不允许再小）
-        MinimumSize = new Size(1900, 1000);
         // ⭐ 2026-10-03 修（老板报「任务栏图标是色块方块」）：
         //   **无边框窗体在 .NET 下必须显式设置 Icon** —— 不设的话任务栏/Alt-Tab 会用
         //   「框架默认图标」（就是那个带色块的方块）；而资源管理器看 exe 图标却是正常的，
@@ -418,14 +416,15 @@ public class ShellForm : Form
     {
         if (isCustomMax)
         {
-            Bounds = savedBounds;
             isCustomMax = false;
+            Bounds = savedBounds;
         }
         else
         {
             savedBounds = Bounds;
-            Bounds = Screen.FromControl(this).WorkingArea;
+            // 先置 true：OnResize 里的最小 1900×1000 不参与最大化，否则工作区会被夹小
             isCustomMax = true;
+            Bounds = Screen.FromControl(this).WorkingArea;
         }
     }
 
