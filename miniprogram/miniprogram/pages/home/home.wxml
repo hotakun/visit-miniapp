@@ -202,6 +202,8 @@
       <text>截止 {{item.deadline}}</text>
     </view>
     <view class="pbar"><view class="pfill" style="width:{{item.percent}}%;{{item.purpose === 'develop' ? 'background:linear-gradient(90deg,#5B9DFF,#2F80ED)' : ''}}"></view></view>
+    <view class="t-submit" wx:if="{{!bossMode && item.status === 'published' && !item.expired && item.total > 0 && item.visited >= item.total && !item.hasOngoing}}"
+          catchtap="submitTask" data-id="{{item._id}}">🎉 全部完成 · 提交结束</view>
   </view>
 
   <view class="empty" wx:if="{{!bossMode && !loading && !tasks.length}}">暂无任务，等管理员派发后即可看到</view>

@@ -202,6 +202,7 @@
 .task-card.expired::before { background: linear-gradient(160deg, #F7A8AC, #E5484D 60%, #C93A40); }
 .card-body .task-card { margin-bottom: 24rpx; }
 .card-body .task-card:last-child { margin-bottom: 0; }
+.t-submit { margin-top: 16rpx; height: 64rpx; line-height: 64rpx; text-align: center; border-radius: 12rpx; background: var(--primary); color: #fff; font-size: 26rpx; font-weight: 600; position: relative; z-index: 1; }
 .t3 { font-size: 22rpx; color: #B97A0B; margin-top: 14rpx; font-weight: 600; position: relative; z-index: 1; }
 .card-empty { text-align: center; color: var(--sub); font-size: 24rpx; padding: 26rpx 0 10rpx; }
 .team-row { display: flex; align-items: center; gap: 22rpx; padding: 18rpx 0; border-bottom: 1rpx solid var(--line); }

@@ -848,6 +848,38 @@ Page({
     }
     ctx.draw();
   },
+  submitTask(e) {
+    const id = e.currentTarget.dataset.id;
+    if (api.isTrialUser()) { api.toast('游客不能提交数据'); return; }
+    const t = (this.data.tasks || []).find(x => x._id === id);
+    if (!t) return;
+    wx.showModal({
+      title: '提交结束任务',
+      content: '全部客户已拜访完成，确认提交结束？管理员审核通过后，任务进入历史任务。',
+      success: r => { if (r.confirm) this._doSubmitTask(id); }
+    });
+  },
+  async _doSubmitTask(id) {
+    if (this._finishingTask) return;
+    this._finishingTask = true;
+    wx.showLoading({ title: '提交中…' });
+    try {
+      const res = await api.call('tasks', { action: 'finish', taskId: id });
+      wx.hideLoading();
+      this._finishingTask = false;
+      if (res && res.ok) {
+        api.toast(res.status === 'reviewing' ? '已提交，等待管理员审核' : '任务已结束 ✓', res.status === 'reviewing' ? 'none' : 'success');
+        if (res.status === 'reviewing') getApp().startReviewWatcher();
+        this.load(true);
+      } else {
+        api.toast((res && res.msg) || '提交失败');
+      }
+    } catch (e) {
+      wx.hideLoading();
+      this._finishingTask = false;
+      api.toast('提交失败，请确认云函数已部署');
+    }
+  },
   goTask(e) {
     this.reportLocOnce(); // 2026-09-08 老板定：点击任务时获取一次定位并上报
     wx.navigateTo({ url: `/pages/task/task?taskId=${e.currentTarget.dataset.id}` });
