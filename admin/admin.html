@@ -11482,8 +11482,66 @@ let curBatchId = '';
 let curBatchName = '';
 let curBatchCount = 0;
 
-async function loadBatches() {
-  const res = await getBatches();                  // ⭐ 共用缓存（60 秒，进页面秒开）
+let _mergeSrc = '';
+function mergeBatchOpen(sourceId, sourceName) {
+  const others = (batchCache || []).filter(b => b._id !== sourceId && !b.mergedInto);
+  if (!others.length) { alert('没有其他批次可以合并'); return; }
+  const old = $('bmMask'); if (old) old.remove();
+  const opts = others.map(b => '<option value="' + esc(b._id) + '">' + esc(b.name) + '</option>').join('');
+  const mask = document.createElement('div');
+  mask.id = 'bmMask';
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:99999;display:flex;align-items:center;justify-content:center';
+  mask.innerHTML =
+    '<div style="background:#fff;border-radius:12px;width:440px;max-width:92vw;padding:18px;box-shadow:0 12px 34px rgba(0,0,0,.25)">' +
+    '<div style="font-size:16px;font-weight:800;margin-bottom:12px">⇄ 合并批次</div>' +
+    '<div style="font-size:12.5px;color:#6B7280;margin-bottom:10px">发起批次：<b style="color:#1F2430">' + esc(sourceName) + '</b>（保留它的名字）</div>' +
+    '<div style="margin-bottom:10px"><div style="font-size:12px;color:#6B7280;margin-bottom:4px">并入哪个批次</div><select id="bmTarget" style="width:100%;height:34px;border:1px solid #E3E8EF;border-radius:8px;padding:0 8px">' + opts + '</select></div>' +
+    '<div style="margin-bottom:10px"><div style="font-size:12px;color:#6B7280;margin-bottom:4px">合并后的批次名称</div><input id="bmName" value="' + esc(sourceName) + '" style="width:100%;height:34px;border:1px solid #E3E8EF;border-radius:8px;padding:0 8px;box-sizing:border-box"></div>' +
+    '<div id="bmPrev" style="font-size:12px;color:#6B7280;margin-bottom:14px">正在计算…</div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" onclick="mergeBatchClose()">取消</button><button class="btn primary" id="bmGo" onclick="mergeBatchRun(\'' + sourceId + '\')">确认合并</button></div>' +
+    '</div>';
+  document.body.appendChild(mask);
+  const sel = $('bmTarget');
+  if (sel) sel.onchange = () => mergeBatchPreview(sourceId, sel.value);
+  mergeBatchPreview(sourceId, sel && sel.value);
+}
+function mergeBatchPreview(sourceId, targetId) {
+  if (!targetId || !$('bmPrev')) return;
+  api('mergeCustomerBatches', { sourceBatchId: sourceId, targetBatchId: targetId, preview: true }).then(r => {
+    if (!$('bmPrev')) return;
+    if (r && r.ok) $('bmPrev').textContent = '发起批次 ' + (r.sourceCount || 0) + ' 家 + 目标批次 ' + (r.targetCount || 0) + ' 家；按客户 id 去重合并。';
+    else $('bmPrev').textContent = (r && r.msg) || '读取批次失败';
+  }).catch(() => { if ($('bmPrev')) $('bmPrev').textContent = '读取批次失败'; });
+}
+function mergeBatchClose() { const m = $('bmMask'); if (m) m.remove(); }
+async function mergeBatchRun(sourceId) {
+  const targetId = String(($('bmTarget') || {}).value || '');
+  const name = String(($('bmName') || {}).value || '').trim();
+  if (!targetId || targetId === sourceId) { alert('请选择另一个批次'); return; }
+  if (!name) { alert('批次名称不能为空'); return; }
+  if (!confirm('确认把目标批次并入发起批次？\n\n· 重叠客户按客户 id 去重\n· 目标批次会隐藏并留合并记录\n· 已创建的任务、拜访记录不动')) return;
+  const go = $('bmGo'), prev = $('bmPrev');
+  if (go) { go.disabled = true; go.textContent = '合并中…'; }
+  let offset = 0, total = 0, added = 0;
+  try {
+    for (;;) {
+      const r = await api('mergeCustomerBatches', { sourceBatchId: sourceId, targetBatchId: targetId, name, offset });
+      if (!r || !r.ok) { alert((r && r.msg) || '合并失败'); return; }
+      offset = r.offset; total = r.total; added += r.added || 0;
+      if (prev) prev.textContent = '合并中 ' + offset + ' / ' + total + ' 家…';
+      if (r.done) break;
+    }
+    mergeBatchClose();
+    if (typeof invalidateBatches === 'function') invalidateBatches();
+    await loadBatches();
+    alert('合并完成：新增 ' + added + ' 家；目标批次已隐藏，任务未改动。');
+  } catch (e) {
+    alert('合并失败：' + ((e && e.message) || '网络错误'));
+  } finally {
+    if (go) { go.disabled = false; go.textContent = '确认合并'; }
+  }
+}
+async function loadBatches() {  const res = await getBatches();                  // ⭐ 共用缓存（60 秒，进页面秒开）
   if (!res || !res.ok) { $('batchCards').innerHTML = `<div class="empty">${esc((res && res.msg) || '加载失败')}</div>`; return; }
   batchCache = res.batches || [];
   renderBatchCards(res.batches, res.unbatched);
@@ -11542,6 +11600,7 @@ function renderBatchCards(batches, unbatched) {
 
         <button class="btn-clear" onclick="openClaimsFor('${b._id}', '${esc(b.name)}')">📋 待确认认领</button>
         <button class="btn-clear" onclick="openImport(true, '${b._id}')">📥 追加导入</button>
+        <button class="btn-clear" onclick="mergeBatchOpen('${b._id}', '${esc(b.name)}')">⇄ 合并批次</button>
         <button class="btn-clear" onclick="deleteBatch('${b._id}', '${esc(b.name)}', ${total})">🗑 删除</button>
       </div>
     </div>`;
