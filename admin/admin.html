@@ -9100,17 +9100,21 @@ async function mpBulkNew() {
   });
   if (!keys.length) { alert('请先勾选系统里没有候选的待处理客户'); return; }
   const rows = keys.map(k => _mpRows.find(r => r.mall_key === k)).filter(Boolean);
-  const noCoord = rows.filter(x => !mpHasCoord(x));
-  const ready = rows.filter(x => mpHasCoord(x));
-  if (!ready.length) { alert('勾选的客户都没有坐标，无法新建。请先「📍 输入经纬度」或「🔍 自己搜」。'); return; }
-  const skipTxt = noCoord.length
-    ? ('\n\n⚠️ 以下 ' + noCoord.length + ' 条没坐标，将跳过：\n' + noCoord.slice(0, 10).map(x => '· ' + (x.name || x.mall_key)).join('\n') + (noCoord.length > 10 ? '\n…' : ''))
+  const validNew = x => !!String(x.name || '').trim() && mpHasCoord(x) && isCnLat(Number(x.lat)) && isCnLng(Number(x.lng));
+  const badRows = rows.filter(x => !validNew(x));
+  const ready = rows.filter(x => validNew(x));
+  const badTxt = badRows.length
+    ? ('\n\n⚠️ 以下 ' + badRows.length + ' 条没坐标 / 坐标异常 / 没店名，将直接放入「II 暂时跳过」：\n' + badRows.slice(0, 10).map(x => '· ' + (x.name || x.mall_key)).join('\n') + (badRows.length > 10 ? '\n…' : ''))
     : '';
-  if (!confirm('将 ' + ready.length + ' 条按「新建客户」标记（这一步还不发送到云端）？' + skipTxt + '\n\n标记完成后，再点顶部「✅ 确认并发送到云端」。')) return;
+  if (!confirm((ready.length ? ('将 ' + ready.length + ' 条按「新建客户」标记（这一步还不发送到云端）？') : '勾选的客户都不满足新建条件。') + badTxt + '\n\n标记完成后，再点顶部「✅ 确认并发送到云端」。')) return;
   const btn = $('mpBulkBtn');
   if (btn) { btn.disabled = true; btn.textContent = '标记中…'; }
-  let ok = 0, bad = 0;
+  let ok = 0, bad = 0, skipped = 0;
   try {
+    for (const x of badRows) {
+      const rr = await mpMark(x.mall_key, 'skipped');
+      if (rr && rr.ok) skipped++; else bad++;
+    }
     const loc = await ensureCustLocal().catch(() => null);
     const pts = (loc && loc.points) || [];
     for (const x of ready) {
@@ -9127,7 +9131,7 @@ async function mpBulkNew() {
   _mpBulk = {};
   await mpLoad(true);
   const msg = '已标记新建 ' + ok + ' 条' + (bad ? ('，失败 ' + bad + ' 条') : '') +
-    (noCoord.length ? ('；跳过没坐标 ' + noCoord.length + ' 条') : '') +
+    (skipped ? ('；已放入 II 暂时跳过 ' + skipped + ' 条') : '') +
     '。\n\n请点顶部「✅ 确认并发送到云端」完成发送。';
   alert(msg);
 }
