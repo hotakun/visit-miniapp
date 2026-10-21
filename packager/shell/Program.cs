@@ -257,6 +257,7 @@ public class ShellForm : Form
     // 窗体阴影（2026-09-07 老板定：最简单稳定方案——CS_DROPSHADOW 让系统画淡阴影）
     // 2026-10-21 老板要：无边框窗口也支持鼠标拖四边/四角缩放
     private const int WM_NCHITTEST = 0x0084;
+    private const int WM_NCCALCSIZE = 0x0083;
     private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13;
     private const int HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
 
@@ -271,6 +272,12 @@ public class ShellForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        // 自定义最大化时去掉 WS_THICKFRAME 留下的非客户区细缝（正常窗口仍保留拖边缩放）
+        if (m.Msg == WM_NCCALCSIZE && isCustomMax && m.WParam != IntPtr.Zero)
+        {
+            m.Result = IntPtr.Zero;
+            return;
+        }
         if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
         {
             int lp = m.LParam.ToInt32();
