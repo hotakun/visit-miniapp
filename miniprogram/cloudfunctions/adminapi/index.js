@@ -7287,9 +7287,11 @@ async function purgeCustomerVisits(event) {
 async function getMpKey() {
   const res = await db.collection('settings').where({ key: 'mpWSKey' }).limit(1).get();
   let v = (res.data[0] && res.data[0].value) || '';
+  // 2026-10-21：旧默认 QAFBZ 已配额满；设置里若还留着旧值，按空处理，回落到 key2
+  if (String(v).trim() === 'QAFBZ-UES65-YPJIL-IRCGI-IP2M6-U7FBV') v = '';
   if (!String(v).trim()) {
     const r2 = await db.collection('settings').where({ key: 'mpKey' }).limit(1).get();
-    v = (r2.data[0] && r2.data[0].value) || 'QAFBZ-UES65-YPJIL-IRCGI-IP2M6-U7FBV';
+    v = (r2.data[0] && r2.data[0].value) || 'XP6BZ-EZD6M-4HA63-6BYAU-K47TF-64BN7';
   }
   return String(v).trim();
 }
