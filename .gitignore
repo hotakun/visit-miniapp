@@ -55,3 +55,8 @@ admin/media/
 
 # Fixed Version WebView2 Runtime（约 674MB，分发时单独带，不进仓库）
 admin/WebView2Runtime/
+
+# 2026-10-22: 旧版可执行文件备份（构建产物，不入库）
+admin/*.exe.old*
+*.exe.old*
+*.exe.old*.*
