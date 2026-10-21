@@ -1374,7 +1374,6 @@ async function finish(salesmanId, taskId, user, isBoss) {
   if (!t || (t.salesmanId !== salesmanId && !isBoss)) return { ok: false, code: 'NOT_FOUND', msg: '任务不存在' };
   if (t.status === 'reviewing') return { ok: false, code: 'REVIEWING', msg: '已在审核中，等待管理员确认' };
   if (t.status !== 'published') return { ok: false, code: 'STATE', msg: t.status === 'done' ? '任务已结束' : '任务状态异常' };
-  if (t.deadline && String(t.deadline) <= todayStr()) return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，请联系管理员延期' };
 
   // 制约（2026-09-05 老板定）：有客户拜访中时不能提交任务结束（提前交也不行），先完成或取消拜访
   const ong = await db.collection('visits')
@@ -1389,6 +1388,11 @@ async function finish(salesmanId, taskId, user, isBoss) {
   // 未拜访家数
   const ids = t.customerIds || [];
   const left = ids.length - await countVisitedCustomers(taskId);
+  // 2026-10-21 老板定：**过期但已经全部完成**仍允许提交结束；
+  //   只有"过期且还有未拜访"才拒绝，必须走管理员延期。
+  if (t.deadline && String(t.deadline) <= todayStr() && left > 0) {
+    return { ok: false, code: 'TASK_EXPIRED', msg: '任务已过期，还有 ' + left + ' 家未拜访，请联系管理员延期' };
+  }
   // 是否自动审核通过（勾选=全部完成自动结束；不勾选=必须人工审核）
   const setRes = await db.collection('settings').where({ key: 'autoApproveFinish' }).get();
   const autoPass = !!(setRes.data[0] && setRes.data[0].value);

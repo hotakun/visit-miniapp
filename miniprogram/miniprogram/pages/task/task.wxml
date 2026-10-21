@@ -58,7 +58,7 @@
           其余状态（可交任务 / 已过期 / 审核中 / 已完成）照旧显示。
        ⚠️ js 里的 `openMap()` 变成零开销死代码（不再被调用），以后要恢复把它接回来即可。 -->
   <view class="foot" wx:if="{{task && !(task.status === 'published' && !task.expired && !allDone)}}">
-    <view class="btn-primary" wx:if="{{task.status === 'published' && !task.expired && allDone}}" hover-class="btn-hover" bindtap="finishTask">🎉 全部完成 · 交任务</view>
+    <view class="btn-primary" wx:if="{{task.status === 'published' && allDone}}" hover-class="btn-hover" bindtap="finishTask">🎉 全部完成 · 交任务</view>
     <!-- ⭐ 2026-10-18 老板定：过期后点这里 → 立即给后台消息中心发「申请延期」。
          已申请 → 变黄色「等待管理员处理」（重复点只提示，不再重复发）。 -->
     <view class="{{task.extendRequest && task.extendRequest.status === 'pending' ? 'btn-wait' : 'btn-expired'}}"
