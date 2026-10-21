@@ -1670,6 +1670,7 @@ tr.row-off td:not(.keep){opacity:.4}
           <button class="btn ghost btn-sm" onclick="openMallImport()">📥 导入所有客户列表</button>
           <span class="mall-last" id="mallLastAt">上次导入：—</span>
           <span class="btn ghost btn-sm" id="mpTb-pending" onclick="mpTab('pending')" style="cursor:pointer">⏳ 待处理</span>
+          <span class="btn ghost btn-sm" id="mpTb-skip" onclick="mpTab('skip')" title="暂时跳过" style="cursor:pointer">II</span>
           <span class="btn ghost btn-sm" id="mpTb-done" onclick="mpTab('done')" style="cursor:pointer">✅ 已处理</span>
           <span class="btn ghost btn-sm" id="mpTb-all" onclick="mpTab('all')" style="cursor:pointer">全部</span>
           <input id="mpQ" class="ginp" style="width:200px" placeholder="搜店名 / 电话 / 地址 / 编号"
@@ -9124,7 +9125,7 @@ function mpMark(key, status, tid, tname, lat, lng, picks) {
 function mpRender() {
   const box = $('mpList'), cnt = $('mpCount'), st = $('mpStats');
   if (!box) return;
-  const DONE = ['paired', 'created', 'skipped', 'pushed', 'failed'];
+  const DONE = ['paired', 'created', 'pushed', 'failed'];
   const s = mpStat(), tot = s.p + s.a + s.c + s.s;
   // ⭐⭐⭐ 2026-10-13 老板拍板：顶上一个「✅ 确认并发送到云端」——
   //   梳理阶段（配对 / 新建）**只记账、云端一个字不动**；按了这个按钮才一条条发上去。
@@ -9145,12 +9146,17 @@ function mpRender() {
     '<span id="mpPushMsg" style="font-size:12.5px;color:var(--sub)">' +
     (ready ? '梳完再发，云端一个字不动' : (failed ? '⚠️ 有 ' + failed + ' 条发送失败（红色，可重发）' : '先把「就是这家 / 新建」梳理好，再按左边发送')) +
     '</span></div>';
-  ['pending', 'done', 'all'].forEach(t => {
+  ['pending', 'skip', 'done', 'all'].forEach(t => {
     const e = $('mpTb-' + t); if (!e) return; const on = (_mpTab === t);
     e.style.background = on ? '#F5531C' : ''; e.style.color = on ? '#fff' : ''; e.style.borderColor = on ? '#F5531C' : '';
   });
   const kw = String(($('mpQ') || {}).value || '').trim().toLowerCase();
-  let list = _mpRows.filter(x => _mpTab === 'pending' ? (!x.status || x.status === 'pending') : (_mpTab === 'done' ? DONE.indexOf(x.status) >= 0 : true));
+  let list = _mpRows.filter(x => {
+    if (_mpTab === 'pending') return !x.status || x.status === 'pending';
+    if (_mpTab === 'skip') return x.status === 'skipped';
+    if (_mpTab === 'done') return DONE.indexOf(x.status) >= 0;
+    return true;
+  });
   if (kw) list = list.filter(x => ((x.name || '') + (x.phone || '') + (x.address || '') + (x.mall_code || '')).toLowerCase().indexOf(kw) >= 0);
   // ⭐⭐⭐ 2026-10-13 老板定（原话：「商城待配对 → 已处理列表，这个顺序不对吧，应该是**最近发送通过的在上面**才对」）：
   //   · 「已处理」页签：**按处理时间倒序**（最近发送通过 / 最近梳理的在最上面）。
@@ -9176,6 +9182,8 @@ function mpRender() {
   if (_mpTab === 'pending') {
     list = list.slice().sort(byImported);
   } else if (_mpTab === 'done') {
+    list = list.slice().sort(byHandled);
+  } else if (_mpTab === 'skip') {
     list = list.slice().sort(byHandled);
   } else if (_mpTab === 'all') {
     const ORD = { paired: 0, created: 0, failed: 1, pushed: 0, skipped: 2, pending: 3 };
