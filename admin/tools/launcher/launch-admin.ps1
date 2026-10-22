@@ -38,24 +38,51 @@ if (-not (Test-Port)) {
 $edge = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 if (-not (Test-Path $edge)) { $edge = 'C:\Program Files\Microsoft\Edge\Application\msedge.exe' }
 
-# ⭐⭐ 2026-10-22 老板定（实测：反复点快捷方式会叠一堆窗口）：
-#   **已经开着就把它激活到前台，绝不再开一个新窗口。**
-if (-not ('JhWin' -as [type])) {
+# ⭐⭐ 2026-10-22 老板实测（「你看看现在有几个窗口？都乱了呀」）：
+#   Edge 把**多个 app 窗口塞在同一个进程里**，而 `Get-Process | MainWindowTitle` 每个进程只报一个 →
+#   按它判断"是否已开着"完全失效、越点越多。改成 **Win32 枚举所有可见顶层窗口**按标题找；
+#   找到多于一个就**把多余的关掉**，只留一个并置前。
+if (-not ('JhWins' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
+using System.Text;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
-public class JhWin {
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+public class JhWins {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  public static List<IntPtr> Find(string needle, int[] pids) {
+    var res = new List<IntPtr>();
+    EnumWindows(delegate(IntPtr h, IntPtr l) {
+      if (!IsWindowVisible(h)) return true;
+      var sb = new StringBuilder(512); GetWindowTextW(h, sb, 512);
+      string t = sb.ToString();
+      if (t.Length == 0 || t.IndexOf(needle) < 0) return true;
+      int pid; GetWindowThreadProcessId(h, out pid);
+      for (int i = 0; i < pids.Length; i++) { if (pids[i] == pid) { res.Add(h); break; } }
+      return true;
+    }, IntPtr.Zero);
+    return res;
+  }
 }
 '@
 }
-$existing = Get-Process msedge -ErrorAction SilentlyContinue |
-    Where-Object { $_.MainWindowTitle -like '*聚火拜访*' -and $_.MainWindowHandle -ne 0 } |
-    Select-Object -First 1
-if ($existing) {
-    [void][JhWin]::ShowWindow($existing.MainWindowHandle, 9)      # 9 = SW_RESTORE（最小化的也还原）
-    [void][JhWin]::SetForegroundWindow($existing.MainWindowHandle)
+# 用字符码拼「聚火拜访」，避免脚本编码不小心变坏时匹配不上
+$needle = [string][char]0x805A + [char]0x706B + [char]0x62DC + [char]0x8BBF
+$epids = @(Get-Process msedge -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+$wins = [JhWins]::Find($needle, [int[]]$epids)
+if ($wins.Count -gt 0) {
+    for ($i = 1; $i -lt $wins.Count; $i++) {
+        [void][JhWins]::PostMessageW($wins[$i], 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CLOSE：多余的关掉
+    }
+    [void][JhWins]::ShowWindow($wins[0], 9)          # 9 = SW_RESTORE（最小化的也还原）
+    [void][JhWins]::SetForegroundWindow($wins[0])
     exit 0
 }
 

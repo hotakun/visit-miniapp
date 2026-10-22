@@ -10245,8 +10245,27 @@ function custLocalRow(p) {
 //   做法：统一走这里 —— 数据来自本地缓存文件（6 万家已在本地点里），**全量、秒开、搜索在本地**。
 //   opt.mode：按客户类型过滤（mall 回访 / new 新客 / '' 不过滤）；opt.unbatched=true 只留未入批的；opt.batchId=只留该批次成员
 //   ⚠️ 返回 null 表示**本地缓存还没预热好**，调用方要给提示（不要静默当成"没有客户"）。
+// ⭐⭐ 2026-10-22（老板定「首屏降到毫秒级」）：**按需查询**，不再为了一个批次把 88 MB 全量下下来。
+//   服务端 /points/query 用内存索引（byId / byBatch / bbox），毫秒级返回；数据仍是同一份缓存。
+async function custQuery(q) {
+  const r = await fetch('/points/query', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(q || {})
+  });
+  const j = await r.json();
+  if (!j || !j.ok) throw new Error((j && j.msg) || '查询失败');
+  return { total: j.total, ms: j.ms, rows: custWithCode((j.points || []).map(custLocalRow)) };
+}
+
 async function custLocalList(opt) {
   const o = opt || {};
+  // ⭐ 2026-10-22：带 batchId / 未分批 的查询走服务端索引（毫秒级），不必下全量
+  if (o.batchId || o.unbatched) {
+    try {
+      const got = await custQuery({ batchId: o.batchId || '', mode: o.mode || '', unbatched: !!o.unbatched });
+      return got.rows;
+    } catch (e) { /* 服务端失败 → 退回全量口径（老行为） */ }
+  }
   const loc = await ensureCustLocal();
   const pts = (loc && loc.points) || [];
   if (!pts.length) return null;
@@ -15509,29 +15528,19 @@ async function applyLocalMatch() {
 
     let list = [];
     let noCoord = 0;
-    let memberIds = null;
-    try { memberIds = await bmpFetchMemberIds(batchId); } catch (e) { memberIds = null; }
-
-    if (memberIds) {
-      // ⭐ 2026-10-22 修（我第一次写错的地方）：**必须用全量缓存（17.9 万点）去查成员**，
-      //   不能用「按批次过滤后的列表」—— 那个列表是拿缓存里**过期的 `bi`** 筛出来的，
-      //   查不到的成员会被误判成"没有坐标"（实测：永康 3116 个成员里 3115 个都在缓存且有坐标，
-      //   却一度报成 2395 家没坐标）。
-      const loc = await ensureCustLocal();
-      const pts = (loc && loc.points) || [];
-      const byId = new Map();
-      for (let i = 0; i < pts.length; i++) { const p = pts[i]; if (p && p.i != null) byId.set(String(p.i), p); }
-      memberIds.forEach(function (id) {
-        const p = byId.get(String(id));
-        if (p && p.la && p.ln) list.push(custLocalRow(p));
-        else noCoord++;                      // 是成员，但本地缓存里没这个客户 / 没坐标
-      });
-    } else {
-      // 云端拿不到成员 → 退回纯缓存口径（保持旧行为）
-      try { list = (await custLocalList({ batchId: batchId })) || []; } catch (e) { list = []; }
+    // ⭐ 2026-10-22（老板定「首屏降到毫秒级」）：**一次请求拿到整批** ——
+    //   成员来自服务器 PG 的 `batch_members`（权威），坐标来自本地缓存；
+    //   不再逐页调云端 exportBatchMembers（8 页要好几秒），也不再下 88 MB 全量。
+    try {
+      const got = await custQuery({ batchId: batchId });
+      const rows = got.rows || [];
+      list = rows.filter(function (c) { return c.lat && c.lng; });
+      noCoord = Math.max(0, (got.total || rows.length) - list.length);
+    } catch (e) {
+      // 服务端查询失败 → 退回旧口径（本地缓存按批次过滤）
+      try { list = (await custLocalList({ batchId: batchId })) || []; } catch (e2) { list = []; }
       noCoord = 0;
     }
-
     if (!list.length && !noCoord) {
       document.getElementById('bmpStat').textContent = '这个批次没有客户（或本地缓存还没就绪）';
       document.getElementById('bmpMap').innerHTML = '<div style="padding:48px;text-align:center;color:#8A939C">没有可显示的客户点位</div>';

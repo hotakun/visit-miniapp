@@ -6,11 +6,118 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { execFile } = require('child_process');
 const XLSX = require('xlsx');
 const store = require('./store');   // 2026-09-27：本地缓存层（客户点缓存，见 _scratch/架构-本地缓存与同步方案.md）
 
 const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+
+// ⭐⭐ 2026-10-22：本地客户缓存的**按需查询**（店老板定：「首屏降到毫秒级」）。
+//   索引在第一次查询时建好，之后跟着缓存对象一起换（`store.write()` 会替换 points 数组引用）。
+//   byId：O(1) 取单个客户；byBatch：O(1) 取整批；bbox/关键词：线性扫 17.9 万（≈2~8ms）。
+let _ptIdxFor = null, _ptIdx = null;
+function pointsIndex(points) {
+  if (_ptIdxFor === points && _ptIdx) return _ptIdx;
+  const byId = new Map(), byBatch = new Map();
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    if (!p || p.i == null) continue;
+    byId.set(String(p.i), p);
+    const bi = p.bi ? String(p.bi) : '';
+    if (bi) {
+      const ids = bi.split(',');
+      for (let k = 0; k < ids.length; k++) {
+        const bid = ids[k];
+        if (!bid) continue;
+        let arr = byBatch.get(bid);
+        if (!arr) { arr = []; byBatch.set(bid, arr); }
+        arr.push(p);
+      }
+    }
+  }
+  _ptIdxFor = points; _ptIdx = { byId, byBatch, all: points };
+  return _ptIdx;
+}
+
+// ⭐ 2026-10-22：批次归属**问 PG**（`batch_members` 才是权威；本地 `bi` 是冗余字段、早失真了）。
+//   PG 不可用 → 返回 null，调用方退回本地 bi（可能不准，但不至于整页打不开）。
+function pgBatchMemberIds(batchId) {
+  return new Promise((resolve, reject) => {
+    if (!cfg.pgApiUrl) return reject(new Error('未配置 pgApiUrl'));
+    const u = String(cfg.pgApiUrl).replace(/\/+$/, '') + '/batchMembers?batchId=' + encodeURIComponent(batchId) +
+      (cfg.pgApiToken ? ('&token=' + encodeURIComponent(cfg.pgApiToken)) : '');
+    const mod = u.indexOf('https:') === 0 ? https : http;
+    const rq = mod.get(u, { timeout: 4000 }, r => {
+      let b = '';
+      r.on('data', d => { b += d; });
+      r.on('end', () => {
+        try {
+          const j = JSON.parse(b);
+          if (j && j.ok && Array.isArray(j.ids)) resolve(j.ids.map(String));
+          else reject(new Error('PG 返回异常'));
+        } catch (e) { reject(e); }
+      });
+    });
+    rq.on('timeout', () => { rq.destroy(new Error('PG 超时')); });
+    rq.on('error', reject);
+  });
+}
+
+async function pointsQuery(q) {
+  const t0 = Date.now();
+  const c = store.read();
+  const pts = (c && c.points) || [];
+  const idx = pointsIndex(pts);
+  let out;
+  let authTotal = null;          // 权威总数（batchId 时 = PG 的成员数，用于把"缓存里没有的那些"也算进去）
+  if (Array.isArray(q.ids) && q.ids.length) {
+    out = [];
+    for (let i = 0; i < q.ids.length; i++) {
+      const p = idx.byId.get(String(q.ids[i]));
+      if (p) out.push(p);
+    }
+  } else if (q.batchId) {
+    let ids = null;
+    try { ids = await pgBatchMemberIds(String(q.batchId)); } catch (e) { ids = null; }
+    if (ids) {
+      authTotal = ids.length;                       // 权威成员数（含本地缓存里没有的那些）
+      out = [];
+      for (let i = 0; i < ids.length; i++) {
+        const p = idx.byId.get(ids[i]);
+        if (p) out.push(p);
+      }
+    } else {
+      out = (idx.byBatch.get(String(q.batchId)) || []).slice();   // 退回本地（可能失真）
+    }
+  } else if (Array.isArray(q.bbox) && q.bbox.length === 4) {
+    const minLng = Number(q.bbox[0]), minLat = Number(q.bbox[1]);
+    const maxLng = Number(q.bbox[2]), maxLat = Number(q.bbox[3]);
+    out = pts.filter(p => p.la >= minLat && p.la <= maxLat && p.ln >= minLng && p.ln <= maxLng);
+  } else {
+    out = pts;
+  }
+  if (q.mode) out = out.filter(p => p.ct === q.mode);
+  if (q.unbatched) out = out.filter(p => !p.bi);
+  if (q.keyword) {
+    const kw = String(q.keyword).toLowerCase();
+    out = out.filter(p => String(p.n || '').toLowerCase().indexOf(kw) >= 0);
+  }
+  const countAll = out.length;
+  const off = Math.max(0, Number(q.offset) || 0);
+  const lim = Number(q.limit) || 0;
+  if (lim > 0) out = out.slice(off, off + lim);
+  else if (off) out = out.slice(off);
+  return {
+    ok: true,
+    total: (authTotal != null) ? authTotal : countAll,
+    count: out.length,
+    ms: Date.now() - t0,
+    syncedAt: c ? c.syncedAt : 0,
+    points: out
+  };
+}
+
 // ⚠️ 2026-09-27 踩过的坑：store 拉缓存时调的是 **adminapi**，而它**需要账号密码认证** ——
 //   不带就返回「登录失效」，预热会**静默失败**（现象：/mapPoints 一直空 + warming:true）。
 //   默认 qingyan/123456；不想写死可在 config.json 加 adminUser / adminPass 覆盖。
@@ -1068,6 +1175,39 @@ function writeChangeLog(rec) {
     res.end(JSON.stringify(c
       ? { ok: true, syncedAt: c.syncedAt, count: c.points.length, points: c.points, warming: warming, progress: prog }
       : { ok: true, syncedAt: 0, count: 0, points: [], warming: true, progress: prog }));
+    return;
+  }
+
+  // ⭐⭐⭐ 2026-10-22（老板定「首屏降到毫秒级，我看效果」）：**按需查询**接口。
+  //   背景：GET /mapPoints 每次要把 **88 MB / 179,138 个点**整个塞给浏览器（实测 60.4 秒）——
+  //   但真正需要"全量"的场景几乎没有，绝大多数只要一个批次 / 一个视口 / 一批 id。
+  //   这里用内存索引（byId / byBatch）+ 线性 bbox 过滤，毫秒级返回；点仍然来自同一份缓存，
+  //   所以**不新增数据副本**，也没有一致性问题。
+  if (req.method === 'POST' && req.url.split('?')[0] === '/points/query') {
+    let qb = '';
+    req.on('data', c => { qb += c; });
+    req.on('end', async () => {
+      let q = {};
+      try { q = JSON.parse(qb || '{}'); } catch (e) { q = {}; }
+      try {
+        const r = await pointsQuery(q);
+        // ⭐ 2026-10-22：大结果集走 gzip（一个批次 3000+ 点 ≈ 1.8 MB → 约 0.3 MB），
+        //   浏览器 fetch 会自动解压，前端无感。
+        const body = JSON.stringify(r);
+        const acceptsGz = String(req.headers['accept-encoding'] || '').indexOf('gzip') >= 0;
+        if (acceptsGz && body.length > 100 * 1024) {
+          const gz = zlib.gzipSync(Buffer.from(body, 'utf8'));
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store' });
+          res.end(gz);
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          res.end(body);
+        }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, msg: String((e && e.message) || e) }));
+      }
+    });
     return;
   }
 
