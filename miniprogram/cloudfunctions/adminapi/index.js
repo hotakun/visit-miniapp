@@ -6987,9 +6987,23 @@ async function dedupeBatchMembers(event) {
     const cid = k.split('\u0001')[1];
     if (!alive.has(cid)) arr.forEach(id => orphanKeys.push(id));
   }
+  // ⭐ 2026-10-22：**已合并 / 已删除批次的成员**也要清掉 ——
+  //   合并曾经只复制不删除（见 mergeCustomerBatches 的注释），历史残留就是这么来的。
+  //   ⚠️ 拿不到批次表 / 表为空时**一律跳过**：宁可不清，也绝不能把全表成员误删。
+  const staleRows = [];
+  try {
+    const bRes = await fetchAll('customer_batches', {}, { mergedInto: true });
+    if (bRes.length) {
+      const activeBatches = new Set();
+      for (const b of bRes) if (!b.mergedInto) activeBatches.add(String(b._id));
+      for (const [k, arr] of groups.entries()) {
+        if (!activeBatches.has(k.split('\u0001')[0])) arr.forEach(id => staleRows.push(id));
+      }
+    }
+  } catch (e) { /* 批次表读失败 → 跳过这一项 */ }
   let removed = 0;
   if (!dryRun) {
-    const all = extra.concat(orphanKeys);
+    const all = Array.from(new Set(extra.concat(orphanKeys).concat(staleRows)));
     for (let i = 0; i < all.length; i += 10) {
       const part = all.slice(i, i + 10);
       const rs = await Promise.all(part.map(id =>
@@ -7002,10 +7016,10 @@ async function dedupeBatchMembers(event) {
   return {
     ok: true, dryRun,
     totalRows: rows.length, uniqueKeys: groups.size,
-    duplicates: extra.length, orphans: orphanKeys.length, removed,
+    duplicates: extra.length, orphans: orphanKeys.length, staleBatch: staleRows.length, removed,
     msg: dryRun
-      ? `体检完成：${rows.length} 行 / 唯一 ${groups.size} 组 / 重复 ${extra.length} 条 / 孤儿 ${orphanKeys.length} 条（未删除）`
-      : `已清理：重复 ${extra.length} 条 + 孤儿 ${orphanKeys.length} 条 = 删除 ${removed} 条（原 ${rows.length} 行 → 唯一 ${groups.size} 组）`
+      ? `体检完成：${rows.length} 行 / 唯一 ${groups.size} 组 / 重复 ${extra.length} / 孤儿 ${orphanKeys.length} / 已合并批次残留 ${staleRows.length}（未删除）`
+      : `已清理：重复 ${extra.length} + 孤儿 ${orphanKeys.length} + 合并残留 ${staleRows.length} = 删除 ${removed} 条（原 ${rows.length} 行 → 唯一 ${groups.size} 组）`
   };
 }
 
@@ -7286,6 +7300,23 @@ async function mergeCustomerBatches(event) {
   }
   const done = offset + ids.length >= total;
   if (done) {
+    // ⭐⭐ 2026-10-22 修（老板问「已经合并的旧批次，为什么还残留？」）：
+    //   **根因**：合并只把 `targetId` 的成员**复制**到 `sourceId`，却**从不删 targetId 的成员**
+    //   → 被并掉的批次会永远留着整整一份 `batch_members`（实测胡库残留 419 条）。
+    //   这里在「复制完成」这一刻把它清干净。
+    //   ⚠️ 必须放在复制之后：复制是按 targetId 的成员分页的（skip/offset），边删边复制会漏数据。
+    let purged = 0;
+    for (let guard = 0; guard < 500; guard++) {
+      const rr = await db.collection('batch_members').where({ batchId: targetId }).limit(200).get();
+      const arr = (rr && rr.data) || [];
+      if (!arr.length) break;
+      for (let i = 0; i < arr.length; i += 100) {
+        await Promise.all(arr.slice(i, i + 100).map(m =>
+          db.collection('batch_members').doc(m._id).remove().catch(() => null)
+        ));
+      }
+      purged += arr.length;
+    }
     const name = String(event.name || '').trim();
     if (name) await db.collection('customer_batches').doc(sourceId).update({ data: { name } });
     await db.collection('customer_batches').doc(targetId).update({
@@ -7298,7 +7329,7 @@ async function mergeCustomerBatches(event) {
     });
     if (typeof touchBatchDirty === 'function') await touchBatchDirty();
   }
-  return { ok: true, offset: offset + ids.length, total, added, done };
+  return { ok: true, offset: offset + ids.length, total, added, purged, done };
 }
 
 // 删除批次卡片 = 解散名单（2026-09-07 老板定）：客户档案/拜访/任务全保留，客户回「未分批」
