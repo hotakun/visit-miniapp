@@ -12,14 +12,6 @@
 </view>
 <view class="page" wx:else>
 
-  <!-- ⭐ 2026-10-22 老板定：「回上一页」（不是首页）。只有**正常注册**（本地有登录用户）的人看得到；
-       从分享卡片进来的访客没有登录态 → 不显示，避免顺着按钮摸到首页/其他页。 -->
-  <view class="backrow" wx:if="{{canBack}}">
-    <view class="backbtn" bindtap="goBackPrev" hover-class="backbtn-h" hover-stay-time="60">
-      <text class="bk-a">‹</text><text class="bk-t">回上一页</text>
-    </view>
-  </view>
-
   <!-- ===================== 店名卡（不折叠） ===================== -->
   <!-- ⭐ 2026-09-27：入商城辉光（已入=淡橙一圈 / 未入=天蓝一圈）+「新店」蓝胶囊（设计文档 §二 0） -->
   <view class="head {{d.hasMall ? 'is-mall' : 'is-new'}}">

@@ -349,8 +349,6 @@ Page({
     // （原来写死 `d: D` 会让页面打开瞬间闪一下示例数据；wxml 也加了 wx:if="{{d}}" 兜住）
     d: null,
     loadErr: '',   // 加载失败原因（2026-09-25 加：直接显示在页面上，别只弹一个会被盖掉的 toast）
-    // ⭐ 2026-10-22：是否显示「回上一页」按钮（只有本地登录用户才 true，见 onLoad）
-    canBack: false,
     // 地图标记 / 路线：初始为空，onLoad 拿到真坐标后用 _mkMarkers() 生成
     //（客户 = 橙针 60% 透明 + 常显店名气泡；「我」= 蓝点，只有定位成功才加）
     markers: [],
@@ -379,11 +377,6 @@ Page({
   // ---------- 加载真数据（2026-09-25 新增）----------
   // 入口参数：`?id=<customerId>`（或 customerId）；数据来自 tasks 云函数的 custDetail。
   async onLoad(query) {
-    // ⭐ 2026-10-22 老板定：**只有正常注册（有本地登录用户）的人**才显示「回上一页」按钮。
-    //   原因：这页会被「分享客户卡片」带进来，访客没有登录态 → 不给按钮，
-    //   避免顺着入口摸到首页/其他页面；注册用户（业务员/管理员）照样能退。
-    const _regUser = !!((getApp() && getApp().globalData && getApp().globalData.user) || wx.getStorageSync('user'));
-    if (this.data.canBack !== _regUser) this.setData({ canBack: _regUser });
     // 客户 id 的两个来源（按优先级）：
     //   ① 入口参数 ?id=xxx（新写法，将来用）
     //   ② 上一页塞进 storage 的 `curCustomer._id` —— **现有两个入口都走这条**：
@@ -1242,17 +1235,6 @@ Page({
   // ⭐ 2026-10-07 老板定：**分享这家店给同事**（右上角三个点的「转发给朋友」也会因此点亮）
   //   ⚠️ path 必须带 id —— 对方点开直达这家店的详情页（onLoad 认 ?id=）
   //   ⚠️ 封面只能用 images/share.png：该客户的门头照是云存储 fileID，分享卡片吃不了
-  // ⭐ 2026-10-22 老板定：「回上一页」（不是首页）—— 只有正常注册的用户看得到。
-  //   从分享卡片直接进来时页面栈只有 1 层、退无可退 → 注册用户兜底回首页。
-  goBackPrev() {
-    const pages = (typeof getCurrentPages === 'function') ? getCurrentPages() : [];
-    if (pages.length > 1) {
-      wx.navigateBack({ delta: 1 });
-    } else {
-      wx.switchTab({ url: '/pages/home/home' });
-    }
-  },
-
   onShareAppMessage() {
     const d = this.data.d || {};
     // ⭐ 2026-10-07 老板定：**拿这家店的门头照当分享封面** —— 同事一眼就能认出是哪家店。
