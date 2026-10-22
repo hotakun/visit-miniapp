@@ -101,7 +101,7 @@ const BOSS_PHONE = '15055492888';
 const TICK_TRIGGER_NAME = 'visitTimeoutTick';
 // 服务号（公众号）模板消息：业务员关注服务号一次 → 永久免授权收新任务提醒（2026-09-04 老板定稿 §7.6）
 const MP_API = 'https://api.weixin.qq.com';
-const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'mergeCustomerBatches', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'exportOrdersForSync', 'exportOrderItemsForSync', 'applyMallPair', 'mergeMallSub', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'mergeCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
+const ACTIONS = ['login', 'listTasks', 'getTask', 'createTask', 'editTask', 'rescheduleTask', 'listLatestLocations', 'clearSalesmanLoc', 'visitRecordDays', 'visitRecordsByDay', 'newShopDays', 'newShopsByDay', 'getDayTrack', 'getVisitTrack', 'uploadAdminDist', 'extendTask', 'reassignTask', 'withdrawTask', 'deleteTask', 'sendTask', 'listCustomers', 'custGeoOptions', 'custGeoAggregate', 'custMapPoints', 'custSync', 'custPageAgg', 'customerNames', 'importCustomers', 'importMallCustomers', 'runMallMatch', 'listMallLibrary', 'applyMallMatch', 'listMallClaims', 'resolveMallClaim', 'listCustomerVisits', 'reviewFinishRequest', 'getLastMallImport', 'listSalesmen', 'listAdmins', 'addSalesman', 'addAdmin', 'setUserActive', 'setUserStar', 'setUserReferrer', 'referrerStats', 'getUserDetail', 'unbindUser', 'deleteUser', 'getSettings', 'setSetting', 'setMpOpenid', 'testMpSend', 'mpTokenPush', 'cancelOngoing', 'purgeCancelled', 'purgeCustomerVisits', 'listCoordFixes', 'reviewCoordFix', 'reviewFieldReport', 'fixLegacyPendingCoords', 'smartSortDay', 'resetTestData', 'wipeData', 'listCustomerBatches', 'getCustomerBatchInfo', 'renameCustomerBatch', 'mergeCustomerBatches', 'deleteCustomerBatch', 'createManualBatch', 'backfillMallCode', 'archiveInitialBatch', 'removeCustomerFromBatch', 'removeCustomersFromBatch', 'dedupeBatchMembers', 'addCustomersToBatch', 'addBatchMembersBulk', 'exportBatchMembers', 'exportCustomerBatches', 'exportTasksForSync', 'exportVisitedCustomers', 'exportVisitsForSync', 'exportOrdersForSync', 'exportOrderItemsForSync', 'applyMallPair', 'mergeMallSub', 'mallPairList', 'exportMallPending', 'bizSuggest', 'createMallCustomer', 'geocode', 'fixDupCustomers', 'reassignVisit', 'mergeCustomers', 'finishTask', 'deleteCustomers', 'getTempFileURL', 'autoArchiveExpired', 'updateCustomerRemark', 'listCustomerRemarks', 'purgeUnbatchedCustomers', 'listRegistrations', 'reviewRegistration', 'setUserBoss', 'setUserAlsoSalesman', 'promoteBossSalesman', 'renameUser', 'backfillLastOrder', 'transcribeVisit', 'transcribeUsage', 'saveVisitTrText', 'transcribeCustAudio', 'pollCustAudioText', 'deleteCustAudio', 'saveCustAudioText', 'usageStats', 'testMpAlert', 'getCustomerDetail', 'updateCustomerCoords', 'updateCustomerFields', 'dupCheckCust', 'refreshFromMall', 'backfillGeo', 'backfillAddressFromPlat', 'fixPlatMatched', 'setCustPhotos', 'msgCount', 'msgCenter', 'fieldList', 'listDeletedCustomers', 'restoreCustomers', 'purgeCustomers', 'custDirty', 'listFreeTrips', 'deleteFreeTrip', 'freeTripDetailAdmin', 'listShareImages', 'saveShareImages', 'pollAll', 'pollDirty', 'listNewShops', 'ping'];
 
 // =====================================================================================
 // ⭐ 2026-09-28 晚 老板定：**消息中心**（后台边栏「📬 消息中心」+ 铃铛/角标数字）
@@ -797,6 +797,8 @@ exports.main = async (event) => {
     if (action === 'backfillMallCode') return await backfillMallCode(event);
     if (action === 'archiveInitialBatch') return await archiveInitialBatch(event);
     if (action === 'removeCustomerFromBatch') return await removeCustomerFromBatch(event);
+    if (action === 'removeCustomersFromBatch') return await removeCustomersFromBatch(event);
+    if (action === 'dedupeBatchMembers') return await dedupeBatchMembers(event);
     if (action === 'addCustomersToBatch') return await addCustomersToBatch(event);
     if (action === 'addBatchMembersBulk') return await addBatchMembersBulk(event);
     if (action === 'exportBatchMembers') return await exportBatchMembers(event);
@@ -6893,6 +6895,120 @@ async function removeCustomerFromBatch(event) {
   return { ok: true, msg: '已从批次中移除（客户档案保留）' };
 }
 
+// ⭐ 2026-10-22：**批量从批次移出客户**（后台「🗺 地图选点」用）。
+//   单条版 removeCustomerFromBatch 一次一家；地图上取消几十家会变成几十次云调用 → 这里做批量。
+//   规则与单条版完全一致：有拜访记录的客户不能移出；只删 `batch_members`，客户档案保留。
+async function removeCustomersFromBatch(event) {
+  const batchId = String(event.batchId || '');
+  const ids = Array.isArray(event.customerIds)
+    ? event.customerIds.filter(Boolean).map(String)
+    : [];
+  if (!batchId || !ids.length) return { ok: false, code: 'BAD_ARG', msg: '缺少参数' };
+
+  const b = await db.collection('customer_batches').doc(batchId).get().catch(() => null);
+  if (!b || !b.data) return { ok: false, code: 'NOT_FOUND', msg: '批次不存在' };
+
+  // ① 查出这批 id 里"有拜访记录"的（不能移出）
+  const visited = new Set();
+  for (let i = 0; i < ids.length; i += 100) {
+    const part = ids.slice(i, i + 100);
+    try {
+      const vr = await db.collection('visits').where({ customerId: _.in(part) })
+        .field({ customerId: true }).limit(1000).get();
+      (vr.data || []).forEach(v => visited.add(v.customerId));
+    } catch (e) { /* 查询失败：保守起见按成员表删，失败会在计数里体现 */ }
+  }
+  const removable = ids.filter(id => !visited.has(id));
+
+  // ② 分批删 batch_members（每批 20 个 id，避免 in 过大）
+  let removed = 0;
+  for (let i = 0; i < removable.length; i += 20) {
+    const part = removable.slice(i, i + 20);
+    const mem = await db.collection('batch_members')
+      .where({ batchId, customerId: _.in(part) })
+      .limit(1000).get().catch(() => ({ data: [] }));
+    // ⭐ 2026-10-22：逐个 await remove 太慢（100 家 = 100 次往返，会撞 4~5 秒超时）→ 8 路并发删
+    const rows = (mem.data || []);
+    for (let j = 0; j < rows.length; j += 8) {
+      const grp = rows.slice(j, j + 8);
+      const rs = await Promise.all(grp.map(row =>
+        db.collection('batch_members').doc(row._id).remove().then(() => true).catch(() => false)
+      ));
+      removed += rs.filter(Boolean).length;
+    }
+  }
+
+  if (removed) await touchBatchDirty();
+
+  const skipped = ids.length - removable.length;
+  return {
+    ok: true, removed, skipped,
+    msg: `已移除 ${removed} 家` + (skipped ? `，${skipped} 家有拜访记录未移除` : '')
+  };
+}
+
+// ⭐ 2026-10-22：**清理 batch_members 的重复成员文档**（同一 batchId+customerId 出现多次）。
+//   背景：云端统计批次家数按"行数"算，有重复就会比真实客户数多
+//   （实测：永康 3216 行 · 唯一客户 3116 · 多出 100 条重复）。
+//   策略：拉全表 → 按 (batchId,customerId) 分组 → 每组只留 _id 最小的那条，其余删掉。
+//   幂等：跑多少次结果都一样；`dryRun:true` 只看不删。
+async function dedupeBatchMembers(event) {
+  const dryRun = !!event.dryRun;
+  const rows = await fetchAll('batch_members', {}, { batchId: true, customerId: true });
+  const groups = new Map();
+  for (const r of rows) {
+    const k = String(r.batchId) + '\u0001' + String(r.customerId);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(String(r._id));
+  }
+  const extra = [];        // 重复行（同 batch+customer 多出来的）
+  const orphanKeys = [];   // 孤儿：客户已不存在 / 已进回收站 → 整组都要删
+  for (const [k, arr] of groups.entries()) {
+    if (arr.length <= 1) continue;
+    arr.sort();                                  // _id 字典序 → 最小的留下
+    for (let i = 1; i < arr.length; i++) extra.push(arr[i]);
+  }
+  // ⭐ 2026-10-22：顺带清理**孤儿成员** —— `deleteCustomers` 只标记客户、不清 `batch_members`，
+  //   于是删掉的客户会永远挂在批次里（实测永康就有 1 条：客户表里查不到名字）。
+  //   判定：客户文档不存在，或 `deleted === true`。
+  const custIds = Array.from(new Set(Array.from(groups.keys()).map(k => k.split('\u0001')[1])));
+  const alive = new Set();
+  for (let i = 0; i < custIds.length; i += 100) {
+    const part = custIds.slice(i, i + 100);
+    try {
+      const cr = await db.collection('customers').where({ _id: _.in(part) })
+        .field({ deleted: true }).limit(1000).get();
+      for (const c of (cr.data || [])) if (!c.deleted) alive.add(String(c._id));
+    } catch (e) { /* 查询失败：这一批当作"活着"，宁可不删 */ 
+      part.forEach(id => alive.add(String(id)));
+    }
+  }
+  for (const [k, arr] of groups.entries()) {
+    const cid = k.split('\u0001')[1];
+    if (!alive.has(cid)) arr.forEach(id => orphanKeys.push(id));
+  }
+  let removed = 0;
+  if (!dryRun) {
+    const all = extra.concat(orphanKeys);
+    for (let i = 0; i < all.length; i += 10) {
+      const part = all.slice(i, i + 10);
+      const rs = await Promise.all(part.map(id =>
+        db.collection('batch_members').doc(id).remove().then(() => true).catch(() => false)
+      ));
+      removed += rs.filter(Boolean).length;
+    }
+    if (removed) await touchBatchDirty();
+  }
+  return {
+    ok: true, dryRun,
+    totalRows: rows.length, uniqueKeys: groups.size,
+    duplicates: extra.length, orphans: orphanKeys.length, removed,
+    msg: dryRun
+      ? `体检完成：${rows.length} 行 / 唯一 ${groups.size} 组 / 重复 ${extra.length} 条 / 孤儿 ${orphanKeys.length} 条（未删除）`
+      : `已清理：重复 ${extra.length} 条 + 孤儿 ${orphanKeys.length} 条 = 删除 ${removed} 条（原 ${rows.length} 行 → 唯一 ${groups.size} 组）`
+  };
+}
+
 // ⭐⭐ 2026-09-29 老板定：**改成「回收站」（软删）**，不再真删。
 //   老板原话：「客户管理里面做个回收站功能，删除的客户先放在里面呗，以后再统一清理」
 //           +「可以进回收站，但是不能彻底删除」
@@ -7154,12 +7270,19 @@ async function mergeCustomerBatches(event) {
         .field({ customerId: true }).get()
     : { data: [] };
   const have = new Set((exist.data || []).map(m => m.customerId));
+  // ⭐ 2026-10-22：原来逐个 wait add —— 200 家 = 200 次 DB 往返 ≈ 4~5 秒，
+  //   正好踩 server.js → 微信 HTTP API 的 ~4~5 秒超时（-601008，见 deleteCustomerBatch 上方实测记录）。
+  //   → 改成 8 路小并发写入，单轮压到 1~2 秒；语义不变（仍按客户 id 去重）。
   let added = 0;
-  for (const cid of ids) {
-    if (have.has(cid)) continue;
-    await db.collection('batch_members').add({ data: { batchId: sourceId, customerId: cid, createdAt: Date.now() } });
-    have.add(cid);
-    added++;
+  const pending = ids.filter(cid => !have.has(cid));
+  const CONC = 8;
+  for (let i = 0; i < pending.length; i += CONC) {
+    const group = pending.slice(i, i + CONC);
+    const rs = await Promise.all(group.map(cid =>
+      db.collection('batch_members').add({ data: { batchId: sourceId, customerId: cid, createdAt: Date.now() } })
+        .then(() => true).catch(() => false)
+    ));
+    added += rs.filter(Boolean).length;
   }
   const done = offset + ids.length >= total;
   if (done) {

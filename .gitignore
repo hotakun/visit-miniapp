@@ -60,3 +60,7 @@ admin/WebView2Runtime/
 admin/*.exe.old*
 *.exe.old*
 *.exe.old*.*
+
+# 2026-10-22：开发者工具在仓库根生成的本地配置（不是小程序入口，误开会把整个仓库当代码包）
+/project.config.json
+/project.private.config.json

@@ -11449,7 +11449,12 @@ let batchCache = [];
 let batchCacheAt = 0;              // 缓存时间戳（0 = 无缓存）
 let batchCacheUnbatched = 0;       // 未分批数（loadBatches 要用）
 let batchCachePending = null;      // 并发合并：多处同时调用只发一次请求
+let batchRefreshPending = null;    // ⭐ 2026-10-22：作废请求（/batches/refresh）进行中的 Promise
 async function getBatches(force) {
+  // ⭐ 2026-10-22：若刚做过写操作、作废请求还在飞 → 等它落地再取，
+  //   否则会读到服务器上那份旧快照（合并后卡片仍显示旧家数的根因）。
+  const _pendingRefresh = batchRefreshPending;
+  if (_pendingRefresh) { try { await _pendingRefresh; } catch (e) { /* 等不到就继续 */ } }
   const FRESH = 60 * 1000;
   if (!force && batchCacheAt && (Date.now() - batchCacheAt) < FRESH) {
     return { ok: true, batches: batchCache, unbatched: batchCacheUnbatched, cached: true };
@@ -11480,7 +11485,13 @@ function invalidateBatches() {
   //   ⭐⭐ 2026-10-10 指针表模式：加 `?src=cloud` = **强制从云开发拉**（不走 PG）——
   //     这里都是"刚写完"（建批 / 删批 / 改名）的刷新：pgsync 到 PG 最多滞后 5 分钟，
   //     若还读 PG，老板建完批次回列表会**看不到新批次**。平常读取仍走 PG（免费）。
-  try { fetch('/batches/refresh?src=cloud', { method: 'POST' }).catch(() => null); } catch (e) { /* 静默 */ }
+  // 🔴 2026-10-22 修竞态：原先是 `fetch(...)` 直接甩出去不等，紧跟着的 `loadBatches()` 立刻读 `/batches`，
+  //   读到的还是服务器上**没被作废的旧快照** → 合并/删除后卡片仍显示旧家数（老板实测：合并完 419 还在、5543 没变）。
+  //   → 把这次请求存成 pending，`getBatches()` 取数前先 await 它。
+  batchRefreshPending = fetch('/batches/refresh?src=cloud', { method: 'POST' })
+    .catch(() => null)
+    .then(function () { batchRefreshPending = null; });
+  return batchRefreshPending;
 }
 
 let curBatchId = '';
@@ -11530,7 +11541,19 @@ async function mergeBatchRun(sourceId) {
   let offset = 0, total = 0, added = 0;
   try {
     for (;;) {
-      const r = await api('mergeCustomerBatches', { sourceBatchId: sourceId, targetBatchId: targetId, name, offset });
+      // ⭐ 2026-10-22：单轮降到 100 家 + 超时重试 3 次。
+      //   原因：合并走 server.js → 微信 HTTP API，单次调用 ~4~5 秒就报 -601008（超时）；
+      //   原来一轮 200 家、每家一次 add，正好踩线。重试是安全的 —— 同一 offset 再来一次时，
+      //   已并入的客户会被服务端按客户 id 去重跳过，不会重复加。
+      let r = null;
+      for (let tries = 0; tries < 3; tries++) {
+        try {
+          r = await api('mergeCustomerBatches', { sourceBatchId: sourceId, targetBatchId: targetId, name, offset, limit: 100 });
+        } catch (e) { r = null; }
+        if (r && r.ok) break;
+        if (prev) prev.textContent = '合并超时，第 ' + (tries + 1) + ' 次重试…（' + offset + ' / ' + total + '）';
+        await new Promise(function (res) { setTimeout(res, 800 * (tries + 1)); });
+      }
       if (!r || !r.ok) { alert((r && r.msg) || '合并失败'); return; }
       offset = r.offset; total = r.total; added += r.added || 0;
       if (prev) prev.textContent = '合并中 ' + offset + ' / ' + total + ' 家…';
@@ -11603,6 +11626,7 @@ function renderBatchCards(batches, unbatched) {
         <button class="btn primary" id="batchNewBtn" style="height:32px;font-size:12.5px;padding:0 14px;margin-left:12px;margin-right:auto" onclick="playTkClick();event.stopPropagation();openNewTaskForBatch('${b._id}', '${esc(b.name)}')">＋ 新建任务</button>
         <!-- ⚠️ 2026-10-12 撤掉批次卡上的「🔎 比对认领」：同上，旧入口（openMallMatchFor） -->
 
+        <button class="btn-clear" onclick="playTkClick();event.stopPropagation();openBatchMapPick('${b._id}', '${esc(b.name)}')" title="在地图上框选：取消掉的客户，确定后从批次移除">🗺 地图选点</button>
         <button class="btn-clear" onclick="openClaimsFor('${b._id}', '${esc(b.name)}')">📋 待确认认领</button>
         <button class="btn-clear" onclick="openImport(true, '${b._id}')">📥 追加导入</button>
         <button class="btn-clear" onclick="mergeBatchOpen('${b._id}', '${esc(b.name)}')">⇄ 合并批次</button>
@@ -15299,5 +15323,441 @@ async function applyLocalMatch() {
          🔴 删掉的理由：遮罩一旦被显示出来就是**整页蒙灰**，而铃铛入口已经没了、用户没法再关掉它 →
          索性**整块删掉**，从根本上杜绝"页面变灰"的可能。
          ⚠️ JS 里 toggleNotify() 保留为空函数（防残留 onclick 报错）；renderNotifies() 对缺失元素本来就有 null 保护。 -->
+  <!-- ⭐ 2026-10-22 新增：批次「地图选点」---------------------------------------------
+       用处：点批次卡上的「🗺 地图选点」→ 全屏地图显示该批次全部客户（默认全选）。
+            按住 Shift + 拖动框选 = 切换（框内已选的取消、未选的选中；同一位置再框一次还原）。
+            点「确定」→ 被取消的客户从该批次移除（只删 batch_members，客户档案保留）。
+       ⭐ 任务中的客户（visitState === 'in_task'）显示为**蓝色**，不能选中/取消，
+          也不参与移除 —— 保证不会影响已派出的任务。
+       数据源：custLocalList({batchId}) —— 本地缓存 admin/cache/map-points.json，零云端请求。
+       后端：adminapi 的 removeCustomersFromBatch（批量；未部署时自动退回逐条 removeCustomerFromBatch）。
+  -->
+  <script>
+  let bmpState = null;
+  let bmpAbortFlag = false;   // 「停止」按钮用：当前批处理完就收手
+  function bmpAbort() {
+    bmpAbortFlag = true;
+    const p = document.getElementById('bmpProg');
+    if (p) p.textContent = '正在停止（本批处理完就停）…';
+  }
+
+  // 圆点图标：优先复用 nt-map.js 的 dotIcon，取不到就用等价画法
+  function bmpDot(color, stroke) {
+    if (typeof dotIcon === 'function') return dotIcon(color, stroke);
+    const S = 120, c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const ctx = c.getContext('2d');
+    ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2 - 8, 0, Math.PI * 2);
+    ctx.globalAlpha = 0.8; ctx.fillStyle = color; ctx.fill();
+    ctx.globalAlpha = 1; ctx.lineWidth = 7; ctx.strokeStyle = stroke || '#FFF8F0'; ctx.stroke();
+    return c.toDataURL();
+  }
+
+  function bmpEnsureDom() {
+    if (document.getElementById('bmpModal')) return;
+    const html = [
+      '<div id="bmpModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(17,24,39,.45);align-items:center;justify-content:center;padding:18px">',
+      '  <div style="background:#fff;border-radius:16px;width:min(1400px,96vw);height:min(92vh,880px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.28)">',
+      '    <div style="padding:13px 18px;border-bottom:1px solid #EEF0F2;display:flex;align-items:center;gap:14px;flex-wrap:wrap">',
+      '      <div style="font-weight:800;font-size:16px">🗺 地图选点 · <span id="bmpName" style="color:#F5531C"></span></div>',
+      '      <div id="bmpStat" style="font-size:13px;color:#4B5563"></div>',
+      '      <div style="margin-left:auto;display:flex;gap:8px">',
+      '        <button class="btn-clear" onclick="bmpSelectAll()">全选</button>',
+      '        <button class="btn-clear" onclick="bmpClearAll()">全不选</button>',
+      '        <button class="btn-clear" onclick="bmpClose()">✕ 关闭</button>',
+      '      </div>',
+      '    </div>',
+      '    <div style="padding:8px 18px;font-size:12.5px;line-height:1.7;color:#8A4B1E;background:#FFF7F0;border-bottom:1px solid #FFE3D2">',
+      '      👉 按住 <b>Shift</b> + 拖动 = <b>取消选中</b>（这些客户会被移出批次）&nbsp;·&nbsp;按住 <b>Alt</b> + 拖动 = <b>恢复选中</b>&nbsp;·&nbsp;',
+      '      <b style="color:#F5531C">橙 = 保留</b>，<b style="color:#8A939C">灰 = 将移除</b>，<b style="color:#6F8F78">灰绿 = 已拜访</b>，<b style="color:#A855F7">紫 = 已拜访·保留</b>，<b style="color:#2F80ED">蓝 = 任务中（不可取消）</b>',
+      '    </div>',
+      '    <div id="bmpMap" style="flex:1;min-height:0;background:#EEF2F7;position:relative;overflow:hidden"></div>',
+      '    <div style="padding:11px 18px;border-top:1px solid #EEF0F2;display:flex;align-items:center;gap:12px;flex-wrap:wrap">',
+      '      <div id="bmpWarn" style="font-size:12.5px;color:#B45309"></div>',
+      '      <div id="bmpProg" style="font-size:12.5px;color:#111827;font-weight:700"></div>',
+      '      <div style="margin-left:auto;display:flex;gap:10px">',
+      '        <button class="btn-clear" id="bmpCancel" style="height:36px;padding:0 18px" onclick="bmpClose()">取消</button>',
+      '        <button class="btn-clear" id="bmpStop" style="display:none;height:36px;padding:0 16px;color:#B91C1C" onclick="bmpAbort()">停止</button>',
+      '        <button class="btn primary" id="bmpOk" style="height:36px;padding:0 20px" onclick="bmpConfirm()">确定</button>',
+      '      </div>',
+      '    </div>',
+      '  </div>',
+      '</div>'
+    ].join('');
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  // 任务中的客户：蓝色、不可选、不参与移除
+  function bmpIsLocked(c) { return c.visitState === 'in_task'; }
+  // ⭐ 2026-10-22 老板定：**已拜访过的用绿色显示**（选中后变亮紫）；
+  //   判定 = 任务内状态 visited，或本地缓存里拜访次数 > 0（有些客户不在任务里但拜访过）。
+  function bmpIsVisited(c) { return c.visitStatus === 'visited' || Number(c.visitCount) > 0; }
+
+  // ⭐ 2026-10-22：从云端拉「这个批次当前的成员 id」（分页 exportBatchMembers）。
+  //   本地地图缓存只用来取坐标，成员归属一律以云端为准 —— 否则合并/移出后会显示旧成员。
+  //   返回 null 表示"完全拉不到"（网络/云函数异常）→ 调用方退回纯缓存口径。
+  async function bmpFetchMemberIds(batchId) {
+    const want = String(batchId);
+    const ids = new Set();
+    let after = '', pages = 0, failed = false;
+    for (;;) {
+      let r = null;
+      try { r = await api('exportBatchMembers', { after: after, limit: 500 }); } catch (e) { r = null; }
+      if (!r || !r.ok) { failed = true; break; }
+      const list = r.list || [];
+      for (let i = 0; i < list.length; i++) {
+        const m = list[i];
+        if (String(m.b || '') === want && m.c) ids.add(String(m.c));
+      }
+      after = r.last || '';
+      pages++;
+      if (!r.hasMore || !after || pages > 300) break;
+    }
+    if (failed && !ids.size) return null;
+    return ids;
+  }
+
+  async function openBatchMapPick(batchId, batchName) {
+    if (typeof TMap === 'undefined') { alert('地图库还没加载好，请稍后重试。'); return; }
+    if (bmpState) bmpClose();
+    bmpEnsureDom();
+    document.getElementById('bmpModal').style.display = 'flex';
+    document.getElementById('bmpName').textContent = batchName || '';
+    document.getElementById('bmpStat').textContent = '加载客户中…';
+    document.getElementById('bmpWarn').textContent = '';
+    const okBtn = document.getElementById('bmpOk');
+    okBtn.disabled = true; okBtn.textContent = '确定';
+    document.getElementById('bmpMap').innerHTML = '';
+
+    bmpState = {
+      batchId: batchId, batchName: batchName || '',
+      all: [], withCoord: [], free: [], locked: [], lockedCount: 0,
+      sel: new Set(), noCoord: 0,
+      map: null, markers: null, boxSel: null, sx: 0, sy: 0
+    };
+
+    let list = [];
+    let noCoord = 0;
+    let memberIds = null;
+    try { memberIds = await bmpFetchMemberIds(batchId); } catch (e) { memberIds = null; }
+
+    if (memberIds) {
+      // ⭐ 2026-10-22 修（我第一次写错的地方）：**必须用全量缓存（17.9 万点）去查成员**，
+      //   不能用「按批次过滤后的列表」—— 那个列表是拿缓存里**过期的 `bi`** 筛出来的，
+      //   查不到的成员会被误判成"没有坐标"（实测：永康 3116 个成员里 3115 个都在缓存且有坐标，
+      //   却一度报成 2395 家没坐标）。
+      const loc = await ensureCustLocal();
+      const pts = (loc && loc.points) || [];
+      const byId = new Map();
+      for (let i = 0; i < pts.length; i++) { const p = pts[i]; if (p && p.i != null) byId.set(String(p.i), p); }
+      memberIds.forEach(function (id) {
+        const p = byId.get(String(id));
+        if (p && p.la && p.ln) list.push(custLocalRow(p));
+        else noCoord++;                      // 是成员，但本地缓存里没这个客户 / 没坐标
+      });
+    } else {
+      // 云端拿不到成员 → 退回纯缓存口径（保持旧行为）
+      try { list = (await custLocalList({ batchId: batchId })) || []; } catch (e) { list = []; }
+      noCoord = 0;
+    }
+
+    if (!list.length && !noCoord) {
+      document.getElementById('bmpStat').textContent = '这个批次没有客户（或本地缓存还没就绪）';
+      document.getElementById('bmpMap').innerHTML = '<div style="padding:48px;text-align:center;color:#8A939C">没有可显示的客户点位</div>';
+      return;
+    }
+
+    bmpState.all = list;
+    bmpState.withCoord = list.filter(function (c) { return c.lat && c.lng; });
+    bmpState.noCoord = noCoord + (list.length - bmpState.withCoord.length);
+    // 任务中的单独拎出来：蓝色、不进 sel
+    bmpState.locked = bmpState.withCoord.filter(bmpIsLocked);
+    bmpState.free = bmpState.withCoord.filter(function (c) { return !bmpIsLocked(c); });
+    bmpState.lockedCount = bmpState.locked.length;
+    bmpState.free.forEach(function (c) { bmpState.sel.add(c._id); });   // 可操作的默认全选
+
+    if (!bmpState.withCoord.length) {
+      document.getElementById('bmpStat').textContent = '共 ' + (list.length + bmpState.noCoord) + ' 家，但都没有坐标，无法上图';
+      return;
+    }
+
+    let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+    bmpState.withCoord.forEach(function (c) {
+      if (c.lat < minLat) minLat = c.lat;
+      if (c.lat > maxLat) maxLat = c.lat;
+      if (c.lng < minLng) minLng = c.lng;
+      if (c.lng > maxLng) maxLng = c.lng;
+    });
+    const center = new TMap.LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
+    const span = Math.max(maxLat - minLat, maxLng - minLng);
+    const zoom = span < 0.01 ? 15 : span < 0.03 ? 14 : span < 0.06 ? 13 : span < 0.12 ? 12 : 11;
+
+    bmpUpdateStat();
+    okBtn.disabled = false;
+
+    bmpBindBox();
+
+    setTimeout(function () {
+      if (!bmpState) return;
+      try {
+        bmpState.map = new TMap.Map(document.getElementById('bmpMap'), {
+          center: center, zoom: zoom, pitch: 0, rotation: 0,
+          baseMap: { type: 'vector', features: ['base', 'building3d', 'label'] },
+          mapStyleId: (typeof ADM_MAP_STYLE_ID !== 'undefined' ? ADM_MAP_STYLE_ID : '')
+        });
+        bmpState.markers = new TMap.MultiMarker({
+          map: bmpState.map, zIndex: 20,
+          styles: {
+            keep: new TMap.MarkerStyle({ width: 18, height: 18, anchor: { x: 9, y: 9 }, src: bmpDot('#F5531C') }),
+            keepV: new TMap.MarkerStyle({ width: 18, height: 18, anchor: { x: 9, y: 9 }, src: bmpDot('#A855F7') }),
+            drop: new TMap.MarkerStyle({ width: 18, height: 18, anchor: { x: 9, y: 9 }, src: bmpDot('#9CA3AF', '#E5E7EB') }),
+            dropV: new TMap.MarkerStyle({ width: 18, height: 18, anchor: { x: 9, y: 9 }, src: bmpDot('#6F8F78') }),
+            lock: new TMap.MarkerStyle({ width: 18, height: 18, anchor: { x: 9, y: 9 }, src: bmpDot('#2F80ED') })
+          },
+          geometries: []
+        });
+        bmpRenderMarkers();
+      } catch (e) {
+        console.warn('[bmp] 地图创建失败', e);
+        document.getElementById('bmpMap').innerHTML =
+          '<div style="padding:48px;text-align:center;color:#B91C1C">地图初始化失败：' + (e && e.message ? e.message : e) + '</div>';
+      }
+    }, 160);
+  }
+
+  function bmpRenderMarkers() {
+    if (!bmpState || !bmpState.markers) return;
+    const geos = bmpState.withCoord.map(function (c) {
+      let style;
+      if (bmpIsLocked(c)) {
+        style = 'lock';
+      } else if (bmpIsVisited(c)) {
+        style = bmpState.sel.has(c._id) ? 'keepV' : 'dropV';   // 已拜访：绿 / 选中亮紫
+      } else {
+        style = bmpState.sel.has(c._id) ? 'keep' : 'drop';     // 未拜访：橙 / 灰
+      }
+      return { id: String(c._id), styleId: style, position: new TMap.LatLng(c.lat, c.lng) };
+    });
+    try { bmpState.markers.setGeometries(geos); } catch (e) { console.warn('[bmp] 点位渲染失败', e); }
+  }
+
+  function bmpUpdateStat() {
+    if (!bmpState) return;
+    const total = bmpState.withCoord.length + bmpState.noCoord;
+    const keep = bmpState.sel.size + bmpState.noCoord;
+    const drop = bmpState.free.length - bmpState.sel.size;
+    const stat = document.getElementById('bmpStat');
+    if (stat) {
+      const visitedN = bmpState.withCoord.filter(bmpIsVisited).length;
+      stat.innerHTML = '保留 <b style="color:#F5531C">' + keep + '</b> 家'
+        + ' · 将移除 <b style="color:#6B7280">' + drop + '</b> 家'
+        + (visitedN ? (' · 已拜访 <b style="color:#6F8F78">' + visitedN + '</b> 家') : '')
+        + (bmpState.lockedCount ? (' · <b style="color:#2F80ED">任务中 ' + bmpState.lockedCount + ' 家（不可取消）</b>') : '')
+        + ' · 共 ' + total + ' 家';
+    }
+    const warn = document.getElementById('bmpWarn');
+    if (warn) warn.textContent = bmpState.noCoord
+      ? ('⚠️ 另有 ' + bmpState.noCoord + ' 家没有坐标：图上点不到它们，所以它们会【继续留在本批次】，不会被移出')
+      : '';
+    const ok = document.getElementById('bmpOk');
+    if (ok) ok.textContent = drop > 0 ? ('确定移除 ' + drop + ' 家') : '确定';
+  }
+
+  function bmpSelectAll() {
+    if (!bmpState) return;
+    bmpState.free.forEach(function (c) { bmpState.sel.add(c._id); });   // 任务中的本来就不在里面
+    bmpRenderMarkers(); bmpUpdateStat();
+  }
+
+  function bmpClearAll() {
+    if (!bmpState) return;
+    bmpState.sel.clear();
+    bmpRenderMarkers(); bmpUpdateStat();
+  }
+
+  function bmpBindBox() {
+    const el = document.getElementById('bmpMap');
+    if (!el || el.dataset.bmpBox === '1') return;
+    el.dataset.bmpBox = '1';
+
+    el.addEventListener('mousedown', function (e) {
+      if (!bmpState || !bmpState.map || e.button !== 0) return;
+      // ⭐ 2026-10-22 老板定：Shift = 删点（取消选中 → 将移出批次）；Alt = 加点（恢复选中）
+      if (!e.shiftKey && !e.altKey) return;           // 不按修饰键 → 交给地图自己拖拽
+      e.preventDefault(); e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      bmpState.boxMode = e.shiftKey ? 'remove' : 'add';
+      const r = el.getBoundingClientRect();
+      bmpState.sx = e.clientX - r.left; bmpState.sy = e.clientY - r.top;
+      const d = document.createElement('div');
+      d.id = 'bmpBox';
+      const _rm = bmpState.boxMode === 'remove';
+      d.style.cssText = 'position:absolute;border:1.5px dashed ' + (_rm ? '#E5484D' : '#18A058') + ';'
+        + 'background:' + (_rm ? 'rgba(229,72,77,.14)' : 'rgba(24,160,88,.14)') + ';z-index:30;pointer-events:none;'
+        + 'left:' + bmpState.sx + 'px;top:' + bmpState.sy + 'px;width:0;height:0';
+      el.appendChild(d);
+      bmpState.boxSel = d;
+    }, true);
+
+    window.addEventListener('mousemove', function (e) {
+      if (!bmpState || !bmpState.boxSel) return;
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      bmpState.boxSel.style.left = Math.min(bmpState.sx, x) + 'px';
+      bmpState.boxSel.style.top = Math.min(bmpState.sy, y) + 'px';
+      bmpState.boxSel.style.width = Math.abs(x - bmpState.sx) + 'px';
+      bmpState.boxSel.style.height = Math.abs(y - bmpState.sy) + 'px';
+    });
+
+    window.addEventListener('mouseup', function (e) {
+      if (!bmpState || !bmpState.boxSel || !bmpState.map) return;
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      const w = Math.abs(x - bmpState.sx), h = Math.abs(y - bmpState.sy);
+      if (bmpState.boxSel.parentNode) bmpState.boxSel.parentNode.removeChild(bmpState.boxSel);
+      bmpState.boxSel = null;
+      if (w < 8 || h < 8) return;                    // 太小的当误触
+      try {
+        const p1 = bmpState.map.unprojectFromContainer(new TMap.Point(Math.min(bmpState.sx, x), Math.min(bmpState.sy, y)));
+        const p2 = bmpState.map.unprojectFromContainer(new TMap.Point(Math.max(bmpState.sx, x), Math.max(bmpState.sy, y)));
+        const latMin = Math.min(p1.getLat(), p2.getLat()), latMax = Math.max(p1.getLat(), p2.getLat());
+        const lngMin = Math.min(p1.getLng(), p2.getLng()), lngMax = Math.max(p1.getLng(), p2.getLng());
+        let changed = 0;
+        // ⚠️ 只在 free（非任务中）里操作；locked 一个都不碰
+        bmpState.free.forEach(function (c) {
+          if (c.lat < latMin || c.lat > latMax || c.lng < lngMin || c.lng > lngMax) return;
+          const has = bmpState.sel.has(c._id);
+          if (bmpState.boxMode === 'remove') {
+            if (has) { bmpState.sel.delete(c._id); changed++; }
+          } else {
+            if (!has) { bmpState.sel.add(c._id); changed++; }
+          }
+        });
+        if (changed) { bmpRenderMarkers(); bmpUpdateStat(); }
+      } catch (err) { console.warn('[bmp] 框选换算失败', err); }
+    });
+  }
+
+  async function bmpConfirm() {
+    if (!bmpState || bmpState.running) return;
+    const state = bmpState;   // 捕获一份，避免中途被置空
+    // 只提交「非任务中 + 被取消」的客户
+    const removeIds = state.free.filter(function (c) { return !state.sel.has(c._id); })
+      .map(function (c) { return c._id; });
+    if (!removeIds.length) { alert('没有取消任何客户，无需移除。'); return; }
+    if (!confirm('把 ' + removeIds.length + ' 家客户从「' + state.batchName + '」里移出？\n\n'
+      + '· 移出 = 不再属于这个批次（只删「批次-客户」这条归属关系）\n'
+      + '· 客户档案、拜访记录、订单、任务 一律不删\n'
+      + '· 任务中的客户（蓝点）不会被动到')) return;
+
+    const btn = document.getElementById('bmpOk');
+    const stopBtn = document.getElementById('bmpStop');
+    const cancelBtn = document.getElementById('bmpCancel');
+    const prog = document.getElementById('bmpProg');
+    const setProg = function (t) { if (prog) prog.textContent = t; };
+    const oldTxt = btn ? btn.textContent : '确定';
+
+    bmpAbortFlag = false;
+    state.running = true;
+    if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+    if (stopBtn) stopBtn.style.display = '';
+    if (cancelBtn) cancelBtn.disabled = true;
+
+    const total = removeIds.length;
+    let removed = 0, skipped = 0, done = 0, chunk = 50, bulkOk = true, errMsg = '';
+
+    const tick = function () {
+      setProg('已处理 ' + done + ' / ' + total + ' 家 · 已移除 ' + removed
+        + (skipped ? ' · 跳过 ' + skipped : ''));
+      if (btn) btn.textContent = '处理中 ' + Math.round(done / total * 100) + '%';
+    };
+    tick();
+
+    // 批量接口：一次传一批 id
+    const callBulk = async function (ids) {
+      try {
+        const r = await api('removeCustomersFromBatch', { batchId: state.batchId, customerIds: ids });
+        if (r && r.ok) return r;
+        if (r && (r.code === 'BAD_ACTION' || /未知|unknown/i.test(r.msg || ''))) { bulkOk = false; return null; }
+        return null;   // 其它（多半是超时）
+      } catch (e) { return null; }
+    };
+
+    // 逐条兜底：6 路并发，边跑边报进度
+    const callOne = async function (ids) {
+      const CONC = 6;
+      for (let i = 0; i < ids.length; i += CONC) {
+        if (bmpAbortFlag) return;
+        const grp = ids.slice(i, i + CONC);
+        const rs = await Promise.all(grp.map(function (id) {
+          return api('removeCustomerFromBatch', { batchId: state.batchId, customerId: id })
+            .then(function (x) { return !!(x && x.ok); })
+            .catch(function () { return false; });
+        }));
+        rs.forEach(function (ok) { if (ok) removed++; else skipped++; });
+        done += grp.length;
+        tick();
+        await new Promise(function (r) { setTimeout(r, 0); });   // 让浏览器重绘
+      }
+    };
+
+    try {
+      while (done < total) {
+        if (bmpAbortFlag) { errMsg = '已停止'; break; }
+        const part = removeIds.slice(done, done + chunk);
+
+        if (bulkOk) {
+          const r = await callBulk(part);
+          if (r && r.ok) {
+            removed += r.removed || 0; skipped += r.skipped || 0;
+            done += part.length; tick();
+            await new Promise(function (x) { setTimeout(x, 0); });
+            continue;
+          }
+          if (bulkOk) {
+            // 批量失败（超时）→ 先缩小分片重试；分片够小仍失败才降级逐条
+            if (chunk > 20) { chunk = Math.max(20, Math.floor(chunk / 2)); setProg('批量超时，改用每批 ' + chunk + ' 家…'); continue; }
+            bulkOk = false;
+            setProg('批量接口不可用，降级为逐条（会慢一些）…');
+            continue;
+          }
+        }
+        await callOne(part);
+      }
+    } catch (e) { errMsg = (e && e.message) || String(e); }
+
+    state.running = false;
+    bmpAbortFlag = false;
+    if (btn) { btn.disabled = false; btn.textContent = oldTxt; }
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (cancelBtn) cancelBtn.disabled = false;
+
+    if (errMsg && errMsg !== '已停止') {
+      alert('移除中断：' + errMsg + '\n\n已处理 ' + done + ' / ' + total + ' 家，已移除 ' + removed + ' 家。\n可以再点「确定」继续剩下的。');
+    } else {
+      alert((errMsg === '已停止' ? '已停止。' : '完成。')
+        + '\n已移除 ' + removed + ' 家'
+        + (skipped ? '，跳过 ' + skipped + ' 家（有拜访记录或已不在批次）' : '')
+        + '\n已处理 ' + done + ' / ' + total + ' 家'
+        + (done < total ? '\n\n剩余 ' + (total - done) + ' 家，可再点「确定」继续。' : ''));
+    }
+
+    try { fetch('/syncNow', { method: 'POST' }).catch(function () { }); } catch (e) { }
+    bmpClose();
+    try { if (typeof invalidateBatches === 'function') await invalidateBatches(); } catch (e) { }
+    try { if (typeof loadBatches === 'function') await loadBatches(); } catch (e) { }
+  }
+
+  function bmpClose() {
+    if (bmpState && bmpState.running) { alert('正在移除中，请等它跑完，或点「停止」。'); return; }
+    const m = document.getElementById('bmpModal');
+    if (m) m.style.display = 'none';
+    if (bmpState && bmpState.map) { try { bmpState.map.destroy(); } catch (e) { } }
+    bmpState = null;
+    bmpAbortFlag = false;
+    const box = document.getElementById('bmpMap');
+    if (box) box.innerHTML = '';
+  }
+  </script>
 </body>
 </html>
