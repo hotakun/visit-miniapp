@@ -39,7 +39,10 @@ $edge = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 if (-not (Test-Path $edge)) { $edge = 'C:\Program Files\Microsoft\Edge\Application\msedge.exe' }
 
 if (Test-Path $edge) {
-    Start-Process -FilePath $edge -ArgumentList "--app=$Url", '--window-size=1500,950'
+    # ⚠️ 2026-10-22 修：快捷方式用 -WindowStyle Hidden 启动 powershell 时，
+    #   这个「隐藏」会被子进程继承 → Edge 窗口建出来但是隐藏的（进程在、看不见）。
+    #   显式指定 Normal 覆盖继承，窗口才会真的显示。
+    Start-Process -FilePath $edge -ArgumentList "--app=$Url", '--window-size=1500,950' -WindowStyle Normal
 } else {
     Start-Process $Url
 }

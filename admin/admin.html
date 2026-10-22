@@ -15417,6 +15417,77 @@ async function applyLocalMatch() {
     return ids;
   }
 
+  // ⭐ 2026-10-22：悬停提示（店名 / 加入商城 / 最后订单）。
+  //   用 0.002°（约 200m）格网建索引，鼠标移动时只查 3×3 相邻格 → 3000+ 点也不卡。
+  function bmpBuildGrid() {
+    const CELL = 0.002;
+    const g = new Map();
+    bmpState.withCoord.forEach(function (c) {
+      const k = Math.floor(Number(c.lat) / CELL) + ',' + Math.floor(Number(c.lng) / CELL);
+      if (!g.has(k)) g.set(k, []);
+      g.get(k).push(c);
+    });
+    bmpState.grid = { cell: CELL, map: g };
+  }
+
+  function bmpBindHover() {
+    const el = document.getElementById('bmpMap');
+    if (!el || el.dataset.bmpHover === '1') return;
+    el.dataset.bmpHover = '1';
+    let pending = false;
+    const hide = function () { const t = document.getElementById('bmpTip'); if (t) t.style.display = 'none'; };
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('mousemove', function (ev) {
+      if (pending) return;
+      pending = true;
+      setTimeout(function () {
+        pending = false;
+        if (!bmpState || !bmpState.map || !bmpState.grid) return;
+        const tip = document.getElementById('bmpTip');
+        if (!tip) return;
+        const r = el.getBoundingClientRect();
+        const x = ev.clientX - r.left, y = ev.clientY - r.top;
+        let hit = null, best = 999;
+        try {
+          const p = bmpState.map.unprojectFromContainer(new TMap.Point(x, y));
+          const CELL = bmpState.grid.cell;
+          const ci = Math.floor(p.getLat() / CELL), cj = Math.floor(p.getLng() / CELL);
+          for (let di = -1; di <= 1; di++) {
+            for (let dj = -1; dj <= 1; dj++) {
+              const arr = bmpState.grid.map.get((ci + di) + ',' + (cj + dj));
+              if (!arr) continue;
+              for (let i = 0; i < arr.length; i++) {
+                const c = arr[i];
+                const q = bmpState.map.projectToContainer(new TMap.LatLng(c.lat, c.lng));
+                const dx = q.getX() - x, dy = q.getY() - y;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d < best) { best = d; hit = c; }
+              }
+            }
+          }
+        } catch (e) { return; }
+        if (!hit || best > 12) { tip.style.display = 'none'; return; }
+
+        const mall = hit.mallJoinedAt ? ('加入商城 ' + hit.mallJoinedAt) : '未加入商城';
+        const last = hit.lastOrderAt ? ('最后订单 ' + hit.lastOrderAt) : '无订单';
+        tip.innerHTML =
+          '<div style="font-weight:800;font-size:13px;margin-bottom:3px">' + (hit.name || '(无店名)') + '</div>'
+          + '<div style="font-size:12px;opacity:.9">' + (hit.mallCode ? ('编号 ' + hit.mallCode + ' · ') : '') + mall + '</div>'
+          + '<div style="font-size:12px;opacity:.9">' + last + (hit.orderCount ? ('（' + hit.orderCount + ' 笔）') : '') + '</div>'
+          + '<div style="font-size:12px;opacity:.7">拜访 ' + (hit.visitCount || 0) + ' 次'
+          + (hit.lastVisitAt ? (' · 最近 ' + hit.lastVisitAt) : '') + '</div>';
+
+        tip.style.display = 'block';
+        const tw = tip.offsetWidth, th = tip.offsetHeight;
+        let left = x + 14, top = y - th - 8;
+        if (left + tw > r.width - 6) left = x - tw - 14;
+        if (top < 6) top = y + 14;
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+      }, 25);
+    });
+  }
+
   async function openBatchMapPick(batchId, batchName) {
     if (typeof TMap === 'undefined') { alert('地图库还没加载好，请稍后重试。'); return; }
     if (bmpState) bmpClose();
@@ -15475,6 +15546,7 @@ async function applyLocalMatch() {
     bmpState.free = bmpState.withCoord.filter(function (c) { return !bmpIsLocked(c); });
     bmpState.lockedCount = bmpState.locked.length;
     bmpState.free.forEach(function (c) { bmpState.sel.add(c._id); });   // 可操作的默认全选
+    bmpBuildGrid();                                                     // 悬停提示用
 
     if (!bmpState.withCoord.length) {
       document.getElementById('bmpStat').textContent = '共 ' + (list.length + bmpState.noCoord) + ' 家，但都没有坐标，无法上图';
@@ -15517,6 +15589,16 @@ async function applyLocalMatch() {
           geometries: []
         });
         bmpRenderMarkers();
+        // 悬停提示框（每次打开重建：容器 innerHTML 会被清空）
+        if (!document.getElementById('bmpTip')) {
+          const tip = document.createElement('div');
+          tip.id = 'bmpTip';
+          tip.style.cssText = 'position:absolute;display:none;z-index:40;pointer-events:none;'
+            + 'background:rgba(17,24,39,.92);color:#fff;padding:8px 10px;border-radius:8px;'
+            + 'font-size:12px;line-height:1.55;box-shadow:0 6px 18px rgba(0,0,0,.28);max-width:280px';
+          document.getElementById('bmpMap').appendChild(tip);
+        }
+        bmpBindHover();
       } catch (e) {
         console.warn('[bmp] 地图创建失败', e);
         document.getElementById('bmpMap').innerHTML =
