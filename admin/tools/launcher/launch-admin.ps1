@@ -38,6 +38,27 @@ if (-not (Test-Port)) {
 $edge = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 if (-not (Test-Path $edge)) { $edge = 'C:\Program Files\Microsoft\Edge\Application\msedge.exe' }
 
+# ⭐⭐ 2026-10-22 老板定（实测：反复点快捷方式会叠一堆窗口）：
+#   **已经开着就把它激活到前台，绝不再开一个新窗口。**
+if (-not ('JhWin' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class JhWin {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+'@
+}
+$existing = Get-Process msedge -ErrorAction SilentlyContinue |
+    Where-Object { $_.MainWindowTitle -like '*聚火拜访*' -and $_.MainWindowHandle -ne 0 } |
+    Select-Object -First 1
+if ($existing) {
+    [void][JhWin]::ShowWindow($existing.MainWindowHandle, 9)      # 9 = SW_RESTORE（最小化的也还原）
+    [void][JhWin]::SetForegroundWindow($existing.MainWindowHandle)
+    exit 0
+}
+
 if (Test-Path $edge) {
     # ⚠️ 2026-10-22 修：快捷方式用 -WindowStyle Hidden 启动 powershell 时，
     #   这个「隐藏」会被子进程继承 → Edge 窗口建出来但是隐藏的（进程在、看不见）。
